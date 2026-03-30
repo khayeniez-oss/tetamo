@@ -1,0 +1,919 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import type { ElementType } from "react";
+import {
+  Search,
+  Gem,
+  Home,
+  CheckCircle2,
+  AlertTriangle,
+  Users,
+  BadgeCheck,
+  Clock3,
+  XCircle,
+  CirclePause,
+  Star,
+  ShieldCheck,
+} from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { notifyAdmins } from "@/lib/notifications";
+import { useAgentProfile } from "../layout";
+
+/* =========================
+   TYPES
+========================= */
+
+type ListingStatus = "AKTIF" | "AKAN_KADALUWARSA" | "KADALUWARSA";
+type TransactionStatus = "available" | "sold" | "rented";
+type EffectiveStatus =
+  | ListingStatus
+  | "PENDING_VERIFICATION"
+  | "JEDA"
+  | "TERJUAL"
+  | "TERSEWA";
+
+type Listing = {
+  id: string;
+  kode: string;
+  ownerId: string;
+  title: string;
+  price: string;
+  postedDate: string;
+  listingExpiresAt: string | null;
+  city: string;
+  photos?: string[];
+  isPaused: boolean;
+  boostActive: boolean;
+  spotlightActive: boolean;
+  transactionStatus: TransactionStatus;
+  isPendingVerification: boolean;
+};
+
+type PropertyRow = {
+  id: string;
+  user_id: string | null;
+  kode: string | null;
+  title: string | null;
+  price: number | null;
+  city: string | null;
+  area: string | null;
+  province: string | null;
+  posted_date: string | null;
+  created_at: string | null;
+  source: string | null;
+  status: string | null;
+  verification_status: string | null;
+  verified_ok: boolean | null;
+  is_paused: boolean | null;
+  listing_expires_at: string | null;
+  boost_active: boolean | null;
+  boost_expires_at: string | null;
+  spotlight_active: boolean | null;
+  spotlight_expires_at: string | null;
+  transaction_status: string | null;
+};
+
+type PropertyImageRow = {
+  id: string;
+  property_id: string;
+  image_url: string;
+  sort_order: number | null;
+  is_cover: boolean | null;
+};
+
+type LeadRow = {
+  id: string;
+  property_id: string | null;
+};
+
+/* =========================
+   HELPERS
+========================= */
+
+function toDateOnly(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function diffDays(a: Date, b: Date) {
+  const ms = toDateOnly(a).getTime() - toDateOnly(b).getTime();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+function isDateActive(dateString: string | null | undefined) {
+  if (!dateString) return false;
+  const today = toDateOnly(new Date());
+  const target = toDateOnly(new Date(dateString));
+  if (Number.isNaN(target.getTime())) return false;
+  return target.getTime() >= today.getTime();
+}
+
+function computeStatus(listingExpiresAt: string | null): ListingStatus {
+  if (!listingExpiresAt) return "AKTIF";
+
+  const today = toDateOnly(new Date());
+  const exp = toDateOnly(new Date(listingExpiresAt));
+
+  if (Number.isNaN(exp.getTime())) return "AKTIF";
+
+  const daysLeft = diffDays(exp, today);
+
+  if (daysLeft < 0) return "KADALUWARSA";
+  if (daysLeft <= 7) return "AKAN_KADALUWARSA";
+  return "AKTIF";
+}
+
+function computeStats(listings: Listing[]) {
+  let iklanAktif = 0;
+  let segeraKadaluwarsa = 0;
+
+  for (const listing of listings) {
+    if (listing.isPendingVerification) continue;
+    if (listing.isPaused) continue;
+    if (listing.transactionStatus !== "available") continue;
+
+    const status = computeStatus(listing.listingExpiresAt);
+    if (status === "AKTIF") iklanAktif += 1;
+    if (status === "AKAN_KADALUWARSA") segeraKadaluwarsa += 1;
+  }
+
+  return {
+    totalIklan: listings.length,
+    iklanAktif,
+    segeraKadaluwarsa,
+  };
+}
+
+function statusUI(status: EffectiveStatus) {
+  if (status === "PENDING_VERIFICATION") {
+    return {
+      label: "Menunggu Verifikasi",
+      Icon: ShieldCheck,
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
+    };
+  }
+
+  if (status === "AKTIF") {
+    return {
+      label: "Aktif",
+      Icon: BadgeCheck,
+      badgeClass: "bg-green-50 text-green-700 border-green-200",
+    };
+  }
+
+  if (status === "AKAN_KADALUWARSA") {
+    return {
+      label: "Akan Kadaluarsa",
+      Icon: Clock3,
+      badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    };
+  }
+
+  if (status === "JEDA") {
+    return {
+      label: "Dijeda",
+      Icon: CirclePause,
+      badgeClass: "bg-gray-100 text-gray-700 border-gray-200",
+    };
+  }
+
+  if (status === "TERJUAL") {
+    return {
+      label: "Terjual",
+      Icon: CheckCircle2,
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+
+  if (status === "TERSEWA") {
+    return {
+      label: "Tersewa",
+      Icon: Home,
+      badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
+    };
+  }
+
+  return {
+    label: "Kadaluwarsa",
+    Icon: XCircle,
+    badgeClass: "bg-red-50 text-red-700 border-red-200",
+  };
+}
+
+function StatCard({
+  title,
+  value,
+  Icon,
+}: {
+  title: string;
+  value: string | number;
+  Icon: ElementType;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-gray-500">{title}</p>
+          <p className="mt-2 text-3xl font-semibold text-[#1C1C1E]">{value}</p>
+        </div>
+
+        <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
+          <Icon className="h-5 w-5 text-[#1C1C1E]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatCurrency(value: number | null) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function formatDisplayDate(dateString: string | null) {
+  if (!dateString) return "-";
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function mapTransactionStatus(
+  value: string | null | undefined
+): TransactionStatus {
+  if (value === "sold") return "sold";
+  if (value === "rented") return "rented";
+  return "available";
+}
+
+function mapPropertiesWithImages(
+  properties: PropertyRow[],
+  images: PropertyImageRow[]
+): Listing[] {
+  const fallbackPhoto =
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+
+  return properties.map((property) => {
+    const propertyImages = images
+      .filter((img) => img.property_id === property.id)
+      .sort((a, b) => {
+        const coverA = a.is_cover ? 1 : 0;
+        const coverB = b.is_cover ? 1 : 0;
+
+        if (coverA !== coverB) return coverB - coverA;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+      });
+
+    const coverPhoto = propertyImages[0]?.image_url || fallbackPhoto;
+
+    const isVerified =
+      property.verification_status === "verified" || Boolean(property.verified_ok);
+
+    const isPendingVerification =
+      property.source === "agent" &&
+      !isVerified &&
+      (property.verification_status === "pending_verification" ||
+        property.status === "pending_approval");
+
+    return {
+      id: property.id,
+      kode: property.kode || "-",
+      ownerId: property.user_id || "",
+      title: property.title || "Tanpa Judul",
+      price: formatCurrency(property.price),
+      postedDate: formatDisplayDate(property.posted_date || property.created_at),
+      listingExpiresAt: property.listing_expires_at || null,
+      city: property.city || property.area || property.province || "-",
+      photos: [coverPhoto],
+      isPaused: Boolean(property.is_paused),
+      boostActive:
+        Boolean(property.boost_active) && isDateActive(property.boost_expires_at),
+      spotlightActive:
+        Boolean(property.spotlight_active) &&
+        isDateActive(property.spotlight_expires_at),
+      transactionStatus: mapTransactionStatus(property.transaction_status),
+      isPendingVerification,
+    };
+  });
+}
+
+/* =========================
+   PAGE
+========================= */
+
+export default function AgentListingSayaPage() {
+  const router = useRouter();
+  const { userId, loadingProfile } = useAgentProfile();
+
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [loadingPage, setLoadingPage] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [markingId, setMarkingId] = useState<string | null>(null);
+  const [activatingAddonId, setActivatingAddonId] = useState<string | null>(null);
+
+  const ITEMS_PER_PAGE = 12;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPageData() {
+      if (!userId) {
+        if (isMounted) {
+          setListings([]);
+          setTotalLeads(0);
+          setLoadingPage(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setLoadingPage(true);
+        setErrorMessage("");
+      }
+
+      const [
+        { data: propertiesData, error: propertiesError },
+        { count: leadsCount, error: leadsError },
+      ] = await Promise.all([
+        supabase
+          .from("properties")
+          .select(
+            "id, user_id, kode, title, price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status"
+          )
+          .eq("user_id", userId)
+          .eq("source", "agent")
+          .neq("status", "rejected")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("receiver_user_id", userId)
+          .eq("receiver_role", "agent"),
+      ]);
+
+      if (!isMounted) return;
+
+      if (propertiesError) {
+        setErrorMessage(propertiesError.message);
+        setLoadingPage(false);
+        return;
+      }
+
+      if (leadsError) {
+        setErrorMessage(leadsError.message);
+        setLoadingPage(false);
+        return;
+      }
+
+      const propertyRows = (propertiesData || []) as PropertyRow[];
+      const propertyIds = propertyRows.map((property) => property.id);
+
+      let imageRows: PropertyImageRow[] = [];
+
+      if (propertyIds.length > 0) {
+        const { data: imagesData, error: imagesError } = await supabase
+          .from("property_images")
+          .select("id, property_id, image_url, sort_order, is_cover")
+          .in("property_id", propertyIds)
+          .order("sort_order", { ascending: true });
+
+        if (!isMounted) return;
+
+        if (imagesError) {
+          setErrorMessage(imagesError.message);
+          setLoadingPage(false);
+          return;
+        }
+
+        imageRows = (imagesData || []) as PropertyImageRow[];
+      }
+
+      const mappedListings = mapPropertiesWithImages(propertyRows, imageRows);
+
+      setListings(mappedListings);
+      setTotalLeads(leadsCount || 0);
+      setLoadingPage(false);
+    }
+
+    if (!loadingProfile) {
+      loadPageData();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, loadingProfile]);
+
+  const computedStats = useMemo(() => {
+    const stats = computeStats(listings);
+    return {
+      ...stats,
+      totalLeads,
+    };
+  }, [listings, totalLeads]);
+
+  const filteredListings = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return listings;
+
+    const words = q.split(/\s+/);
+
+    return listings.filter((l) => {
+      const searchableText =
+        `${l.title} ${l.kode} ${l.city} ${l.price}`.toLowerCase();
+      return words.every((word) => searchableText.includes(word));
+    });
+  }, [listings, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredListings.length / ITEMS_PER_PAGE)
+  );
+
+  const paginatedListings = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return filteredListings.slice(start, end);
+  }, [filteredListings, page]);
+
+  const startItem =
+    filteredListings.length === 0 ? 0 : (page - 1) * ITEMS_PER_PAGE + 1;
+
+  const endItem = Math.min(page * ITEMS_PER_PAGE, filteredListings.length);
+
+  function openAgentPayment(params: Record<string, string>) {
+    const query = new URLSearchParams({
+      source: "agent",
+      from: "listing-saya",
+      ...params,
+    });
+
+    router.push(`/agentdashboard/pembayaran?${query.toString()}`);
+  }
+
+  async function toggleJeda(item: Listing) {
+    if (item.transactionStatus !== "available") return;
+    if (item.isPendingVerification) return;
+
+    setTogglingId(item.id);
+
+    const { error } = await supabase
+      .from("properties")
+      .update({ is_paused: !item.isPaused })
+      .eq("id", item.id);
+
+    if (error) {
+      setTogglingId(null);
+      alert("Gagal mengubah status listing.");
+      return;
+    }
+
+    setListings((prev) =>
+      prev.map((listing) =>
+        listing.id === item.id
+          ? { ...listing, isPaused: !listing.isPaused }
+          : listing
+      )
+    );
+
+    setTogglingId(null);
+  }
+
+  async function activateAddon(item: Listing, addon: "boost" | "spotlight") {
+    if (!userId) return;
+    if (item.isPendingVerification) return;
+    if (item.transactionStatus !== "available") return;
+
+    const loadingKey = `${item.id}-${addon}`;
+    setActivatingAddonId(loadingKey);
+
+    const payload =
+      addon === "boost"
+        ? { boost_active: true }
+        : { spotlight_active: true };
+
+    const { error } = await supabase
+      .from("properties")
+      .update(payload)
+      .eq("id", item.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setActivatingAddonId(null);
+      alert(error.message || "Gagal mengaktifkan add-on.");
+      return;
+    }
+
+    setListings((prev) =>
+      prev.map((listing) =>
+        listing.id === item.id
+          ? {
+              ...listing,
+              boostActive: addon === "boost" ? true : listing.boostActive,
+              spotlightActive:
+                addon === "spotlight" ? true : listing.spotlightActive,
+            }
+          : listing
+      )
+    );
+
+    setActivatingAddonId(null);
+  }
+
+  async function markTransaction(
+    item: Listing,
+    nextStatus: Extract<TransactionStatus, "sold" | "rented">
+  ) {
+    if (!userId) return;
+    if (item.isPendingVerification) return;
+
+    const actionLabel = nextStatus === "sold" ? "terjual" : "tersewa";
+    const confirmed = window.confirm(
+      `Tandai listing "${item.title}" sebagai ${actionLabel}? Listing akan hilang dari marketplace publik tetapi tetap ada di dashboard agent dan admin.`
+    );
+
+    if (!confirmed) return;
+
+    setMarkingId(item.id);
+
+    const now = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("properties")
+      .update({
+        transaction_status: nextStatus,
+        transaction_closed_at: now,
+        transaction_closed_by: userId,
+      })
+      .eq("id", item.id);
+
+    if (error) {
+      setMarkingId(null);
+      alert(error.message || "Gagal memperbarui status transaksi.");
+      return;
+    }
+
+    setListings((prev) =>
+      prev.map((listing) =>
+        listing.id === item.id
+          ? { ...listing, transactionStatus: nextStatus }
+          : listing
+      )
+    );
+
+    try {
+      await notifyAdmins({
+        relatedUserId: userId,
+        propertyId: item.id,
+        type:
+          nextStatus === "sold"
+            ? "listing_marked_sold"
+            : "listing_marked_rented",
+        title:
+          nextStatus === "sold"
+            ? "Listing marked as sold"
+            : "Listing marked as rented",
+        body:
+          nextStatus === "sold"
+            ? `Agent marked "${item.title}" as sold.`
+            : `Agent marked "${item.title}" as rented.`,
+        priority: "high",
+      });
+    } catch (notifyError) {
+      console.error("Failed to notify admins:", notifyError);
+    }
+
+    setMarkingId(null);
+  }
+
+  const isLoading = loadingProfile || loadingPage;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1C1C1E]">Listing Saya</h1>
+          <p className="text-sm text-gray-500">
+            Kelola listing yang sedang Anda tangani.
+          </p>
+        </div>
+
+        <button
+          onClick={() => router.push("/agentdashboard/leads")}
+          className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+        >
+          + Lihat Leads
+        </button>
+      </div>
+
+      {errorMessage ? (
+        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Gagal memuat listing: {errorMessage}
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <StatCard
+          title="Total Listing"
+          value={isLoading ? "..." : computedStats.totalIklan}
+          Icon={Home}
+        />
+        <StatCard
+          title="Listing Aktif"
+          value={isLoading ? "..." : computedStats.iklanAktif}
+          Icon={CheckCircle2}
+        />
+        <StatCard
+          title="Segera Kadaluarsa"
+          value={isLoading ? "..." : computedStats.segeraKadaluwarsa}
+          Icon={AlertTriangle}
+        />
+        <StatCard
+          title="Total Leads"
+          value={isLoading ? "..." : computedStats.totalLeads}
+          Icon={Users}
+        />
+      </div>
+
+      <div className="mt-6 relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-700 w-5 h-5" />
+
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Cari seperti Google: jakarta rumah 2.5, TTM-2026, apartemen pusat..."
+          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+        />
+      </div>
+
+      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-semibold text-[#1C1C1E]">
+              Listing Saya
+            </h2>
+            <p className="text-sm text-gray-500">
+              Daftar listing yang sedang Anda tangani beserta status dan aksi
+              cepat.
+            </p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-gray-100">
+          {isLoading ? (
+            <div className="p-8 text-center text-sm text-gray-500">
+              Loading listing...
+            </div>
+          ) : paginatedListings.length === 0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">
+              Tidak ada listing yang cocok dengan pencarian Anda.
+            </div>
+          ) : (
+            paginatedListings.map((item) => {
+              const baseStatus = computeStatus(item.listingExpiresAt);
+
+              const effectiveStatus: EffectiveStatus = item.isPendingVerification
+                ? "PENDING_VERIFICATION"
+                : item.transactionStatus === "sold"
+                ? "TERJUAL"
+                : item.transactionStatus === "rented"
+                ? "TERSEWA"
+                : item.isPaused
+                ? "JEDA"
+                : baseStatus;
+
+              const ui = statusUI(effectiveStatus);
+              const BadgeIcon = ui.Icon;
+              const isToggling = togglingId === item.id;
+              const isMarking = markingId === item.id;
+              const isClosed = item.transactionStatus !== "available";
+              const isPending = item.isPendingVerification;
+              const isBoosting = activatingAddonId === `${item.id}-boost`;
+              const isSpotlighting = activatingAddonId === `${item.id}-spotlight`;
+
+              const cover =
+                item.photos?.[0] ??
+                "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+
+              return (
+                <div
+                  key={item.id}
+                  className="p-6 flex items-center justify-between gap-6 border-b border-gray-200 last:border-b-0"
+                >
+                  <div className="flex items-center gap-5 min-w-0">
+                    <div className="w-28 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
+                      <img
+                        src={cover}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <span
+                          className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badgeClass}`}
+                        >
+                          <BadgeIcon className="h-3.5 w-3.5" />
+                          {ui.label}
+                        </span>
+
+                        {item.boostActive && !isClosed && !isPending && (
+                          <span className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+                            <Star className="h-3.5 w-3.5" />
+                            Boosted
+                          </span>
+                        )}
+
+                        {item.spotlightActive && !isClosed && !isPending && (
+                          <span className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border bg-purple-50 text-purple-700 border-purple-200">
+                            <Gem className="h-4 w-4" />
+                            Spotlight
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-1 flex items-center gap-1 text-xs text-gray-600 flex-wrap">
+                        <span>Kode: {item.kode}</span>
+                        <span>•</span>
+                        <span>{item.postedDate}</span>
+                        <span>•</span>
+                        <span>{item.city}</span>
+                      </div>
+
+                      <p className="mt-3 font-medium text-[#1C1C1E] truncate">
+                        {item.title}
+                      </p>
+
+                      <p className="text-sm text-gray-500">{item.price}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
+                    <button
+                      onClick={() =>
+                        router.push(
+                          `/agentdashboard/propertilokasi/edit/${encodeURIComponent(
+                            item.kode
+                          )}`
+                        )
+                      }
+                      className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Edit
+                    </button>
+
+                    {!isClosed &&
+                      !isPending &&
+                      baseStatus === "AKTIF" &&
+                      !item.isPaused && (
+                        <button
+                          onClick={() => toggleJeda(item)}
+                          disabled={isToggling}
+                          className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {isToggling ? "Loading..." : "Jeda"}
+                        </button>
+                      )}
+
+                    {!isClosed && !isPending && item.isPaused && (
+                      <button
+                        onClick={() => toggleJeda(item)}
+                        disabled={isToggling}
+                        className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {isToggling ? "Loading..." : "Aktifkan"}
+                      </button>
+                    )}
+
+                    {!isClosed && !isPending && (
+                      <>
+                        <button
+                          onClick={() => markTransaction(item, "sold")}
+                          disabled={isMarking}
+                          className="px-4 py-2 rounded-xl border border-emerald-300 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                        >
+                          {isMarking ? "Loading..." : "Sold"}
+                        </button>
+
+                        <button
+                          onClick={() => markTransaction(item, "rented")}
+                          disabled={isMarking}
+                          className="px-4 py-2 rounded-xl border border-sky-300 text-sm text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+                        >
+                          {isMarking ? "Loading..." : "Rented"}
+                        </button>
+                      </>
+                    )}
+
+                    {!isClosed &&
+                      !isPending &&
+                      baseStatus !== "AKTIF" &&
+                      !item.isPaused && (
+                        <button
+                          onClick={() =>
+                            openAgentPayment({
+                              kode: item.kode,
+                              propertyId: item.id,
+                              action: "renew",
+                            })
+                          }
+                          className="px-4 py-2 rounded-xl bg-[#1C1C1E] text-white text-sm hover:opacity-90"
+                        >
+                          Perpanjang
+                        </button>
+                      )}
+
+                    {!isClosed && !isPending && (
+                      <div className="flex items-center gap-2 pl-3 border-l border-gray-200">
+                        <button
+                          onClick={() => activateAddon(item, "boost")}
+                          disabled={isBoosting}
+                          className="px-4 py-2 rounded-xl bg-[#1C1C1E] text-white text-sm hover:opacity-90 inline-flex items-center gap-2 disabled:opacity-50"
+                        >
+                          <Star className="h-4 w-4" />
+                          {isBoosting ? "Loading..." : "Boost"}
+                        </button>
+
+                        <button
+                          onClick={() => activateAddon(item, "spotlight")}
+                          disabled={isSpotlighting}
+                          className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 disabled:opacity-50"
+                        >
+                          <Gem className="h-4 w-4" />
+                          {isSpotlighting ? "Loading..." : "Spotlight"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mt-6">
+        <p className="text-sm text-gray-900">
+          Menampilkan {startItem}–{endItem} dari {filteredListings.length}{" "}
+          listing
+        </p>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-200 disabled:opacity-60"
+          >
+            Sebelumnya
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPage(p)}
+              className={`px-3 py-2 border rounded-lg text-sm ${
+                page === p
+                  ? "bg-black text-white border-black"
+                  : "border-gray-400"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-400 disabled:opacity-60"
+          >
+            Berikutnya
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

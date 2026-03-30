@@ -1,0 +1,429 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useLanguage } from "@/app/context/LanguageContext";
+import { supabase } from "@/lib/supabase";
+import {
+  ChevronDown,
+  Globe,
+  User,
+  LogOut,
+  LayoutDashboard,
+} from "lucide-react";
+
+type ProfileData = {
+  full_name: string | null;
+  role: string | null;
+};
+
+function getDashboardHref(role: string | null) {
+  if (role === "owner") return "/pemilikdashboard";
+  if (role === "agent") return "/agentdashboard";
+  if (role === "admin") return "/admindashboard";
+  if (role === "developer") return "/";
+  return "/";
+}
+
+function getDisplayName(
+  fullName: string | null,
+  email: string | null,
+  fallback: string
+) {
+  if (fullName?.trim()) return fullName.trim();
+  if (email?.trim()) return email.trim();
+  return fallback;
+}
+
+function getInitials(fullName: string | null, email: string | null) {
+  const source = fullName?.trim() || email?.trim() || "A";
+  const parts = source.split(" ").filter(Boolean);
+
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+
+  return source.slice(0, 2).toUpperCase();
+}
+
+export default function Navbar() {
+  const router = useRouter();
+  const { lang, setLang } = useLanguage();
+
+  const isID = lang === "id";
+
+  const t = {
+    brandTagline: isID ? "SEMUA DALAM SATU - PUSAT PROPERTI" : "ALL IN ONE - REAL ESTATE HUB",
+
+    allProperties: isID ? "Properti" : "Properties",
+    forSale: isID ? "Dijual" : "Sale",
+    forRent: isID ? "Disewa" : "Rent",
+    buyers: isID ? "Pembeli" : "Buyers",
+
+    account: isID ? "Akun" : "Account",
+    loading: isID ? "Memuat..." : "Loading...",
+    dashboard: "Dashboard",
+    loadingDashboard: isID ? "Memuat dashboard..." : "Loading dashboard...",
+    logout: isID ? "Keluar" : "Logout",
+
+    login: isID ? "Masuk" : "Login",
+    agentLogin: isID ? "Masuk Agen" : "Agent Login",
+    adminLogin: isID ? "Masuk Admin" : "Admin Login",
+    signUp: isID ? "Daftar" : "Sign Up",
+  };
+
+  const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const [langOpen, setLangOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+
+  const langRef = useRef<HTMLDivElement | null>(null);
+  const accountRef = useRef<HTMLDivElement | null>(null);
+
+  async function loadProfileByUserId(
+    userId: string,
+    fallbackEmail: string | null
+  ) {
+    setProfileLoading(true);
+
+    try {
+      const result = await Promise.race([
+        supabase
+          .from("profiles")
+          .select("full_name, role")
+          .eq("id", userId)
+          .maybeSingle(),
+        new Promise<{ data: null; error: null }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: null }), 4000)
+        ),
+      ]);
+
+      const profileData = result?.data as ProfileData | null;
+      setProfile(profileData ?? null);
+      setAuthUserEmail(fallbackEmail);
+    } catch {
+      setProfile(null);
+      setAuthUserEmail(fallbackEmail);
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAuth() {
+      setSessionLoading(true);
+
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!mounted) return;
+
+        if (!user) {
+          setAuthUserEmail(null);
+          setProfile(null);
+          setSessionLoading(false);
+          setProfileLoading(false);
+          return;
+        }
+
+        setAuthUserEmail(user.email ?? null);
+        setSessionLoading(false);
+
+        loadProfileByUserId(user.id, user.email ?? null);
+      } catch {
+        if (!mounted) return;
+        setAuthUserEmail(null);
+        setProfile(null);
+        setSessionLoading(false);
+        setProfileLoading(false);
+      }
+    }
+
+    loadAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+
+      if (!mounted) return;
+
+      if (!user) {
+        setAuthUserEmail(null);
+        setProfile(null);
+        setSessionLoading(false);
+        setProfileLoading(false);
+        return;
+      }
+
+      setAuthUserEmail(user.email ?? null);
+      setSessionLoading(false);
+
+      loadProfileByUserId(user.id, user.email ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node;
+
+      if (langRef.current && !langRef.current.contains(target)) {
+        setLangOpen(false);
+      }
+
+      if (accountRef.current && !accountRef.current.contains(target)) {
+        setAccountOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setAccountOpen(false);
+    router.push("/");
+    router.refresh();
+  }
+
+  const isLoggedIn = Boolean(authUserEmail);
+  const displayName = getDisplayName(
+    profile?.full_name ?? null,
+    authUserEmail,
+    t.account
+  );
+  const initials = getInitials(profile?.full_name ?? null, authUserEmail);
+  const dashboardHref = getDashboardHref(profile?.role ?? null);
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/85 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+        <Link href="/" className="flex shrink-0 items-center gap-4">
+          <div className="relative h-16 w-16 shrink-0">
+            <Image
+              src="/tetamo-logo-transparent1.png"
+              alt="TeTamo logo"
+              fill
+              priority
+              sizes="40px"
+              className="object-contain"
+            />
+          </div>
+
+          <div className="flex flex-col leading-tight">
+  <span className="text-[20px] font-semibold tracking-[-0.01em] text-[#1C1C1E]">
+    TeTaMo
+  </span>
+  <span className="text-[12px] font-medium uppercase tracking-[0.08em] text-[#6B7280]">
+    {t.brandTagline}
+  </span>
+</div>
+        </Link>
+
+        <div className="hidden items-center gap-10 md:flex">
+          <nav className="flex items-center gap-9 text-[15px] font-medium text-[#2C2C2E]">
+            <Link href="/properti" className="transition hover:text-black">
+              {t.allProperties}
+            </Link>
+
+            <Link
+              href="/properti?jenisListing=dijual"
+              className="transition hover:text-black"
+            >
+              {t.forSale}
+            </Link>
+
+            <Link
+              href="/properti?jenisListing=disewa"
+              className="transition hover:text-black"
+            >
+              {t.forRent}
+            </Link>
+
+            <Link href="/pembeli" className="transition hover:text-black">
+              {t.buyers}
+            </Link>
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <div ref={langRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setLangOpen((prev) => !prev);
+                  setAccountOpen(false);
+                }}
+                className="inline-flex h-14 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-5 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+              >
+                <Globe className="h-4 w-4" />
+                <span>{lang.toUpperCase()}</span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              {langOpen && (
+                <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLang("id");
+                      setLangOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                      lang === "id"
+                        ? "bg-[#1C1C1E] text-white"
+                        : "text-[#1C1C1E] hover:bg-gray-50"
+                    }`}
+                  >
+                    ID
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLang("en");
+                      setLangOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                      lang === "en"
+                        ? "bg-[#1C1C1E] text-white"
+                        : "text-[#1C1C1E] hover:bg-gray-50"
+                    }`}
+                  >
+                    EN
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div ref={accountRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountOpen((prev) => !prev);
+                  setLangOpen(false);
+                }}
+                className="inline-flex h-14 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-5 text-[15px] font-semibold text-white transition hover:opacity-90"
+              >
+                {isLoggedIn ? (
+                  <>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
+                      {initials}
+                    </div>
+                    <span className="hidden max-w-[140px] truncate lg:inline">
+                      {displayName}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <User className="h-4 w-4" />
+                    <span className="hidden sm:inline">{t.account}</span>
+                  </>
+                )}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              {accountOpen && (
+                <div className="absolute right-0 top-[calc(100%+8px)] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  {sessionLoading ? (
+                    <div className="px-4 py-3 text-sm text-gray-500">
+                      {t.loading}
+                    </div>
+                  ) : isLoggedIn ? (
+                    <>
+                      <div className="border-b border-gray-100 px-4 py-3">
+                        <p className="truncate text-sm font-semibold text-[#1C1C1E]">
+                          {displayName}
+                        </p>
+                        <p className="truncate text-xs text-gray-500">
+                          {authUserEmail}
+                        </p>
+                      </div>
+
+                      {!profileLoading ? (
+                        <Link
+                          href={dashboardHref}
+                          onClick={() => setAccountOpen(false)}
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          <LayoutDashboard className="h-4 w-4" />
+                          {t.dashboard}
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400">
+                          <LayoutDashboard className="h-4 w-4" />
+                          {t.loadingDashboard}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-red-600 transition hover:bg-red-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        {t.logout}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/login"
+                        onClick={() => setAccountOpen(false)}
+                        className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.login}
+                      </Link>
+
+                      <Link
+                        href="/login?role=agent"
+                        onClick={() => setAccountOpen(false)}
+                        className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.agentLogin}
+                      </Link>
+
+                      <Link
+                        href="/login?role=admin"
+                        onClick={() => setAccountOpen(false)}
+                        className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.adminLogin}
+                      </Link>
+
+                      <Link
+                        href="/signup"
+                        onClick={() => setAccountOpen(false)}
+                        className="block px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.signUp}
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}

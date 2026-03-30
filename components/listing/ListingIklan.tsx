@@ -1,0 +1,741 @@
+"use client";
+
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { useLanguage } from "@/app/context/LanguageContext";
+import { TetamoSelect } from "@/components/ui/TetamoSelect";
+
+type Props = {
+  draft: any;
+  setDraft: (fn: any) => void;
+  onNext: () => void;
+  onReset?: () => void;
+
+  inputBase?: string;
+  provinces?: string[];
+  citiesByProvince?: Record<string, string[]>;
+  housingSuggestions?: string[];
+};
+
+const DEFAULT_PROVINCES = [
+  "Aceh",
+  "Bali",
+  "Banten",
+  "Bengkulu",
+  "DI Yogyakarta",
+  "DKI Jakarta",
+  "Gorontalo",
+  "Jambi",
+  "Jawa Barat",
+  "Jawa Tengah",
+  "Jawa Timur",
+  "Kalimantan Barat",
+  "Kalimantan Selatan",
+  "Kalimantan Tengah",
+  "Kalimantan Timur",
+  "Kalimantan Utara",
+  "Kepulauan Bangka Belitung",
+  "Kepulauan Riau",
+  "Lampung",
+  "Maluku",
+  "Maluku Utara",
+  "Nusa Tenggara Barat",
+  "Nusa Tenggara Timur",
+  "Papua",
+  "Papua Barat",
+  "Riau",
+  "Sulawesi Barat",
+  "Sulawesi Selatan",
+  "Sulawesi Tengah",
+  "Sulawesi Tenggara",
+  "Sulawesi Utara",
+  "Sumatera Barat",
+  "Sumatera Selatan",
+  "Sumatera Utara",
+];
+
+const DEFAULT_CITIES_BY_PROVINCE: Record<string, string[]> = {
+  Bali: [
+    "Badung",
+    "Bangli",
+    "Buleleng",
+    "Denpasar",
+    "Gianyar",
+    "Jembrana",
+    "Karangasem",
+    "Klungkung",
+    "Tabanan",
+  ],
+  "DKI Jakarta": [
+    "Jakarta Barat",
+    "Jakarta Pusat",
+    "Jakarta Selatan",
+    "Jakarta Timur",
+    "Jakarta Utara",
+    "Kepulauan Seribu",
+  ],
+  "Jawa Barat": [
+    "Bandung",
+    "Bandung Barat",
+    "Bekasi",
+    "Bogor",
+    "Cimahi",
+    "Cirebon",
+    "Depok",
+    "Garut",
+    "Karawang",
+    "Sukabumi",
+    "Tasikmalaya",
+  ],
+  "Jawa Timur": [
+    "Batu",
+    "Blitar",
+    "Gresik",
+    "Jember",
+    "Kediri",
+    "Lamongan",
+    "Madiun",
+    "Malang",
+    "Mojokerto",
+    "Pasuruan",
+    "Sidoarjo",
+    "Surabaya",
+  ],
+  Banten: [
+    "Cilegon",
+    "Lebak",
+    "Pandeglang",
+    "Serang",
+    "Tangerang",
+    "Tangerang Selatan",
+  ],
+  "DI Yogyakarta": [
+    "Bantul",
+    "Gunungkidul",
+    "Kulon Progo",
+    "Sleman",
+    "Yogyakarta",
+  ],
+};
+
+const DEFAULT_HOUSING_SUGGESTIONS = [
+  "Alam Sutera",
+  "BSD City",
+  "CitraGarden",
+  "Gading Serpong",
+  "Pantai Indah Kapuk",
+  "Setiabudi",
+  "Canggu",
+].sort((a, b) => a.localeCompare(b));
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean))).sort(
+    (a, b) => a.localeCompare(b)
+  );
+}
+
+function normalizeSearch(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function buildAddressSuggestionVariants(params: {
+  query: string;
+  city: string;
+  province: string;
+  housingName: string;
+  customHousing: string;
+  note: string;
+}) {
+  const query = params.query.trim();
+  const city = params.city.trim();
+  const province = params.province.trim();
+  const note = params.note.trim();
+
+  const housing =
+    params.housingName === "__OTHER__"
+      ? params.customHousing.trim()
+      : params.housingName.trim();
+
+  if (!query) return [];
+
+  return uniqueStrings([
+    query,
+    city ? `${query}, ${city}` : "",
+    city && province ? `${query}, ${city}, ${province}` : "",
+    housing ? `${query}, ${housing}` : "",
+    housing && city ? `${query}, ${housing}, ${city}` : "",
+    housing && city && province ? `${query}, ${housing}, ${city}, ${province}` : "",
+    province ? `${query}, ${province}` : "",
+    note ? `${query} - ${note}` : "",
+    city && note ? `${query}, ${city} - ${note}` : "",
+    housing && note ? `${query}, ${housing} - ${note}` : "",
+  ]);
+}
+
+export default function ListingIklan({
+  draft,
+  setDraft,
+  onNext,
+  onReset,
+  inputBase = "mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10",
+  provinces = [],
+  citiesByProvince = {},
+  housingSuggestions = [],
+}: Props) {
+  const { lang } = useLanguage();
+
+  const mode = draft?.mode === "edit" ? "edit" : "create";
+
+  const [listingType, setListingType] = useState(draft?.listingType ?? "");
+  const [address, setAddress] = useState(draft?.address ?? "");
+  const [province, setProvince] = useState(draft?.province ?? "");
+  const [city, setCity] = useState(draft?.city ?? "");
+  const [housingName, setHousingName] = useState(draft?.housingName ?? "");
+  const [customHousing, setCustomHousing] = useState(draft?.customHousing ?? "");
+  const [note, setNote] = useState(draft?.note ?? "");
+
+  const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
+  const [highlightedAddressIndex, setHighlightedAddressIndex] = useState(-1);
+
+  const addressBoxRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setListingType(draft?.listingType ?? "");
+    setAddress(draft?.address ?? "");
+    setProvince(draft?.province ?? "");
+    setCity(draft?.city ?? "");
+    setHousingName(draft?.housingName ?? "");
+    setCustomHousing(draft?.customHousing ?? "");
+    setNote(draft?.note ?? "");
+  }, [
+    draft?.listingType,
+    draft?.address,
+    draft?.province,
+    draft?.city,
+    draft?.housingName,
+    draft?.customHousing,
+    draft?.note,
+  ]);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!addressBoxRef.current) return;
+      if (!addressBoxRef.current.contains(event.target as Node)) {
+        setIsAddressDropdownOpen(false);
+        setHighlightedAddressIndex(-1);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
+  const finalProvinces = useMemo(
+    () => uniqueStrings(provinces.length > 0 ? provinces : DEFAULT_PROVINCES),
+    [provinces]
+  );
+
+  const finalCitiesByProvince = useMemo(
+    () =>
+      Object.keys(citiesByProvince).length > 0
+        ? citiesByProvince
+        : DEFAULT_CITIES_BY_PROVINCE,
+    [citiesByProvince]
+  );
+
+  const finalHousingSuggestions = useMemo(
+    () =>
+      uniqueStrings(
+        housingSuggestions.length > 0
+          ? housingSuggestions
+          : DEFAULT_HOUSING_SUGGESTIONS
+      ),
+    [housingSuggestions]
+  );
+
+  const cityOptions = useMemo(() => {
+    if (!province) return [];
+    return uniqueStrings(finalCitiesByProvince[province] ?? []);
+  }, [province, finalCitiesByProvince]);
+
+  const cityAreaSuggestions = useMemo(() => {
+    return uniqueStrings([
+      ...cityOptions,
+      ...(housingName && housingName !== "__OTHER__" ? [housingName] : []),
+      ...(customHousing ? [customHousing] : []),
+      ...(city ? [city] : []),
+    ]);
+  }, [cityOptions, housingName, customHousing, city]);
+
+  const rawAddressSuggestions = useMemo(() => {
+    return buildAddressSuggestionVariants({
+      query: address,
+      city,
+      province,
+      housingName,
+      customHousing,
+      note,
+    });
+  }, [address, city, province, housingName, customHousing, note]);
+
+  const filteredAddressSuggestions = useMemo(() => {
+    const query = normalizeSearch(address);
+
+    if (query.length < 3) return [];
+
+    return rawAddressSuggestions
+      .filter((item) => normalizeSearch(item).includes(query))
+      .filter((item) => normalizeSearch(item) !== query)
+      .slice(0, 6);
+  }, [address, rawAddressSuggestions]);
+
+  useEffect(() => {
+    setHighlightedAddressIndex(-1);
+  }, [filteredAddressSuggestions]);
+
+  const canNext = useMemo(() => {
+    return (
+      listingType.trim().length > 0 &&
+      address.trim().length > 0 &&
+      province.trim().length > 0 &&
+      city.trim().length > 0 &&
+      (housingName === "__OTHER__" ? customHousing.trim().length > 0 : true)
+    );
+  }, [listingType, address, province, city, housingName, customHousing]);
+
+  function chooseAddressSuggestion(value: string) {
+    setAddress(value);
+    setIsAddressDropdownOpen(false);
+    setHighlightedAddressIndex(-1);
+  }
+
+  function handleAddressKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (!filteredAddressSuggestions.length) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setIsAddressDropdownOpen(true);
+      setHighlightedAddressIndex((prev) =>
+        prev < filteredAddressSuggestions.length - 1 ? prev + 1 : 0
+      );
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setIsAddressDropdownOpen(true);
+      setHighlightedAddressIndex((prev) =>
+        prev > 0 ? prev - 1 : filteredAddressSuggestions.length - 1
+      );
+      return;
+    }
+
+    if (e.key === "Enter") {
+      if (!isAddressDropdownOpen) return;
+
+      e.preventDefault();
+
+      if (
+        highlightedAddressIndex >= 0 &&
+        highlightedAddressIndex < filteredAddressSuggestions.length
+      ) {
+        chooseAddressSuggestion(filteredAddressSuggestions[highlightedAddressIndex]);
+      } else {
+        chooseAddressSuggestion(filteredAddressSuggestions[0]);
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      setIsAddressDropdownOpen(false);
+      setHighlightedAddressIndex(-1);
+    }
+  }
+
+  function handleNext() {
+    if (!canNext) return;
+
+    setDraft((prev: any) => ({
+      ...(prev || {}),
+      mode,
+      listingType,
+      address,
+      province,
+      city,
+      housingName,
+      customHousing,
+      note,
+    }));
+
+    onNext();
+  }
+
+  return (
+    <main className="min-h-screen bg-white text-gray-900">
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-extrabold tracking-tight text-[#1C1C1E]">
+                {lang === "id" ? "Lokasi Properti" : "Property Location"}
+              </h1>
+
+              {draft?.mode !== "edit" && draft?.source !== "agent" && (
+                <span
+                  className={[
+                    "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+                    draft?.plan === "featured"
+                      ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600"
+                      : draft?.plan === "basic"
+                      ? "border-gray-300 bg-white text-gray-700"
+                      : "border-gray-200 bg-gray-50 text-gray-400",
+                  ].join(" ")}
+                >
+                  {draft?.plan === "featured"
+                    ? "FEATURED"
+                    : draft?.plan === "basic"
+                    ? "BASIC"
+                    : lang === "id"
+                    ? "MEMUAT..."
+                    : "LOADING..."}
+                </span>
+              )}
+            </div>
+
+            <p className="mt-2 text-gray-600">
+              {lang === "id"
+                ? "(Step 1) Isi lokasi dulu, lalu lanjut ke detail dan foto."
+                : "(Step 1) Fill in the location first, then continue to details and photos."}
+            </p>
+          </div>
+
+          {onReset ? (
+            <button
+              type="button"
+              onClick={onReset}
+              className="mt-1 inline-flex items-center gap-2 text-sm font-semibold text-[#1C1C1E] hover:opacity-80"
+            >
+              ← {lang === "id" ? "Kembali" : "Back"}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="h-10" />
+
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-[#1C1C1E]">
+            {lang === "id" ? "Jenis Iklan" : "Listing Type"}{" "}
+            <span className="text-red-600">*</span>
+          </label>
+
+          <div className="mt-3 inline-flex rounded-2xl border border-gray-200 bg-white p-1">
+            {[
+              { key: "dijual", label: lang === "id" ? "Dijual" : "For Sale" },
+              { key: "disewa", label: lang === "id" ? "Disewa" : "For Rent" },
+              { key: "lelang", label: lang === "id" ? "Lelang" : "Auction" },
+            ].map((item) => {
+              const active = listingType === item.key;
+
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setListingType(item.key)}
+                  className={[
+                    "rounded-2xl px-5 py-2 text-sm font-semibold transition",
+                    active
+                      ? "bg-[#1C1C1E] text-white"
+                      : "text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {!listingType && (
+            <p className="mt-2 text-xs text-gray-500">
+              {lang === "id"
+                ? "Pilih salah satu: Dijual / Disewa / Lelang."
+                : "Choose one: For Sale / For Rent / Auction."}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-semibold text-[#1C1C1E]">
+              {lang === "id" ? "Kode" : "Code"}{" "}
+              <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={draft?.kode ?? ""}
+              placeholder={
+                lang === "id" ? "Contoh: TMO-0001" : "Example: TMO-0001"
+              }
+              className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+              onChange={(e) =>
+                setDraft((prev: any) => ({
+                  ...(prev || {}),
+                  kode: e.target.value,
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[#1C1C1E]">
+              {lang === "id" ? "Tanggal Tayang" : "Posted Date"}{" "}
+              <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={(draft?.postedDate ?? "").slice(0, 10)}
+              className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+              onChange={(e) =>
+                setDraft((prev: any) => ({
+                  ...(prev || {}),
+                  postedDate: e.target.value,
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mt-8 rounded-3xl border border-gray-100 bg-white shadow-sm">
+          <div className="p-8">
+            <div ref={addressBoxRef} className="relative">
+              <label className="text-sm font-semibold text-[#1C1C1E]">
+                {lang === "id" ? "Alamat Properti" : "Property Address"}{" "}
+                <span className="text-red-600">*</span>
+              </label>
+
+              <input
+                autoComplete="street-address"
+                value={address}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setIsAddressDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  if (filteredAddressSuggestions.length > 0) {
+                    setIsAddressDropdownOpen(true);
+                  }
+                }}
+                onKeyDown={handleAddressKeyDown}
+                placeholder={
+                  lang === "id"
+                    ? "Contoh: 27A, Jalan Pantai Batu Bolong, Canggu"
+                    : "Example: 27A, Jalan Pantai Batu Bolong, Canggu"
+                }
+                className={inputBase}
+              />
+
+              {filteredAddressSuggestions.length > 0 && isAddressDropdownOpen && (
+                <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <div className="max-h-72 overflow-y-auto py-2">
+                    {filteredAddressSuggestions.map((item, index) => {
+                      const active = index === highlightedAddressIndex;
+
+                      return (
+                        <button
+                          key={`${item}-${index}`}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            chooseAddressSuggestion(item);
+                          }}
+                          className={[
+                            "block w-full px-4 py-3 text-left text-sm transition",
+                            active
+                              ? "bg-[#1C1C1E] text-white"
+                              : "text-gray-700 hover:bg-gray-50",
+                          ].join(" ")}
+                        >
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <p className="mt-2 text-xs text-gray-500">
+                {lang === "id"
+                  ? "Ketik alamat, lalu pilih saran yang muncul."
+                  : "Type the address, then choose one of the suggestions."}
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Provinsi" : "Province"}{" "}
+                  <span className="text-red-600">*</span>
+                </label>
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={province}
+                    placeholder={
+                      lang === "id" ? "Pilih provinsi" : "Select province"
+                    }
+                    options={finalProvinces.map((item) => ({
+                      value: item,
+                      label: item,
+                    }))}
+                    onChange={(value) => {
+                      setProvince(value);
+                      setCity("");
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Kota / Area" : "City / Area"}{" "}
+                  <span className="text-red-600">*</span>
+                </label>
+
+                <input
+                  list="city-area-suggestions"
+                  autoComplete="address-level2"
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder={
+                    province
+                      ? lang === "id"
+                        ? "Masukkan kota / area"
+                        : "Enter city / area"
+                      : lang === "id"
+                      ? "Pilih provinsi dulu"
+                      : "Select province first"
+                  }
+                  className={inputBase}
+                />
+
+                <datalist id="city-area-suggestions">
+                  {cityAreaSuggestions.map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <label className="text-sm font-semibold text-[#1C1C1E]">
+                {lang === "id"
+                  ? "Nama Apartemen / Perumahan / Cluster"
+                  : "Apartment / Housing / Cluster Name"}{" "}
+                <span className="text-gray-400">
+                  {lang === "id" ? "(Opsional)" : "(Optional)"}
+                </span>
+              </label>
+
+              <div className="mt-2">
+                <TetamoSelect
+                  value={housingName}
+                  placeholder={
+                    lang === "id" ? "Pilih (opsional)" : "Select (optional)"
+                  }
+                  options={[
+                    ...finalHousingSuggestions.map((item) => ({
+                      value: item,
+                      label: item,
+                    })),
+                    {
+                      value: "__OTHER__",
+                      label:
+                        lang === "id"
+                          ? "Lainnya (ketik manual)"
+                          : "Other (type manually)",
+                    },
+                  ]}
+                  onChange={(value) => {
+                    setHousingName(value);
+                    if (value !== "__OTHER__") setCustomHousing("");
+                  }}
+                />
+              </div>
+
+              {housingName === "__OTHER__" && (
+                <div className="mt-4">
+                  <label className="text-sm font-semibold text-[#1C1C1E]">
+                    {lang === "id" ? "Ketik nama" : "Type name"}
+                  </label>
+                  <input
+                    value={customHousing}
+                    onChange={(e) => setCustomHousing(e.target.value)}
+                    placeholder={
+                      lang === "id"
+                        ? "Contoh: Cluster Melati / The Mansion / dll"
+                        : "Example: Cluster Melati / The Mansion / etc"
+                    }
+                    className={inputBase}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <label className="text-sm font-semibold text-[#1C1C1E]">
+                {lang === "id" ? "Catatan Lokasi" : "Location Notes"}{" "}
+                <span className="text-gray-400">
+                  {lang === "id" ? "(Opsional)" : "(Optional)"}
+                </span>
+              </label>
+
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={
+                  lang === "id"
+                    ? "Contoh: dekat MRT, akses tol, landmark, patokan..."
+                    : "Example: near MRT, toll access, landmark, directions..."
+                }
+                className={inputBase}
+              />
+            </div>
+
+            <div className="mt-10">
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!canNext}
+                className={[
+                  "w-full rounded-2xl px-6 py-4 text-center font-semibold transition",
+                  canNext
+                    ? "bg-[#1C1C1E] text-white hover:opacity-90"
+                    : "cursor-not-allowed bg-gray-200 text-gray-500",
+                ].join(" ")}
+              >
+                {lang === "id" ? "Simpan & Lanjutkan" : "Save & Continue"}
+              </button>
+
+              {onReset ? (
+                <button
+                  type="button"
+                  onClick={onReset}
+                  className="mt-4 text-sm text-gray-500 hover:text-black"
+                >
+                  {lang === "id" ? "Reset" : "Reset"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

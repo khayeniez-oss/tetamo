@@ -1,0 +1,464 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Search, CheckCircle, XCircle, RotateCcw } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+/* =========================
+TYPES
+========================= */
+
+type PaymentStatus =
+  | "initiated"
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "expired"
+  | "refunded";
+
+type PaymentRow = {
+  id: string;
+  user_id: string | null;
+  listing_code: string | null;
+  product_name: string | null;
+  payment_title: string | null;
+  payment_method: string | null;
+  method: string | null;
+  gateway: string | null;
+  provider: string | null;
+  amount: number | null;
+  amount_idr: number | null;
+  currency: string | null;
+  created_at: string | null;
+  status: PaymentStatus | null;
+};
+
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+};
+
+type Payment = {
+  id: string;
+  owner: string;
+  listingKode: string;
+  package: string;
+  amount: string;
+  method: string;
+  date: string;
+  status: PaymentStatus;
+};
+
+/* =========================
+STATUS UI
+========================= */
+
+function statusUI(status: PaymentStatus) {
+  if (status === "succeeded")
+    return {
+      label: "Paid",
+      badge: "bg-green-50 text-green-700 border-green-200",
+    };
+
+  if (status === "pending" || status === "initiated")
+    return {
+      label: "Pending",
+      badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    };
+
+  if (status === "failed")
+    return {
+      label: "Failed",
+      badge: "bg-red-50 text-red-700 border-red-200",
+    };
+
+  if (status === "expired")
+    return {
+      label: "Expired",
+      badge: "bg-orange-50 text-orange-700 border-orange-200",
+    };
+
+  return {
+    label: "Refunded",
+    badge: "bg-gray-100 text-gray-700 border-gray-200",
+  };
+}
+
+/* =========================
+HELPERS
+========================= */
+
+function formatAmount(
+  amount: number | null,
+  amountIdr: number | null,
+  currency: string | null
+) {
+  const code = (currency || "IDR").toUpperCase();
+
+  if (code === "IDR" || amountIdr !== null) {
+    const value = Number(amountIdr ?? amount ?? 0);
+    return `Rp ${new Intl.NumberFormat("id-ID").format(value)}`;
+  }
+
+  const value = Number(amount ?? amountIdr ?? 0);
+
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return `${code} ${new Intl.NumberFormat("en-US").format(value)}`;
+  }
+}
+
+function formatDate(date: string | null) {
+  if (!date) return "-";
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(parsed);
+}
+
+/* =========================
+PAGE
+========================= */
+
+export default function AdminPaymentsPage() {
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const ITEMS_PER_PAGE = 12;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPayments() {
+      setLoading(true);
+      setError("");
+
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from("payments")
+        .select(
+          `
+            id,
+            user_id,
+            listing_code,
+            product_name,
+            payment_title,
+            payment_method,
+            method,
+            gateway,
+            provider,
+            amount,
+            amount_idr,
+            currency,
+            created_at,
+            status
+          `
+        )
+        .order("created_at", { ascending: false });
+
+      if (!isMounted) return;
+
+      if (paymentsError) {
+        console.error("Failed to load payments:", paymentsError);
+        setError("Gagal memuat payments.");
+        setPayments([]);
+        setLoading(false);
+        return;
+      }
+
+      const rows = (paymentsData || []) as PaymentRow[];
+      const userIds = Array.from(
+        new Set(rows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))
+      );
+
+      let profileMap = new Map<string, ProfileRow>();
+
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", userIds);
+
+        if (!isMounted) return;
+
+        if (profilesError) {
+          console.error("Failed to load payment owners:", profilesError);
+        } else {
+          profileMap = new Map(
+            ((profilesData || []) as ProfileRow[]).map((row) => [row.id, row])
+          );
+        }
+      }
+
+      const mapped: Payment[] = rows.map((row) => ({
+        id: row.id,
+        owner:
+          (row.user_id ? profileMap.get(row.user_id)?.full_name : null)?.trim() ||
+          "Unknown",
+        listingKode: row.listing_code?.trim() || "-",
+        package: row.product_name?.trim() || row.payment_title?.trim() || "-",
+        amount: formatAmount(row.amount, row.amount_idr, row.currency),
+        method:
+          row.payment_method?.trim() ||
+          row.method?.trim() ||
+          row.gateway?.trim() ||
+          row.provider?.trim() ||
+          "-",
+        date: formatDate(row.created_at),
+        status: (row.status || "pending") as PaymentStatus,
+      }));
+
+      setPayments(mapped);
+      setLoading(false);
+    }
+
+    loadPayments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return payments;
+
+    const words = searchQuery.toLowerCase().split(" ").filter(Boolean);
+
+    return payments.filter((p) => {
+      const searchable = `
+        ${p.owner}
+        ${p.listingKode}
+        ${p.package}
+        ${p.method}
+        ${p.status}
+      `.toLowerCase();
+
+      return words.every((w) => searchable.includes(w));
+    });
+  }, [searchQuery, payments]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const safePage = Math.min(page, totalPages);
+
+  const paginated = filtered.slice(
+    (safePage - 1) * ITEMS_PER_PAGE,
+    safePage * ITEMS_PER_PAGE
+  );
+
+  const startItem =
+    filtered.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+
+  const endItem = Math.min(safePage * ITEMS_PER_PAGE, filtered.length);
+
+  async function updateStatus(id: string, status: PaymentStatus) {
+    setSavingId(id);
+    setError("");
+
+    const { error } = await supabase
+      .from("payments")
+      .update({ status })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Failed to update payment status:", error);
+      setError("Gagal mengubah status payment.");
+      setSavingId(null);
+      return;
+    }
+
+    setPayments((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status } : p))
+    );
+
+    setSavingId(null);
+  }
+
+  return (
+    <div>
+      {/* Header */}
+
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#1C1C1E]">Payments</h1>
+        <p className="text-sm text-gray-500">
+          Monitor dan kelola transaksi pembayaran.
+        </p>
+      </div>
+
+      {/* Search */}
+
+      <div className="relative mt-6">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
+          size={18}
+        />
+
+        <input
+          type="text"
+          placeholder="Cari owner, listing, metode pembayaran..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setPage(1);
+          }}
+          className="w-full rounded-2xl border border-gray-400 py-3 pl-12 pr-4 text-sm outline-none placeholder-gray-500 focus:border-[#1C1C1E]"
+        />
+      </div>
+
+      {/* Payments Card */}
+
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+        {loading ? (
+          <div className="p-6 text-sm text-gray-500">Loading payments...</div>
+        ) : error ? (
+          <div className="p-6 text-sm text-red-600">{error}</div>
+        ) : paginated.length === 0 ? (
+          <div className="p-6 text-sm text-gray-500">Belum ada payment.</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {paginated.map((payment) => {
+              const ui = statusUI(payment.status);
+              const isSaving = savingId === payment.id;
+
+              return (
+                <div
+                  key={payment.id}
+                  className="flex items-center justify-between gap-6 p-6"
+                >
+                  {/* LEFT */}
+
+                  <div>
+                    <span
+                      className={`inline-flex rounded-full border px-3 py-1 text-xs ${ui.badge}`}
+                    >
+                      {ui.label}
+                    </span>
+
+                    <p className="mt-2 font-medium text-[#1C1C1E]">
+                      {payment.owner}
+                    </p>
+
+                    <p className="text-sm text-gray-500">
+                      Listing: {payment.listingKode}
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      {payment.package} • {payment.method}
+                    </p>
+                  </div>
+
+                  {/* RIGHT */}
+
+                  <div className="text-right">
+                    <p className="font-semibold text-[#1C1C1E]">
+                      {payment.amount}
+                    </p>
+
+                    <p className="text-xs text-gray-500">{payment.date}</p>
+                  </div>
+
+                  {/* ACTION */}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => updateStatus(payment.id, "succeeded")}
+                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      title="Mark as paid"
+                    >
+                      <CheckCircle size={16} />
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => updateStatus(payment.id, "failed")}
+                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      title="Mark as failed"
+                    >
+                      <XCircle size={16} />
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => updateStatus(payment.id, "refunded")}
+                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      title="Mark as refunded"
+                    >
+                      <RotateCcw size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+
+      <div className="mt-6 flex items-center justify-between">
+        <p className="text-sm text-gray-900">
+          Menampilkan {startItem}–{endItem} dari {filtered.length} transaksi
+        </p>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={safePage === 1 || filtered.length === 0}
+            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Sebelumnya
+          </button>
+
+          {filtered.length > 0 &&
+            Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                type="button"
+                key={p}
+                onClick={() => setPage(p)}
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  safePage === p
+                    ? "border-black bg-black text-white"
+                    : "border-gray-400"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safePage === totalPages || filtered.length === 0}
+            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Berikutnya
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
