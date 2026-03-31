@@ -1457,11 +1457,11 @@ export default function SearchPageContent() {
                         {item.area}, {item.province}
                       </p>
 
-                      <h3 className="mb-3 text-xl font-semibold leading-snug text-[#1C1C1E]">
+                      <h3 className="mb-2 text-base font-semibold leading-snug text-[#1C1C1E] sm:text-lg">
                         {item.title}
                       </h3>
 
-                      <p className="text-lg font-bold text-[#1C1C1E]">
+                      <p className="text-base font-bold text-[#1C1C1E] sm:text-lg">
                         {item.price}
                       </p>
 
