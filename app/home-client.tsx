@@ -109,12 +109,12 @@ function InfoCard({
 }) {
   return (
     <div
-      className={`rounded-3xl border border-gray-200 bg-white p-6 text-left shadow-sm sm:p-7 ${className}`}
+      className={`rounded-3xl border border-gray-200 bg-white p-4 text-left shadow-sm sm:p-5 ${className}`}
     >
-      <h3 className="mb-3 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+      <h3 className="mb-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
         {title}
       </h3>
-      <p className="text-sm leading-7 text-gray-600 sm:text-base">
+      <p className="text-sm leading-6 text-gray-600 sm:leading-7">
         {description}
       </p>
     </div>
@@ -157,7 +157,7 @@ function FeaturedOwnerPropertyCard({
         <img
           src={property.images[imgIndex]}
           alt="Property"
-          className="h-56 w-full object-cover sm:h-64 lg:h-72"
+          className="h-[320px] w-full object-cover sm:h-[360px] lg:h-[420px]"
         />
 
         <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
@@ -187,17 +187,16 @@ function FeaturedOwnerPropertyCard({
         <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
           {property.price}
         </h3>
-        <p className="mt-1 text-sm text-gray-600 sm:text-base">
-          {property.province}
-        </p>
 
-        <p className="mt-3 text-sm leading-6 text-gray-600 sm:text-base">
+        <p className="mt-1 text-sm text-gray-600">{property.province}</p>
+
+        <p className="mt-2 text-sm leading-6 text-gray-600">
           {property.size} • {translateBed(property.bed, lang)} •{" "}
           {translateFurnishing(property.furnishing, lang)} •{" "}
           {translateGarage(property.garage, lang)}
         </p>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <p className="text-sm text-gray-600">
             {lang === "id" ? "Pemilik:" : "Owner:"}{" "}
             <span className="font-semibold text-[#1C1C1E]">
@@ -226,23 +225,21 @@ function FeaturedOwnerPropertyCard({
           </div>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <a
             href={`https://wa.me/${property.ownerWhatsapp}`}
             target="_blank"
             rel="noreferrer"
-            className="block w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
+            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-3 py-3 text-center text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
           >
             {lang === "id" ? "WhatsApp Pemilik" : "WhatsApp Owner"}
           </a>
 
           <button
             type="button"
-            className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-yellow-700 sm:text-base"
+            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
           >
-            {lang === "id"
-              ? "Lihat Detail / Jadwal Viewing"
-              : "View Detail / Schedule Viewing"}
+            {lang === "id" ? "Lihat Detail" : "View Detail"}
           </button>
         </div>
       </div>
@@ -318,6 +315,7 @@ function FeaturedOwnersSection() {
             ? "Properti Pemilik Unggulan"
             : "Featured Owner Properties"}
         </h2>
+
         <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
           {lang === "id"
             ? "Properti langsung dari pemilik. Transparan, jelas, dan terverifikasi."
@@ -460,7 +458,7 @@ function FeaturedPropertyCard({ property }: { property: FeaturedProperty }) {
         <img
           src={property.images[imgIndex]}
           alt="Property"
-          className="h-56 w-full object-cover sm:h-64 lg:h-72"
+          className="h-[320px] w-full object-cover sm:h-[360px] lg:h-[420px]"
         />
 
         <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
@@ -490,11 +488,10 @@ function FeaturedPropertyCard({ property }: { property: FeaturedProperty }) {
         <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
           {property.price}
         </h3>
-        <p className="mt-1 text-sm text-gray-600 sm:text-base">
-          {property.province}
-        </p>
 
-        <p className="mt-3 text-sm leading-6 text-gray-600 sm:text-base">
+        <p className="mt-1 text-sm text-gray-600">{property.province}</p>
+
+        <p className="mt-2 text-sm leading-6 text-gray-600">
           {property.size} • {translateBed(property.bed, lang)} •{" "}
           {translateFurnishing(property.furnishing, lang)} •{" "}
           {translateGarage(property.garage, lang)}
@@ -529,7 +526,7 @@ function FeaturedPropertyCard({ property }: { property: FeaturedProperty }) {
           </div>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <a
             href={`https://wa.me/${property.whatsapp}?text=${encodeURIComponent(
               lang === "id"
@@ -552,18 +549,16 @@ Is this property still available?`
             )}`}
             target="_blank"
             rel="noreferrer"
-            className="block w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
+            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-3 py-3 text-center text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
           >
             WhatsApp
           </a>
 
           <Link
             href={`/properti/${property.id}`}
-            className="block w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700 sm:text-base"
+            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
           >
-            {lang === "id"
-              ? "Lihat Detail / Jadwal Viewing"
-              : "View Detail / Schedule Viewing"}
+            {lang === "id" ? "Lihat Detail" : "View Detail"}
           </Link>
         </div>
       </div>
@@ -748,6 +743,7 @@ function FeaturedAgentsSection() {
         <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
           {lang === "id" ? "Agen Unggulan TeTamo" : "TeTamo Featured Agents"}
         </h2>
+
         <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
           {lang === "id"
             ? "Profil agen modern yang terhubung dengan media sosial, memudahkan pembeli serius menemukan dan menghubungi Anda secara langsung."
@@ -758,7 +754,7 @@ function FeaturedAgentsSection() {
           {agents.map((agent) => (
             <div
               key={agent.id}
-              className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 text-center shadow-sm sm:p-6"
+              className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
             >
               {agent.agentVerified && (
                 <div className="absolute left-3 top-3 rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
@@ -766,23 +762,31 @@ function FeaturedAgentsSection() {
                 </div>
               )}
 
-              <img
-                src={agent.photo}
-                alt={agent.name}
-                className="mx-auto mt-5 h-28 w-28 rounded-2xl object-cover sm:mt-6 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
-              />
+              <div className="mt-8 flex items-start gap-4 sm:mt-10">
+                <img
+                  src={agent.photo}
+                  alt={agent.name}
+                  className="h-20 w-20 shrink-0 rounded-2xl object-cover sm:h-24 sm:w-24"
+                />
 
-              <h3 className="mt-4 text-lg font-bold text-[#1C1C1E] sm:text-xl">
-                {agent.name}
-              </h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                    {agent.name}
+                  </h3>
 
-              <div className="mt-2 flex flex-wrap justify-center gap-x-2 gap-y-1 text-sm text-gray-600">
-                <span>{agent.agency}</span>
-                <span className="hidden sm:inline">•</span>
-                <span>{agent.location}</span>
+                  <div className="mt-1 text-sm text-gray-600">
+                    {agent.agency}
+                  </div>
+
+                  <div className="mt-1 text-sm text-gray-500">
+                    {agent.location}
+                  </div>
+
+                  <p className="mt-2 text-sm text-gray-500">
+                    {agent.experience}
+                  </p>
+                </div>
               </div>
-
-              <p className="mt-2 text-sm text-gray-500">{agent.experience}</p>
 
               <div className="mt-5 flex flex-wrap justify-center gap-3">
                 <SocialBtn href={agent.socials?.instagram} label="Instagram">
@@ -803,7 +807,7 @@ function FeaturedAgentsSection() {
                 href={`https://wa.me/${agent.whatsapp}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-6 inline-block w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
+                className="mt-5 inline-block w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
               >
                 WhatsApp
               </a>
@@ -832,112 +836,112 @@ export default function HomeClient() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-gray-900">
-    <section className="bg-[#F7F7F8] px-4 pb-10 pt-8 text-center sm:px-6 sm:pb-12 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
-  <div className="mx-auto max-w-5xl">
-    <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-[#1C1C1E] sm:text-[36px] md:text-5xl lg:text-[52px]">
-      {lang === "id"
-        ? "Pasang Iklan dan Temukan Properti Anda di TeTaMo"
-        : "Advertise and Find Your Property at TeTaMo"}
-    </h1>
+      <section className="bg-[#F7F7F8] px-4 pb-10 pt-8 text-center sm:px-6 sm:pb-12 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
+        <div className="mx-auto max-w-5xl">
+          <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-[#1C1C1E] sm:text-[36px] md:text-5xl lg:text-[52px]">
+            {lang === "id"
+              ? "Pasang Iklan dan Temukan Properti Anda di TeTaMo"
+              : "Advertise and Find Your Property at TeTaMo"}
+          </h1>
 
-    <p className="mx-auto mt-4 max-w-3xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
-      {lang === "id"
-        ? "Platform properti all-in-one di Indonesia — transparan, profesional, dan fokus pada pembeli serius."
-        : "Indonesia's all-in-one real estate hub — transparent, professional, and focused on serious buyers."}
-    </p>
+          <p className="mx-auto mt-4 max-w-3xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
+            {lang === "id"
+              ? "Platform properti all-in-one di Indonesia — transparan, profesional, dan fokus pada pembeli serius."
+              : "Indonesia's all-in-one real estate hub — transparent, professional, and focused on serious buyers."}
+          </p>
 
-    <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">
-  <div className="flex items-center gap-2">
-    <div className="min-w-0 flex-1">
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") goSearch();
-        }}
-        placeholder={
-          lang === "id"
-            ? "Cari lokasi, harga, agen, properti..."
-            : "Search location, price, agent, property..."
-        }
-        className="h-11 w-full rounded-[16px] border border-transparent px-4 text-[15px] text-[#1C1C1E] placeholder:text-gray-500 focus:border-gray-200 focus:outline-none"
-      />
-    </div>
+          <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <input
+                  type="text"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") goSearch();
+                  }}
+                  placeholder={
+                    lang === "id"
+                      ? "Cari lokasi, harga, agen, properti..."
+                      : "Search location, price, agent, property..."
+                  }
+                  className="h-11 w-full rounded-[16px] border border-transparent px-4 text-[15px] text-[#1C1C1E] placeholder:text-gray-500 focus:border-gray-200 focus:outline-none"
+                />
+              </div>
 
-    <button
-      type="button"
-      onClick={goSearch}
-      className="h-11 w-[92px] shrink-0 rounded-[16px] bg-[#1C1C1E] px-3 text-sm font-semibold text-white transition hover:opacity-90"
-    >
-      {lang === "id" ? "Cari" : "Search"}
-    </button>
-  </div>
-</div>
+              <button
+                type="button"
+                onClick={goSearch}
+                className="h-11 w-[92px] shrink-0 rounded-[16px] bg-[#1C1C1E] px-3 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                {lang === "id" ? "Cari" : "Search"}
+              </button>
+            </div>
+          </div>
 
-    <div className="mx-auto mt-7 grid max-w-4xl grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
-      <Link
-        href="/properti"
-        className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-white transition hover:opacity-90 sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-      >
-        {lang === "id" ? "Lihat Properti" : "View Properties"}
-      </Link>
+          <div className="mx-auto mt-7 grid max-w-4xl grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
+            <Link
+              href="/properti"
+              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-white transition hover:opacity-90 sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+            >
+              {lang === "id" ? "Lihat Properti" : "View Properties"}
+            </Link>
 
-      <Link
-        href="/pemilik"
-        className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-      >
-        {lang === "id" ? "Iklankan Sebagai Pemilik" : "Advertise as Owner"}
-      </Link>
+            <Link
+              href="/pemilik"
+              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+            >
+              {lang === "id"
+                ? "Iklankan Sebagai Pemilik"
+                : "Advertise as Owner"}
+            </Link>
 
-      <Link
-        href="/pemilik"
-        className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-      >
-        {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
-      </Link>
-    </div>
-  </div>
-</section>
+            <Link
+              href="/pemilik"
+              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+            >
+              {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
+            </Link>
+          </div>
+        </div>
+      </section>
 
-    <section className="bg-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
-  <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
-    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-center shadow-sm sm:p-5">
-      <h3 className="mb-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-        {lang === "id" ? "Properti Terverifikasi" : "Verified Properties"}
-      </h3>
-      <p className="text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
-        {lang === "id"
-          ? "Properti asli dari agen dan pemilik. Mengurangi duplikasi dan spam."
-          : "Properties directly from verified agents and owners. Fewer duplicates, less spam."}
-      </p>
-    </div>
+      <section className="bg-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
+          <InfoCard
+            title={
+              lang === "id" ? "Properti Terverifikasi" : "Verified Properties"
+            }
+            description={
+              lang === "id"
+                ? "Properti asli dari agen dan pemilik. Mengurangi duplikasi dan spam."
+                : "Properties directly from verified agents and owners. Fewer duplicates, less spam."
+            }
+          />
 
-    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-center shadow-sm sm:p-5">
-      <h3 className="mb-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-        {lang === "id" ? "Jadwal Viewing" : "Schedule a Viewing"}
-      </h3>
-      <p className="text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
-        {lang === "id"
-          ? "Pembeli dan penyewa bisa menjadwalkan viewing langsung lewat Tetamo."
-          : "Buyers and renters can directly schedule a viewing through Tetamo."}
-      </p>
-    </div>
+          <InfoCard
+            title={lang === "id" ? "Jadwal Viewing" : "Schedule a Viewing"}
+            description={
+              lang === "id"
+                ? "Pembeli dan penyewa bisa menjadwalkan viewing langsung lewat Tetamo."
+                : "Buyers and renters can directly schedule a viewing through Tetamo."
+            }
+          />
 
-    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-center shadow-sm sm:p-5">
-      <h3 className="mb-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-        {lang === "id"
-          ? "Agen Media Sosial dan Branding"
-          : "Agent Social Media and Branding"}
-      </h3>
-      <p className="text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
-        {lang === "id"
-          ? "Profil agen terhubung ke media sosial, lebih banyak eksposur, lebih besar peluang closing."
-          : "Agent profiles connect directly to social media for higher exposure and better closing opportunities."}
-      </p>
-    </div>
-  </div>
-</section>
+          <InfoCard
+            title={
+              lang === "id"
+                ? "Agen Media Sosial dan Branding"
+                : "Agent Social Media and Branding"
+            }
+            description={
+              lang === "id"
+                ? "Profil agen terhubung ke media sosial, lebih banyak eksposur, lebih besar peluang closing."
+                : "Agent profiles connect directly to social media for higher exposure and better closing opportunities."
+            }
+          />
+        </div>
+      </section>
 
       <FeaturedPropertiesSection />
       <FeaturedAgentsSection />
