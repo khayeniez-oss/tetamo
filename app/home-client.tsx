@@ -832,7 +832,7 @@ export default function HomeClient() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-gray-900">
-      <section className="bg-[#F7F7F8] px-4 pb-12 pt-8 text-center sm:px-6 sm:pb-14 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
+    <section className="bg-[#F7F7F8] px-4 pb-10 pt-8 text-center sm:px-6 sm:pb-12 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
   <div className="mx-auto max-w-5xl">
     <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-[#1C1C1E] sm:text-[36px] md:text-5xl lg:text-[52px]">
       {lang === "id"
@@ -846,51 +846,53 @@ export default function HomeClient() {
         : "Indonesia's all-in-one real estate hub — transparent, professional, and focused on serious buyers."}
     </p>
 
-    <div className="mx-auto mt-8 w-full max-w-3xl rounded-[24px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-9">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") goSearch();
-          }}
-          placeholder={
-            lang === "id"
-              ? "Cari lokasi, harga, agen, properti..."
-              : "Search location, price, agent, property..."
-          }
-          className="h-12 w-full rounded-[18px] border border-transparent px-4 text-[15px] text-[#1C1C1E] placeholder:text-gray-500 focus:border-gray-200 focus:outline-none sm:flex-1"
-        />
-
-        <button
-          type="button"
-          onClick={goSearch}
-          className="h-12 w-full rounded-[18px] bg-[#1C1C1E] px-6 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto sm:min-w-[120px]"
-        >
-          {lang === "id" ? "Cari" : "Search"}
-        </button>
-      </div>
+    <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">
+  <div className="flex items-center gap-2">
+    <div className="min-w-0 flex-1">
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") goSearch();
+        }}
+        placeholder={
+          lang === "id"
+            ? "Cari lokasi, harga, agen, properti..."
+            : "Search location, price, agent, property..."
+        }
+        className="h-11 w-full rounded-[16px] border border-transparent px-4 text-[15px] text-[#1C1C1E] placeholder:text-gray-500 focus:border-gray-200 focus:outline-none"
+      />
     </div>
 
-    <div className="mx-auto mt-8 grid max-w-4xl grid-cols-3 gap-2 sm:mt-10 sm:gap-3">
+    <button
+      type="button"
+      onClick={goSearch}
+      className="h-11 w-[92px] shrink-0 rounded-[16px] bg-[#1C1C1E] px-3 text-sm font-semibold text-white transition hover:opacity-90"
+    >
+      {lang === "id" ? "Cari" : "Search"}
+    </button>
+  </div>
+</div>
+
+    <div className="mx-auto mt-7 grid max-w-4xl grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
       <Link
         href="/properti"
-        className="inline-flex min-h-[72px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 py-3 text-center text-[11px] font-semibold leading-[1.2] text-white transition hover:opacity-90 sm:min-h-[56px] sm:px-4 sm:py-3 sm:text-sm md:text-base"
+        className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-white transition hover:opacity-90 sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
       >
         {lang === "id" ? "Lihat Properti" : "View Properties"}
       </Link>
 
       <Link
         href="/pemilik"
-        className="inline-flex min-h-[72px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-3 text-center text-[11px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[56px] sm:px-4 sm:py-3 sm:text-sm md:text-base"
+        className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
       >
         {lang === "id" ? "Iklankan Sebagai Pemilik" : "Advertise as Owner"}
       </Link>
 
       <Link
         href="/pemilik"
-        className="inline-flex min-h-[72px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-3 text-center text-[11px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[56px] sm:px-4 sm:py-3 sm:text-sm md:text-base"
+        className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
       >
         {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
       </Link>
@@ -898,37 +900,37 @@ export default function HomeClient() {
   </div>
 </section>
 
-      <section className="bg-white px-4 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
-  <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-      <h3 className="mb-3 text-xl font-semibold text-[#1C1C1E]">
+    <section className="bg-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+  <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
+    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-center shadow-sm sm:p-5">
+      <h3 className="mb-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
         {lang === "id" ? "Properti Terverifikasi" : "Verified Properties"}
       </h3>
-      <p className="text-sm leading-7 text-gray-600 sm:text-base">
+      <p className="text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
         {lang === "id"
           ? "Properti asli dari agen dan pemilik. Mengurangi duplikasi dan spam."
           : "Properties directly from verified agents and owners. Fewer duplicates, less spam."}
       </p>
     </div>
 
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-      <h3 className="mb-3 text-xl font-semibold text-[#1C1C1E]">
+    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-center shadow-sm sm:p-5">
+      <h3 className="mb-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
         {lang === "id" ? "Jadwal Viewing" : "Schedule a Viewing"}
       </h3>
-      <p className="text-sm leading-7 text-gray-600 sm:text-base">
+      <p className="text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
         {lang === "id"
           ? "Pembeli dan penyewa bisa menjadwalkan viewing langsung lewat Tetamo."
           : "Buyers and renters can directly schedule a viewing through Tetamo."}
       </p>
     </div>
 
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-      <h3 className="mb-3 text-xl font-semibold text-[#1C1C1E]">
+    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-center shadow-sm sm:p-5">
+      <h3 className="mb-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
         {lang === "id"
           ? "Agen Media Sosial dan Branding"
           : "Agent Social Media and Branding"}
       </h3>
-      <p className="text-sm leading-7 text-gray-600 sm:text-base">
+      <p className="text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
         {lang === "id"
           ? "Profil agen terhubung ke media sosial, lebih banyak eksposur, lebih besar peluang closing."
           : "Agent profiles connect directly to social media for higher exposure and better closing opportunities."}
