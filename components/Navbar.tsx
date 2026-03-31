@@ -12,6 +12,8 @@ import {
   User,
   LogOut,
   LayoutDashboard,
+  Menu,
+  X,
 } from "lucide-react";
 
 type ProfileData = {
@@ -55,7 +57,9 @@ export default function Navbar() {
   const isID = lang === "id";
 
   const t = {
-    brandTagline: isID ? "SEMUA DALAM SATU - PUSAT PROPERTI" : "ALL IN ONE - REAL ESTATE HUB",
+    brandTagline: isID
+      ? "SEMUA DALAM SATU - PUSAT PROPERTI"
+      : "ALL IN ONE - REAL ESTATE HUB",
 
     allProperties: isID ? "Properti" : "Properties",
     forSale: isID ? "Dijual" : "Sale",
@@ -72,6 +76,7 @@ export default function Navbar() {
     agentLogin: isID ? "Masuk Agen" : "Agent Login",
     adminLogin: isID ? "Masuk Admin" : "Admin Login",
     signUp: isID ? "Daftar" : "Sign Up",
+    menu: isID ? "Menu" : "Menu",
   };
 
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
@@ -82,9 +87,18 @@ export default function Navbar() {
 
   const [langOpen, setLangOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const langRef = useRef<HTMLDivElement | null>(null);
+  const desktopLangRef = useRef<HTMLDivElement | null>(null);
+  const mobileLangRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  function closeAllMenus() {
+    setLangOpen(false);
+    setAccountOpen(false);
+    setMobileMenuOpen(false);
+  }
 
   async function loadProfileByUserId(
     userId: string,
@@ -182,12 +196,21 @@ export default function Navbar() {
     function handleOutsideClick(event: MouseEvent) {
       const target = event.target as Node;
 
-      if (langRef.current && !langRef.current.contains(target)) {
+      const insideDesktopLang =
+        desktopLangRef.current?.contains(target) ?? false;
+      const insideMobileLang =
+        mobileLangRef.current?.contains(target) ?? false;
+
+      if (!insideDesktopLang && !insideMobileLang) {
         setLangOpen(false);
       }
 
       if (accountRef.current && !accountRef.current.contains(target)) {
         setAccountOpen(false);
+      }
+
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(target)) {
+        setMobileMenuOpen(false);
       }
     }
 
@@ -198,9 +221,24 @@ export default function Navbar() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleResize() {
+      if (window.innerWidth >= 768) {
+        setMobileMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     setAccountOpen(false);
+    setMobileMenuOpen(false);
     router.push("/");
     router.refresh();
   }
@@ -215,68 +253,234 @@ export default function Navbar() {
   const dashboardHref = getDashboardHref(profile?.role ?? null);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/85 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-        <Link href="/" className="flex shrink-0 items-center gap-4">
-          <div className="relative h-16 w-16 shrink-0">
-            <Image
-              src="/tetamo-logo-transparent1.png"
-              alt="TeTamo logo"
-              fill
-              priority
-              sizes="40px"
-              className="object-contain"
-            />
+    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 md:py-4">
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href="/"
+            onClick={closeAllMenus}
+            className="flex min-w-0 max-w-[calc(100%-108px)] items-center gap-3 sm:max-w-none sm:gap-4"
+          >
+            <div className="relative h-12 w-12 shrink-0 sm:h-14 sm:w-14 md:h-16 md:w-16">
+              <Image
+                src="/tetamo-logo-transparent1.png"
+                alt="TeTamo logo"
+                fill
+                priority
+                sizes="64px"
+                className="object-contain"
+              />
+            </div>
+
+            <div className="min-w-0 leading-tight">
+              <span className="block truncate text-[18px] font-semibold tracking-[-0.01em] text-[#1C1C1E] sm:text-[20px]">
+                TeTaMo
+              </span>
+
+              <span className="hidden text-[11px] font-medium uppercase tracking-[0.06em] text-[#6B7280] md:block">
+                {t.brandTagline}
+              </span>
+            </div>
+          </Link>
+
+          <div className="hidden items-center gap-6 md:flex lg:gap-10">
+            <nav className="flex items-center gap-5 text-[15px] font-medium text-[#2C2C2E] lg:gap-9">
+              <Link href="/properti" className="transition hover:text-black">
+                {t.allProperties}
+              </Link>
+
+              <Link
+                href="/properti?jenisListing=dijual"
+                className="transition hover:text-black"
+              >
+                {t.forSale}
+              </Link>
+
+              <Link
+                href="/properti?jenisListing=disewa"
+                className="transition hover:text-black"
+              >
+                {t.forRent}
+              </Link>
+
+              <Link href="/pembeli" className="transition hover:text-black">
+                {t.buyers}
+              </Link>
+            </nav>
+
+            <div className="flex shrink-0 items-center gap-3">
+              <div ref={desktopLangRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLangOpen((prev) => !prev);
+                    setAccountOpen(false);
+                  }}
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
+                >
+                  <Globe className="h-4 w-4" />
+                  <span>{lang.toUpperCase()}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+
+                {langOpen && (
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLang("id");
+                        setLangOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                        lang === "id"
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E] hover:bg-gray-50"
+                      }`}
+                    >
+                      ID
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLang("en");
+                        setLangOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                        lang === "en"
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E] hover:bg-gray-50"
+                      }`}
+                    >
+                      EN
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div ref={accountRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountOpen((prev) => !prev);
+                    setLangOpen(false);
+                  }}
+                  className="inline-flex h-12 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-4 text-[15px] font-semibold text-white transition hover:opacity-90 lg:h-14 lg:px-5"
+                >
+                  {isLoggedIn ? (
+                    <>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
+                        {initials}
+                      </div>
+                      <span className="hidden max-w-[140px] truncate lg:inline">
+                        {displayName}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <User className="h-4 w-4" />
+                      <span className="hidden sm:inline">{t.account}</span>
+                    </>
+                  )}
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+
+                {accountOpen && (
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                    {sessionLoading ? (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        {t.loading}
+                      </div>
+                    ) : isLoggedIn ? (
+                      <>
+                        <div className="border-b border-gray-100 px-4 py-3">
+                          <p className="truncate text-sm font-semibold text-[#1C1C1E]">
+                            {displayName}
+                          </p>
+                          <p className="truncate text-xs text-gray-500">
+                            {authUserEmail}
+                          </p>
+                        </div>
+
+                        {!profileLoading ? (
+                          <Link
+                            href={dashboardHref}
+                            onClick={() => setAccountOpen(false)}
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                          >
+                            <LayoutDashboard className="h-4 w-4" />
+                            {t.dashboard}
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400">
+                            <LayoutDashboard className="h-4 w-4" />
+                            {t.loadingDashboard}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-red-600 transition hover:bg-red-50"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          {t.logout}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Link
+                          href="/login"
+                          onClick={() => setAccountOpen(false)}
+                          className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          {t.login}
+                        </Link>
+
+                        <Link
+                          href="/login?role=agent"
+                          onClick={() => setAccountOpen(false)}
+                          className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          {t.agentLogin}
+                        </Link>
+
+                        <Link
+                          href="/login?role=admin"
+                          onClick={() => setAccountOpen(false)}
+                          className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          {t.adminLogin}
+                        </Link>
+
+                        <Link
+                          href="/signup"
+                          onClick={() => setAccountOpen(false)}
+                          className="block px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          {t.signUp}
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col leading-tight">
-  <span className="text-[20px] font-semibold tracking-[-0.01em] text-[#1C1C1E]">
-    TeTaMo
-  </span>
-  <span className="text-[12px] font-medium uppercase tracking-[0.08em] text-[#6B7280]">
-    {t.brandTagline}
-  </span>
-</div>
-        </Link>
-
-        <div className="hidden items-center gap-10 md:flex">
-          <nav className="flex items-center gap-9 text-[15px] font-medium text-[#2C2C2E]">
-            <Link href="/properti" className="transition hover:text-black">
-              {t.allProperties}
-            </Link>
-
-            <Link
-              href="/properti?jenisListing=dijual"
-              className="transition hover:text-black"
-            >
-              {t.forSale}
-            </Link>
-
-            <Link
-              href="/properti?jenisListing=disewa"
-              className="transition hover:text-black"
-            >
-              {t.forRent}
-            </Link>
-
-            <Link href="/pembeli" className="transition hover:text-black">
-              {t.buyers}
-            </Link>
-          </nav>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <div ref={langRef} className="relative">
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
+            <div ref={mobileLangRef} className="relative">
               <button
                 type="button"
                 onClick={() => {
                   setLangOpen((prev) => !prev);
+                  setMobileMenuOpen(false);
                   setAccountOpen(false);
                 }}
-                className="inline-flex h-14 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-5 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                className="inline-flex h-10 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
                 <Globe className="h-4 w-4" />
                 <span>{lang.toUpperCase()}</span>
-                <ChevronDown className="h-4 w-4" />
               </button>
 
               {langOpen && (
@@ -314,110 +518,142 @@ export default function Navbar() {
               )}
             </div>
 
-            <div ref={accountRef} className="relative">
+            <div ref={mobileMenuRef} className="relative">
               <button
                 type="button"
                 onClick={() => {
-                  setAccountOpen((prev) => !prev);
+                  setMobileMenuOpen((prev) => !prev);
                   setLangOpen(false);
+                  setAccountOpen(false);
                 }}
-                className="inline-flex h-14 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-5 text-[15px] font-semibold text-white transition hover:opacity-90"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90"
+                aria-label={t.menu}
               >
-                {isLoggedIn ? (
-                  <>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
-                      {initials}
-                    </div>
-                    <span className="hidden max-w-[140px] truncate lg:inline">
-                      {displayName}
-                    </span>
-                  </>
+                {mobileMenuOpen ? (
+                  <X className="h-5 w-5" />
                 ) : (
-                  <>
-                    <User className="h-4 w-4" />
-                    <span className="hidden sm:inline">{t.account}</span>
-                  </>
+                  <Menu className="h-5 w-5" />
                 )}
-                <ChevronDown className="h-4 w-4" />
               </button>
 
-              {accountOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                  {sessionLoading ? (
-                    <div className="px-4 py-3 text-sm text-gray-500">
-                      {t.loading}
-                    </div>
-                  ) : isLoggedIn ? (
-                    <>
-                      <div className="border-b border-gray-100 px-4 py-3">
-                        <p className="truncate text-sm font-semibold text-[#1C1C1E]">
-                          {displayName}
-                        </p>
-                        <p className="truncate text-xs text-gray-500">
-                          {authUserEmail}
-                        </p>
-                      </div>
+              {mobileMenuOpen && (
+                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+                  <div className="p-4">
+                    <nav className="grid gap-2">
+                      <Link
+                        href="/properti"
+                        onClick={closeAllMenus}
+                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.allProperties}
+                      </Link>
 
-                      {!profileLoading ? (
-                        <Link
-                          href={dashboardHref}
-                          onClick={() => setAccountOpen(false)}
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                        >
-                          <LayoutDashboard className="h-4 w-4" />
-                          {t.dashboard}
-                        </Link>
+                      <Link
+                        href="/properti?jenisListing=dijual"
+                        onClick={closeAllMenus}
+                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.forSale}
+                      </Link>
+
+                      <Link
+                        href="/properti?jenisListing=disewa"
+                        onClick={closeAllMenus}
+                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.forRent}
+                      </Link>
+
+                      <Link
+                        href="/pembeli"
+                        onClick={closeAllMenus}
+                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {t.buyers}
+                      </Link>
+                    </nav>
+
+                    <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                      {sessionLoading ? (
+                        <div className="text-sm text-gray-500">{t.loading}</div>
+                      ) : isLoggedIn ? (
+                        <>
+                          <div className="mb-4 flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1C1C1E] text-xs font-bold text-white">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-[#1C1C1E]">
+                                {displayName}
+                              </p>
+                              <p className="truncate text-xs text-gray-500">
+                                {authUserEmail}
+                              </p>
+                            </div>
+                          </div>
+
+                          {!profileLoading ? (
+                            <Link
+                              href={dashboardHref}
+                              onClick={closeAllMenus}
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                            >
+                              <LayoutDashboard className="h-4 w-4" />
+                              {t.dashboard}
+                            </Link>
+                          ) : (
+                            <div className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-200 px-4 py-3 text-sm font-medium text-gray-500">
+                              <LayoutDashboard className="h-4 w-4" />
+                              {t.loadingDashboard}
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                          >
+                            <LogOut className="h-4 w-4" />
+                            {t.logout}
+                          </button>
+                        </>
                       ) : (
-                        <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400">
-                          <LayoutDashboard className="h-4 w-4" />
-                          {t.loadingDashboard}
+                        <div className="grid gap-2">
+                          <Link
+                            href="/login"
+                            onClick={closeAllMenus}
+                            className="rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                          >
+                            {t.login}
+                          </Link>
+
+                          <Link
+                            href="/login?role=agent"
+                            onClick={closeAllMenus}
+                            className="rounded-2xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                          >
+                            {t.agentLogin}
+                          </Link>
+
+                          <Link
+                            href="/login?role=admin"
+                            onClick={closeAllMenus}
+                            className="rounded-2xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                          >
+                            {t.adminLogin}
+                          </Link>
+
+                          <Link
+                            href="/signup"
+                            onClick={closeAllMenus}
+                            className="rounded-2xl bg-yellow-500 px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-yellow-400"
+                          >
+                            {t.signUp}
+                          </Link>
                         </div>
                       )}
-
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-red-600 transition hover:bg-red-50"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        {t.logout}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Link
-                        href="/login"
-                        onClick={() => setAccountOpen(false)}
-                        className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.login}
-                      </Link>
-
-                      <Link
-                        href="/login?role=agent"
-                        onClick={() => setAccountOpen(false)}
-                        className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.agentLogin}
-                      </Link>
-
-                      <Link
-                        href="/login?role=admin"
-                        onClick={() => setAccountOpen(false)}
-                        className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.adminLogin}
-                      </Link>
-
-                      <Link
-                        href="/signup"
-                        onClick={() => setAccountOpen(false)}
-                        className="block px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.signUp}
-                      </Link>
-                    </>
-                  )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

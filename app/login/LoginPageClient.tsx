@@ -35,6 +35,35 @@ function AppleIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+function FormInput({
+  label,
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  type?: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
+        {label}
+      </label>
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
+      />
+    </div>
+  );
+}
+
 export default function LoginPageClient() {
   const { lang } = useLanguage();
   const router = useRouter();
@@ -201,13 +230,13 @@ export default function LoginPageClient() {
   const isBusy = loading || socialLoading !== null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-6 py-16">
-      <div className="w-full max-w-md rounded-[32px] border border-[#e5e5e7] bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1C1C1E]">
+    <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-10 sm:px-6 sm:py-16">
+      <div className="w-full max-w-md rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
+        <div className="mb-7 text-center sm:mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
             {lang === "id" ? "Selamat datang kembali" : "Welcome back"}
           </h1>
-          <p className="mt-2 text-sm text-[#6e6e73]">
+          <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
             {lang === "id"
               ? "Masuk ke akun TeTamo Anda"
               : "Log in to your TeTamo account"}
@@ -215,39 +244,30 @@ export default function LoginPageClient() {
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
-              {lang === "id" ? "Email" : "Email"}
-            </label>
-            <input
-              type="email"
-              placeholder={
-                lang === "id" ? "Masukkan email Anda" : "Enter your email"
-              }
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
-            />
-          </div>
+          <FormInput
+            label={lang === "id" ? "Email" : "Email"}
+            type="email"
+            placeholder={
+              lang === "id" ? "Masukkan email Anda" : "Enter your email"
+            }
+            value={email}
+            onChange={setEmail}
+          />
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
-              {lang === "id" ? "Kata Sandi" : "Password"}
-            </label>
-            <input
-              type="password"
-              placeholder={
-                lang === "id"
-                  ? "Masukkan kata sandi Anda"
-                  : "Enter your password"
-              }
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
-            />
-          </div>
+          <FormInput
+            label={lang === "id" ? "Kata Sandi" : "Password"}
+            type="password"
+            placeholder={
+              lang === "id"
+                ? "Masukkan kata sandi Anda"
+                : "Enter your password"
+            }
+            value={password}
+            onChange={setPassword}
+          />
 
           <button
+            type="button"
             onClick={handleLogin}
             disabled={isBusy}
             className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
@@ -308,7 +328,7 @@ export default function LoginPageClient() {
           </button>
         </div>
 
-        <p className="mt-6 text-center text-sm text-[#6e6e73]">
+        <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
           {lang === "id" ? "Belum punya akun?" : "Don’t have an account?"}{" "}
           <Link
             href={signupHref}

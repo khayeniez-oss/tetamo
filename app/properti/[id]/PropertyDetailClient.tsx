@@ -25,6 +25,9 @@ import {
   FileText,
   Home,
   Square,
+  Heart,
+  Bookmark,
+  Star,
 } from "lucide-react";
 
 type VerificationStatus = "pending" | "verified";
@@ -32,6 +35,7 @@ type VerificationStatus = "pending" | "verified";
 type PropertyItem = {
   id: string;
   jenisListing: "dijual" | "disewa";
+  propertyType: string;
   title: string;
   price: string;
   province: string;
@@ -84,6 +88,11 @@ type PropertyItem = {
   parkingAvailable: boolean;
   electricityValue: string;
   waterValue: string;
+
+  likeCountBase: number;
+  saveCountBase: number;
+  ratingAverageBase: number;
+  ratingCountBase: number;
 };
 
 type PropertyImageRow = {
@@ -127,6 +136,7 @@ type PropertyRow = {
   facilities: Record<string, boolean> | null;
   nearby: Record<string, boolean> | null;
   listing_type: string | null;
+  property_type: string | null;
   source: string | null;
   status: string | null;
   verification_status: string | null;
@@ -152,7 +162,6 @@ type PropertyRow = {
   created_by_user_id: string | null;
 
   property_images: PropertyImageRow[] | null;
-  profiles: ProfileRow | ProfileRow[] | null;
 };
 
 type DetailSpecItem = {
@@ -161,6 +170,9 @@ type DetailSpecItem = {
   value: string;
   icon: any;
 };
+
+const FALLBACK_POSTER_PHOTO =
+  "https://randomuser.me/api/portraits/men/32.jpg";
 
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
@@ -198,6 +210,16 @@ function toNumberOrNull(value: unknown) {
 function toStringOrEmpty(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+}
+
+function toCount(value: unknown) {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
+}
+
+function toAverage(value: unknown) {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Number(num) : 0;
 }
 
 function mapFurnishing(value?: string | null, lang?: string) {
@@ -289,6 +311,49 @@ function isListingPublic(
   return true;
 }
 
+function formatPropertyType(value?: string | null, lang?: string) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (!raw) return "";
+
+  if (raw === "tanah") return lang === "id" ? "Tanah" : "Land";
+  if (raw === "rumah") return lang === "id" ? "Rumah" : "House";
+  if (raw === "villa" || raw === "vila") return "Villa";
+  if (raw === "apartemen" || raw === "apartment") {
+    return lang === "id" ? "Apartemen" : "Apartment";
+  }
+  if (raw === "ruko") return lang === "id" ? "Ruko" : "Shophouse";
+  if (raw === "rukan") return lang === "id" ? "Rukan" : "Office Unit";
+  if (raw === "gudang") return lang === "id" ? "Gudang" : "Warehouse";
+  if (raw === "kantor") return lang === "id" ? "Kantor" : "Office";
+  if (raw === "kost" || raw === "kos") {
+    return lang === "id" ? "Kost" : "Boarding House";
+  }
+  if (raw === "hotel") return "Hotel";
+  if (raw === "pabrik") return lang === "id" ? "Pabrik" : "Factory";
+  if (raw === "toko") return lang === "id" ? "Toko" : "Shop";
+
+  return raw
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function getPosterLabel(
+  postedByType: "owner" | "agent" | "developer",
+  lang: string
+) {
+  if (lang === "id") {
+    if (postedByType === "agent") return "Agen";
+    if (postedByType === "developer") return "Developer";
+    return "Pemilik";
+  }
+
+  if (postedByType === "agent") return "The agent";
+  if (postedByType === "developer") return "The developer";
+  return "The owner";
+}
+
 export default function PropertyDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
 
@@ -300,6 +365,14 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   const [property, setProperty] = useState<PropertyItem | null>(null);
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [userRating, setUserRating] = useState(0);
+  const [displayLikeCount, setDisplayLikeCount] = useState(0);
+  const [displaySaveCount, setDisplaySaveCount] = useState(0);
+  const [displayRatingAverage, setDisplayRatingAverage] = useState(0);
+  const [displayRatingCount, setDisplayRatingCount] = useState(0);
 
   const trackedDetailViewRef = useRef<string | null>(null);
 
@@ -323,6 +396,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         property_title: property.title,
         property_code: property.kodeListing ?? null,
         listing_type: property.jenisListing,
+        property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
         province: property.province,
@@ -362,20 +436,6 @@ export default function PropertyDetailClient({ id }: { id: string }) {
               image_url,
               sort_order,
               is_cover
-            ),
-            profiles:user_id (
-              id,
-              full_name,
-              phone,
-              role,
-              agency,
-              photo_url,
-              email,
-              instagram_url,
-              facebook_url,
-              tiktok_url,
-              youtube_url,
-              linkedin_url
             )
           `)
           .eq("id", id)
@@ -456,9 +516,61 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         return;
       }
 
-      const profile = Array.isArray(row.profiles)
-        ? row.profiles[0]
-        : row.profiles;
+      const possibleProfileIds = Array.from(
+        new Set(
+          [row.contact_user_id, row.user_id].filter(
+            (value): value is string => Boolean(value)
+          )
+        )
+      );
+
+      let contactProfile: ProfileRow | null = null;
+      let userProfile: ProfileRow | null = null;
+
+      if (possibleProfileIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from("profiles")
+          .select(`
+            id,
+            full_name,
+            phone,
+            role,
+            agency,
+            photo_url,
+            instagram_url,
+            facebook_url,
+            tiktok_url,
+            youtube_url,
+            linkedin_url
+          `)
+          .in("id", possibleProfileIds);
+
+        if (profilesError) {
+          console.error("Failed to load poster profiles:", profilesError);
+        }
+
+        const profilesMap = new Map(
+          ((profilesData ?? []) as ProfileRow[]).map((profile) => [
+            profile.id,
+            profile,
+          ])
+        );
+
+        contactProfile = row.contact_user_id
+          ? profilesMap.get(row.contact_user_id) ?? null
+          : null;
+
+        userProfile = row.user_id
+          ? profilesMap.get(row.user_id) ?? null
+          : null;
+      }
+
+      const posterProfile =
+        (contactProfile?.photo_url ? contactProfile : null) ||
+        (userProfile?.photo_url ? userProfile : null) ||
+        contactProfile ||
+        userProfile ||
+        null;
 
       const sortedImages = [...(row.property_images ?? [])].sort((a, b) => {
         const coverA = a.is_cover ? 1 : 0;
@@ -510,6 +622,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
         id: row.id,
         jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+        propertyType: row.property_type || "",
         title: row.title ?? "-",
         price: formatIdr(row.price ?? 0),
         province: row.province ?? "-",
@@ -528,18 +641,20 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         nearby: row.nearby ?? {},
         agency:
           row.contact_agency ||
-          profile?.agency ||
+          posterProfile?.agency ||
           (postedByType === "agent"
             ? "Tetamo Agent"
             : postedByType === "developer"
             ? "Developer"
             : "Owner"),
-        agentName: row.contact_name || profile?.full_name || "Tetamo User",
+        agentName:
+          row.contact_name ||
+          contactProfile?.full_name ||
+          userProfile?.full_name ||
+          "Tetamo User",
         images,
         videoUrl: row.video_url ?? null,
-        photo:
-          profile?.photo_url ||
-          "https://randomuser.me/api/portraits/men/32.jpg",
+        photo: posterProfile?.photo_url || FALLBACK_POSTER_PHOTO,
 
         kodeListing: row.kode ?? "-",
         postedDate: formatPostedDate(row.posted_date || row.created_at),
@@ -552,14 +667,40 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
         postedByType,
         receiverId: row.contact_user_id || row.user_id || "",
-        receiverName: row.contact_name || profile?.full_name || "Tetamo User",
-        receiverWhatsapp: normalizeWhatsapp(row.contact_phone),
+        receiverName:
+          row.contact_name ||
+          contactProfile?.full_name ||
+          userProfile?.full_name ||
+          "Tetamo User",
+        receiverWhatsapp: normalizeWhatsapp(
+          row.contact_phone || contactProfile?.phone || userProfile?.phone
+        ),
 
-        instagramUrl: profile?.instagram_url || "",
-        facebookUrl: profile?.facebook_url || "",
-        tiktokUrl: profile?.tiktok_url || "",
-        youtubeUrl: profile?.youtube_url || "",
-        linkedinUrl: profile?.linkedin_url || "",
+        instagramUrl:
+          posterProfile?.instagram_url ||
+          contactProfile?.instagram_url ||
+          userProfile?.instagram_url ||
+          "",
+        facebookUrl:
+          posterProfile?.facebook_url ||
+          contactProfile?.facebook_url ||
+          userProfile?.facebook_url ||
+          "",
+        tiktokUrl:
+          posterProfile?.tiktok_url ||
+          contactProfile?.tiktok_url ||
+          userProfile?.tiktok_url ||
+          "",
+        youtubeUrl:
+          posterProfile?.youtube_url ||
+          contactProfile?.youtube_url ||
+          userProfile?.youtube_url ||
+          "",
+        linkedinUrl:
+          posterProfile?.linkedin_url ||
+          contactProfile?.linkedin_url ||
+          userProfile?.linkedin_url ||
+          "",
 
         buildingSizeValue: toNumberOrNull(row.building_size),
         landSizeValue: toNumberOrNull(row.land_size),
@@ -574,6 +715,18 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         waterValue: toStringOrEmpty(
           row.water_source ?? row.water ?? row.air
         ),
+
+        likeCountBase: toCount(row.like_count ?? row.likes_count),
+        saveCountBase: toCount(
+          row.save_count ??
+            row.saves_count ??
+            row.favorite_count ??
+            row.favourites_count
+        ),
+        ratingAverageBase: toAverage(
+          row.rating_avg ?? row.average_rating ?? row.avg_rating
+        ),
+        ratingCountBase: toCount(row.rating_count ?? row.ratings_count),
       };
 
       if (!ignore) {
@@ -608,6 +761,52 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   }, [id, lang]);
 
   useEffect(() => {
+    if (!property) return;
+    if (typeof window === "undefined") return;
+
+    const likeKey = `tetamo:property:${property.id}:liked`;
+    const saveKey = `tetamo:property:${property.id}:saved`;
+    const ratingKey = `tetamo:property:${property.id}:rating`;
+
+    const nextLiked = localStorage.getItem(likeKey) === "1";
+    const nextSaved = localStorage.getItem(saveKey) === "1";
+    const nextRating = toCount(localStorage.getItem(ratingKey));
+
+    setLiked(nextLiked);
+    setSaved(nextSaved);
+    setUserRating(nextRating);
+
+    setDisplayLikeCount(property.likeCountBase + (nextLiked ? 1 : 0));
+    setDisplaySaveCount(property.saveCountBase + (nextSaved ? 1 : 0));
+
+    if (nextRating > 0) {
+      const nextCount = property.ratingCountBase + 1;
+      const nextAverage =
+        nextCount > 0
+          ? Number(
+              (
+                (property.ratingAverageBase * property.ratingCountBase +
+                  nextRating) /
+                nextCount
+              ).toFixed(1)
+            )
+          : Number(nextRating.toFixed(1));
+
+      setDisplayRatingCount(nextCount);
+      setDisplayRatingAverage(nextAverage);
+    } else {
+      setDisplayRatingCount(property.ratingCountBase);
+      setDisplayRatingAverage(Number(property.ratingAverageBase.toFixed(1)));
+    }
+  }, [
+    property?.id,
+    property?.likeCountBase,
+    property?.saveCountBase,
+    property?.ratingAverageBase,
+    property?.ratingCountBase,
+  ]);
+
+  useEffect(() => {
     if (!property?.id) return;
     if (trackedDetailViewRef.current === property.id) return;
 
@@ -621,6 +820,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         property_title: property.title,
         property_code: property.kodeListing ?? null,
         listing_type: property.jenisListing,
+        property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
         province: property.province,
@@ -631,6 +831,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     property?.title,
     property?.kodeListing,
     property?.jenisListing,
+    property?.propertyType,
     property?.postedByType,
     property?.area,
     property?.province,
@@ -654,6 +855,69 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   const prevImg = () =>
     property &&
     setIdx((prev) => (prev === 0 ? property.images.length - 1 : prev - 1));
+
+  function toggleLike() {
+    if (!property || typeof window === "undefined") return;
+
+    const nextLiked = !liked;
+    const likeKey = `tetamo:property:${property.id}:liked`;
+
+    setLiked(nextLiked);
+    setDisplayLikeCount(property.likeCountBase + (nextLiked ? 1 : 0));
+
+    if (nextLiked) {
+      localStorage.setItem(likeKey, "1");
+    } else {
+      localStorage.removeItem(likeKey);
+    }
+  }
+
+  function toggleSave() {
+    if (!property || typeof window === "undefined") return;
+
+    const nextSaved = !saved;
+    const saveKey = `tetamo:property:${property.id}:saved`;
+
+    setSaved(nextSaved);
+    setDisplaySaveCount(property.saveCountBase + (nextSaved ? 1 : 0));
+
+    if (nextSaved) {
+      localStorage.setItem(saveKey, "1");
+    } else {
+      localStorage.removeItem(saveKey);
+    }
+  }
+
+  function handleRate(nextValue: number) {
+    if (!property || typeof window === "undefined") return;
+
+    const ratingKey = `tetamo:property:${property.id}:rating`;
+    const nextRating = userRating === nextValue ? 0 : nextValue;
+
+    setUserRating(nextRating);
+
+    if (nextRating > 0) {
+      const nextCount = property.ratingCountBase + 1;
+      const nextAverage =
+        nextCount > 0
+          ? Number(
+              (
+                (property.ratingAverageBase * property.ratingCountBase +
+                  nextRating) /
+                nextCount
+              ).toFixed(1)
+            )
+          : Number(nextRating.toFixed(1));
+
+      setDisplayRatingCount(nextCount);
+      setDisplayRatingAverage(nextAverage);
+      localStorage.setItem(ratingKey, String(nextRating));
+    } else {
+      setDisplayRatingCount(property.ratingCountBase);
+      setDisplayRatingAverage(Number(property.ratingAverageBase.toFixed(1)));
+      localStorage.removeItem(ratingKey);
+    }
+  }
 
   async function handleWhatsAppClick() {
     if (!property) return;
@@ -707,6 +971,7 @@ Is this property still available?`;
           property_title: property.title,
           property_code: property.kodeListing ?? null,
           listing_type: property.jenisListing,
+          property_type: property.propertyType,
           posted_by_type: property.postedByType,
           area: property.area,
           province: property.province,
@@ -947,10 +1212,12 @@ Is this property still available?`;
       console.error("Failed to notify viewing request:", notifyError);
     }
 
+    const posterLabel = getPosterLabel(property.postedByType, lang);
+
     alert(
       lang === "id"
-        ? "Jadwal viewing berhasil dikirim."
-        : "Viewing request submitted."
+        ? `Jadwal viewing berhasil dikirim. ${posterLabel} akan menghubungi Anda untuk konfirmasi.`
+        : `Viewing request sent successfully. ${posterLabel} will contact you for confirmation.`
     );
 
     setJadwalOpen(false);
@@ -961,8 +1228,8 @@ Is this property still available?`;
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-gray-900">
-        <div className="mx-auto max-w-4xl px-6 py-12">
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-500">
+        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
+          <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
             {lang === "id" ? "Memuat properti..." : "Loading property..."}
           </div>
         </div>
@@ -973,7 +1240,7 @@ Is this property still available?`;
   if (!property) {
     return (
       <main className="min-h-screen bg-white text-gray-900">
-        <div className="mx-auto max-w-4xl px-6 py-12">
+        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
           <h1 className="text-2xl font-bold">
             {lang === "id" ? "Properti tidak ditemukan" : "Property not found"}
           </h1>
@@ -987,6 +1254,8 @@ Is this property still available?`;
       </main>
     );
   }
+
+  const propertyTypeLabel = formatPropertyType(property.propertyType, lang);
 
   const facilityLabels: Record<string, string> = {
     fac_ac: lang === "id" ? "AC" : "AC",
@@ -1054,6 +1323,7 @@ Is this property still available?`;
   ].filter((item) => item.href);
 
   const summaryItems = [
+    propertyTypeLabel,
     property.buildingSizeValue
       ? `${formatNumber(property.buildingSizeValue)} m²`
       : "",
@@ -1095,6 +1365,13 @@ Is this property still available?`;
       if (!cleaned || cleaned === "-") return;
       items.push({ key, label, value: cleaned, icon });
     };
+
+    addItem(
+      "property_type",
+      lang === "id" ? "Tipe Properti" : "Property Type",
+      propertyTypeLabel,
+      Home
+    );
 
     addItem(
       "bedrooms",
@@ -1191,8 +1468,8 @@ Is this property still available?`;
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        <div className="flex items-center justify-between gap-4">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href="/properti"
             className="text-sm underline text-[#1C1C1E] hover:opacity-80"
@@ -1200,11 +1477,11 @@ Is this property still available?`;
             {lang === "id" ? "Kembali ke Marketplace" : "Back to Marketplace"}
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {prevId ? (
               <Link
                 href={`/properti/${prevId}`}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold transition hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 px-4 py-2 text-center text-sm font-semibold transition hover:bg-gray-50"
               >
                 ← {lang === "id" ? "Sebelumnya" : "Previous"}
               </Link>
@@ -1221,7 +1498,7 @@ Is this property still available?`;
             {nextId ? (
               <Link
                 href={`/properti/${nextId}`}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold transition hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 px-4 py-2 text-center text-sm font-semibold transition hover:bg-gray-50"
               >
                 {lang === "id" ? "Berikutnya" : "Next"} →
               </Link>
@@ -1237,33 +1514,41 @@ Is this property still available?`;
           </div>
         </div>
 
-        <div className="mt-6 grid items-start gap-10 lg:grid-cols-2">
-          <div className="w-full space-y-6">
-            <div className="relative overflow-hidden rounded-2xl border border-gray-200">
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-2 lg:gap-10">
+          <div className="w-full">
+            <div className="relative overflow-hidden rounded-3xl border border-gray-200">
               <img
                 src={property.images[idx]}
                 alt={property.title}
-                className="h-[560px] w-full object-cover"
+                className="h-[280px] w-full object-cover sm:h-[420px] lg:h-[560px]"
               />
 
-              <div className="absolute right-4 top-4 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-xs font-semibold text-white">
+              <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
                 TETAMO
               </div>
 
-              <div className="absolute bottom-4 left-4 rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
-                {property.jenisListing === "dijual"
-                  ? lang === "id"
-                    ? "Dijual"
-                    : "For Sale"
-                  : lang === "id"
-                  ? "Disewa"
-                  : "For Rent"}
+              <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
+                <div className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                  {property.jenisListing === "dijual"
+                    ? lang === "id"
+                      ? "Dijual"
+                      : "For Sale"
+                    : lang === "id"
+                    ? "Disewa"
+                    : "For Rent"}
+                </div>
+
+                {propertyTypeLabel ? (
+                  <div className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                    {propertyTypeLabel}
+                  </div>
+                ) : null}
               </div>
 
               <button
                 type="button"
                 onClick={prevImg}
-                className="absolute left-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-white"
+                className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white sm:left-4"
                 aria-label="Previous image"
               >
                 ‹
@@ -1272,7 +1557,7 @@ Is this property still available?`;
               <button
                 type="button"
                 onClick={nextImg}
-                className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-white"
+                className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white sm:right-4"
                 aria-label="Next image"
               >
                 ›
@@ -1280,57 +1565,57 @@ Is this property still available?`;
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-10 shadow-sm">
-            <div className="text-3xl font-extrabold text-[#1C1C1E]">
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
+            <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-3xl">
               {property.price}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
               {property.spotlight && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 sm:text-xs">
                   <Gem className="h-3.5 w-3.5" />
                   Spotlight
                 </span>
               )}
 
               {property.featured && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-[11px] font-semibold text-purple-700 sm:text-xs">
                   <Crown className="h-3.5 w-3.5" />
                   Featured
                 </span>
               )}
 
               {property.boosted && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold text-sky-700 sm:text-xs">
                   <Zap className="h-3.5 w-3.5" />
                   Boost
                 </span>
               )}
 
               {property.verifiedListing && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
                   {lang === "id" ? "Listing Terverifikasi" : "Verified Listing"}
                 </span>
               )}
 
               {property.ownerApproved && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                   {lang === "id" ? "Pemilik Disetujui" : "Owner Approved"}
                 </span>
               )}
 
               {property.agentVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                   {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
                 </span>
               )}
             </div>
 
-            <h1 className="mt-6 text-xl font-bold text-[#1C1C1E]">
+            <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:mt-6 sm:text-2xl">
               {property.title}
             </h1>
 
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-800">
               {summaryItems.map((item, summaryIndex) => (
                 <div
                   key={`${item}-${summaryIndex}`}
@@ -1344,21 +1629,28 @@ Is this property still available?`;
               ))}
             </div>
 
-            <div className="mt-3 text-gray-600">{property.province}</div>
+            <div className="mt-3 text-sm text-gray-600 sm:text-base">
+              {property.area}, {property.province}
+            </div>
 
-            <div className="mt-6 border-t border-gray-200" />
+            <div className="mt-5 border-t border-gray-200 sm:mt-6" />
 
-            <div className="mt-4 flex items-start gap-6">
-              <div className="h-24 w-24 overflow-hidden rounded-xl border border-gray-200 bg-gray-200">
+            <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 sm:h-24 sm:w-24">
                 <img
                   src={property.photo}
                   alt={property.agentName}
                   className="h-full w-full object-cover"
+                  onError={(e) => {
+                    if (e.currentTarget.src !== FALLBACK_POSTER_PHOTO) {
+                      e.currentTarget.src = FALLBACK_POSTER_PHOTO;
+                    }
+                  }}
                 />
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-gray-600">
+                <div className="text-sm leading-6 text-gray-600">
                   <span className="text-gray-500">
                     {lang === "id"
                       ? property.postedByType === "owner"
@@ -1377,42 +1669,46 @@ Is this property still available?`;
                   </span>
                   {property.agency && (
                     <>
-                      <span className="mx-2 text-gray-700">•</span>
-                      <span className="text-gray-600">{property.agency}</span>
+                      <span className="mx-2 text-gray-400">•</span>
+                      <span className="text-gray-700">{property.agency}</span>
                     </>
                   )}
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-x-10">
-                  <div className="text-sm font-semibold text-gray-800">
-                    {lang === "id" ? "Kode :" : "Code :"}
-                  </div>
-                  <div className="text-sm font-semibold text-gray-800">
-                    {lang === "id" ? "Tanggal :" : "Date :"}
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-8">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      {lang === "id" ? "Kode" : "Code"}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-700">
+                      {property.kodeListing}
+                    </div>
                   </div>
 
-                  <div className="text-sm text-gray-700">
-                    {property.kodeListing}
-                  </div>
-                  <div className="text-sm text-gray-700">
-                    {property.postedDate}
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      {lang === "id" ? "Tanggal" : "Date"}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-700">
+                      {property.postedDate}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-5">
               <button
                 type="button"
                 onClick={openJadwalWithTracking}
-                className="w-full rounded-2xl bg-[#B8860B] py-3 text-center font-semibold text-white transition hover:opacity-90"
+                className="w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
               >
                 {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
               </button>
             </div>
 
             {socialLinks.length > 0 ? (
-              <div className="mt-4 flex items-center justify-center gap-3">
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
                 {socialLinks.map((item) => {
                   const Icon = item.icon;
 
@@ -1435,7 +1731,79 @@ Is this property still available?`;
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1.6fr]">
+          <button
+            type="button"
+            onClick={toggleSave}
+            className={[
+              "flex min-h-[78px] w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50",
+              saved
+                ? "border-[#1C1C1E] bg-[#1C1C1E] text-white hover:bg-[#1C1C1E]"
+                : "",
+            ].join(" ")}
+          >
+            <Bookmark className="h-4 w-4" />
+            {lang === "id" ? "Simpan" : "Save"} ({displaySaveCount})
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleLike}
+            className={[
+              "flex min-h-[78px] w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50",
+              liked
+                ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-50"
+                : "",
+            ].join(" ")}
+          >
+            <Heart className="h-4 w-4" />
+            {lang === "id" ? "Suka" : "Like"} ({displayLikeCount})
+          </button>
+
+          <div className="flex min-h-[78px] w-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-[#1C1C1E]">
+                {lang === "id" ? "Rating Properti" : "Property Rating"}
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => handleRate(value)}
+                    className={[
+                      "rounded-full border p-1.5 transition",
+                      userRating >= value
+                        ? "border-amber-200 bg-amber-50 text-amber-600"
+                        : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50",
+                    ].join(" ")}
+                    aria-label={`Rate ${value} star`}
+                    title={`${value} star`}
+                  >
+                    <Star
+                      className="h-3.5 w-3.5"
+                      fill={
+                        userRating >= value ? "currentColor" : "transparent"
+                      }
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="shrink-0 text-left sm:ml-4 sm:text-right">
+              <div className="text-lg font-extrabold text-[#1C1C1E]">
+                {displayRatingAverage.toFixed(1)}
+              </div>
+              <div className="text-xs text-gray-500">
+                {displayRatingCount} {lang === "id" ? "rating" : "ratings"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-bold text-[#1C1C1E]">
             {lang === "id" ? "Detail Properti" : "Property Details"}
           </h2>
@@ -1478,20 +1846,20 @@ Is this property still available?`;
         </div>
 
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6 lg:col-span-2">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
               {lang === "id" ? "Deskripsi Properti" : "Property Description"}
             </h2>
 
-            <p className="mt-3 whitespace-pre-line leading-relaxed text-gray-600">
+            <p className="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600 sm:text-base">
               {lang === "en"
                 ? property.descriptionEn || property.description
                 : property.description}
             </p>
           </div>
 
-          <div className="mt-1 flex justify-center">
-            <div className="h-[620px] w-[350px] overflow-hidden rounded-2xl border border-gray-200 bg-black">
+          <div className="flex justify-center lg:justify-end">
+            <div className="h-[260px] w-full max-w-[420px] overflow-hidden rounded-3xl border border-gray-200 bg-black sm:h-[420px] lg:h-[620px] lg:max-w-[350px]">
               {property.videoUrl ? (
                 <video
                   src={property.videoUrl}
@@ -1500,7 +1868,7 @@ Is this property still available?`;
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-500">
+                <div className="flex h-full w-full items-center justify-center bg-gray-100 px-4 text-center text-sm text-gray-500">
                   {lang === "id" ? "Belum ada video." : "No video yet."}
                 </div>
               )}
@@ -1509,7 +1877,7 @@ Is this property still available?`;
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
               {lang === "id" ? "Fasilitas" : "Facilities"}
             </h2>
@@ -1534,7 +1902,7 @@ Is this property still available?`;
             )}
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
               {lang === "id" ? "Terdekat" : "Nearby"}
             </h2>
@@ -1560,11 +1928,11 @@ Is this property still available?`;
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={handleWhatsAppClick}
-            className="w-full rounded-2xl bg-[#1C1C1E] py-3 text-center font-semibold text-white transition hover:opacity-90"
+            className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
           >
             WhatsApp
           </button>
@@ -1572,7 +1940,7 @@ Is this property still available?`;
           <button
             type="button"
             onClick={openJadwalWithTracking}
-            className="rounded-2xl bg-yellow-600 py-3 text-center font-bold text-white transition hover:bg-yellow-700"
+            className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700 sm:text-base"
           >
             {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
           </button>
@@ -1586,7 +1954,7 @@ Is this property still available?`;
         </div>
 
         {jadwalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <button
               type="button"
               onClick={closeJadwal}
@@ -1594,8 +1962,8 @@ Is this property still available?`;
               aria-label="Close Jadwal popup"
             />
 
-            <div className="relative z-10 w-[92%] max-w-lg rounded-2xl bg-white p-5 shadow-xl">
-              <div className="flex items-center justify-between">
+            <div className="relative z-10 w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl sm:p-6">
+              <div className="flex items-center justify-between gap-3">
                 <h3 className="text-lg font-bold text-[#1C1C1E]">
                   {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
                 </h3>
@@ -1609,7 +1977,7 @@ Is this property still available?`;
                 </button>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
                     {lang === "id" ? "Pilih Tanggal" : "Select Date"}
@@ -1649,7 +2017,7 @@ Is this property still available?`;
                       type="button"
                       disabled={!selectedDate || !selectedTime}
                       onClick={handleViewingRequest}
-                      className="w-full rounded-2xl bg-yellow-600 py-2 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-40"
+                      className="w-full rounded-2xl bg-yellow-600 py-2.5 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-40"
                     >
                       {lang === "id" ? "Kirim Jadwal" : "Submit Schedule"}
                     </button>
@@ -1659,7 +2027,7 @@ Is this property still available?`;
                 <button
                   type="button"
                   onClick={closeJadwal}
-                  className="mt-1 w-full rounded-2xl bg-[#1C1C1E] py-2 font-semibold text-white hover:opacity-90"
+                  className="mt-1 w-full rounded-2xl bg-[#1C1C1E] py-2.5 font-semibold text-white hover:opacity-90"
                 >
                   {lang === "id" ? "Tutup" : "Close"}
                 </button>

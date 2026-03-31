@@ -34,6 +34,7 @@ type Property = {
 
   id: string;
   jenisListing: "dijual" | "disewa";
+  propertyType: string;
   kode?: string;
   postedDate?: string;
 
@@ -78,6 +79,7 @@ type PropertyRow = {
   bedrooms: number | null;
   furnishing: string | null;
   listing_type: string | null;
+  property_type: string | null;
   source: string | null;
   status: string | null;
   verification_status: string | null;
@@ -242,6 +244,32 @@ function normalizePostedByType(
   return "owner";
 }
 
+function formatPropertyType(value?: string | null, lang?: string) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (!raw) return lang === "id" ? "Properti" : "Property";
+
+  if (raw === "tanah") return lang === "id" ? "Tanah" : "Land";
+  if (raw === "rumah") return lang === "id" ? "Rumah" : "House";
+  if (raw === "villa") return "Villa";
+  if (raw === "apartemen") return lang === "id" ? "Apartemen" : "Apartment";
+  if (raw === "apartment") return lang === "id" ? "Apartemen" : "Apartment";
+  if (raw === "ruko") return lang === "id" ? "Ruko" : "Shophouse";
+  if (raw === "rukan") return lang === "id" ? "Rukan" : "Office Unit";
+  if (raw === "gudang") return lang === "id" ? "Gudang" : "Warehouse";
+  if (raw === "kantor") return lang === "id" ? "Kantor" : "Office";
+  if (raw === "kost") return lang === "id" ? "Kost" : "Boarding House";
+  if (raw === "kos") return lang === "id" ? "Kos" : "Boarding House";
+  if (raw === "hotel") return "Hotel";
+  if (raw === "pabrik") return lang === "id" ? "Pabrik" : "Factory";
+  if (raw === "toko") return lang === "id" ? "Toko" : "Shop";
+
+  return raw
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function PropertyCard({ p }: { p: Property }) {
   const { lang } = useLanguage();
   const router = useRouter();
@@ -278,6 +306,7 @@ function PropertyCard({ p }: { p: Property }) {
               property_title: p.title,
               property_code: p.kode ?? null,
               listing_type: p.jenisListing,
+              property_type: p.propertyType,
               posted_by_type: p.postedByType,
               area: p.area,
               province: p.province,
@@ -293,7 +322,16 @@ function PropertyCard({ p }: { p: Property }) {
     observer.observe(node);
 
     return () => observer.disconnect();
-  }, [p.id, p.title, p.kode, p.jenisListing, p.postedByType, p.area, p.province]);
+  }, [
+    p.id,
+    p.title,
+    p.kode,
+    p.jenisListing,
+    p.propertyType,
+    p.postedByType,
+    p.area,
+    p.province,
+  ]);
 
   function postedByLabel() {
     if (lang === "id") {
@@ -315,11 +353,15 @@ function PropertyCard({ p }: { p: Property }) {
     return "border-sky-200 bg-sky-50 text-sky-700";
   }
 
+  function propertyTypeBadgeClass() {
+    return "border-white/80 bg-white/95 text-[#1C1C1E]";
+  }
+
   function renderVerificationBadge() {
     if (p.postedByType === "agent") {
       if (p.agentVerified) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#B8860B] px-3 py-0.5 text-xs font-semibold text-white shadow-sm">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
             <UserCheck size={12} strokeWidth={2.5} />
             {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
           </span>
@@ -328,7 +370,7 @@ function PropertyCard({ p }: { p: Property }) {
 
       if (p.agentPendingVerification) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-0.5 text-xs font-semibold text-amber-700 shadow-sm">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm sm:text-xs">
             <Clock size={12} strokeWidth={2.5} />
             {lang === "id"
               ? "Menunggu Verifikasi"
@@ -343,7 +385,7 @@ function PropertyCard({ p }: { p: Property }) {
     if (p.postedByType === "developer") {
       if (p.developerVerified) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-3 py-0.5 text-xs font-semibold text-white shadow-sm">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
             <ShieldCheck size={12} strokeWidth={2.5} />
             {lang === "id" ? "Developer Terverifikasi" : "Verified Developer"}
           </span>
@@ -352,7 +394,7 @@ function PropertyCard({ p }: { p: Property }) {
 
       if (p.developerPendingApproval) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-3 py-0.5 text-xs font-semibold text-gray-900 shadow-sm">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-3 py-1 text-[11px] font-semibold text-gray-900 shadow-sm sm:text-xs">
             <Clock size={12} strokeWidth={2.5} />
             {lang === "id"
               ? "Menunggu Persetujuan"
@@ -366,7 +408,7 @@ function PropertyCard({ p }: { p: Property }) {
 
     if (p.ownerVerified) {
       return (
-        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-3 py-0.5 text-xs font-semibold text-white shadow-sm">
+        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
           <ShieldCheck size={12} strokeWidth={2.5} />
           {lang === "id" ? "Pemilik Terverifikasi" : "Verified Owner"}
         </span>
@@ -375,7 +417,7 @@ function PropertyCard({ p }: { p: Property }) {
 
     if (p.ownerPendingApproval) {
       return (
-        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-3 py-0.5 text-xs font-semibold text-gray-900 shadow-sm">
+        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-3 py-1 text-[11px] font-semibold text-gray-900 shadow-sm sm:text-xs">
           <Clock size={12} strokeWidth={2.5} />
           {lang === "id"
             ? "Menunggu Persetujuan"
@@ -403,6 +445,7 @@ function PropertyCard({ p }: { p: Property }) {
         property_title: property.title,
         property_code: property.kode ?? null,
         listing_type: property.jenisListing,
+        property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
         province: property.province,
@@ -478,6 +521,7 @@ Is this property still available?`;
           property_title: property.title,
           property_code: property.kode ?? null,
           listing_type: property.jenisListing,
+          property_type: property.propertyType,
           posted_by_type: property.postedByType,
           area: property.area,
           province: property.province,
@@ -487,7 +531,11 @@ Is this property still available?`;
       });
 
       let senderProfile:
-        | { full_name: string | null; phone: string | null; email: string | null }
+        | {
+            full_name: string | null;
+            phone: string | null;
+            email: string | null;
+          }
         | null = null;
 
       const { data: profileData, error: senderProfileError } = await supabase
@@ -614,9 +662,9 @@ Is this property still available?`;
     <div
       ref={cardRef}
       className={[
-        "relative overflow-hidden rounded-2xl border bg-white transition-all duration-300",
+        "relative overflow-hidden rounded-3xl border bg-white transition-all duration-300",
         p.spotlight
-          ? "border-[#00CFE8] scale-[1.015] -translate-y-2 shadow-[0_0_0_1px_#00CFE8,0_20px_45px_rgba(0,207,232,0.22),0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-3 hover:scale-[1.02] hover:shadow-[0_0_0_1px_#00CFE8,0_28px_60px_rgba(0,207,232,0.26),0_16px_40px_rgba(0,0,0,0.10)]"
+          ? "border-[#00CFE8] shadow-[0_0_0_1px_#00CFE8,0_18px_42px_rgba(0,207,232,0.20),0_10px_28px_rgba(0,0,0,0.08)] sm:scale-[1.01] sm:-translate-y-1 sm:hover:-translate-y-2 sm:hover:scale-[1.015]"
           : p.featured
           ? "border-[#D4A017] shadow-[0_0_0_1px_#D4A017,0_8px_25px_rgba(212,160,23,0.25)]"
           : p.boosted
@@ -625,7 +673,7 @@ Is this property still available?`;
       ].join(" ")}
     >
       <div className="relative">
-        <div className="absolute left-3 top-3 z-20 flex flex-col gap-2">
+        <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             {p.spotlight && (
               <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-extrabold text-[#1C1C1E] shadow-[0_6px_18px_rgba(0,0,0,0.12)] backdrop-blur-sm">
@@ -658,11 +706,11 @@ Is this property still available?`;
           <img
             src={p.images[idx]}
             alt={p.title}
-            className="h-100 w-full object-cover"
+            className="h-60 w-full object-cover sm:h-72 lg:h-80"
           />
         </Link>
 
-        <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-xs font-semibold text-white">
+        <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
           TETAMO
         </div>
 
@@ -670,7 +718,7 @@ Is this property still available?`;
           type="button"
           onClick={prev}
           aria-label="Previous image"
-          className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-white transition hover:bg-[#1C1C1E]"
+          className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
         >
           ‹
         </button>
@@ -679,44 +727,54 @@ Is this property still available?`;
           type="button"
           onClick={next}
           aria-label="Next image"
-          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-white transition hover:bg-[#1C1C1E]"
+          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
         >
           ›
         </button>
 
-        <div
-          className={`absolute bottom-3 left-3 rounded-full border px-3 py-1 text-xs font-semibold ${listingTypeBadgeClass()}`}
-        >
-          {p.jenisListing === "dijual"
-            ? lang === "id"
-              ? "Dijual"
-              : "For Sale"
-            : lang === "id"
-            ? "Disewa"
-            : "For Rent"}
+        <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-96px)] flex-wrap items-center gap-2">
+          <div
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs ${listingTypeBadgeClass()}`}
+          >
+            {p.jenisListing === "dijual"
+              ? lang === "id"
+                ? "Dijual"
+                : "For Sale"
+              : lang === "id"
+              ? "Disewa"
+              : "For Rent"}
+          </div>
+
+          <div
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm sm:text-xs ${propertyTypeBadgeClass()}`}
+          >
+            {formatPropertyType(p.propertyType, lang)}
+          </div>
         </div>
       </div>
 
-      <div className="p-5">
-        <div className="text-2xl font-extrabold text-[#1C1C1E]">{p.price}</div>
+      <div className="p-4 sm:p-5">
+        <div className="text-xl font-extrabold text-[#1C1C1E] sm:text-2xl">
+          {p.price}
+        </div>
 
         <div className="mt-1 text-sm text-gray-500">
           {p.area}, {p.province}
         </div>
 
         <Link href={`/properti/${p.id}`} className="mt-2 block">
-          <h3 className="text-lg font-semibold leading-snug text-[#1C1C1E] hover:underline">
+          <h3 className="text-base font-semibold leading-snug text-[#1C1C1E] hover:underline sm:text-lg">
             {p.title}
           </h3>
         </Link>
 
-        <div className="mt-3 text-sm text-gray-600">
+        <div className="mt-3 text-sm leading-6 text-gray-600">
           {p.size} •{" "}
           {p.bed.replace("Kamar", lang === "id" ? "Kamar" : "Bed")} •{" "}
           {p.furnished}
         </div>
 
-        <div className="mt-3 text-sm text-gray-600">
+        <div className="mt-3 text-sm leading-6 text-gray-600">
           {postedByLabel()}:{" "}
           <span className="font-semibold text-[#1C1C1E]">{p.agentName}</span>
           {p.agency ? (
@@ -727,15 +785,17 @@ Is this property still available?`;
           ) : null}
         </div>
 
-        <div className="mt-2 text-xs tracking-wide text-gray-500">
-          {p.kode} • {p.postedDate}
+        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs tracking-wide text-gray-500">
+          <span>{p.kode}</span>
+          <span>•</span>
+          <span>{p.postedDate}</span>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => handleWhatsAppInquiry(p)}
-            className="rounded-2xl bg-[#1C1C1E] py-2 text-center font-semibold text-white transition hover:opacity-90"
+            className="rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
           >
             WhatsApp
           </button>
@@ -747,7 +807,7 @@ Is this property still available?`;
                 button: "view_detail",
               })
             }
-            className="rounded-2xl bg-yellow-600 py-2 text-center font-bold text-white transition hover:bg-yellow-700"
+            className="rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700 sm:text-base"
           >
             {lang === "id" ? "Lihat Detail" : "View Detail"}
           </Link>
@@ -756,12 +816,35 @@ Is this property still available?`;
         <button
           type="button"
           onClick={() => handleScheduleViewing(p)}
-          className="mt-3 block w-full rounded-2xl border border-gray-200 py-2 text-center font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+          className="mt-3 block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50 sm:text-base"
         >
           {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
         </button>
       </div>
     </div>
+  );
+}
+
+function FilterChip({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+        active
+          ? "bg-[#1C1C1E] text-white"
+          : "border border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -795,6 +878,7 @@ export default function PropertiPageClient() {
           bedrooms,
           furnishing,
           listing_type,
+          property_type,
           source,
           status,
           verification_status,
@@ -914,6 +998,7 @@ export default function PropertiPageClient() {
 
           id: row.id,
           jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+          propertyType: row.property_type || "",
           kode: row.kode ?? undefined,
           postedDate: formatPostedDate(row.posted_date || row.created_at),
 
@@ -994,53 +1079,82 @@ export default function PropertiPageClient() {
   const start = (page - 1) * pageSize;
   const paged = filtered.slice(start, start + pageSize);
 
+  const currentFilterLabel = jenisListing
+    ? jenisListing === "dijual"
+      ? lang === "id"
+        ? "Dijual"
+        : "For Sale"
+      : lang === "id"
+      ? "Disewa"
+      : "For Rent"
+    : lang === "id"
+    ? "Semua properti"
+    : "All properties";
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
-          {lang === "id" ? "Marketplace Properti" : "Property Marketplace"}
-        </h1>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="rounded-3xl bg-[#F7F7F8] px-5 py-6 sm:px-7 sm:py-8">
+          <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
+            {lang === "id" ? "Marketplace Properti" : "Property Marketplace"}
+          </h1>
 
-        <p className="mt-2 text-gray-600">
-          {jenisListing
-            ? `Filter: ${
-                jenisListing === "dijual"
-                  ? lang === "id"
-                    ? "Dijual"
-                    : "For Sale"
-                  : lang === "id"
-                  ? "Disewa"
-                  : "For Rent"
-              }`
-            : lang === "id"
-            ? "Semua properti"
-            : "All properties"}
-        </p>
+          <p className="mt-2 text-sm leading-7 text-gray-600 sm:text-base">
+            {lang === "id"
+              ? "Temukan listing properti dari pemilik, agen, dan developer yang aktif."
+              : "Discover active property listings from owners, agents, and developers."}
+          </p>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <FilterChip
+              href="/properti"
+              active={!jenisListing}
+              label={lang === "id" ? "Semua" : "All"}
+            />
+            <FilterChip
+              href="/properti?jenisListing=dijual"
+              active={jenisListing === "dijual"}
+              label={lang === "id" ? "Dijual" : "For Sale"}
+            />
+            <FilterChip
+              href="/properti?jenisListing=disewa"
+              active={jenisListing === "disewa"}
+              label={lang === "id" ? "Disewa" : "For Rent"}
+            />
+          </div>
+
+          <p className="mt-4 text-sm font-medium text-gray-600">
+            {lang === "id" ? "Filter aktif:" : "Active filter:"}{" "}
+            <span className="font-semibold text-[#1C1C1E]">
+              {currentFilterLabel}
+            </span>
+          </p>
+        </div>
 
         {loading ? (
-          <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-500">
+          <div className="mt-8 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
             {lang === "id" ? "Memuat properti..." : "Loading properties..."}
           </div>
         ) : paged.length === 0 ? (
-          <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-500">
+          <div className="mt-8 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
             {lang === "id"
               ? "Belum ada properti untuk ditampilkan."
               : "No properties to display yet."}
           </div>
         ) : (
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
+          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {paged.map((p) => (
               <PropertyCard key={p.id} p={p} />
             ))}
           </div>
         )}
 
-        <div className="mt-10 flex items-center justify-center gap-3">
+        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="rounded-xl border border-gray-200 px-4 py-2 disabled:opacity-40"
+            className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:w-auto"
           >
             {lang === "id" ? "Sebelumnya" : "Prev"}
           </button>
@@ -1055,7 +1169,7 @@ export default function PropertiPageClient() {
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="rounded-xl border border-gray-200 px-4 py-2 disabled:opacity-40"
+            className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:w-auto"
           >
             {lang === "id" ? "Berikutnya" : "Next"}
           </button>

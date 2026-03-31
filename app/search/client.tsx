@@ -165,7 +165,11 @@ function normalizeWhatsapp(phone?: string | null) {
 }
 
 function extractPriceNumber(price: string) {
-  const cleaned = price.toLowerCase().replace(/rp/g, "").replace(/\./g, "").trim();
+  const cleaned = price
+    .toLowerCase()
+    .replace(/rp/g, "")
+    .replace(/\./g, "")
+    .trim();
 
   if (cleaned.includes("/ tahun")) {
     const yearly = cleaned.replace("/ tahun", "").trim();
@@ -227,10 +231,7 @@ function getListingTierUI(tier: ListingTier) {
     };
   }
 
-  return {
-    label: "Normal",
-    badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
-  };
+  return null;
 }
 
 function isFutureDate(value?: string | null) {
@@ -290,7 +291,9 @@ function calculateRelevanceScore(item: PropertyItem, query: string) {
   if (normalizedTitle.includes(normalizedQuery)) score += 1000;
   if (normalizedArea === normalizedQuery) score += 900;
   if (normalizedProvince === normalizedQuery) score += 800;
-  if (`${normalizedArea} ${normalizedProvince}`.includes(normalizedQuery)) score += 700;
+  if (`${normalizedArea} ${normalizedProvince}`.includes(normalizedQuery)) {
+    score += 700;
+  }
 
   for (const word of words) {
     if (normalizedCode.includes(word)) score += 250;
@@ -413,6 +416,54 @@ function mapDbPropertyToUi(item: DbProperty): PropertyItem {
     boosted: boostActive,
     listingTier,
   };
+}
+
+function FilterSelect({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
+      >
+        {children}
+      </select>
+      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+        ▼
+      </span>
+    </div>
+  );
+}
+
+function PaginationButton({
+  active,
+  children,
+  onClick,
+}: {
+  active?: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl border px-3 py-2 text-sm transition ${
+        active
+          ? "border-black bg-black text-white"
+          : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
+      }`}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function SearchPageContent() {
@@ -631,7 +682,9 @@ export default function SearchPageContent() {
         const searchable = buildSearchableText(item);
 
         const matchesQuery =
-          !normalizedQuery || relevanceScore > 0 || searchable.includes(normalizedQuery);
+          !normalizedQuery ||
+          relevanceScore > 0 ||
+          searchable.includes(normalizedQuery);
 
         const matchesJenis = !jenisListing || item.jenisListing === jenisListing;
         const matchesProvince = !province || item.province === province;
@@ -639,7 +692,8 @@ export default function SearchPageContent() {
         const matchesBedroom =
           !bedroom || extractBedroomCount(item.bed) >= Number(bedroom);
         const matchesPrice =
-          !priceRange || getPriceRange(extractPriceNumber(item.price)) === priceRange;
+          !priceRange ||
+          getPriceRange(extractPriceNumber(item.price)) === priceRange;
 
         return (
           matchesQuery &&
@@ -661,7 +715,9 @@ export default function SearchPageContent() {
       );
     } else if (sortBy === "terbaru") {
       result = [...result].sort(
-        (a, b) => parsePostedDateToTime(b.item.postedDate) - parsePostedDateToTime(a.item.postedDate)
+        (a, b) =>
+          parsePostedDateToTime(b.item.postedDate) -
+          parsePostedDateToTime(a.item.postedDate)
       );
     } else {
       result = [...result].sort((a, b) => b.relevanceScore - a.relevanceScore);
@@ -735,23 +791,25 @@ export default function SearchPageContent() {
     autocompleteGroups.properti.length > 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
-      <h1 className="mb-2 text-2xl font-bold text-[#1C1C1E]">
-        Hasil Pencarian
-      </h1>
+    <div className="mx-auto max-w-7xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
+          Hasil Pencarian
+        </h1>
 
-      <p className="mb-6 text-gray-600">
-        {queryFromUrl ? (
-          <>
-            {filteredResults.length} properti ditemukan untuk{" "}
-            <span className="font-semibold">{queryFromUrl}</span>
-          </>
-        ) : (
-          <>Menampilkan semua properti yang tersedia.</>
-        )}
-      </p>
+        <p className="mt-2 text-sm leading-6 text-gray-600 sm:text-base">
+          {queryFromUrl ? (
+            <>
+              {filteredResults.length} properti ditemukan untuk{" "}
+              <span className="font-semibold">{queryFromUrl}</span>
+            </>
+          ) : (
+            <>Menampilkan semua properti yang tersedia.</>
+          )}
+        </p>
+      </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
         <div ref={searchBoxRef} className="relative">
           <div className="flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">
@@ -783,9 +841,9 @@ export default function SearchPageContent() {
                           </div>
 
                           {autocompleteGroups.kode.map((item) => {
-                            const tierUI = getListingTierUI(
-                              item.listingTier || "normal"
-                            );
+                            const tierUI = item.listingTier
+                              ? getListingTierUI(item.listingTier)
+                              : null;
 
                             return (
                               <button
@@ -803,11 +861,13 @@ export default function SearchPageContent() {
                                     <p className="font-medium text-[#1C1C1E]">
                                       {item.label}
                                     </p>
-                                    <span
-                                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${tierUI.badgeClass}`}
-                                    >
-                                      {tierUI.label}
-                                    </span>
+                                    {tierUI ? (
+                                      <span
+                                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${tierUI.badgeClass}`}
+                                      >
+                                        {tierUI.label}
+                                      </span>
+                                    ) : null}
                                     {item.boosted ? (
                                       <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
                                         Boost
@@ -859,9 +919,9 @@ export default function SearchPageContent() {
                           </div>
 
                           {autocompleteGroups.properti.map((item) => {
-                            const tierUI = getListingTierUI(
-                              item.listingTier || "normal"
-                            );
+                            const tierUI = item.listingTier
+                              ? getListingTierUI(item.listingTier)
+                              : null;
 
                             return (
                               <button
@@ -879,11 +939,13 @@ export default function SearchPageContent() {
                                     <p className="font-medium text-[#1C1C1E]">
                                       {item.label}
                                     </p>
-                                    <span
-                                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${tierUI.badgeClass}`}
-                                    >
-                                      {tierUI.label}
-                                    </span>
+                                    {tierUI ? (
+                                      <span
+                                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${tierUI.badgeClass}`}
+                                      >
+                                        {tierUI.label}
+                                      </span>
+                                    ) : null}
                                     {item.boosted ? (
                                       <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
                                         Boost
@@ -913,124 +975,76 @@ export default function SearchPageContent() {
             <button
               type="button"
               onClick={() => handleSearch()}
-              className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90"
+              className="w-full rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 md:w-auto"
             >
               Search
             </button>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <div className="relative">
-            <select
-              value={jenisListing}
-              onChange={(e) =>
-                setJenisListing(e.target.value as "" | "dijual" | "disewa")
-              }
-              className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="">Semua Listing</option>
-              <option value="dijual">Dijual</option>
-              <option value="disewa">Disewa</option>
-            </select>
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              ▼
-            </span>
-          </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <FilterSelect
+            value={jenisListing}
+            onChange={(value) =>
+              setJenisListing(value as "" | "dijual" | "disewa")
+            }
+          >
+            <option value="">Semua Listing</option>
+            <option value="dijual">Dijual</option>
+            <option value="disewa">Disewa</option>
+          </FilterSelect>
 
-          <div className="relative">
-            <select
-              value={province}
-              onChange={(e) => setProvince(e.target.value)}
-              className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="">Semua Provinsi</option>
-              {provinces.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+          <FilterSelect value={province} onChange={setProvince}>
+            <option value="">Semua Provinsi</option>
+            {provinces.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </FilterSelect>
 
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              ▼
-            </span>
-          </div>
+          <FilterSelect value={area} onChange={setArea}>
+            <option value="">Semua Area</option>
+            {areas.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </FilterSelect>
 
-          <div className="relative">
-            <select
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="">Semua Area</option>
-              {areas.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+          <FilterSelect value={bedroom} onChange={setBedroom}>
+            <option value="">Semua Kamar</option>
+            <option value="1">1+ Kamar</option>
+            <option value="2">2+ Kamar</option>
+            <option value="3">3+ Kamar</option>
+            <option value="4">4+ Kamar</option>
+            <option value="5">5+ Kamar</option>
+          </FilterSelect>
 
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              ▼
-            </span>
-          </div>
+          <FilterSelect
+            value={priceRange}
+            onChange={(value) => setPriceRange(value as PriceRange)}
+          >
+            <option value="">Semua Harga</option>
+            <option value="<100jt">&lt; 100 Juta</option>
+            <option value="100jt-500jt">100 - 500 Juta</option>
+            <option value="500jt-1m">500 Juta - 1 Miliar</option>
+            <option value="1m-3m">1 - 3 Miliar</option>
+            <option value=">3m">&gt; 3 Miliar</option>
+          </FilterSelect>
 
-          <div className="relative">
-            <select
-              value={bedroom}
-              onChange={(e) => setBedroom(e.target.value)}
-              className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="">Semua Kamar</option>
-              <option value="1">1+ Kamar</option>
-              <option value="2">2+ Kamar</option>
-              <option value="3">3+ Kamar</option>
-              <option value="4">4+ Kamar</option>
-              <option value="5">5+ Kamar</option>
-            </select>
-
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              ▼
-            </span>
-          </div>
-
-          <div className="relative">
-            <select
-              value={priceRange}
-              onChange={(e) => setPriceRange(e.target.value as PriceRange)}
-              className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="">Semua Harga</option>
-              <option value="<100jt">&lt; 100 Juta</option>
-              <option value="100jt-500jt">100 - 500 Juta</option>
-              <option value="500jt-1m">500 Juta - 1 Miliar</option>
-              <option value="1m-3m">1 - 3 Miliar</option>
-              <option value=">3m">&gt; 3 Miliar</option>
-            </select>
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              ▼
-            </span>
-          </div>
-
-          <div className="relative">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="relevan">Paling Relevan</option>
-              <option value="terbaru">Terbaru</option>
-              <option value="harga-rendah">Harga Terendah</option>
-              <option value="harga-tinggi">Harga Tertinggi</option>
-            </select>
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              ▼
-            </span>
-          </div>
+          <FilterSelect
+            value={sortBy}
+            onChange={(value) => setSortBy(value as SortOption)}
+          >
+            <option value="relevan">Paling Relevan</option>
+            <option value="terbaru">Terbaru</option>
+            <option value="harga-rendah">Harga Terendah</option>
+            <option value="harga-tinggi">Harga Tertinggi</option>
+          </FilterSelect>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-gray-500">
             Menampilkan {startItem}–{endItem} dari {filteredResults.length} properti
           </p>
@@ -1039,7 +1053,7 @@ export default function SearchPageContent() {
             <button
               type="button"
               onClick={clearFilters}
-              className="text-sm text-[#1C1C1E] underline underline-offset-2"
+              className="w-full text-left text-sm text-[#1C1C1E] underline underline-offset-2 sm:w-auto sm:text-right"
             >
               Clear Filters
             </button>
@@ -1048,16 +1062,16 @@ export default function SearchPageContent() {
       </div>
 
       {loadingData ? (
-        <div className="mt-16 text-center text-gray-500">
+        <div className="mt-12 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:mt-16 sm:text-base">
           Memuat properti...
         </div>
       ) : errorMessage ? (
-        <div className="mt-16 text-center text-red-600">
+        <div className="mt-12 rounded-3xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-600 sm:mt-16 sm:text-base">
           Gagal memuat properti: {errorMessage}
         </div>
       ) : paginatedResults.length > 0 ? (
         <>
-          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {paginatedResults.map((item) => {
               const tierUI = getListingTierUI(item.listingTier);
 
@@ -1065,15 +1079,21 @@ export default function SearchPageContent() {
                 <Link
                   href={`/properti/${item.id}`}
                   key={item.id}
-                  className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+                  className="block overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
                 >
-                  <img
-                    src={item.images[0]}
-                    alt={item.title}
-                    className="h-100 w-full object-cover"
-                  />
+                  <div className="relative">
+                    <img
+                      src={item.images[0]}
+                      alt={item.title}
+                      className="h-56 w-full object-cover sm:h-64 lg:h-72"
+                    />
 
-                  <div className="p-4">
+                    <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                      TETAMO
+                    </div>
+                  </div>
+
+                  <div className="p-4 sm:p-5">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       {item.verifiedListing && (
                         <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] text-green-700">
@@ -1091,11 +1111,13 @@ export default function SearchPageContent() {
                         {item.jenisListing === "dijual" ? "Dijual" : "Disewa"}
                       </span>
 
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${tierUI.badgeClass}`}
-                      >
-                        {tierUI.label}
-                      </span>
+                      {tierUI ? (
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${tierUI.badgeClass}`}
+                        >
+                          {tierUI.label}
+                        </span>
+                      ) : null}
 
                       {item.boosted ? (
                         <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] text-sky-700">
@@ -1108,7 +1130,7 @@ export default function SearchPageContent() {
                       {item.area}, {item.province}
                     </p>
 
-                    <h3 className="mb-2 font-semibold text-[#1C1C1E]">
+                    <h3 className="mb-2 text-base font-semibold leading-snug text-[#1C1C1E]">
                       {item.title}
                     </h3>
 
@@ -1116,7 +1138,7 @@ export default function SearchPageContent() {
                       {item.price}
                     </p>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                       <span>{item.size}</span>
                       <span>•</span>
                       <span>{item.bed}</span>
@@ -1133,40 +1155,38 @@ export default function SearchPageContent() {
             })}
           </div>
 
-          <div className="mt-6 flex items-center justify-between">
+          <div className="mt-8 flex flex-col gap-4 sm:mt-10">
             <p className="text-sm text-gray-900">
               Halaman {currentPage} dari {totalPages}
             </p>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:opacity-50"
+                className="rounded-xl border bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:opacity-50"
               >
                 Sebelumnya
               </button>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setCurrentPage(p)}
-                  className={`rounded-lg border px-3 py-2 text-sm ${
-                    currentPage === p
-                      ? "border-black bg-black text-white"
-                      : "border-gray-400"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
+              <div className="flex flex-wrap items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <PaginationButton
+                    key={p}
+                    active={currentPage === p}
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </PaginationButton>
+                ))}
+              </div>
 
               <button
                 onClick={() =>
                   setCurrentPage((p) => Math.min(totalPages, p + 1))
                 }
                 disabled={currentPage === totalPages}
-                className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:opacity-50"
+                className="rounded-xl border bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:opacity-50"
               >
                 Berikutnya
               </button>
@@ -1174,7 +1194,7 @@ export default function SearchPageContent() {
           </div>
         </>
       ) : (
-        <div className="mt-16 text-center text-gray-500">
+        <div className="mt-12 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:mt-16 sm:text-base">
           Tidak ada properti ditemukan.
         </div>
       )}

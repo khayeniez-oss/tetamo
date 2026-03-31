@@ -288,6 +288,26 @@ function TetamoSelect({
   );
 }
 
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+      <h2 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+        {title}
+      </h2>
+      <p className="mt-1 text-sm leading-6 text-gray-500">{subtitle}</p>
+      <div className="mt-5">{children}</div>
+    </div>
+  );
+}
+
 export default function PembeliPage() {
   const { lang } = useLanguage();
 
@@ -437,19 +457,19 @@ export default function PembeliPage() {
 
   return (
     <div className="bg-white">
-      <section className="mx-auto max-w-6xl px-6 pb-10 pt-14">
+      <section className="mx-auto max-w-7xl px-4 pb-10 pt-10 sm:px-6 sm:pb-12 sm:pt-14 lg:px-8">
         <div className="max-w-3xl">
           <span className="mb-4 inline-flex rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-600">
             {lang === "id" ? "Pembeli / Penyewa" : "Buyers / Renters"}
           </span>
 
-          <h1 className="text-4xl font-bold leading-tight text-[#1C1C1E] md:text-5xl">
+          <h1 className="text-3xl font-bold leading-tight text-[#1C1C1E] sm:text-4xl md:text-5xl">
             {lang === "id"
               ? "Bantu Saya Menemukan Properti"
               : "Help Me Find the Right Property"}
           </h1>
 
-          <p className="mt-4 text-lg leading-relaxed text-gray-600">
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-gray-600 sm:text-base sm:leading-8 lg:text-lg">
             {lang === "id"
               ? "Beritahu TETAMO properti seperti apa yang Anda cari untuk dibeli atau disewa. Kami akan membantu mencocokkan Anda dengan properti yang sesuai dan, jika dibutuhkan, merekomendasikan agen yang tepat."
               : "Tell TETAMO what kind of property you are looking for to buy or rent. We will help match you with suitable properties and, if needed, recommend the right agent."}
@@ -457,10 +477,10 @@ export default function PembeliPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-16">
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
+      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+        <div className="rounded-3xl border border-gray-200 bg-[#F7F7F8] p-4 shadow-sm sm:p-6 lg:p-8">
           {submitted ? (
-            <div className="py-8">
+            <div className="rounded-3xl border border-gray-200 bg-white p-6 sm:p-8">
               <div className="max-w-2xl">
                 <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-green-100 text-xl text-green-700">
                   ✓
@@ -472,16 +492,16 @@ export default function PembeliPage() {
                     : "Your request has been submitted"}
                 </h2>
 
-                <p className="mt-3 text-sm text-gray-600">
+                <p className="mt-3 text-sm leading-7 text-gray-600 sm:text-base">
                   {lang === "id"
-                    ? "Tim TETAMO telah menerima permintaan Anda. Admin akan meninjau kebutuhan Anda sebagai pembeli/penyewa dan membantu mencocokkan properti yang sesuai."
-                    : "The TETAMO team has received your request. Admin will review your needs as a buyer/renter and help match suitable properties."}
+                    ? "Tim TETAMO telah menerima permintaan Anda. Admin akan meninjau kebutuhan Anda sebagai pembeli atau penyewa dan membantu mencocokkan properti yang sesuai."
+                    : "The TETAMO team has received your request. Admin will review your needs as a buyer or renter and help match suitable properties."}
                 </p>
 
                 <button
                   type="button"
                   onClick={() => setSubmitted(false)}
-                  className="mt-6 rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white hover:opacity-90"
+                  className="mt-6 w-full rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white hover:opacity-90 sm:w-auto"
                 >
                   {lang === "id"
                     ? "Kirim Permintaan Lain"
@@ -490,20 +510,20 @@ export default function PembeliPage() {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-8">
-              <div>
-                <h2 className="text-xl font-semibold text-[#1C1C1E]">
-                  {lang === "id"
+            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+              <SectionCard
+                title={
+                  lang === "id"
                     ? "Informasi Pembeli / Penyewa"
-                    : "Buyer / Renter Information"}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {lang === "id"
+                    : "Buyer / Renter Information"
+                }
+                subtitle={
+                  lang === "id"
                     ? "Isi data kontak agar TETAMO dapat menghubungi Anda."
-                    : "Fill in your contact details so TETAMO can reach you."}
-                </p>
-
-                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    : "Fill in your contact details so TETAMO can reach you."
+                }
+              >
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <div>
                     <label className="text-sm font-medium text-gray-700">
                       {lang === "id" ? "Nama Lengkap" : "Full Name"}
@@ -527,7 +547,7 @@ export default function PembeliPage() {
                       {lang === "id" ? "Nomor Telepon" : "Phone Number"}
                     </label>
 
-                    <div className="mt-2 grid grid-cols-[120px_1fr] gap-2 md:grid-cols-[150px_1fr]">
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[130px_1fr] md:grid-cols-[145px_1fr]">
                       <TetamoSelect
                         value={form.countryCode}
                         onChange={(value) =>
@@ -575,21 +595,21 @@ export default function PembeliPage() {
                     />
                   </div>
                 </div>
-              </div>
+              </SectionCard>
 
-              <div>
-                <h2 className="text-xl font-semibold text-[#1C1C1E]">
-                  {lang === "id"
+              <SectionCard
+                title={
+                  lang === "id"
                     ? "Properti yang Dicari"
-                    : "Property Preferences"}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {lang === "id"
+                    : "Property Preferences"
+                }
+                subtitle={
+                  lang === "id"
                     ? "Beri tahu preferensi properti Anda."
-                    : "Tell us your property preferences."}
-                </p>
-
-                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    : "Tell us your property preferences."
+                }
+              >
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <div>
                     <label className="text-sm font-medium text-gray-700">
                       {lang === "id" ? "Mencari Untuk" : "Looking For"}
@@ -670,7 +690,6 @@ export default function PembeliPage() {
                       onChange={(value) => updateField("bedroom", value)}
                       options={bedroomOptions}
                       placeholder={lang === "id" ? "Pilih" : "Select"}
-                      className="rounded-xl"
                     />
                   </div>
 
@@ -683,7 +702,6 @@ export default function PembeliPage() {
                       onChange={(value) => updateField("bathroom", value)}
                       options={bathroomOptions}
                       placeholder={lang === "id" ? "Pilih" : "Select"}
-                      className="rounded-xl"
                     />
                   </div>
 
@@ -731,26 +749,24 @@ export default function PembeliPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </SectionCard>
 
-              <div>
-                <h2 className="text-xl font-semibold text-[#1C1C1E]">
-                  {lang === "id" ? "Bantuan dari TETAMO" : "Help from TETAMO"}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {lang === "id"
+              <SectionCard
+                title={lang === "id" ? "Bantuan dari TETAMO" : "Help from TETAMO"}
+                subtitle={
+                  lang === "id"
                     ? "Pilih apakah Anda ingin dibantu oleh agen yang direkomendasikan."
-                    : "Choose whether you want TETAMO to recommend an agent."}
-                </p>
-
-                <div className="mt-5">
+                    : "Choose whether you want TETAMO to recommend an agent."
+                }
+              >
+                <div>
                   <label className="text-sm font-medium text-gray-700">
                     {lang === "id"
                       ? "Apakah Anda ingin TETAMO merekomendasikan agen?"
                       : "Would you like TETAMO to recommend an agent?"}
                   </label>
 
-                  <div className="mt-3 flex items-center gap-6">
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
                     <label className="flex items-center gap-2 text-sm text-gray-700">
                       <input
                         type="radio"
@@ -795,19 +811,19 @@ export default function PembeliPage() {
                     className="mt-2 w-full resize-none rounded-2xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
                   />
                 </div>
-              </div>
+              </SectionCard>
 
-              {errorMessage ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {errorMessage}
-                </div>
-              ) : null}
+              <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+                {errorMessage ? (
+                  <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                  </div>
+                ) : null}
 
-              <div className="mt-8">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full rounded-2xl bg-[#1C1C1E] px-6 py-3 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 md:w-auto"
+                  className="w-full rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:text-base"
                 >
                   {submitting
                     ? lang === "id"
@@ -818,33 +834,33 @@ export default function PembeliPage() {
                     : "Submit Request"}
                 </button>
 
-                <p className="mt-3 text-xs text-gray-500">
+                <p className="mt-3 text-xs leading-6 text-gray-500 sm:text-sm">
                   {lang === "id"
                     ? "Permintaan Anda akan langsung masuk ke sistem TETAMO dan dapat ditinjau oleh admin untuk proses tindak lanjut."
                     : "Your request will be sent directly into the TETAMO system for admin review and follow-up."}
                 </p>
 
                 <div className="mt-6 grid grid-cols-1 gap-4 text-sm text-gray-600 md:grid-cols-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-600">✔</span>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-green-600">✔</span>
                     <span>
                       {lang === "id"
-                        ? "Data Anda aman & tidak dibagikan tanpa izin"
+                        ? "Data Anda aman dan tidak dibagikan tanpa izin"
                         : "Your data is secure and never shared without consent"}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-600">✔</span>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-green-600">✔</span>
                     <span>
                       {lang === "id"
-                        ? "Gratis tanpa biaya untuk pembeli / penyewa"
-                        : "Completely free for buyers / renters"}
+                        ? "Gratis tanpa biaya untuk pembeli atau penyewa"
+                        : "Completely free for buyers or renters"}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-600">✔</span>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-green-600">✔</span>
                     <span>
                       {lang === "id"
                         ? "Agen yang direkomendasikan telah diverifikasi TETAMO"

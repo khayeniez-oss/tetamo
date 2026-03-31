@@ -47,6 +47,35 @@ function AppleDarkIcon() {
   );
 }
 
+function FormInput({
+  label,
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  type?: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
+        {label}
+      </label>
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
+      />
+    </div>
+  );
+}
+
 export default function SignupPage() {
   const { lang } = useLanguage();
   const router = useRouter();
@@ -82,6 +111,13 @@ export default function SignupPage() {
   const loginRedirect =
     role === "agent"
       ? `/login?role=agent&next=${encodeURIComponent(agentNextPath)}`
+      : "/login";
+
+  const footerLoginHref =
+    role === "agent"
+      ? loginRedirect
+      : next
+      ? `/login?next=${encodeURIComponent(next)}`
       : "/login";
 
   const getOAuthRedirectTo = (provider: OAuthProvider) => {
@@ -265,14 +301,14 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-6 py-16">
-      <div className="w-full max-w-md rounded-[32px] border border-[#e5e5e7] bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1C1C1E]">
+    <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-10 sm:px-6 sm:py-16">
+      <div className="w-full max-w-md rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
+        <div className="mb-7 text-center sm:mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
             {lang === "id" ? "Buat akun Anda" : "Create your account"}
           </h1>
 
-          <p className="mt-2 text-sm text-[#6e6e73]">
+          <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
             {lang === "id"
               ? "Daftar untuk mulai menggunakan TeTamo"
               : "Sign up to start using TeTamo"}
@@ -285,7 +321,7 @@ export default function SignupPage() {
           </p>
 
           {(packageId || planId) && (
-            <p className="mt-1 text-xs text-[#6e6e73]">
+            <p className="mt-1 text-xs leading-5 text-[#6e6e73]">
               {lang === "id"
                 ? `Paket terpilih: ${packageId || planId}`
                 : `Selected package: ${packageId || planId}`}
@@ -332,73 +368,51 @@ export default function SignupPage() {
         )}
 
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
-              {lang === "id" ? "Nama Lengkap" : "Full name"}
-            </label>
-            <input
-              type="text"
-              placeholder={
-                lang === "id"
-                  ? "Masukkan nama lengkap Anda"
-                  : "Enter your full name"
-              }
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
-            />
-          </div>
+          <FormInput
+            label={lang === "id" ? "Nama Lengkap" : "Full name"}
+            placeholder={
+              lang === "id"
+                ? "Masukkan nama lengkap Anda"
+                : "Enter your full name"
+            }
+            value={fullName}
+            onChange={setFullName}
+          />
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
-              Email
-            </label>
-            <input
-              type="email"
-              placeholder={
-                lang === "id" ? "Masukkan email Anda" : "Enter your email"
-              }
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
-            />
-          </div>
+          <FormInput
+            label="Email"
+            type="email"
+            placeholder={
+              lang === "id" ? "Masukkan email Anda" : "Enter your email"
+            }
+            value={email}
+            onChange={setEmail}
+          />
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
-              {lang === "id" ? "Kata Sandi" : "Password"}
-            </label>
-            <input
-              type="password"
-              placeholder={
-                lang === "id" ? "Buat kata sandi" : "Create a password"
-              }
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
-            />
-          </div>
+          <FormInput
+            label={lang === "id" ? "Kata Sandi" : "Password"}
+            type="password"
+            placeholder={lang === "id" ? "Buat kata sandi" : "Create a password"}
+            value={password}
+            onChange={setPassword}
+          />
 
           {isAdminSignup && (
-            <div>
-              <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
-                {lang === "id" ? "Admin Code" : "Admin Code"}
-              </label>
-              <input
-                type="password"
-                placeholder={
-                  lang === "id"
-                    ? "Masukkan admin signup code"
-                    : "Enter admin signup code"
-                }
-                value={adminCode}
-                onChange={(e) => setAdminCode(e.target.value)}
-                className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
-              />
-            </div>
+            <FormInput
+              label="Admin Code"
+              type="password"
+              placeholder={
+                lang === "id"
+                  ? "Masukkan admin signup code"
+                  : "Enter admin signup code"
+              }
+              value={adminCode}
+              onChange={setAdminCode}
+            />
           )}
 
           <button
+            type="button"
             onClick={handleSignup}
             disabled={loading}
             className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
@@ -413,10 +427,10 @@ export default function SignupPage() {
           </button>
         </div>
 
-        <p className="mt-6 text-center text-sm text-[#6e6e73]">
+        <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
           {lang === "id" ? "Sudah punya akun?" : "Already have an account?"}{" "}
           <Link
-            href="/login"
+            href={footerLoginHref}
             className="font-semibold text-[#1C1C1E] underline underline-offset-4"
           >
             {lang === "id" ? "Masuk" : "Log in"}
