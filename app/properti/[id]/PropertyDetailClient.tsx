@@ -31,8 +31,6 @@ import {
   Star,
 } from "lucide-react";
 
-type VerificationStatus = "pending" | "verified";
-
 type PropertyImageRow = {
   image_url: string;
   sort_order: number | null;
@@ -91,14 +89,12 @@ type PropertyRow = {
   spotlight_active: boolean | null;
   spotlight_expires_at: string | null;
   transaction_status: string | null;
-
   contact_user_id: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   contact_role: string | null;
   contact_agency: string | null;
   created_by_user_id: string | null;
-
   property_images: PropertyImageRow[] | null;
 };
 
@@ -110,8 +106,6 @@ type PropertyItem = {
   price: string;
   province: string;
   area: string;
-  size: string;
-  bed: string;
   furnished: string;
   certificate: string;
   description: string;
@@ -121,33 +115,25 @@ type PropertyItem = {
   images: string[];
   videoUrl?: string | null;
   photo: string;
-
   facilities?: Record<string, boolean>;
   nearby?: Record<string, boolean>;
-
   kodeListing: string;
   postedDate?: string;
-
-  verifiedOwnerStatus?: VerificationStatus;
   boosted?: boolean;
   featured?: boolean;
   spotlight?: boolean;
-
   verifiedListing: boolean;
   ownerApproved: boolean;
   agentVerified: boolean;
-
   postedByType: "owner" | "agent" | "developer";
   receiverId: string;
   receiverName: string;
   receiverWhatsapp: string;
-
   instagramUrl: string;
   facebookUrl: string;
   tiktokUrl: string;
   youtubeUrl: string;
   linkedinUrl: string;
-
   buildingSizeValue: number | null;
   landSizeValue: number | null;
   bedroomsValue: number | null;
@@ -157,11 +143,6 @@ type PropertyItem = {
   parkingAvailable: boolean;
   electricityValue: string;
   waterValue: string;
-
-  likeCountBase: number;
-  saveCountBase: number;
-  ratingAverageBase: number;
-  ratingCountBase: number;
 };
 
 type DetailChip = {
@@ -212,28 +193,6 @@ function toStringOrEmpty(value: unknown) {
   return String(value).trim();
 }
 
-function toCount(value: unknown) {
-  const num = Number(value);
-  return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
-}
-
-function toAverage(value: unknown) {
-  const num = Number(value);
-  return Number.isFinite(num) && num > 0 ? Number(num) : 0;
-}
-
-function mapFurnishing(value?: string | null, lang?: string) {
-  if (!value) return "-";
-
-  const v = value.toLowerCase();
-
-  if (v === "full") return lang === "id" ? "Full Furnish" : "Full Furnished";
-  if (v === "semi") return lang === "id" ? "Semi Furnish" : "Semi Furnished";
-  if (v === "unfurnished") return "Unfurnished";
-
-  return value;
-}
-
 function normalizeWhatsapp(phone?: string | null) {
   if (!phone) return "";
   const digits = phone.replace(/[^\d]/g, "");
@@ -258,6 +217,18 @@ function normalizeExternalUrl(url?: string | null) {
     return trimmed;
   }
   return `https://${trimmed}`;
+}
+
+function mapFurnishing(value?: string | null, lang?: string) {
+  if (!value) return "-";
+
+  const v = value.toLowerCase();
+
+  if (v === "full") return lang === "id" ? "Full Furnish" : "Full Furnished";
+  if (v === "semi") return lang === "id" ? "Semi Furnish" : "Semi Furnished";
+  if (v === "unfurnished") return "Unfurnished";
+
+  return value;
 }
 
 function isFutureDate(value?: string | null) {
@@ -285,6 +256,7 @@ function normalizePostedByType(
   source?: string | null
 ): "owner" | "agent" | "developer" {
   const value = (role || source || "owner").toLowerCase();
+
   if (value === "agent") return "agent";
   if (value === "developer") return "developer";
   return "owner";
@@ -351,26 +323,6 @@ function getPosterLabel(
   if (postedByType === "agent") return "The agent";
   if (postedByType === "developer") return "The developer";
   return "The owner";
-}
-
-function Badge({
-  children,
-  dark = false,
-}: {
-  children: React.ReactNode;
-  dark?: boolean;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold sm:text-xs ${
-        dark
-          ? "bg-[#1C1C1E] text-white"
-          : "border border-gray-200 bg-white text-[#1C1C1E]"
-      }`}
-    >
-      {children}
-    </span>
-  );
 }
 
 function SocialCircle({
@@ -660,10 +612,6 @@ export default function PropertyDetailClient({ id }: { id: string }) {
       );
 
       const mapped: PropertyItem = {
-        verifiedListing: isVerified,
-        ownerApproved: postedByType === "owner" && isVerified,
-        agentVerified: postedByType === "agent" && isVerified,
-
         id: row.id,
         jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
         propertyType: row.property_type || "",
@@ -671,18 +619,10 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         price: formatIdr(row.price ?? 0),
         province: row.province ?? "-",
         area: row.city || row.area || "-",
-        size: `${row.building_size ?? row.land_size ?? 0} m²`,
-        bed: bedroomsValue
-          ? `${bedroomsValue} ${
-              lang === "id" ? "Kamar" : bedroomsValue > 1 ? "Beds" : "Bed"
-            }`
-          : "-",
         furnished: mapFurnishing(row.furnishing, lang),
         certificate: row.certificate ?? "-",
         description: row.description || "-",
         descriptionEn: row.description_en || "",
-        facilities: row.facilities ?? {},
-        nearby: row.nearby ?? {},
         agency:
           row.contact_agency ||
           posterProfile?.agency ||
@@ -700,14 +640,19 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         videoUrl: row.video_url ?? null,
         photo: posterProfile?.photo_url || FALLBACK_POSTER_PHOTO,
 
+        facilities: row.facilities ?? {},
+        nearby: row.nearby ?? {},
+
         kodeListing: row.kode ?? "-",
         postedDate: formatPostedDate(row.posted_date || row.created_at),
 
-        verifiedOwnerStatus:
-          postedByType === "owner" && isVerified ? "verified" : "pending",
         boosted,
         featured,
         spotlight,
+
+        verifiedListing: isVerified,
+        ownerApproved: postedByType === "owner" && isVerified,
+        agentVerified: postedByType === "agent" && isVerified,
 
         postedByType,
         receiverId: row.contact_user_id || row.user_id || "",
@@ -759,18 +704,6 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         waterValue: toStringOrEmpty(
           row.water_source ?? row.water ?? row.air
         ),
-
-        likeCountBase: toCount(row.like_count ?? row.likes_count),
-        saveCountBase: toCount(
-          row.save_count ??
-            row.saves_count ??
-            row.favorite_count ??
-            row.favourites_count
-        ),
-        ratingAverageBase: toAverage(
-          row.rating_avg ?? row.average_rating ?? row.avg_rating
-        ),
-        ratingCountBase: toCount(row.rating_count ?? row.ratings_count),
       };
 
       if (!ignore) {
@@ -844,63 +777,58 @@ export default function PropertyDetailClient({ id }: { id: string }) {
       setLiked(false);
       setSaved(false);
       setUserRating(0);
-      setDisplayLikeCount(property.likeCountBase);
-      setDisplaySaveCount(property.saveCountBase);
-      setDisplayRatingAverage(Number(property.ratingAverageBase.toFixed(1)));
-      setDisplayRatingCount(property.ratingCountBase);
+      setDisplayLikeCount(0);
+      setDisplaySaveCount(0);
+      setDisplayRatingAverage(0);
+      setDisplayRatingCount(0);
 
       try {
-        const [
-          summaryRes,
-          savedRes,
-          likedRes,
-          userRatingRes,
-        ] = await Promise.all([
-          supabase
-            .from("property_engagement_summary")
-            .select("save_count, like_count, rating_count, avg_rating")
-            .eq("property_id", property.id)
-            .maybeSingle(),
-          authUserId
-            ? supabase
-                .from("saved_properties")
-                .select("id")
-                .eq("user_id", authUserId)
-                .eq("property_id", property.id)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null } as any),
-          authUserId
-            ? supabase
-                .from("property_likes")
-                .select("id")
-                .eq("user_id", authUserId)
-                .eq("property_id", property.id)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null } as any),
-          authUserId
-            ? supabase
-                .from("property_ratings")
-                .select("rating")
-                .eq("user_id", authUserId)
-                .eq("property_id", property.id)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null } as any),
-        ]);
+        const [summaryRes, savedRes, likedRes, userRatingRes] =
+          await Promise.all([
+            supabase
+              .from("property_engagement_summary")
+              .select("save_count, like_count, rating_count, avg_rating")
+              .eq("property_id", property.id)
+              .maybeSingle(),
+            authUserId
+              ? supabase
+                  .from("saved_properties")
+                  .select("id")
+                  .eq("user_id", authUserId)
+                  .eq("property_id", property.id)
+                  .maybeSingle()
+              : Promise.resolve({ data: null, error: null } as any),
+            authUserId
+              ? supabase
+                  .from("property_likes")
+                  .select("id")
+                  .eq("user_id", authUserId)
+                  .eq("property_id", property.id)
+                  .maybeSingle()
+              : Promise.resolve({ data: null, error: null } as any),
+            authUserId
+              ? supabase
+                  .from("property_ratings")
+                  .select("rating")
+                  .eq("user_id", authUserId)
+                  .eq("property_id", property.id)
+                  .maybeSingle()
+              : Promise.resolve({ data: null, error: null } as any),
+          ]);
 
         if (ignore) return;
 
         if (summaryRes.data) {
-          setDisplaySaveCount(toCount((summaryRes.data as any).save_count));
-          setDisplayLikeCount(toCount((summaryRes.data as any).like_count));
-          setDisplayRatingCount(toCount((summaryRes.data as any).rating_count));
-          setDisplayRatingAverage(
-            Number(toAverage((summaryRes.data as any).avg_rating).toFixed(1))
-          );
+          const summary = summaryRes.data as any;
+          setDisplaySaveCount(Number(summary.save_count || 0));
+          setDisplayLikeCount(Number(summary.like_count || 0));
+          setDisplayRatingCount(Number(summary.rating_count || 0));
+          setDisplayRatingAverage(Number(Number(summary.avg_rating || 0).toFixed(1)));
         }
 
         setSaved(Boolean(savedRes.data));
         setLiked(Boolean(likedRes.data));
-        setUserRating(toCount((userRatingRes.data as any)?.rating));
+        setUserRating(Number((userRatingRes.data as any)?.rating || 0));
       } catch (error) {
         console.error("Failed to load property engagement:", error);
       }
@@ -1486,22 +1414,22 @@ Is this property still available?`;
     },
   ].filter((item) => item.href);
 
-  const topDetailChips: DetailChip[] = [
+  const primaryDetailChips: DetailChip[] = [
     {
       key: "type",
-      label: lang === "id" ? "Tipe Properti" : "Property Type",
+      label: lang === "id" ? "Property Type" : "Property Type",
       value: propertyTypeLabel || "-",
       icon: Home,
     },
     {
       key: "bed",
-      label: lang === "id" ? "Kamar Tidur" : "Bedrooms",
+      label: lang === "id" ? "Bedrooms" : "Bedrooms",
       value: property.bedroomsValue ? formatNumber(property.bedroomsValue) : "-",
       icon: BedDouble,
     },
     {
       key: "bath",
-      label: lang === "id" ? "Kamar Mandi" : "Bathrooms",
+      label: lang === "id" ? "Bathrooms" : "Bathrooms",
       value: property.bathroomsValue
         ? formatNumber(property.bathroomsValue)
         : "-",
@@ -1509,7 +1437,7 @@ Is this property still available?`;
     },
     {
       key: "land",
-      label: lang === "id" ? "Luas Tanah" : "Land Size",
+      label: lang === "id" ? "Land Size" : "Land Size",
       value: property.landSizeValue
         ? `${formatNumber(property.landSizeValue)} m²`
         : "-",
@@ -1517,7 +1445,7 @@ Is this property still available?`;
     },
     {
       key: "building",
-      label: lang === "id" ? "Luas Bangunan" : "Building Size",
+      label: lang === "id" ? "Building Size" : "Building Size",
       value: property.buildingSizeValue
         ? `${formatNumber(property.buildingSizeValue)} m²`
         : "-",
@@ -1525,34 +1453,34 @@ Is this property still available?`;
     },
     {
       key: "parking",
-      label: lang === "id" ? "Parkir" : "Parking",
+      label: lang === "id" ? "Parking" : "Parking",
       value: property.parkingValue
         ? formatNumber(property.parkingValue)
         : property.parkingAvailable
         ? lang === "id"
-          ? "Tersedia"
+          ? "Available"
           : "Available"
         : "-",
       icon: CarFront,
     },
   ];
 
-  const extraDetailChips: DetailChip[] = [
+  const secondaryDetailChips: DetailChip[] = [
     {
       key: "floors",
-      label: lang === "id" ? "Lantai" : "Floors",
+      label: lang === "id" ? "Floors" : "Floors",
       value: property.floorsValue ? formatNumber(property.floorsValue) : "-",
       icon: Layers3,
     },
     {
       key: "electricity",
-      label: lang === "id" ? "Listrik" : "Electricity",
+      label: lang === "id" ? "Electricity" : "Electricity",
       value: property.electricityValue || "-",
       icon: Zap,
     },
     {
       key: "water",
-      label: lang === "id" ? "Air" : "Water",
+      label: lang === "id" ? "Water" : "Water",
       value: property.waterValue || "-",
       icon: Droplets,
     },
@@ -1564,7 +1492,7 @@ Is this property still available?`;
     },
     {
       key: "certificate",
-      label: lang === "id" ? "Sertifikat" : "Certificate",
+      label: lang === "id" ? "Certificate" : "Certificate",
       value:
         property.jenisListing === "dijual" ? property.certificate || "-" : "-",
       icon: FileText,
@@ -1624,7 +1552,7 @@ Is this property still available?`;
                 href={`/properti/${prevId}`}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
               >
-                ← {lang === "id" ? "Prev" : "Prev"}
+                ← Prev
               </Link>
             ) : (
               <button
@@ -1632,7 +1560,7 @@ Is this property still available?`;
                 disabled
                 className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
               >
-                ← {lang === "id" ? "Prev" : "Prev"}
+                ← Prev
               </button>
             )}
 
@@ -1641,7 +1569,7 @@ Is this property still available?`;
                 href={`/properti/${nextId}`}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
               >
-                {lang === "id" ? "Next" : "Next"} →
+                Next →
               </Link>
             ) : (
               <button
@@ -1649,19 +1577,19 @@ Is this property still available?`;
                 disabled
                 className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
               >
-                {lang === "id" ? "Next" : "Next"} →
+                Next →
               </button>
             )}
           </div>
         </div>
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-8">
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.12fr_0.88fr]">
           <div className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="relative overflow-hidden rounded-[24px]">
               <img
                 src={property.images[idx]}
                 alt={property.title}
-                className="h-[360px] w-full object-cover sm:h-[460px] lg:h-[620px]"
+                className="h-[360px] w-full object-cover sm:h-[470px] lg:h-[640px]"
               />
 
               <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
@@ -1669,7 +1597,7 @@ Is this property still available?`;
               </div>
 
               <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
-                <Badge>
+                <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                   {property.jenisListing === "dijual"
                     ? lang === "id"
                       ? "Dijual"
@@ -1677,9 +1605,13 @@ Is this property still available?`;
                     : lang === "id"
                     ? "Disewa"
                     : "For Rent"}
-                </Badge>
+                </span>
 
-                {propertyTypeLabel ? <Badge>{propertyTypeLabel}</Badge> : null}
+                {propertyTypeLabel ? (
+                  <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                    {propertyTypeLabel}
+                  </span>
+                ) : null}
               </div>
 
               <button
@@ -1700,29 +1632,6 @@ Is this property still available?`;
                 ›
               </button>
             </div>
-
-            {property.images.length > 1 ? (
-              <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5">
-                {property.images.slice(0, 5).map((image, imageIndex) => (
-                  <button
-                    key={`${image}-${imageIndex}`}
-                    type="button"
-                    onClick={() => setIdx(imageIndex)}
-                    className={`overflow-hidden rounded-2xl border ${
-                      idx === imageIndex
-                        ? "border-[#1C1C1E]"
-                        : "border-gray-200"
-                    }`}
-                  >
-                    <img
-                      src={image}
-                      alt={`${property.title} ${imageIndex + 1}`}
-                      className="h-20 w-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
@@ -1732,36 +1641,30 @@ Is this property still available?`;
 
             <div className="mt-3 flex flex-wrap gap-2">
               {property.spotlight && (
-                <Badge>
-                  <span className="inline-flex items-center gap-1">
-                    <Gem className="h-3.5 w-3.5" />
-                    Spotlight
-                  </span>
-                </Badge>
+                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                  <Gem className="h-3.5 w-3.5" />
+                  Spotlight
+                </span>
               )}
 
               {property.featured && (
-                <Badge>
-                  <span className="inline-flex items-center gap-1">
-                    <Crown className="h-3.5 w-3.5" />
-                    Featured
-                  </span>
-                </Badge>
+                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                  <Crown className="h-3.5 w-3.5" />
+                  Featured
+                </span>
               )}
 
               {property.boosted && (
-                <Badge>
-                  <span className="inline-flex items-center gap-1">
-                    <Zap className="h-3.5 w-3.5" />
-                    Boost
-                  </span>
-                </Badge>
+                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                  <Zap className="h-3.5 w-3.5" />
+                  Boost
+                </span>
               )}
 
               {property.verifiedListing && (
-                <Badge dark>
+                <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
                   {lang === "id" ? "Verified Listing" : "Verified Listing"}
-                </Badge>
+                </span>
               )}
             </div>
 
@@ -1789,13 +1692,13 @@ Is this property still available?`;
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-gray-500">
+                  <div className="text-xs uppercase tracking-wide text-gray-500">
                     {lang === "id"
                       ? property.postedByType === "owner"
-                        ? "Pemilik"
+                        ? "Owner"
                         : property.postedByType === "developer"
                         ? "Developer"
-                        : "Agen"
+                        : "Agent"
                       : property.postedByType === "owner"
                       ? "Owner"
                       : property.postedByType === "developer"
@@ -1813,14 +1716,14 @@ Is this property still available?`;
 
                   <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
                     <span>
-                      {lang === "id" ? "Kode:" : "Code:"}{" "}
+                      Code:{" "}
                       <span className="font-medium text-gray-700">
                         {property.kodeListing}
                       </span>
                     </span>
 
                     <span>
-                      {lang === "id" ? "Tayang:" : "Posted:"}{" "}
+                      Posted:{" "}
                       <span className="font-medium text-gray-700">
                         {property.postedDate}
                       </span>
@@ -1847,64 +1750,68 @@ Is this property still available?`;
                 onClick={openJadwalWithTracking}
                 className="mt-5 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
               >
-                {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
+                {lang === "id" ? "Schedule Viewing" : "Schedule Viewing"}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
+        <div className="mt-6 grid grid-cols-3 gap-3">
           <button
             type="button"
             onClick={toggleSave}
-            className={`flex min-h-[78px] items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-semibold shadow-sm transition ${
+            className={`flex min-h-[76px] items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-center text-[11px] font-semibold shadow-sm transition sm:text-sm ${
               saved
                 ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                 : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
             }`}
           >
-            <Bookmark className="h-4 w-4" />
-            {lang === "id" ? "Simpan" : "Save"} ({displaySaveCount})
+            <Bookmark className="h-3.5 w-3.5" />
+            <span>
+              Save ({displaySaveCount})
+            </span>
           </button>
 
           <button
             type="button"
             onClick={toggleLike}
-            className={`flex min-h-[78px] items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-semibold shadow-sm transition ${
+            className={`flex min-h-[76px] items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-center text-[11px] font-semibold shadow-sm transition sm:text-sm ${
               liked
                 ? "border-red-200 bg-red-50 text-red-700"
                 : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
             }`}
           >
-            <Heart className="h-4 w-4" />
-            {lang === "id" ? "Suka" : "Like"} ({displayLikeCount})
+            <Heart className="h-3.5 w-3.5" />
+            <span>
+              Like ({displayLikeCount})
+            </span>
           </button>
 
-          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-sm font-semibold text-[#1C1C1E]">
-                  {lang === "id" ? "Rating Properti" : "Property Rating"}
+          <div className="min-h-[76px] rounded-2xl border border-gray-200 bg-white px-2 py-3 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-[#1C1C1E] sm:text-sm">
+                  Property Rating
                 </div>
-                <div className="mt-1 text-xs text-gray-500">
-                  {displayRatingCount} {lang === "id" ? "rating" : "ratings"}
+                <div className="mt-1 text-[10px] text-gray-500">
+                  {displayRatingCount} ratings
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-xl font-extrabold text-[#1C1C1E]">
+                <div className="text-lg font-extrabold text-[#1C1C1E]">
                   {displayRatingAverage.toFixed(1)}
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 flex items-center gap-1">
+            <div className="mt-2 flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => handleRate(value)}
-                  className={`rounded-full border p-1.5 transition ${
+                  className={`rounded-full border p-1 transition ${
                     userRating >= value
                       ? "border-amber-200 bg-amber-50 text-amber-500"
                       : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
@@ -1913,7 +1820,7 @@ Is this property still available?`;
                   title={`Rate ${value}`}
                 >
                   <Star
-                    className="h-3.5 w-3.5"
+                    className="h-3 w-3"
                     fill={userRating >= value ? "currentColor" : "transparent"}
                   />
                 </button>
@@ -1924,56 +1831,66 @@ Is this property still available?`;
 
         <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-bold text-[#1C1C1E]">
-            {lang === "id" ? "Detail Properti" : "Property Details"}
+            Property Details
           </h2>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {topDetailChips.map((item) => {
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            {primaryDetailChips.map((item) => {
               const Icon = item.icon;
               return (
                 <div
                   key={item.key}
-                  className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
                 >
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <Icon className="h-4 w-4" />
-                    <span className="text-xs font-medium uppercase tracking-wide">
-                      {item.label}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
-                    {item.value}
-                  </div>
-                </div>
-              );
-            })}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Icon className="h-3.5 w-3.5" />
+                      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
+                        {item.label}
+                      </div>
+                    </div>
 
-            {extraDetailChips.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.key}
-                  className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
-                >
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <Icon className="h-4 w-4" />
-                    <span className="text-xs font-medium uppercase tracking-wide">
-                      {item.label}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
-                    {item.value}
+                    <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
+                      {item.value}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {secondaryDetailChips.length > 0 ? (
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              {secondaryDetailChips.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.key}
+                    className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <Icon className="h-3.5 w-3.5" />
+                        <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
+                          {item.label}
+                        </div>
+                      </div>
+
+                      <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
+                        {item.value}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Deskripsi" : "Description"}
+              {lang === "id" ? "Deskripsi Properti" : "Property Description"}
             </h2>
 
             <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-[15px]">
@@ -1990,23 +1907,17 @@ Is this property still available?`;
 
             <div className="mt-4 space-y-3 text-sm text-gray-700">
               <div>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {lang === "id" ? "Harga:" : "Price:"}
-                </span>{" "}
+                <span className="font-semibold text-[#1C1C1E]">Price:</span>{" "}
                 {property.price}
               </div>
 
               <div>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {lang === "id" ? "Lokasi:" : "Location:"}
-                </span>{" "}
+                <span className="font-semibold text-[#1C1C1E]">Location:</span>{" "}
                 {property.area}, {property.province}
               </div>
 
               <div>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {lang === "id" ? "Tipe:" : "Type:"}
-                </span>{" "}
+                <span className="font-semibold text-[#1C1C1E]">Type:</span>{" "}
                 {propertyTypeLabel}
               </div>
             </div>
@@ -2065,7 +1976,7 @@ Is this property still available?`;
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={handleWhatsAppClick}
@@ -2079,7 +1990,7 @@ Is this property still available?`;
             onClick={openJadwalWithTracking}
             className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
           >
-            {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
+            {lang === "id" ? "Schedule Viewing" : "Schedule Viewing"}
           </button>
         </div>
 
