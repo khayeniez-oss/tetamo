@@ -1589,7 +1589,7 @@ Is this property still available?`;
               <img
                 src={property.images[idx]}
                 alt={property.title}
-                className="h-[360px] w-full object-cover sm:h-[470px] lg:h-[640px]"
+                className="h-[440px] w-full object-cover sm:h-[470px] lg:h-[640px]"
               />
 
               <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
