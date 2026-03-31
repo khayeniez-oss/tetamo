@@ -1026,7 +1026,7 @@ export default function SearchPageContent() {
 
         <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <div ref={searchBoxRef} className="relative">
-            <div className="flex flex-col gap-3 lg:flex-row">
+            <div className="grid grid-cols-[1fr_96px] gap-3 sm:grid-cols-[1fr_110px]">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
 
@@ -1194,7 +1194,7 @@ export default function SearchPageContent() {
               <button
                 type="button"
                 onClick={() => handleSearch()}
-                className="w-full rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 lg:w-auto"
+                className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 {t.search}
               </button>
@@ -1412,7 +1412,7 @@ export default function SearchPageContent() {
                       <img
                         src={item.images[0]}
                         alt={item.title}
-                        className="h-[360px] w-full object-cover sm:h-[430px] lg:h-[500px]"
+                        className="h-[440px] w-full object-cover sm:h-[430px] lg:h-[500px]"
                       />
 
                       <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
