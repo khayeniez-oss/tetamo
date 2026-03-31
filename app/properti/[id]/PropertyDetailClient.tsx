@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import MortgageCalculator from "@/components/MortgageCalculator";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -31,69 +32,6 @@ import {
 } from "lucide-react";
 
 type VerificationStatus = "pending" | "verified";
-
-type PropertyItem = {
-  id: string;
-  jenisListing: "dijual" | "disewa";
-  propertyType: string;
-  title: string;
-  price: string;
-  province: string;
-  area: string;
-  size: string;
-  bed: string;
-  furnished: string;
-  certificate: string;
-  description: string;
-  descriptionEn: string;
-  agency: string;
-  agentName: string;
-  images: string[];
-  videoUrl?: string | null;
-  photo: string;
-
-  facilities?: Record<string, boolean>;
-  nearby?: Record<string, boolean>;
-
-  kodeListing: string;
-  postedDate?: string;
-
-  verifiedOwnerStatus?: VerificationStatus;
-  verifiedAgent?: boolean;
-  boosted?: boolean;
-  featured?: boolean;
-  spotlight?: boolean;
-
-  verifiedListing: boolean;
-  ownerApproved: boolean;
-  agentVerified: boolean;
-
-  postedByType: "owner" | "agent" | "developer";
-  receiverId: string;
-  receiverName: string;
-  receiverWhatsapp: string;
-
-  instagramUrl: string;
-  facebookUrl: string;
-  tiktokUrl: string;
-  youtubeUrl: string;
-  linkedinUrl: string;
-
-  buildingSizeValue: number | null;
-  landSizeValue: number | null;
-  bedroomsValue: number | null;
-  bathroomsValue: number | null;
-  floorsValue: number | null;
-  parkingValue: number | null;
-  parkingAvailable: boolean;
-  electricityValue: string;
-  waterValue: string;
-
-  likeCountBase: number;
-  saveCountBase: number;
-  ratingAverageBase: number;
-  ratingCountBase: number;
-};
 
 type PropertyImageRow = {
   image_url: string;
@@ -164,7 +102,69 @@ type PropertyRow = {
   property_images: PropertyImageRow[] | null;
 };
 
-type DetailSpecItem = {
+type PropertyItem = {
+  id: string;
+  jenisListing: "dijual" | "disewa";
+  propertyType: string;
+  title: string;
+  price: string;
+  province: string;
+  area: string;
+  size: string;
+  bed: string;
+  furnished: string;
+  certificate: string;
+  description: string;
+  descriptionEn: string;
+  agency: string;
+  agentName: string;
+  images: string[];
+  videoUrl?: string | null;
+  photo: string;
+
+  facilities?: Record<string, boolean>;
+  nearby?: Record<string, boolean>;
+
+  kodeListing: string;
+  postedDate?: string;
+
+  verifiedOwnerStatus?: VerificationStatus;
+  boosted?: boolean;
+  featured?: boolean;
+  spotlight?: boolean;
+
+  verifiedListing: boolean;
+  ownerApproved: boolean;
+  agentVerified: boolean;
+
+  postedByType: "owner" | "agent" | "developer";
+  receiverId: string;
+  receiverName: string;
+  receiverWhatsapp: string;
+
+  instagramUrl: string;
+  facebookUrl: string;
+  tiktokUrl: string;
+  youtubeUrl: string;
+  linkedinUrl: string;
+
+  buildingSizeValue: number | null;
+  landSizeValue: number | null;
+  bedroomsValue: number | null;
+  bathroomsValue: number | null;
+  floorsValue: number | null;
+  parkingValue: number | null;
+  parkingAvailable: boolean;
+  electricityValue: string;
+  waterValue: string;
+
+  likeCountBase: number;
+  saveCountBase: number;
+  ratingAverageBase: number;
+  ratingCountBase: number;
+};
+
+type DetailChip = {
   key: string;
   label: string;
   value: string;
@@ -285,7 +285,6 @@ function normalizePostedByType(
   source?: string | null
 ): "owner" | "agent" | "developer" {
   const value = (role || source || "owner").toLowerCase();
-
   if (value === "agent") return "agent";
   if (value === "developer") return "developer";
   return "owner";
@@ -354,17 +353,64 @@ function getPosterLabel(
   return "The owner";
 }
 
+function Badge({
+  children,
+  dark = false,
+}: {
+  children: React.ReactNode;
+  dark?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold sm:text-xs ${
+        dark
+          ? "bg-[#1C1C1E] text-white"
+          : "border border-gray-200 bg-white text-[#1C1C1E]"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SocialCircle({
+  href,
+  label,
+  icon: Icon,
+}: {
+  href: string;
+  label: string;
+  icon: any;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-[#1C1C1E] transition hover:bg-gray-50"
+    >
+      <Icon className="h-4 w-4" />
+    </a>
+  );
+}
+
 export default function PropertyDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [jadwalOpen, setJadwalOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
   const [idx, setIdx] = useState(0);
 
   const [property, setProperty] = useState<PropertyItem | null>(null);
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
 
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -376,35 +422,32 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
   const trackedDetailViewRef = useRef<string | null>(null);
 
-  function openJadwal() {
-    setJadwalOpen(true);
-  }
+  useEffect(() => {
+    let mounted = true;
 
-  function closeJadwal() {
-    setJadwalOpen(false);
-  }
+    async function loadAuthUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-  function openJadwalWithTracking() {
-    if (!property) return;
+      if (!mounted) return;
+      setAuthUserId(user?.id ?? null);
+    }
 
-    void trackEvent({
-      event_name: "property_schedule_viewing_click",
-      property_id: property.id,
-      source_page: "property_detail",
-      metadata: {
-        button: "schedule_viewing",
-        property_title: property.title,
-        property_code: property.kodeListing ?? null,
-        listing_type: property.jenisListing,
-        property_type: property.propertyType,
-        posted_by_type: property.postedByType,
-        area: property.area,
-        province: property.province,
-      },
+    loadAuthUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setAuthUserId(session?.user?.id ?? null);
     });
 
-    openJadwal();
-  }
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     setIdx(0);
@@ -537,6 +580,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
             role,
             agency,
             photo_url,
+            email,
             instagram_url,
             facebook_url,
             tiktok_url,
@@ -761,52 +805,6 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   }, [id, lang]);
 
   useEffect(() => {
-    if (!property) return;
-    if (typeof window === "undefined") return;
-
-    const likeKey = `tetamo:property:${property.id}:liked`;
-    const saveKey = `tetamo:property:${property.id}:saved`;
-    const ratingKey = `tetamo:property:${property.id}:rating`;
-
-    const nextLiked = localStorage.getItem(likeKey) === "1";
-    const nextSaved = localStorage.getItem(saveKey) === "1";
-    const nextRating = toCount(localStorage.getItem(ratingKey));
-
-    setLiked(nextLiked);
-    setSaved(nextSaved);
-    setUserRating(nextRating);
-
-    setDisplayLikeCount(property.likeCountBase + (nextLiked ? 1 : 0));
-    setDisplaySaveCount(property.saveCountBase + (nextSaved ? 1 : 0));
-
-    if (nextRating > 0) {
-      const nextCount = property.ratingCountBase + 1;
-      const nextAverage =
-        nextCount > 0
-          ? Number(
-              (
-                (property.ratingAverageBase * property.ratingCountBase +
-                  nextRating) /
-                nextCount
-              ).toFixed(1)
-            )
-          : Number(nextRating.toFixed(1));
-
-      setDisplayRatingCount(nextCount);
-      setDisplayRatingAverage(nextAverage);
-    } else {
-      setDisplayRatingCount(property.ratingCountBase);
-      setDisplayRatingAverage(Number(property.ratingAverageBase.toFixed(1)));
-    }
-  }, [
-    property?.id,
-    property?.likeCountBase,
-    property?.saveCountBase,
-    property?.ratingAverageBase,
-    property?.ratingCountBase,
-  ]);
-
-  useEffect(() => {
     if (!property?.id) return;
     if (trackedDetailViewRef.current === property.id) return;
 
@@ -837,6 +835,84 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     property?.province,
   ]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadEngagement() {
+      if (!property) return;
+
+      setLiked(false);
+      setSaved(false);
+      setUserRating(0);
+      setDisplayLikeCount(property.likeCountBase);
+      setDisplaySaveCount(property.saveCountBase);
+      setDisplayRatingAverage(Number(property.ratingAverageBase.toFixed(1)));
+      setDisplayRatingCount(property.ratingCountBase);
+
+      try {
+        const [
+          summaryRes,
+          savedRes,
+          likedRes,
+          userRatingRes,
+        ] = await Promise.all([
+          supabase
+            .from("property_engagement_summary")
+            .select("save_count, like_count, rating_count, avg_rating")
+            .eq("property_id", property.id)
+            .maybeSingle(),
+          authUserId
+            ? supabase
+                .from("saved_properties")
+                .select("id")
+                .eq("user_id", authUserId)
+                .eq("property_id", property.id)
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null } as any),
+          authUserId
+            ? supabase
+                .from("property_likes")
+                .select("id")
+                .eq("user_id", authUserId)
+                .eq("property_id", property.id)
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null } as any),
+          authUserId
+            ? supabase
+                .from("property_ratings")
+                .select("rating")
+                .eq("user_id", authUserId)
+                .eq("property_id", property.id)
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null } as any),
+        ]);
+
+        if (ignore) return;
+
+        if (summaryRes.data) {
+          setDisplaySaveCount(toCount((summaryRes.data as any).save_count));
+          setDisplayLikeCount(toCount((summaryRes.data as any).like_count));
+          setDisplayRatingCount(toCount((summaryRes.data as any).rating_count));
+          setDisplayRatingAverage(
+            Number(toAverage((summaryRes.data as any).avg_rating).toFixed(1))
+          );
+        }
+
+        setSaved(Boolean(savedRes.data));
+        setLiked(Boolean(likedRes.data));
+        setUserRating(toCount((userRatingRes.data as any)?.rating));
+      } catch (error) {
+        console.error("Failed to load property engagement:", error);
+      }
+    }
+
+    loadEngagement();
+
+    return () => {
+      ignore = true;
+    };
+  }, [property, authUserId]);
+
   const propertyIndex = useMemo(
     () => orderedIds.findIndex((x) => x === id),
     [orderedIds, id]
@@ -856,67 +932,194 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     property &&
     setIdx((prev) => (prev === 0 ? property.images.length - 1 : prev - 1));
 
-  function toggleLike() {
-    if (!property || typeof window === "undefined") return;
+  async function ensureAuthenticated() {
+    if (authUserId) return authUserId;
 
-    const nextLiked = !liked;
-    const likeKey = `tetamo:property:${property.id}:liked`;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    setLiked(nextLiked);
-    setDisplayLikeCount(property.likeCountBase + (nextLiked ? 1 : 0));
+    if (user?.id) {
+      setAuthUserId(user.id);
+      return user.id;
+    }
 
-    if (nextLiked) {
-      localStorage.setItem(likeKey, "1");
-    } else {
-      localStorage.removeItem(likeKey);
+    alert(
+      lang === "id"
+        ? "Silakan login terlebih dahulu."
+        : "Please log in first."
+    );
+    router.push(`/login?next=${encodeURIComponent(pathname)}`);
+    return null;
+  }
+
+  async function toggleSave() {
+    if (!property) return;
+
+    const userId = await ensureAuthenticated();
+    if (!userId) return;
+
+    const currentlySaved = saved;
+
+    setSaved(!currentlySaved);
+    setDisplaySaveCount((prev) => Math.max(0, prev + (currentlySaved ? -1 : 1)));
+
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from("saved_properties")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", property.id);
+
+      if (error) {
+        console.error("Failed to remove saved property:", error);
+        setSaved(true);
+        setDisplaySaveCount((prev) => prev + 1);
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("saved_properties").insert({
+      user_id: userId,
+      property_id: property.id,
+    });
+
+    if (error) {
+      console.error("Failed to save property:", error);
+      setSaved(false);
+      setDisplaySaveCount((prev) => Math.max(0, prev - 1));
     }
   }
 
-  function toggleSave() {
-    if (!property || typeof window === "undefined") return;
+  async function toggleLike() {
+    if (!property) return;
 
-    const nextSaved = !saved;
-    const saveKey = `tetamo:property:${property.id}:saved`;
+    const userId = await ensureAuthenticated();
+    if (!userId) return;
 
-    setSaved(nextSaved);
-    setDisplaySaveCount(property.saveCountBase + (nextSaved ? 1 : 0));
+    const currentlyLiked = liked;
 
-    if (nextSaved) {
-      localStorage.setItem(saveKey, "1");
-    } else {
-      localStorage.removeItem(saveKey);
+    setLiked(!currentlyLiked);
+    setDisplayLikeCount((prev) => Math.max(0, prev + (currentlyLiked ? -1 : 1)));
+
+    if (currentlyLiked) {
+      const { error } = await supabase
+        .from("property_likes")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", property.id);
+
+      if (error) {
+        console.error("Failed to remove property like:", error);
+        setLiked(true);
+        setDisplayLikeCount((prev) => prev + 1);
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("property_likes").insert({
+      user_id: userId,
+      property_id: property.id,
+    });
+
+    if (error) {
+      console.error("Failed to like property:", error);
+      setLiked(false);
+      setDisplayLikeCount((prev) => Math.max(0, prev - 1));
     }
   }
 
-  function handleRate(nextValue: number) {
-    if (!property || typeof window === "undefined") return;
+  async function handleRate(nextValue: number) {
+    if (!property) return;
 
-    const ratingKey = `tetamo:property:${property.id}:rating`;
-    const nextRating = userRating === nextValue ? 0 : nextValue;
+    const userId = await ensureAuthenticated();
+    if (!userId) return;
 
-    setUserRating(nextRating);
+    const currentRating = userRating;
+    const currentCount = displayRatingCount;
+    const currentAverage = displayRatingAverage;
+    const nextRating = currentRating === nextValue ? 0 : nextValue;
+
+    let nextCount = currentCount;
+    let total = currentAverage * currentCount;
+
+    if (currentRating > 0) {
+      total -= currentRating;
+      nextCount -= 1;
+    }
 
     if (nextRating > 0) {
-      const nextCount = property.ratingCountBase + 1;
-      const nextAverage =
-        nextCount > 0
-          ? Number(
-              (
-                (property.ratingAverageBase * property.ratingCountBase +
-                  nextRating) /
-                nextCount
-              ).toFixed(1)
-            )
-          : Number(nextRating.toFixed(1));
-
-      setDisplayRatingCount(nextCount);
-      setDisplayRatingAverage(nextAverage);
-      localStorage.setItem(ratingKey, String(nextRating));
-    } else {
-      setDisplayRatingCount(property.ratingCountBase);
-      setDisplayRatingAverage(Number(property.ratingAverageBase.toFixed(1)));
-      localStorage.removeItem(ratingKey);
+      total += nextRating;
+      nextCount += 1;
     }
+
+    const nextAverage = nextCount > 0 ? total / nextCount : 0;
+
+    setUserRating(nextRating);
+    setDisplayRatingCount(Math.max(nextCount, 0));
+    setDisplayRatingAverage(Number(nextAverage.toFixed(1)));
+
+    if (nextRating === 0) {
+      const { error } = await supabase
+        .from("property_ratings")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", property.id);
+
+      if (error) {
+        console.error("Failed to delete property rating:", error);
+        setUserRating(currentRating);
+        setDisplayRatingCount(currentCount);
+        setDisplayRatingAverage(currentAverage);
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("property_ratings").upsert(
+      {
+        user_id: userId,
+        property_id: property.id,
+        rating: nextRating,
+      },
+      { onConflict: "user_id,property_id" }
+    );
+
+    if (error) {
+      console.error("Failed to rate property:", error);
+      setUserRating(currentRating);
+      setDisplayRatingCount(currentCount);
+      setDisplayRatingAverage(currentAverage);
+    }
+  }
+
+  function openJadwal() {
+    setJadwalOpen(true);
+  }
+
+  function closeJadwal() {
+    setJadwalOpen(false);
+  }
+
+  function openJadwalWithTracking() {
+    if (!property) return;
+
+    void trackEvent({
+      event_name: "property_schedule_viewing_click",
+      property_id: property.id,
+      source_page: "property_detail",
+      metadata: {
+        button: "schedule_viewing",
+        property_title: property.title,
+        property_code: property.kodeListing ?? null,
+        listing_type: property.jenisListing,
+        property_type: property.propertyType,
+        posted_by_type: property.postedByType,
+        area: property.area,
+        province: property.province,
+      },
+    });
+
+    openJadwal();
   }
 
   async function handleWhatsAppClick() {
@@ -981,25 +1184,17 @@ Is this property still available?`;
       });
 
       let senderProfile:
-        | {
-            full_name: string | null;
-            phone: string | null;
-            email: string | null;
-          }
+        | { full_name: string | null; phone: string | null; email: string | null }
         | null = null;
 
       if (user?.id) {
-        const { data: profileData, error: senderProfileError } = await supabase
+        const { data: profileData } = await supabase
           .from("profiles")
           .select("full_name, phone, email")
           .eq("id", user.id)
           .maybeSingle();
 
-        if (senderProfileError) {
-          console.error("Failed to load sender profile:", senderProfileError);
-        } else {
-          senderProfile = profileData;
-        }
+        senderProfile = profileData;
       }
 
       const leadPayload = {
@@ -1105,19 +1300,20 @@ Is this property still available?`;
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      alert("Please log in first.");
+      alert(
+        lang === "id"
+          ? "Silakan login terlebih dahulu."
+          : "Please log in first."
+      );
+      router.push(`/login?next=${encodeURIComponent(pathname)}`);
       return;
     }
 
-    const { data: senderProfile, error: senderProfileError } = await supabase
+    const { data: senderProfile } = await supabase
       .from("profiles")
       .select("full_name, phone, email")
       .eq("id", user.id)
       .maybeSingle();
-
-    if (senderProfileError) {
-      console.error("Failed to load sender profile:", senderProfileError);
-    }
 
     const message =
       lang === "id"
@@ -1228,7 +1424,7 @@ Is this property still available?`;
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-gray-900">
-        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
           <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
             {lang === "id" ? "Memuat properti..." : "Loading property..."}
           </div>
@@ -1240,7 +1436,7 @@ Is this property still available?`;
   if (!property) {
     return (
       <main className="min-h-screen bg-white text-gray-900">
-        <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
           <h1 className="text-2xl font-bold">
             {lang === "id" ? "Properti tidak ditemukan" : "Property not found"}
           </h1>
@@ -1256,38 +1452,6 @@ Is this property still available?`;
   }
 
   const propertyTypeLabel = formatPropertyType(property.propertyType, lang);
-
-  const facilityLabels: Record<string, string> = {
-    fac_ac: lang === "id" ? "AC" : "AC",
-    fac_pool: lang === "id" ? "Kolam Renang" : "Swimming Pool",
-    fac_gym: lang === "id" ? "Gym" : "Gym",
-    fac_security: lang === "id" ? "Security 24 Jam" : "24-Hour Security",
-    fac_cctv: "CCTV",
-    fac_lift: lang === "id" ? "Lift" : "Lift",
-    fac_parking: lang === "id" ? "Parkir" : "Parking",
-    fac_garden: lang === "id" ? "Taman" : "Garden",
-    fac_wifi: "WiFi",
-  };
-
-  const nearbyLabels: Record<string, string> = {
-    near_toll: lang === "id" ? "Akses Tol" : "Toll Access",
-    near_mall: "Mall",
-    near_school: lang === "id" ? "Sekolah" : "School",
-    near_hospital: lang === "id" ? "Rumah Sakit" : "Hospital",
-    near_station: lang === "id" ? "Stasiun" : "Station",
-    near_airport: lang === "id" ? "Bandara" : "Airport",
-    near_market: lang === "id" ? "Pasar" : "Market",
-    near_office: lang === "id" ? "Perkantoran" : "Office Area",
-    near_beach: lang === "id" ? "Pantai" : "Beach",
-  };
-
-  const activeFacilities = Object.entries(property.facilities ?? {})
-    .filter(([, value]) => Boolean(value))
-    .map(([key]) => facilityLabels[key] ?? key);
-
-  const activeNearby = Object.entries(property.nearby ?? {})
-    .filter(([, value]) => Boolean(value))
-    .map(([key]) => nearbyLabels[key] ?? key);
 
   const socialLinks = [
     {
@@ -1322,154 +1486,131 @@ Is this property still available?`;
     },
   ].filter((item) => item.href);
 
-  const summaryItems = [
-    propertyTypeLabel,
-    property.buildingSizeValue
-      ? `${formatNumber(property.buildingSizeValue)} m²`
-      : "",
-    property.bedroomsValue
-      ? `${formatNumber(property.bedroomsValue)} ${
-          lang === "id"
-            ? "Kamar"
-            : property.bedroomsValue > 1
-            ? "Beds"
-            : "Bed"
-        }`
-      : "",
-    property.bathroomsValue
-      ? `${formatNumber(property.bathroomsValue)} ${
-          lang === "id"
-            ? "K. Mandi"
-            : property.bathroomsValue > 1
-            ? "Baths"
-            : "Bath"
-        }`
-      : "",
-    property.furnished !== "-" ? property.furnished : "",
-    property.jenisListing === "dijual" && property.certificate !== "-"
-      ? property.certificate
-      : "",
-  ].filter(Boolean);
-
-  const detailSpecs: DetailSpecItem[] = (() => {
-    const items: DetailSpecItem[] = [];
-    const isSale = property.jenisListing === "dijual";
-
-    const addItem = (
-      key: string,
-      label: string,
-      value: string,
-      icon: any
-    ) => {
-      const cleaned = value.trim();
-      if (!cleaned || cleaned === "-") return;
-      items.push({ key, label, value: cleaned, icon });
-    };
-
-    addItem(
-      "property_type",
-      lang === "id" ? "Tipe Properti" : "Property Type",
-      propertyTypeLabel,
-      Home
-    );
-
-    addItem(
-      "bedrooms",
-      lang === "id" ? "Kamar Tidur" : "Bedrooms",
-      property.bedroomsValue ? formatNumber(property.bedroomsValue) : "",
-      BedDouble
-    );
-
-    addItem(
-      "bathrooms",
-      lang === "id" ? "Kamar Mandi" : "Bathrooms",
-      property.bathroomsValue ? formatNumber(property.bathroomsValue) : "",
-      Bath
-    );
-
-    addItem(
-      "floors",
-      lang === "id" ? "Lantai" : "Floors",
-      property.floorsValue ? formatNumber(property.floorsValue) : "",
-      Layers3
-    );
-
-    addItem(
-      "parking",
-      lang === "id" ? "Parkir" : "Parking",
-      property.parkingValue
-        ? `${formatNumber(property.parkingValue)} ${
-            lang === "id"
-              ? "Slot"
-              : property.parkingValue > 1
-              ? "Slots"
-              : "Slot"
-          }`
+  const topDetailChips: DetailChip[] = [
+    {
+      key: "type",
+      label: lang === "id" ? "Tipe Properti" : "Property Type",
+      value: propertyTypeLabel || "-",
+      icon: Home,
+    },
+    {
+      key: "bed",
+      label: lang === "id" ? "Kamar Tidur" : "Bedrooms",
+      value: property.bedroomsValue ? formatNumber(property.bedroomsValue) : "-",
+      icon: BedDouble,
+    },
+    {
+      key: "bath",
+      label: lang === "id" ? "Kamar Mandi" : "Bathrooms",
+      value: property.bathroomsValue
+        ? formatNumber(property.bathroomsValue)
+        : "-",
+      icon: Bath,
+    },
+    {
+      key: "land",
+      label: lang === "id" ? "Luas Tanah" : "Land Size",
+      value: property.landSizeValue
+        ? `${formatNumber(property.landSizeValue)} m²`
+        : "-",
+      icon: Square,
+    },
+    {
+      key: "building",
+      label: lang === "id" ? "Luas Bangunan" : "Building Size",
+      value: property.buildingSizeValue
+        ? `${formatNumber(property.buildingSizeValue)} m²`
+        : "-",
+      icon: Ruler,
+    },
+    {
+      key: "parking",
+      label: lang === "id" ? "Parkir" : "Parking",
+      value: property.parkingValue
+        ? formatNumber(property.parkingValue)
         : property.parkingAvailable
         ? lang === "id"
           ? "Tersedia"
           : "Available"
-        : "",
-      CarFront
-    );
+        : "-",
+      icon: CarFront,
+    },
+  ];
 
-    addItem(
-      "electricity",
-      lang === "id" ? "Listrik" : "Electricity",
-      property.electricityValue,
-      Zap
-    );
+  const extraDetailChips: DetailChip[] = [
+    {
+      key: "floors",
+      label: lang === "id" ? "Lantai" : "Floors",
+      value: property.floorsValue ? formatNumber(property.floorsValue) : "-",
+      icon: Layers3,
+    },
+    {
+      key: "electricity",
+      label: lang === "id" ? "Listrik" : "Electricity",
+      value: property.electricityValue || "-",
+      icon: Zap,
+    },
+    {
+      key: "water",
+      label: lang === "id" ? "Air" : "Water",
+      value: property.waterValue || "-",
+      icon: Droplets,
+    },
+    {
+      key: "furnishing",
+      label: lang === "id" ? "Furnishing" : "Furnishing",
+      value: property.furnished || "-",
+      icon: Home,
+    },
+    {
+      key: "certificate",
+      label: lang === "id" ? "Sertifikat" : "Certificate",
+      value:
+        property.jenisListing === "dijual" ? property.certificate || "-" : "-",
+      icon: FileText,
+    },
+  ].filter(
+    (item) =>
+      item.value !== "-" &&
+      !(item.key === "certificate" && property.jenisListing !== "dijual")
+  );
 
-    addItem(
-      "water",
-      lang === "id" ? "Air" : "Water",
-      property.waterValue,
-      Droplets
-    );
+  const facilityLabels: Record<string, string> = {
+    fac_ac: "AC",
+    fac_pool: lang === "id" ? "Kolam Renang" : "Swimming Pool",
+    fac_gym: "Gym",
+    fac_security: lang === "id" ? "Security 24 Jam" : "24-Hour Security",
+    fac_cctv: "CCTV",
+    fac_lift: lang === "id" ? "Lift" : "Lift",
+    fac_parking: lang === "id" ? "Parkir" : "Parking",
+    fac_garden: lang === "id" ? "Taman" : "Garden",
+    fac_wifi: "WiFi",
+  };
 
-    addItem(
-      "building_size",
-      lang === "id" ? "Luas Bangunan" : "Building Size",
-      property.buildingSizeValue
-        ? `${formatNumber(property.buildingSizeValue)} m²`
-        : "",
-      Ruler
-    );
+  const nearbyLabels: Record<string, string> = {
+    near_toll: lang === "id" ? "Akses Tol" : "Toll Access",
+    near_mall: "Mall",
+    near_school: lang === "id" ? "Sekolah" : "School",
+    near_hospital: lang === "id" ? "Rumah Sakit" : "Hospital",
+    near_station: lang === "id" ? "Stasiun" : "Station",
+    near_airport: lang === "id" ? "Bandara" : "Airport",
+    near_market: lang === "id" ? "Pasar" : "Market",
+    near_office: lang === "id" ? "Perkantoran" : "Office Area",
+    near_beach: lang === "id" ? "Pantai" : "Beach",
+  };
 
-    if (isSale) {
-      addItem(
-        "land_size",
-        lang === "id" ? "Luas Tanah" : "Land Size",
-        property.landSizeValue
-          ? `${formatNumber(property.landSizeValue)} m²`
-          : "",
-        Square
-      );
-    }
+  const activeFacilities = Object.entries(property.facilities ?? {})
+    .filter(([, value]) => Boolean(value))
+    .map(([key]) => facilityLabels[key] ?? key);
 
-    addItem(
-      "furnishing",
-      lang === "id" ? "Furnishing" : "Furnishing",
-      property.furnished !== "-" ? property.furnished : "",
-      Home
-    );
-
-    if (isSale) {
-      addItem(
-        "certificate",
-        lang === "id" ? "Sertifikat" : "Certificate",
-        property.certificate !== "-" ? property.certificate : "",
-        FileText
-      );
-    }
-
-    return items;
-  })();
+  const activeNearby = Object.entries(property.nearby ?? {})
+    .filter(([, value]) => Boolean(value))
+    .map(([key]) => nearbyLabels[key] ?? key);
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="flex items-start justify-between gap-4">
           <Link
             href="/properti"
             className="text-sm underline text-[#1C1C1E] hover:opacity-80"
@@ -1477,50 +1618,50 @@ Is this property still available?`;
             {lang === "id" ? "Kembali ke Marketplace" : "Back to Marketplace"}
           </Link>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
             {prevId ? (
               <Link
                 href={`/properti/${prevId}`}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-center text-sm font-semibold transition hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
               >
-                ← {lang === "id" ? "Sebelumnya" : "Previous"}
+                ← {lang === "id" ? "Prev" : "Prev"}
               </Link>
             ) : (
               <button
                 type="button"
                 disabled
-                className="cursor-not-allowed rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold opacity-40"
+                className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
               >
-                ← {lang === "id" ? "Sebelumnya" : "Previous"}
+                ← {lang === "id" ? "Prev" : "Prev"}
               </button>
             )}
 
             {nextId ? (
               <Link
                 href={`/properti/${nextId}`}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-center text-sm font-semibold transition hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
               >
-                {lang === "id" ? "Berikutnya" : "Next"} →
+                {lang === "id" ? "Next" : "Next"} →
               </Link>
             ) : (
               <button
                 type="button"
                 disabled
-                className="cursor-not-allowed rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold opacity-40"
+                className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
               >
-                {lang === "id" ? "Berikutnya" : "Next"} →
+                {lang === "id" ? "Next" : "Next"} →
               </button>
             )}
           </div>
         </div>
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-2 lg:gap-10">
-          <div className="w-full">
-            <div className="relative overflow-hidden rounded-3xl border border-gray-200">
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-8">
+          <div className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+            <div className="relative overflow-hidden rounded-[24px]">
               <img
                 src={property.images[idx]}
                 alt={property.title}
-                className="h-[280px] w-full object-cover sm:h-[420px] lg:h-[560px]"
+                className="h-[360px] w-full object-cover sm:h-[460px] lg:h-[620px]"
               />
 
               <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
@@ -1528,7 +1669,7 @@ Is this property still available?`;
               </div>
 
               <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
-                <div className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                <Badge>
                   {property.jenisListing === "dijual"
                     ? lang === "id"
                       ? "Dijual"
@@ -1536,19 +1677,15 @@ Is this property still available?`;
                     : lang === "id"
                     ? "Disewa"
                     : "For Rent"}
-                </div>
+                </Badge>
 
-                {propertyTypeLabel ? (
-                  <div className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                    {propertyTypeLabel}
-                  </div>
-                ) : null}
+                {propertyTypeLabel ? <Badge>{propertyTypeLabel}</Badge> : null}
               </div>
 
               <button
                 type="button"
                 onClick={prevImg}
-                className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white sm:left-4"
+                className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:left-4"
                 aria-label="Previous image"
               >
                 ‹
@@ -1557,190 +1694,174 @@ Is this property still available?`;
               <button
                 type="button"
                 onClick={nextImg}
-                className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white sm:right-4"
+                className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:right-4"
                 aria-label="Next image"
               >
                 ›
               </button>
             </div>
+
+            {property.images.length > 1 ? (
+              <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5">
+                {property.images.slice(0, 5).map((image, imageIndex) => (
+                  <button
+                    key={`${image}-${imageIndex}`}
+                    type="button"
+                    onClick={() => setIdx(imageIndex)}
+                    className={`overflow-hidden rounded-2xl border ${
+                      idx === imageIndex
+                        ? "border-[#1C1C1E]"
+                        : "border-gray-200"
+                    }`}
+                  >
+                    <img
+                      src={image}
+                      alt={`${property.title} ${imageIndex + 1}`}
+                      className="h-20 w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
-            <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-3xl">
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
               {property.price}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {property.spotlight && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 sm:text-xs">
-                  <Gem className="h-3.5 w-3.5" />
-                  Spotlight
-                </span>
+                <Badge>
+                  <span className="inline-flex items-center gap-1">
+                    <Gem className="h-3.5 w-3.5" />
+                    Spotlight
+                  </span>
+                </Badge>
               )}
 
               {property.featured && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-[11px] font-semibold text-purple-700 sm:text-xs">
-                  <Crown className="h-3.5 w-3.5" />
-                  Featured
-                </span>
+                <Badge>
+                  <span className="inline-flex items-center gap-1">
+                    <Crown className="h-3.5 w-3.5" />
+                    Featured
+                  </span>
+                </Badge>
               )}
 
               {property.boosted && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold text-sky-700 sm:text-xs">
-                  <Zap className="h-3.5 w-3.5" />
-                  Boost
-                </span>
+                <Badge>
+                  <span className="inline-flex items-center gap-1">
+                    <Zap className="h-3.5 w-3.5" />
+                    Boost
+                  </span>
+                </Badge>
               )}
 
               {property.verifiedListing && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                  {lang === "id" ? "Listing Terverifikasi" : "Verified Listing"}
-                </span>
-              )}
-
-              {property.ownerApproved && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  {lang === "id" ? "Pemilik Disetujui" : "Owner Approved"}
-                </span>
-              )}
-
-              {property.agentVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
-                </span>
+                <Badge dark>
+                  {lang === "id" ? "Verified Listing" : "Verified Listing"}
+                </Badge>
               )}
             </div>
 
-            <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:mt-6 sm:text-2xl">
+            <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:text-2xl">
               {property.title}
             </h1>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-800">
-              {summaryItems.map((item, summaryIndex) => (
-                <div
-                  key={`${item}-${summaryIndex}`}
-                  className="flex items-center gap-2"
-                >
-                  {summaryIndex > 0 && (
-                    <span className="font-semibold text-[#1C1C1E]">•</span>
-                  )}
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 text-sm text-gray-600 sm:text-base">
+            <div className="mt-2 text-sm text-gray-600 sm:text-[15px]">
               {property.area}, {property.province}
             </div>
 
-            <div className="mt-5 border-t border-gray-200 sm:mt-6" />
+            <div className="mt-5 border-t border-gray-200 pt-5">
+              <div className="flex items-start gap-4">
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 sm:h-24 sm:w-24">
+                  <img
+                    src={property.photo}
+                    alt={property.agentName}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      if (e.currentTarget.src !== FALLBACK_POSTER_PHOTO) {
+                        e.currentTarget.src = FALLBACK_POSTER_PHOTO;
+                      }
+                    }}
+                  />
+                </div>
 
-            <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
-              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 sm:h-24 sm:w-24">
-                <img
-                  src={property.photo}
-                  alt={property.agentName}
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    if (e.currentTarget.src !== FALLBACK_POSTER_PHOTO) {
-                      e.currentTarget.src = FALLBACK_POSTER_PHOTO;
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="text-sm leading-6 text-gray-600">
-                  <span className="text-gray-500">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-gray-500">
                     {lang === "id"
                       ? property.postedByType === "owner"
-                        ? "Pemilik :"
+                        ? "Pemilik"
                         : property.postedByType === "developer"
-                        ? "Developer :"
-                        : "Agen :"
+                        ? "Developer"
+                        : "Agen"
                       : property.postedByType === "owner"
-                      ? "Owner :"
+                      ? "Owner"
                       : property.postedByType === "developer"
-                      ? "Developer :"
-                      : "Agent :"}
-                  </span>{" "}
-                  <span className="font-semibold text-[#1C1C1E]">
-                    {property.agentName}
-                  </span>
-                  {property.agency && (
-                    <>
-                      <span className="mx-2 text-gray-400">•</span>
-                      <span className="text-gray-700">{property.agency}</span>
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-8">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      {lang === "id" ? "Kode" : "Code"}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-700">
-                      {property.kodeListing}
-                    </div>
+                      ? "Developer"
+                      : "Agent"}
                   </div>
 
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      {lang === "id" ? "Tanggal" : "Date"}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-700">
-                      {property.postedDate}
-                    </div>
+                  <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
+                    {property.agentName}
+                  </div>
+
+                  <div className="mt-1 text-sm text-gray-600">
+                    {property.agency}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
+                    <span>
+                      {lang === "id" ? "Kode:" : "Code:"}{" "}
+                      <span className="font-medium text-gray-700">
+                        {property.kodeListing}
+                      </span>
+                    </span>
+
+                    <span>
+                      {lang === "id" ? "Tayang:" : "Posted:"}{" "}
+                      <span className="font-medium text-gray-700">
+                        {property.postedDate}
+                      </span>
+                    </span>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-5">
+              {socialLinks.length > 0 ? (
+                <div className="mt-5 flex flex-wrap gap-3">
+                  {socialLinks.map((item) => (
+                    <SocialCircle
+                      key={item.key}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={openJadwalWithTracking}
-                className="w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
+                className="mt-5 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
               >
                 {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
               </button>
             </div>
-
-            {socialLinks.length > 0 ? (
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
-                {socialLinks.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <a
-                      key={item.key}
-                      href={item.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={item.label}
-                      title={item.label}
-                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-[#1C1C1E] transition hover:bg-gray-50"
-                    >
-                      <Icon className="h-4 w-4" />
-                    </a>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_1fr_1.6fr]">
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
           <button
             type="button"
             onClick={toggleSave}
-            className={[
-              "flex min-h-[78px] w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50",
+            className={`flex min-h-[78px] items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-semibold shadow-sm transition ${
               saved
-                ? "border-[#1C1C1E] bg-[#1C1C1E] text-white hover:bg-[#1C1C1E]"
-                : "",
-            ].join(" ")}
+                ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+            }`}
           >
             <Bookmark className="h-4 w-4" />
             {lang === "id" ? "Simpan" : "Save"} ({displaySaveCount})
@@ -1749,56 +1870,54 @@ Is this property still available?`;
           <button
             type="button"
             onClick={toggleLike}
-            className={[
-              "flex min-h-[78px] w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50",
+            className={`flex min-h-[78px] items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-semibold shadow-sm transition ${
               liked
-                ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-50"
-                : "",
-            ].join(" ")}
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+            }`}
           >
             <Heart className="h-4 w-4" />
             {lang === "id" ? "Suka" : "Like"} ({displayLikeCount})
           </button>
 
-          <div className="flex min-h-[78px] w-full flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="text-sm font-bold text-[#1C1C1E]">
-                {lang === "id" ? "Rating Properti" : "Property Rating"}
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Rating Properti" : "Property Rating"}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {displayRatingCount} {lang === "id" ? "rating" : "ratings"}
+                </div>
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => handleRate(value)}
-                    className={[
-                      "rounded-full border p-1.5 transition",
-                      userRating >= value
-                        ? "border-amber-200 bg-amber-50 text-amber-600"
-                        : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50",
-                    ].join(" ")}
-                    aria-label={`Rate ${value} star`}
-                    title={`${value} star`}
-                  >
-                    <Star
-                      className="h-3.5 w-3.5"
-                      fill={
-                        userRating >= value ? "currentColor" : "transparent"
-                      }
-                    />
-                  </button>
-                ))}
+              <div className="text-right">
+                <div className="text-xl font-extrabold text-[#1C1C1E]">
+                  {displayRatingAverage.toFixed(1)}
+                </div>
               </div>
             </div>
 
-            <div className="shrink-0 text-left sm:ml-4 sm:text-right">
-              <div className="text-lg font-extrabold text-[#1C1C1E]">
-                {displayRatingAverage.toFixed(1)}
-              </div>
-              <div className="text-xs text-gray-500">
-                {displayRatingCount} {lang === "id" ? "rating" : "ratings"}
-              </div>
+            <div className="mt-3 flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleRate(value)}
+                  className={`rounded-full border p-1.5 transition ${
+                    userRating >= value
+                      ? "border-amber-200 bg-amber-50 text-amber-500"
+                      : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
+                  }`}
+                  aria-label={`Rate ${value}`}
+                  title={`Rate ${value}`}
+                >
+                  <Star
+                    className="h-3.5 w-3.5"
+                    fill={userRating >= value ? "currentColor" : "transparent"}
+                  />
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -1808,70 +1927,88 @@ Is this property still available?`;
             {lang === "id" ? "Detail Properti" : "Property Details"}
           </h2>
 
-          {detailSpecs.length > 0 ? (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {detailSpecs.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <div
-                    key={item.key}
-                    className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#1C1C1E] shadow-sm">
-                        <Icon className="h-4 w-4" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          {item.label}
-                        </div>
-                        <div className="mt-1 text-sm font-semibold text-[#1C1C1E]">
-                          {item.value}
-                        </div>
-                      </div>
-                    </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {topDetailChips.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.key}
+                  className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                >
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Icon className="h-4 w-4" />
+                    <span className="text-xs font-medium uppercase tracking-wide">
+                      {item.label}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-gray-500">
-              {lang === "id"
-                ? "Belum ada detail properti yang ditampilkan."
-                : "No property details to display yet."}
-            </p>
-          )}
+                  <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
+                    {item.value}
+                  </div>
+                </div>
+              );
+            })}
+
+            {extraDetailChips.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.key}
+                  className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                >
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Icon className="h-4 w-4" />
+                    <span className="text-xs font-medium uppercase tracking-wide">
+                      {item.label}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
+                    {item.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-3">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6 lg:col-span-2">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Deskripsi Properti" : "Property Description"}
+              {lang === "id" ? "Deskripsi" : "Description"}
             </h2>
 
-            <p className="mt-3 whitespace-pre-line text-sm leading-7 text-gray-600 sm:text-base">
-              {lang === "en"
-                ? property.descriptionEn || property.description
+            <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-[15px]">
+              {lang === "en" && property.descriptionEn
+                ? property.descriptionEn
                 : property.description}
             </p>
           </div>
 
-          <div className="flex justify-center lg:justify-end">
-            <div className="h-[260px] w-full max-w-[420px] overflow-hidden rounded-3xl border border-gray-200 bg-black sm:h-[420px] lg:h-[620px] lg:max-w-[350px]">
-              {property.videoUrl ? (
-                <video
-                  src={property.videoUrl}
-                  controls
-                  playsInline
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gray-100 px-4 text-center text-sm text-gray-500">
-                  {lang === "id" ? "Belum ada video." : "No video yet."}
-                </div>
-              )}
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <h2 className="text-lg font-bold text-[#1C1C1E]">
+              {lang === "id" ? "Ringkasan" : "Summary"}
+            </h2>
+
+            <div className="mt-4 space-y-3 text-sm text-gray-700">
+              <div>
+                <span className="font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Harga:" : "Price:"}
+                </span>{" "}
+                {property.price}
+              </div>
+
+              <div>
+                <span className="font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Lokasi:" : "Location:"}
+                </span>{" "}
+                {property.area}, {property.province}
+              </div>
+
+              <div>
+                <span className="font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Tipe:" : "Type:"}
+                </span>{" "}
+                {propertyTypeLabel}
+              </div>
             </div>
           </div>
         </div>
@@ -1932,7 +2069,7 @@ Is this property still available?`;
           <button
             type="button"
             onClick={handleWhatsAppClick}
-            className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
+            className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
           >
             WhatsApp
           </button>
@@ -1940,7 +2077,7 @@ Is this property still available?`;
           <button
             type="button"
             onClick={openJadwalWithTracking}
-            className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700 sm:text-base"
+            className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
           >
             {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
           </button>
@@ -2011,23 +2148,21 @@ Is this property still available?`;
                       </button>
                     ))}
                   </div>
-
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      disabled={!selectedDate || !selectedTime}
-                      onClick={handleViewingRequest}
-                      className="w-full rounded-2xl bg-yellow-600 py-2.5 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-40"
-                    >
-                      {lang === "id" ? "Kirim Jadwal" : "Submit Schedule"}
-                    </button>
-                  </div>
                 </div>
 
                 <button
                   type="button"
+                  disabled={!selectedDate || !selectedTime}
+                  onClick={handleViewingRequest}
+                  className="w-full rounded-2xl bg-yellow-600 py-2.5 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-40"
+                >
+                  {lang === "id" ? "Kirim Jadwal" : "Submit Schedule"}
+                </button>
+
+                <button
+                  type="button"
                   onClick={closeJadwal}
-                  className="mt-1 w-full rounded-2xl bg-[#1C1C1E] py-2.5 font-semibold text-white hover:opacity-90"
+                  className="w-full rounded-2xl bg-[#1C1C1E] py-2.5 font-semibold text-white hover:opacity-90"
                 >
                   {lang === "id" ? "Tutup" : "Close"}
                 </button>
