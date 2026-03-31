@@ -2,7 +2,11 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+  usePathname,
+} from "next/navigation";
 import {
   Gem,
   Crown,
@@ -10,6 +14,9 @@ import {
   ShieldCheck,
   UserCheck,
   Clock,
+  Bookmark,
+  Heart,
+  Star,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -104,6 +111,24 @@ type PropertyRow = {
   created_by_user_id: string | null;
 
   property_images: PropertyImageRow[] | null;
+};
+
+type SavedRow = {
+  property_id: string;
+};
+
+type LikeRow = {
+  property_id: string;
+};
+
+type RatingRow = {
+  property_id: string;
+  rating: number;
+};
+
+type RatingSummary = {
+  avg: number;
+  count: number;
 };
 
 function rotateListingsByReceiver(list: Property[]) {
@@ -270,7 +295,48 @@ function formatPropertyType(value?: string | null, lang?: string) {
     .join(" ");
 }
 
-function PropertyCard({ p }: { p: Property }) {
+function FilterChip({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
+        active
+          ? "bg-[#1C1C1E] text-white"
+          : "border border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function PropertyCard({
+  p,
+  saved,
+  liked,
+  userRating,
+  ratingSummary,
+  onToggleSave,
+  onToggleLike,
+  onRate,
+}: {
+  p: Property;
+  saved: boolean;
+  liked: boolean;
+  userRating: number;
+  ratingSummary: RatingSummary;
+  onToggleSave: (propertyId: string) => void;
+  onToggleLike: (propertyId: string) => void;
+  onRate: (propertyId: string, rating: number) => void;
+}) {
   const { lang } = useLanguage();
   const router = useRouter();
   const [idx, setIdx] = useState(0);
@@ -361,8 +427,8 @@ function PropertyCard({ p }: { p: Property }) {
     if (p.postedByType === "agent") {
       if (p.agentVerified) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
-            <UserCheck size={12} strokeWidth={2.5} />
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#B8860B] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
+            <UserCheck size={11} strokeWidth={2.5} />
             {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
           </span>
         );
@@ -370,8 +436,8 @@ function PropertyCard({ p }: { p: Property }) {
 
       if (p.agentPendingVerification) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm sm:text-xs">
-            <Clock size={12} strokeWidth={2.5} />
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 shadow-sm sm:text-[11px]">
+            <Clock size={11} strokeWidth={2.5} />
             {lang === "id"
               ? "Menunggu Verifikasi"
               : "Pending for Verification"}
@@ -385,8 +451,8 @@ function PropertyCard({ p }: { p: Property }) {
     if (p.postedByType === "developer") {
       if (p.developerVerified) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
-            <ShieldCheck size={12} strokeWidth={2.5} />
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
+            <ShieldCheck size={11} strokeWidth={2.5} />
             {lang === "id" ? "Developer Terverifikasi" : "Verified Developer"}
           </span>
         );
@@ -394,8 +460,8 @@ function PropertyCard({ p }: { p: Property }) {
 
       if (p.developerPendingApproval) {
         return (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-3 py-1 text-[11px] font-semibold text-gray-900 shadow-sm sm:text-xs">
-            <Clock size={12} strokeWidth={2.5} />
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-gray-900 shadow-sm sm:text-[11px]">
+            <Clock size={11} strokeWidth={2.5} />
             {lang === "id"
               ? "Menunggu Persetujuan"
               : "Pending for Approval"}
@@ -408,8 +474,8 @@ function PropertyCard({ p }: { p: Property }) {
 
     if (p.ownerVerified) {
       return (
-        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
-          <ShieldCheck size={12} strokeWidth={2.5} />
+        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
+          <ShieldCheck size={11} strokeWidth={2.5} />
           {lang === "id" ? "Pemilik Terverifikasi" : "Verified Owner"}
         </span>
       );
@@ -417,8 +483,8 @@ function PropertyCard({ p }: { p: Property }) {
 
     if (p.ownerPendingApproval) {
       return (
-        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-3 py-1 text-[11px] font-semibold text-gray-900 shadow-sm sm:text-xs">
-          <Clock size={12} strokeWidth={2.5} />
+        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-gray-900 shadow-sm sm:text-[11px]">
+          <Clock size={11} strokeWidth={2.5} />
           {lang === "id"
             ? "Menunggu Persetujuan"
             : "Pending for Approval"}
@@ -676,22 +742,22 @@ Is this property still available?`;
         <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             {p.spotlight && (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-extrabold text-[#1C1C1E] shadow-[0_6px_18px_rgba(0,0,0,0.12)] backdrop-blur-sm">
-                <Gem size={14} className="text-[#00CFE8]" />
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1C1C1E] shadow-[0_6px_18px_rgba(0,0,0,0.12)] backdrop-blur-sm sm:text-[11px]">
+                <Gem size={13} className="text-[#00CFE8]" />
                 SPOTLIGHT
               </span>
             )}
 
             {p.featured && (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-[#B8860B] shadow-md">
-                <Crown size={14} className="text-[#FFD700]" />
+              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#B8860B] shadow-md sm:text-[11px]">
+                <Crown size={13} className="text-[#FFD700]" />
                 FEATURED
               </span>
             )}
 
             {p.boosted && !p.featured && !p.spotlight && (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-md">
-                <Zap size={14} className="text-[#F59E0B]" />
+              <span className="inline-flex w-fit items-center gap-1 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-[10px] font-bold text-slate-700 shadow-md sm:text-[11px]">
+                <Zap size={13} className="text-[#F59E0B]" />
                 BOOST
               </span>
             )}
@@ -706,11 +772,11 @@ Is this property still available?`;
           <img
             src={p.images[idx]}
             alt={p.title}
-            className="h-60 w-full object-cover sm:h-72 lg:h-80"
+            className="h-[340px] w-full object-cover sm:h-[390px] lg:h-[460px]"
           />
         </Link>
 
-        <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+        <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[10px] font-semibold text-white sm:text-[11px]">
           TETAMO
         </div>
 
@@ -734,7 +800,7 @@ Is this property still available?`;
 
         <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-96px)] flex-wrap items-center gap-2">
           <div
-            className={`rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs ${listingTypeBadgeClass()}`}
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${listingTypeBadgeClass()}`}
           >
             {p.jenisListing === "dijual"
               ? lang === "id"
@@ -746,7 +812,7 @@ Is this property still available?`;
           </div>
 
           <div
-            className={`rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm sm:text-xs ${propertyTypeBadgeClass()}`}
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-sm sm:text-[11px] ${propertyTypeBadgeClass()}`}
           >
             {formatPropertyType(p.propertyType, lang)}
           </div>
@@ -754,27 +820,27 @@ Is this property still available?`;
       </div>
 
       <div className="p-4 sm:p-5">
-        <div className="text-xl font-extrabold text-[#1C1C1E] sm:text-2xl">
+        <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
           {p.price}
         </div>
 
-        <div className="mt-1 text-sm text-gray-500">
+        <div className="mt-1 text-xs text-gray-500 sm:text-sm">
           {p.area}, {p.province}
         </div>
 
         <Link href={`/properti/${p.id}`} className="mt-2 block">
-          <h3 className="text-base font-semibold leading-snug text-[#1C1C1E] hover:underline sm:text-lg">
+          <h3 className="text-sm font-semibold leading-snug text-[#1C1C1E] hover:underline sm:text-base">
             {p.title}
           </h3>
         </Link>
 
-        <div className="mt-3 text-sm leading-6 text-gray-600">
+        <div className="mt-3 text-xs leading-6 text-gray-600 sm:text-sm">
           {p.size} •{" "}
           {p.bed.replace("Kamar", lang === "id" ? "Kamar" : "Bed")} •{" "}
           {p.furnished}
         </div>
 
-        <div className="mt-3 text-sm leading-6 text-gray-600">
+        <div className="mt-2.5 text-xs leading-6 text-gray-600 sm:text-sm">
           {postedByLabel()}:{" "}
           <span className="font-semibold text-[#1C1C1E]">{p.agentName}</span>
           {p.agency ? (
@@ -785,17 +851,17 @@ Is this property still available?`;
           ) : null}
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs tracking-wide text-gray-500">
+        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-wide text-gray-500">
           <span>{p.kode}</span>
           <span>•</span>
           <span>{p.postedDate}</span>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={() => handleWhatsAppInquiry(p)}
-            className="rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 sm:text-base"
+            className="rounded-2xl bg-[#1C1C1E] px-3 py-2.5 text-center text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
           >
             WhatsApp
           </button>
@@ -807,7 +873,7 @@ Is this property still available?`;
                 button: "view_detail",
               })
             }
-            className="rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700 sm:text-base"
+            className="rounded-2xl bg-yellow-600 px-3 py-2.5 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
           >
             {lang === "id" ? "Lihat Detail" : "View Detail"}
           </Link>
@@ -816,45 +882,128 @@ Is this property still available?`;
         <button
           type="button"
           onClick={() => handleScheduleViewing(p)}
-          className="mt-3 block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50 sm:text-base"
+          className="mt-3 block w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-center text-[13px] font-semibold text-[#1C1C1E] transition hover:bg-gray-50 sm:text-sm"
         >
           {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
         </button>
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => onToggleSave(p.id)}
+            className={`rounded-2xl border px-2 py-2 text-center transition ${
+              saved
+                ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+            }`}
+          >
+            <div className="flex items-center justify-center gap-1">
+              <Bookmark className="h-3.5 w-3.5" />
+              <span className="text-[11px] font-semibold sm:text-xs">
+                {lang === "id" ? "Simpan" : "Save"}
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onToggleLike(p.id)}
+            className={`rounded-2xl border px-2 py-2 text-center transition ${
+              liked
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+            }`}
+          >
+            <div className="flex items-center justify-center gap-1">
+              <Heart className="h-3.5 w-3.5" />
+              <span className="text-[11px] font-semibold sm:text-xs">
+                {lang === "id" ? "Suka" : "Like"}
+              </span>
+            </div>
+          </button>
+
+          <div className="rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center">
+            <div className="text-sm font-bold text-[#1C1C1E]">
+              {ratingSummary.count > 0 ? ratingSummary.avg.toFixed(1) : "0.0"}
+            </div>
+            <div className="text-[10px] text-gray-500 sm:text-[11px]">
+              {lang === "id" ? "Rating" : "Rating"} ({ratingSummary.count})
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center justify-center gap-1">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onRate(p.id, value)}
+              className={`rounded-full p-1 transition ${
+                userRating >= value
+                  ? "text-amber-500"
+                  : "text-gray-300 hover:text-amber-400"
+              }`}
+              aria-label={`Rate ${value}`}
+              title={`Rate ${value}`}
+            >
+              <Star
+                className="h-3.5 w-3.5"
+                fill={userRating >= value ? "currentColor" : "transparent"}
+              />
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function FilterChip({
-  href,
-  active,
-  label,
-}: {
-  href: string;
-  active: boolean;
-  label: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition ${
-        active
-          ? "bg-[#1C1C1E] text-white"
-          : "border border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-}
-
 export default function PropertiPageClient() {
   const { lang } = useLanguage();
+  const router = useRouter();
+  const pathname = usePathname();
   const sp = useSearchParams();
   const jenisListing = sp.get("jenisListing");
 
   const [all, setAll] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
+  const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
+  const [userRatingsMap, setUserRatingsMap] = useState<Record<string, number>>(
+    {}
+  );
+  const [ratingSummaryMap, setRatingSummaryMap] = useState<
+    Record<string, RatingSummary>
+  >({});
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAuthUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted) return;
+      setAuthUserId(user?.id ?? null);
+    }
+
+    loadAuthUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setAuthUserId(session?.user?.id ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -1037,6 +1186,284 @@ export default function PropertiPageClient() {
     };
   }, [lang]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadEngagement() {
+      const propertyIds = all.map((item) => item.id);
+
+      if (!authUserId || propertyIds.length === 0) {
+        if (!ignore) {
+          setSavedMap({});
+          setLikedMap({});
+          setUserRatingsMap({});
+          setRatingSummaryMap({});
+        }
+        return;
+      }
+
+      const [savedRes, likesRes, userRatingsRes, allRatingsRes] =
+        await Promise.all([
+          supabase
+            .from("saved_properties")
+            .select("property_id")
+            .eq("user_id", authUserId)
+            .in("property_id", propertyIds),
+          supabase
+            .from("property_likes")
+            .select("property_id")
+            .eq("user_id", authUserId)
+            .in("property_id", propertyIds),
+          supabase
+            .from("property_ratings")
+            .select("property_id, rating")
+            .eq("user_id", authUserId)
+            .in("property_id", propertyIds),
+          supabase
+            .from("property_ratings")
+            .select("property_id, rating")
+            .in("property_id", propertyIds),
+        ]);
+
+      if (ignore) return;
+
+      const nextSavedMap: Record<string, boolean> = {};
+      const nextLikedMap: Record<string, boolean> = {};
+      const nextUserRatingsMap: Record<string, number> = {};
+      const nextRatingSummaryMap: Record<string, RatingSummary> = {};
+
+      ((savedRes.data ?? []) as SavedRow[]).forEach((row) => {
+        nextSavedMap[row.property_id] = true;
+      });
+
+      ((likesRes.data ?? []) as LikeRow[]).forEach((row) => {
+        nextLikedMap[row.property_id] = true;
+      });
+
+      ((userRatingsRes.data ?? []) as RatingRow[]).forEach((row) => {
+        nextUserRatingsMap[row.property_id] = row.rating;
+      });
+
+      const allRatings = (allRatingsRes.data ?? []) as RatingRow[];
+      const grouped: Record<string, number[]> = {};
+
+      allRatings.forEach((row) => {
+        if (!grouped[row.property_id]) grouped[row.property_id] = [];
+        grouped[row.property_id].push(row.rating);
+      });
+
+      Object.entries(grouped).forEach(([propertyId, ratings]) => {
+        const count = ratings.length;
+        const avg =
+          count > 0
+            ? ratings.reduce((sum, value) => sum + value, 0) / count
+            : 0;
+
+        nextRatingSummaryMap[propertyId] = { avg, count };
+      });
+
+      setSavedMap(nextSavedMap);
+      setLikedMap(nextLikedMap);
+      setUserRatingsMap(nextUserRatingsMap);
+      setRatingSummaryMap(nextRatingSummaryMap);
+    }
+
+    loadEngagement();
+
+    return () => {
+      ignore = true;
+    };
+  }, [all, authUserId]);
+
+  async function ensureAuthenticated() {
+    if (authUserId) return authUserId;
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user?.id) {
+      setAuthUserId(user.id);
+      return user.id;
+    }
+
+    const currentPath = `${pathname}${sp.toString() ? `?${sp.toString()}` : ""}`;
+
+    alert(
+      lang === "id"
+        ? "Silakan login terlebih dahulu."
+        : "Please log in first."
+    );
+    router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+    return null;
+  }
+
+  async function handleToggleSave(propertyId: string) {
+    const userId = await ensureAuthenticated();
+    if (!userId) return;
+
+    const currentlySaved = Boolean(savedMap[propertyId]);
+
+    setSavedMap((prev) => ({
+      ...prev,
+      [propertyId]: !currentlySaved,
+    }));
+
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from("saved_properties")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", propertyId);
+
+      if (error) {
+        console.error("Failed to remove saved property:", error);
+        setSavedMap((prev) => ({
+          ...prev,
+          [propertyId]: true,
+        }));
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("saved_properties").insert({
+      user_id: userId,
+      property_id: propertyId,
+    });
+
+    if (error) {
+      console.error("Failed to save property:", error);
+      setSavedMap((prev) => ({
+        ...prev,
+        [propertyId]: false,
+      }));
+    }
+  }
+
+  async function handleToggleLike(propertyId: string) {
+    const userId = await ensureAuthenticated();
+    if (!userId) return;
+
+    const currentlyLiked = Boolean(likedMap[propertyId]);
+
+    setLikedMap((prev) => ({
+      ...prev,
+      [propertyId]: !currentlyLiked,
+    }));
+
+    if (currentlyLiked) {
+      const { error } = await supabase
+        .from("property_likes")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", propertyId);
+
+      if (error) {
+        console.error("Failed to remove property like:", error);
+        setLikedMap((prev) => ({
+          ...prev,
+          [propertyId]: true,
+        }));
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("property_likes").insert({
+      user_id: userId,
+      property_id: propertyId,
+    });
+
+    if (error) {
+      console.error("Failed to like property:", error);
+      setLikedMap((prev) => ({
+        ...prev,
+        [propertyId]: false,
+      }));
+    }
+  }
+
+  async function handleRate(propertyId: string, rating: number) {
+    const userId = await ensureAuthenticated();
+    if (!userId) return;
+
+    const currentUserRating = userRatingsMap[propertyId] ?? 0;
+    const currentSummary = ratingSummaryMap[propertyId] ?? { avg: 0, count: 0 };
+    const nextRating = currentUserRating === rating ? 0 : rating;
+
+    setUserRatingsMap((prev) => ({
+      ...prev,
+      [propertyId]: nextRating,
+    }));
+
+    setRatingSummaryMap((prev) => {
+      const summary = prev[propertyId] ?? { avg: 0, count: 0 };
+      let total = summary.avg * summary.count;
+      let count = summary.count;
+
+      if (currentUserRating > 0) {
+        total -= currentUserRating;
+        count -= 1;
+      }
+
+      if (nextRating > 0) {
+        total += nextRating;
+        count += 1;
+      }
+
+      return {
+        ...prev,
+        [propertyId]: {
+          avg: count > 0 ? total / count : 0,
+          count: Math.max(count, 0),
+        },
+      };
+    });
+
+    if (nextRating === 0) {
+      const { error } = await supabase
+        .from("property_ratings")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", propertyId);
+
+      if (error) {
+        console.error("Failed to delete property rating:", error);
+        setUserRatingsMap((prev) => ({
+          ...prev,
+          [propertyId]: currentUserRating,
+        }));
+        setRatingSummaryMap((prev) => ({
+          ...prev,
+          [propertyId]: currentSummary,
+        }));
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("property_ratings").upsert(
+      {
+        user_id: userId,
+        property_id: propertyId,
+        rating: nextRating,
+      },
+      {
+        onConflict: "user_id,property_id",
+      }
+    );
+
+    if (error) {
+      console.error("Failed to rate property:", error);
+      setUserRatingsMap((prev) => ({
+        ...prev,
+        [propertyId]: currentUserRating,
+      }));
+      setRatingSummaryMap((prev) => ({
+        ...prev,
+        [propertyId]: currentSummary,
+      }));
+    }
+  }
+
   const filtered = useMemo(() => {
     let list = [...all];
 
@@ -1144,7 +1571,17 @@ export default function PropertiPageClient() {
         ) : (
           <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {paged.map((p) => (
-              <PropertyCard key={p.id} p={p} />
+              <PropertyCard
+                key={p.id}
+                p={p}
+                saved={Boolean(savedMap[p.id])}
+                liked={Boolean(likedMap[p.id])}
+                userRating={userRatingsMap[p.id] ?? 0}
+                ratingSummary={ratingSummaryMap[p.id] ?? { avg: 0, count: 0 }}
+                onToggleSave={handleToggleSave}
+                onToggleLike={handleToggleLike}
+                onRate={handleRate}
+              />
             ))}
           </div>
         )}
