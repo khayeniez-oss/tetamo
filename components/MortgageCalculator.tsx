@@ -95,7 +95,7 @@ export default function MortgageCalculator({
     let monthlyInstallment = 0;
 
     if (monthlyRate === 0) {
-      monthlyInstallment = loanAmount / totalMonths;
+      monthlyInstallment = totalMonths > 0 ? loanAmount / totalMonths : 0;
     } else {
       monthlyInstallment =
         (loanAmount * monthlyRate) /
@@ -128,17 +128,21 @@ export default function MortgageCalculator({
   }
 
   return (
-    <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-[#1C1C1E]">{t.title}</h2>
-          <p className="mt-2 text-sm text-gray-500">{t.subtitle}</p>
+    <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 lg:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+            {t.title}
+          </h2>
+          <p className="mt-2 text-xs leading-6 text-gray-500 sm:text-sm">
+            {t.subtitle}
+          </p>
         </div>
 
         <button
           type="button"
           onClick={resetCalculator}
-          className="shrink-0 rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+          className="shrink-0 rounded-xl border border-gray-300 px-4 py-2 text-xs font-medium text-[#1C1C1E] transition hover:bg-gray-50 sm:text-sm"
         >
           {t.reset}
         </button>
@@ -155,10 +159,10 @@ export default function MortgageCalculator({
               key={bank.label}
               type="button"
               onClick={() => handleBankPreset(bank.label, bank.rate)}
-              className={`rounded-full px-4 py-2 text-sm border transition ${
+              className={`rounded-full border px-3 py-2 text-xs transition sm:px-4 sm:text-sm ${
                 selectedBank === bank.label
-                  ? "bg-[#1C1C1E] text-white border-[#1C1C1E]"
-                  : "bg-white text-[#1C1C1E] border-gray-300 hover:bg-gray-50"
+                  ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                  : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
               }`}
             >
               {bank.label}
@@ -168,7 +172,7 @@ export default function MortgageCalculator({
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-gray-700">
             {t.propertyPrice}
@@ -229,37 +233,39 @@ export default function MortgageCalculator({
         </div>
       </div>
 
-      <div className="mt-6 space-y-4 rounded-2xl bg-[#F7F7F7] p-6">
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>{t.downPayment}</span>
-          <span className="font-medium text-[#1C1C1E]">
-            Rp {formatIDR(result.dpAmount)}
-          </span>
-        </div>
+      <div className="mt-6 rounded-2xl bg-[#F7F7F7] p-4 sm:p-5">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-4 text-sm text-gray-600">
+            <span>{t.downPayment}</span>
+            <span className="text-right font-medium text-[#1C1C1E]">
+              Rp {formatIDR(result.dpAmount)}
+            </span>
+          </div>
 
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>{t.estimatedLoan}</span>
-          <span className="font-medium text-[#1C1C1E]">
-            Rp {formatIDR(result.loanAmount)}
-          </span>
-        </div>
+          <div className="flex items-center justify-between gap-4 text-sm text-gray-600">
+            <span>{t.estimatedLoan}</span>
+            <span className="text-right font-medium text-[#1C1C1E]">
+              Rp {formatIDR(result.loanAmount)}
+            </span>
+          </div>
 
-        <div className="flex items-center justify-between border-t border-gray-200 pt-3">
-          <span className="text-sm text-gray-600">
-            {t.estimatedMonthlyInstallment}
-          </span>
-          <span className="text-2xl font-bold text-[#1C1C1E]">
-            Rp {formatIDR(result.monthlyInstallment)}
-          </span>
+          <div className="border-t border-gray-200 pt-3">
+            <div className="text-xs font-medium text-gray-500 sm:text-sm">
+              {t.estimatedMonthlyInstallment}
+            </div>
+            <div className="mt-2 text-xl font-bold leading-tight text-[#1C1C1E] sm:text-2xl lg:text-[28px]">
+              Rp {formatIDR(result.monthlyInstallment)}
+            </div>
+          </div>
         </div>
       </div>
 
-      <p className="mt-4 text-xs leading-relaxed text-gray-500">
+      <p className="mt-4 text-[11px] leading-6 text-gray-500 sm:text-xs">
         {t.disclaimer}
       </p>
 
       {jenisListing === "lelang" && (
-        <p className="mt-3 text-xs leading-relaxed text-gray-500">
+        <p className="mt-3 text-[11px] leading-6 text-gray-500 sm:text-xs">
           {t.auctionNote}
         </p>
       )}

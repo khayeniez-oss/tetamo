@@ -1760,7 +1760,7 @@ Is this property still available?`;
           <button
             type="button"
             onClick={toggleSave}
-            className={`flex min-h-[76px] items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-center text-[11px] font-semibold shadow-sm transition sm:text-sm ${
+            className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
               saved
                 ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                 : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
@@ -1775,7 +1775,7 @@ Is this property still available?`;
           <button
             type="button"
             onClick={toggleLike}
-            className={`flex min-h-[76px] items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-center text-[11px] font-semibold shadow-sm transition sm:text-sm ${
+            className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
               liked
                 ? "border-red-200 bg-red-50 text-red-700"
                 : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
@@ -1787,19 +1787,19 @@ Is this property still available?`;
             </span>
           </button>
 
-          <div className="min-h-[76px] rounded-2xl border border-gray-200 bg-white px-2 py-3 shadow-sm">
+          <div className="min-h-[62px] rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-[11px] font-bold text-[#1C1C1E] sm:text-sm">
+                <div className="text-[10px] font-bold text-[#1C1C1E] sm:text-[12px]">
                   Property Rating
                 </div>
-                <div className="mt-1 text-[10px] text-gray-500">
+                <div className="mt-1 text-[9px] text-gray-500">
                   {displayRatingCount} ratings
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-lg font-extrabold text-[#1C1C1E]">
+                <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
                   {displayRatingAverage.toFixed(1)}
                 </div>
               </div>
@@ -1811,7 +1811,7 @@ Is this property still available?`;
                   key={value}
                   type="button"
                   onClick={() => handleRate(value)}
-                  className={`rounded-full border p-1 transition ${
+                  className={`rounded-full border p-[3px] transition ${
                     userRating >= value
                       ? "border-amber-200 bg-amber-50 text-amber-500"
                       : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
@@ -1820,7 +1820,7 @@ Is this property still available?`;
                   title={`Rate ${value}`}
                 >
                   <Star
-                    className="h-3 w-3"
+                    className="h-2 w-2"
                     fill={userRating >= value ? "currentColor" : "transparent"}
                   />
                 </button>
