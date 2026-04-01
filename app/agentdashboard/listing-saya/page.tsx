@@ -635,7 +635,7 @@ export default function AgentListingSayaPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           title="Total Listing"
           value={isLoading ? "..." : computedStats.totalIklan}
@@ -669,7 +669,7 @@ export default function AgentListingSayaPage() {
             setPage(1);
           }}
           placeholder="Cari seperti Google: jakarta rumah 2.5, TTM-2026, apartemen pusat..."
-          className="w-full rounded-2xl border border-gray-300 pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="w-full rounded-2xl border border-gray-300 py-3 pl-12 pr-4 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
         />
       </div>
 
@@ -723,14 +723,11 @@ export default function AgentListingSayaPage() {
                 "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
 
               return (
-                <div
-                  key={item.id}
-                  className="p-4 sm:p-5 lg:p-6"
-                >
+                <div key={item.id} className="p-4 sm:p-5 lg:p-6">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                        <div className="h-44 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-24 sm:w-36 lg:h-28 lg:w-40 shrink-0">
+                        <div className="h-56 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-24 sm:w-36 lg:h-28 lg:w-40 shrink-0">
                           <img
                             src={cover}
                             alt={item.title}
@@ -774,9 +771,7 @@ export default function AgentListingSayaPage() {
                             {item.title}
                           </p>
 
-                          <p className="mt-1 text-sm text-gray-500">
-                            {item.price}
-                          </p>
+                          <p className="mt-1 text-sm text-gray-500">{item.price}</p>
                         </div>
                       </div>
                     </div>
