@@ -169,21 +169,23 @@ function StatCard({
   const isLongText = typeof value === "string" && value.length > 12;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-gray-500 sm:text-sm">{title}</p>
+    <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] leading-4 text-gray-500 sm:text-sm">
+            {title}
+          </p>
           <p
             className={[
               "mt-2 break-words font-semibold leading-tight text-[#1C1C1E]",
-              isLongText ? "text-base sm:text-lg" : "text-2xl sm:text-3xl",
+              isLongText ? "text-[13px] sm:text-lg" : "text-lg sm:text-3xl",
             ].join(" ")}
           >
             {value}
           </p>
         </div>
 
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
           {icon}
         </div>
       </div>
@@ -416,10 +418,7 @@ export default function AgentKomisiPage() {
   async function handleDelete(id: string) {
     if (!agentUserId) return;
 
-    const confirmed = window.confirm(
-      "Hapus record komisi ini?"
-    );
-
+    const confirmed = window.confirm("Hapus record komisi ini?");
     if (!confirmed) return;
 
     const { error } = await supabase
@@ -477,26 +476,26 @@ export default function AgentKomisiPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           title="Total Komisi"
           value={formatCurrency(summary.totalCommission)}
-          icon={<TrendingUp className="h-5 w-5 text-[#1C1C1E]" />}
+          icon={<TrendingUp className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
         <StatCard
           title="Sudah Dibayar"
           value={formatCurrency(summary.paidCommission)}
-          icon={<CheckCircle2 className="h-5 w-5 text-[#1C1C1E]" />}
+          icon={<CheckCircle2 className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
         <StatCard
           title="Masih Pending"
           value={formatCurrency(summary.pendingCommission)}
-          icon={<Clock className="h-5 w-5 text-[#1C1C1E]" />}
+          icon={<Clock className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
         <StatCard
           title="Total Records"
           value={summary.totalRecords}
-          icon={<Wallet className="h-5 w-5 text-[#1C1C1E]" />}
+          icon={<Wallet className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
       </div>
 
@@ -599,7 +598,7 @@ export default function AgentKomisiPage() {
                         {item.notes ? (
                           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
                             <p className="text-xs text-gray-500">Notes</p>
-                            <p className="mt-1 text-sm leading-6 text-gray-700 whitespace-pre-line">
+                            <p className="mt-1 whitespace-pre-line text-sm leading-6 text-gray-700">
                               {item.notes}
                             </p>
                           </div>
@@ -617,14 +616,14 @@ export default function AgentKomisiPage() {
                             <p className="text-xs text-gray-500">
                               Payment Method
                             </p>
-                            <p className="mt-1 text-sm font-medium text-[#1C1C1E] break-words">
+                            <p className="mt-1 break-words text-sm font-medium text-[#1C1C1E]">
                               {item.payment_method || "-"}
                             </p>
                           </div>
 
                           <div>
                             <p className="text-xs text-gray-500">Reference</p>
-                            <p className="mt-1 text-sm font-medium text-[#1C1C1E] break-words">
+                            <p className="mt-1 break-words text-sm font-medium text-[#1C1C1E]">
                               {item.payment_reference || "-"}
                             </p>
                           </div>
