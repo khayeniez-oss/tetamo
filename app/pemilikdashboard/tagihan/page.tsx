@@ -75,11 +75,7 @@ function normalizeStatus(value?: string | null): PaymentStatus {
   return "pending";
 }
 
-function formatCurrency(
-  amount: number,
-  currency: string,
-  locale: string
-) {
+function formatCurrency(amount: number, currency: string, locale: string) {
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
@@ -146,7 +142,7 @@ function buildOwnerTitle(
       return lang === "id" ? "Boost Listing" : "Listing Boost";
     }
     if (productId === "homepage-spotlight") {
-      return lang === "id" ? "Homepage Spotlight" : "Homepage Spotlight";
+      return "Homepage Spotlight";
     }
     return lang === "id" ? "Add-On Listing" : "Listing Add-On";
   }
@@ -168,9 +164,9 @@ function buildTypeLabel(bill: BillingItem, lang: "id" | "en") {
       return lang === "id" ? "BOOST LISTING" : "LISTING BOOST";
     }
     if (productId === "homepage-spotlight") {
-      return lang === "id" ? "HOMEPAGE SPOTLIGHT" : "HOMEPAGE SPOTLIGHT";
+      return "HOMEPAGE SPOTLIGHT";
     }
-    return lang === "id" ? "ADD-ON" : "ADD-ON";
+    return "ADD-ON";
   }
 
   if (flow === "renew-listing") {
@@ -180,20 +176,17 @@ function buildTypeLabel(bill: BillingItem, lang: "id" | "en") {
   return lang === "id" ? "LISTING BARU" : "NEW LISTING";
 }
 
-function getBillStatusUI(
-  status: PaymentStatus,
-  lang: "id" | "en"
-) {
+function getBillStatusUI(status: PaymentStatus, lang: "id" | "en") {
   if (status === "paid") {
     return {
-      label: lang === "id" ? "Paid" : "Paid",
+      label: "Paid",
       badgeClass: "bg-green-50 text-green-700 border-green-200",
     };
   }
 
   if (status === "pending") {
     return {
-      label: lang === "id" ? "Pending" : "Pending",
+      label: "Pending",
       badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
     };
   }
@@ -214,7 +207,7 @@ function getBillStatusUI(
 
   if (status === "refunded") {
     return {
-      label: lang === "id" ? "Refunded" : "Refunded",
+      label: "Refunded",
       badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
     };
   }
@@ -225,33 +218,16 @@ function getBillStatusUI(
   };
 }
 
-function getActionLabel(
-  bill: BillingItem,
-  lang: "id" | "en"
-) {
+function getActionLabel(bill: BillingItem, lang: "id" | "en") {
   if (bill.status === "pending" && bill.checkoutUrl) {
     return lang === "id" ? "Lanjutkan Bayar" : "Continue Payment";
   }
 
-  if (bill.status === "paid") {
-    return lang === "id" ? "Berhasil Dibayar" : "Paid";
-  }
-
-  if (bill.status === "expired") {
-    return lang === "id" ? "Kadaluarsa" : "Expired";
-  }
-
-  if (bill.status === "failed") {
-    return lang === "id" ? "Gagal" : "Failed";
-  }
-
-  if (bill.status === "cancelled") {
-    return lang === "id" ? "Dibatalkan" : "Cancelled";
-  }
-
-  if (bill.status === "refunded") {
-    return lang === "id" ? "Refunded" : "Refunded";
-  }
+  if (bill.status === "paid") return lang === "id" ? "Berhasil Dibayar" : "Paid";
+  if (bill.status === "expired") return lang === "id" ? "Kadaluarsa" : "Expired";
+  if (bill.status === "failed") return lang === "id" ? "Gagal" : "Failed";
+  if (bill.status === "cancelled") return lang === "id" ? "Dibatalkan" : "Cancelled";
+  if (bill.status === "refunded") return "Refunded";
 
   return lang === "id" ? "Link Tidak Tersedia" : "Link Unavailable";
 }
@@ -481,7 +457,9 @@ export default function PemilikTagihanPage() {
   return (
     <div>
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">{t.pageTitle}</h1>
+        <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+          {t.pageTitle}
+        </h1>
         <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
       </div>
 
@@ -497,31 +475,33 @@ export default function PemilikTagihanPage() {
         </div>
       ) : null}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-          <p className="text-sm text-gray-500">{t.totalRecords}</p>
-          <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+      <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs text-gray-500 sm:text-sm">{t.totalRecords}</p>
+          <p className="mt-2 text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
             {bills.length}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-          <p className="text-sm text-gray-500">{t.totalPaid}</p>
-          <p className="mt-2 break-words text-2xl font-bold text-[#1C1C1E]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs text-gray-500 sm:text-sm">{t.totalPaid}</p>
+          <p className="mt-2 break-words text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
             {formatCurrency(totalPaidAmount, "IDR", locale)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-          <p className="text-sm text-gray-500">{t.totalPending}</p>
-          <p className="mt-2 break-words text-2xl font-bold text-[#1C1C1E]">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs text-gray-500 sm:text-sm">{t.totalPending}</p>
+          <p className="mt-2 break-words text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
             {formatCurrency(totalPendingAmount, "IDR", locale)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-          <p className="text-sm text-gray-500">{t.latestSuccessfulPayment}</p>
-          <p className="mt-2 text-base font-bold text-[#1C1C1E] sm:text-lg">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-xs text-gray-500 sm:text-sm">
+            {t.latestSuccessfulPayment}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
             {latestPaidBill
               ? formatDateTime(latestPaidBill.paidAt, locale)
               : "-"}
