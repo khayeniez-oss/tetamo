@@ -272,17 +272,17 @@ function StatCard({
   Icon: ElementType;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-2 text-2xl font-semibold text-[#1C1C1E] sm:text-3xl">
+          <p className="text-xs text-gray-500 sm:text-sm">{title}</p>
+          <p className="mt-1 text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
             {value}
           </p>
         </div>
 
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
-          <Icon className="h-5 w-5 text-[#1C1C1E]" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
+          <Icon className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
         </div>
       </div>
     </div>
@@ -718,15 +718,17 @@ export default function OwnerDashboardPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:mb-8">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-[#1C1C1E]">{t.pageTitle}</h1>
+          <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+            {t.pageTitle}
+          </h1>
           <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
         </div>
 
         <button
           onClick={() => router.push("/pemilik/iklan")}
-          className="inline-flex items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
         >
           {t.createListing}
         </button>
@@ -738,7 +740,7 @@ export default function OwnerDashboardPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title={t.totalListings}
           value={isLoading ? "..." : computedStats.totalIklan}
@@ -764,7 +766,7 @@ export default function OwnerDashboardPage() {
       <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-4 sm:p-6">
           <div>
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               {t.myListings}
             </h2>
             <p className="text-sm text-gray-500">{t.myListingsSubtitle}</p>
@@ -772,7 +774,9 @@ export default function OwnerDashboardPage() {
         </div>
 
         {isLoading ? (
-          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.loadingDashboard}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">
+            {t.loadingDashboard}
+          </div>
         ) : listings.length === 0 ? (
           <div className="p-4 text-sm text-gray-500 sm:p-6">{t.noListings}</div>
         ) : (
@@ -811,12 +815,9 @@ export default function OwnerDashboardPage() {
                   effectiveStatus === "KADALUWARSA");
 
               return (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-4 p-4 sm:p-6 xl:flex-row xl:items-center xl:justify-between xl:gap-6"
-                >
-                  <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
-                    <div className="h-24 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-28 sm:shrink-0">
+                <div key={item.id} className="p-4 sm:p-6">
+                  <div className="flex flex-col gap-4">
+                    <div className="h-44 w-full overflow-hidden rounded-2xl bg-gray-100 sm:h-52">
                       <img
                         src={item.photo}
                         alt={item.title}
@@ -827,50 +828,49 @@ export default function OwnerDashboardPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${ui.badgeClass}`}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${ui.badgeClass}`}
                         >
-                          <BadgeIcon className="h-3.5 w-3.5" />
+                          <BadgeIcon className="h-3 w-3" />
                           {ui.label}
                         </span>
 
                         {item.verifiedOk ? (
-                          <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs text-green-700">
+                          <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] text-green-700">
                             {t.verified}
                           </span>
                         ) : null}
 
                         {featuredActive ? (
-                          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs text-purple-700">
+                          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] text-purple-700">
                             {t.featured}
                           </span>
                         ) : null}
 
                         {boostActive && !isClosed ? (
-                          <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700">
+                          <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] text-sky-700">
                             {t.boostActive}
                           </span>
                         ) : null}
 
                         {spotlightActive && !isClosed ? (
-                          <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
+                          <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">
                             {t.spotlightActive}
                           </span>
                         ) : null}
-
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                          <span>
-                            {t.code}: {item.kode}
-                          </span>
-                          <span className="hidden sm:inline">•</span>
-                          <span>{item.postedDate}</span>
-                        </div>
                       </div>
 
-                      <p className="mt-3 break-words text-sm font-medium text-[#1C1C1E] sm:text-base">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+                        <span>
+                          {t.code}: {item.kode}
+                        </span>
+                        <span>{item.postedDate}</span>
+                      </div>
+
+                      <p className="mt-3 break-words text-base font-medium text-[#1C1C1E]">
                         {item.title}
                       </p>
 
-                      <p className="text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-gray-500">
                         {formatCurrency(item.price, locale)}
                       </p>
 
@@ -916,104 +916,104 @@ export default function OwnerDashboardPage() {
                         ) : null}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                    <button
-                      onClick={() => {
-                        if (!canEdit) return;
-                        router.push(
-                          `/pemilik/iklan/edit/${encodeURIComponent(item.kode)}`
-                        );
-                      }}
-                      disabled={!canEdit}
-                      className="rounded-xl border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {t.edit}
-                    </button>
-
-                    {!boostActive && canBuyAddon ? (
+                    <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
                       <button
-                        onClick={() => activateAddon(item, "boost")}
-                        disabled={isBoosting}
-                        className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-                      >
-                        {isBoosting ? t.loading : t.boost}
-                      </button>
-                    ) : null}
-
-                    {!spotlightActive && canBuyAddon ? (
-                      <button
-                        onClick={() => activateAddon(item, "spotlight")}
-                        disabled={isSpotlighting}
-                        className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                      >
-                        {isSpotlighting ? t.loading : t.spotlight}
-                      </button>
-                    ) : null}
-
-                    {!isClosed && canPause && !item.isPaused ? (
-                      <button
-                        onClick={() => toggleJeda(item)}
-                        disabled={isToggling}
-                        className="rounded-xl border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        {isToggling ? t.loading : t.pause}
-                      </button>
-                    ) : null}
-
-                    {!isClosed && canPause && item.isPaused ? (
-                      <button
-                        onClick={() => toggleJeda(item)}
-                        disabled={isToggling}
-                        className="rounded-xl border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        {isToggling ? t.loading : t.activate}
-                      </button>
-                    ) : null}
-
-                    {!isClosed ? (
-                      <>
-                        <button
-                          onClick={() => markTransaction(item, "sold")}
-                          disabled={
-                            isMarking ||
-                            effectiveStatus === "PENDING_PAYMENT" ||
-                            effectiveStatus === "PENDING_APPROVAL"
-                          }
-                          className="rounded-xl border border-emerald-300 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                        >
-                          {isMarking ? t.loading : t.sold}
-                        </button>
-
-                        <button
-                          onClick={() => markTransaction(item, "rented")}
-                          disabled={
-                            isMarking ||
-                            effectiveStatus === "PENDING_PAYMENT" ||
-                            effectiveStatus === "PENDING_APPROVAL"
-                          }
-                          className="rounded-xl border border-sky-300 px-4 py-2 text-sm text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-                        >
-                          {isMarking ? t.loading : t.rented}
-                        </button>
-                      </>
-                    ) : null}
-
-                    {canRenew ? (
-                      <button
-                        onClick={() =>
+                        onClick={() => {
+                          if (!canEdit) return;
                           router.push(
-                            `/pemilik/iklan/pembayaran?kode=${encodeURIComponent(
-                              item.kode
-                            )}&action=renew`
-                          )
-                        }
-                        className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90"
+                            `/pemilik/iklan/edit/${encodeURIComponent(item.kode)}`
+                          );
+                        }}
+                        disabled={!canEdit}
+                        className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {t.renew}
+                        {t.edit}
                       </button>
-                    ) : null}
+
+                      {!boostActive && canBuyAddon ? (
+                        <button
+                          onClick={() => activateAddon(item, "boost")}
+                          disabled={isBoosting}
+                          className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                        >
+                          {isBoosting ? t.loading : t.boost}
+                        </button>
+                      ) : null}
+
+                      {!spotlightActive && canBuyAddon ? (
+                        <button
+                          onClick={() => activateAddon(item, "spotlight")}
+                          disabled={isSpotlighting}
+                          className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {isSpotlighting ? t.loading : t.spotlight}
+                        </button>
+                      ) : null}
+
+                      {!isClosed && canPause && !item.isPaused ? (
+                        <button
+                          onClick={() => toggleJeda(item)}
+                          disabled={isToggling}
+                          className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {isToggling ? t.loading : t.pause}
+                        </button>
+                      ) : null}
+
+                      {!isClosed && canPause && item.isPaused ? (
+                        <button
+                          onClick={() => toggleJeda(item)}
+                          disabled={isToggling}
+                          className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {isToggling ? t.loading : t.activate}
+                        </button>
+                      ) : null}
+
+                      {!isClosed ? (
+                        <>
+                          <button
+                            onClick={() => markTransaction(item, "sold")}
+                            disabled={
+                              isMarking ||
+                              effectiveStatus === "PENDING_PAYMENT" ||
+                              effectiveStatus === "PENDING_APPROVAL"
+                            }
+                            className="shrink-0 rounded-xl border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                          >
+                            {isMarking ? t.loading : t.sold}
+                          </button>
+
+                          <button
+                            onClick={() => markTransaction(item, "rented")}
+                            disabled={
+                              isMarking ||
+                              effectiveStatus === "PENDING_PAYMENT" ||
+                              effectiveStatus === "PENDING_APPROVAL"
+                            }
+                            className="shrink-0 rounded-xl border border-sky-300 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+                          >
+                            {isMarking ? t.loading : t.rented}
+                          </button>
+                        </>
+                      ) : null}
+
+                      {canRenew ? (
+                        <button
+                          onClick={() =>
+                            router.push(
+                              `/pemilik/iklan/pembayaran?kode=${encodeURIComponent(
+                                item.kode
+                              )}&action=renew`
+                            )
+                          }
+                          className="shrink-0 rounded-xl bg-[#1C1C1E] px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+                        >
+                          {t.renew}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );

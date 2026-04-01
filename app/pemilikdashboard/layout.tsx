@@ -68,7 +68,7 @@ function SocialButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition hover:bg-white/20"
+      className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white transition hover:bg-white/20 sm:px-3 sm:py-1.5 sm:text-xs"
     >
       {label}
     </a>
@@ -90,7 +90,7 @@ export default function PemilikDashboardLayout({
 
   const menuItemClass = (href: string) =>
     [
-      "block rounded-xl px-3 py-3 text-sm sm:text-[15px] transition",
+      "flex items-center justify-center whitespace-nowrap rounded-xl px-2 py-2.5 text-xs font-medium transition sm:px-3 sm:text-sm lg:justify-start lg:px-3 lg:py-3",
       pathname === href
         ? "bg-white/10 text-white font-semibold"
         : "text-white/85 hover:bg-white/10 hover:text-white",
@@ -206,16 +206,16 @@ export default function PemilikDashboardLayout({
               lg:min-h-screen
               rounded-3xl
               bg-[#1C1C1E]
-              px-5 py-6
-              sm:px-6 sm:py-7
+              px-4 py-4
+              sm:px-5 sm:py-5
               lg:px-8 lg:py-8
               text-white
               shadow-[0_20px_60px_rgba(0,0,0,0.35)]
               ring-1 ring-white/10
             "
           >
-            <div className="flex flex-col sm:flex-row lg:flex-col gap-4 sm:gap-5 lg:gap-0">
-              <div className="mb-0 flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:h-28 sm:w-28 lg:mb-6">
+            <div className="flex items-start gap-4 lg:flex-col lg:gap-0">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:h-24 sm:w-24 lg:mb-6 lg:h-28 lg:w-28">
                 {owner.photo ? (
                   <img
                     src={owner.photo}
@@ -223,40 +223,44 @@ export default function PemilikDashboardLayout({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-sm text-white/60">No Photo</span>
+                  <span className="text-xs text-white/60 sm:text-sm">
+                    No Photo
+                  </span>
                 )}
               </div>
 
-              <div className="min-w-0">
-                <p className="text-xl font-bold tracking-tight sm:text-2xl">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg font-bold tracking-tight sm:text-xl lg:text-2xl">
                   {owner.name || "-"}
                 </p>
-                <p className="mt-1 text-sm font-medium text-white/90 sm:mt-2 sm:text-base">
+                <p className="mt-1 truncate text-sm font-medium text-white/90 lg:mt-2 lg:text-base">
                   {owner.agency || "-"}
                 </p>
                 <p className="mt-1 break-words text-sm text-white/75">
                   {owner.number || "-"}
                 </p>
+
+                <div className="mt-3 flex flex-wrap gap-2 lg:mt-5">
+                  {socialLinks.length > 0 ? (
+                    socialLinks.map((item) => (
+                      <SocialButton
+                        key={item.label}
+                        href={item.href}
+                        label={item.label}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-xs text-white/50">
+                      Belum ada social media
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
-              {socialLinks.length > 0 ? (
-                socialLinks.map((item) => (
-                  <SocialButton
-                    key={item.label}
-                    href={item.href}
-                    label={item.label}
-                  />
-                ))
-              ) : (
-                <p className="text-xs text-white/50">Belum ada social media</p>
-              )}
-            </div>
+            <div className="my-4 border-t border-white/10 sm:my-5 lg:my-8" />
 
-            <div className="my-6 border-t border-white/10 sm:my-7 lg:my-8" />
-
-            <nav className="space-y-2 sm:space-y-3">
+            <nav className="grid grid-cols-4 gap-2 lg:grid-cols-1 lg:gap-3">
               <Link
                 href="/pemilikdashboard"
                 className={menuItemClass("/pemilikdashboard")}
@@ -287,7 +291,7 @@ export default function PemilikDashboardLayout({
             </nav>
           </aside>
 
-          <main className="min-w-0 flex-1 py-1 sm:py-2 lg:py-6">
+          <main className="min-w-0 flex-1 py-0 sm:py-1 lg:py-6">
             {children}
           </main>
         </div>
