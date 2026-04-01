@@ -452,20 +452,20 @@ export default function AgentPembayaranPage() {
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[#1C1C1E]">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-5 sm:py-8 lg:px-6 lg:py-10">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-xl font-bold tracking-tight text-[#1C1C1E] sm:text-2xl">
             Pembayaran Agent
           </h1>
-          <p className="text-sm text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 sm:text-sm">
             Lihat status pembayaran, invoice, dan receipt Anda di sini.
           </p>
         </div>
 
-        <div className="relative mt-6">
+        <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+            size={16}
           />
 
           <input
@@ -473,19 +473,21 @@ export default function AgentPembayaranPage() {
             placeholder="Cari invoice, receipt, listing, atau status..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-2xl border border-gray-400 py-3 pl-12 pr-4 text-sm outline-none placeholder-gray-500 focus:border-[#1C1C1E]"
+            className="w-full rounded-2xl border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-[13px] text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#1C1C1E] sm:py-3 sm:pl-11 sm:pr-4 sm:text-sm"
           />
         </div>
 
-        <div className="mt-8 rounded-3xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-6 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-8">
           {loading ? (
-            <div className="p-6 text-sm text-gray-500">
+            <div className="p-4 text-xs text-gray-500 sm:p-6 sm:text-sm">
               Memuat riwayat pembayaran...
             </div>
           ) : error ? (
-            <div className="p-6 text-sm text-red-600">{error}</div>
+            <div className="p-4 text-xs text-red-600 sm:p-6 sm:text-sm">
+              {error}
+            </div>
           ) : filtered.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">
+            <div className="p-4 text-xs text-gray-500 sm:p-6 sm:text-sm">
               Belum ada riwayat pembayaran.
             </div>
           ) : (
@@ -501,20 +503,20 @@ export default function AgentPembayaranPage() {
                 return (
                   <div
                     key={item.id}
-                    className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between"
+                    className="flex flex-col gap-4 p-4 sm:gap-5 sm:p-5 lg:flex-row lg:items-center lg:justify-between lg:p-6"
                   >
                     <div className="min-w-0 flex-1">
                       <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs ${ui.badge}`}
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium sm:px-3 sm:text-xs ${ui.badge}`}
                       >
                         {ui.label}
                       </span>
 
-                      <p className="mt-3 font-semibold text-[#1C1C1E]">
+                      <p className="mt-3 text-sm font-semibold leading-snug text-[#1C1C1E] sm:text-base">
                         {item.title}
                       </p>
 
-                      <div className="mt-2 space-y-1 text-sm text-gray-500">
+                      <div className="mt-2 space-y-1 text-xs leading-relaxed text-gray-500 sm:text-sm">
                         <p>Listing: {item.listingCode}</p>
                         <p>Invoice: {item.invoiceNumber}</p>
                         <p>
@@ -527,8 +529,8 @@ export default function AgentPembayaranPage() {
                       </div>
                     </div>
 
-                    <div className="grid gap-2 text-sm text-gray-500 lg:min-w-[260px] lg:text-right">
-                      <p className="text-lg font-semibold text-[#1C1C1E]">
+                    <div className="grid gap-1.5 text-xs leading-relaxed text-gray-500 sm:gap-2 sm:text-sm lg:min-w-[250px] lg:text-right">
+                      <p className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
                         {item.amount}
                       </p>
                       <p>Created: {item.createdDate}</p>
@@ -537,9 +539,9 @@ export default function AgentPembayaranPage() {
                       <p>Expired: {item.expiryDate}</p>
                     </div>
 
-                    <div className="flex flex-col items-start gap-2 lg:min-w-[190px] lg:items-end">
+                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[190px] lg:flex-col lg:items-end">
                       {item.invoiceNumber !== "-" ? (
-                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-700">
+                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 sm:text-xs">
                           Invoice Ready
                         </span>
                       ) : null}
@@ -547,7 +549,7 @@ export default function AgentPembayaranPage() {
                       {item.receiptNumber !== "-" ? (
                         <Link
                           href={`/agentdashboard/pembayaran/receipt/${item.paymentId}`}
-                          className="rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+                          className="inline-flex rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-medium text-green-700 transition hover:bg-green-100 sm:px-4 sm:text-sm"
                         >
                           Lihat Receipt
                         </Link>
@@ -556,7 +558,7 @@ export default function AgentPembayaranPage() {
                       {canRetry ? (
                         <a
                           href={item.checkoutUrl}
-                          className="mt-1 inline-flex rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                          className="inline-flex rounded-xl bg-[#1C1C1E] px-3.5 py-2 text-xs font-medium text-white transition hover:opacity-90 sm:px-4 sm:text-sm"
                         >
                           {item.status === "failed" || item.status === "expired"
                             ? "Coba Lagi"
