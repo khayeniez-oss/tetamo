@@ -121,21 +121,21 @@ export default function ListingForm(props: Props) {
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           type="button"
           onClick={onBack}
-          className="mb-6 text-sm text-gray-700 transition hover:text-[#1C1C1E]"
+          className="mb-5 text-sm text-gray-700 transition hover:text-[#1C1C1E] sm:mb-6"
         >
           ← {lang === "id" ? "Kembali" : "Back"}
         </button>
 
-        <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-[#1C1C1E]">
+            <h1 className="text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl">
               {lang === "id" ? "Detail Properti" : "Property Details"}
             </h1>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-sm leading-6 text-gray-600 sm:text-base">
               {lang === "id"
                 ? "Lengkapi detail agar listing terlihat rapi, premium, dan dipercaya."
                 : "Complete the details so your listing looks neat, premium, and trustworthy."}
@@ -143,16 +143,16 @@ export default function ListingForm(props: Props) {
           </div>
 
           {showPackageBadge && hasPlan && (
-            <span className="shrink-0 rounded-full border border-gray-200 bg-white px-5 py-2 text-sm font-semibold">
+            <span className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold sm:px-5">
               {lang === "id" ? "Paket:" : "Package:"}{" "}
               {draft?.plan === "featured" ? "Featured" : "Basic"}
             </span>
           )}
         </div>
 
-        <div className="mt-10 rounded-3xl border border-gray-200 bg-white shadow-sm">
-          <div className="p-8 md:p-10">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="mt-8 rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-10">
+          <div className="p-5 sm:p-8 md:p-10">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-semibold text-[#1C1C1E]">
                   {lang === "id" ? "Tipe Properti" : "Property Type"}
@@ -553,17 +553,17 @@ export default function ListingForm(props: Props) {
             {showFacilitiesAndNearby && (
               <div className="md:col-span-2">
                 <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-                  <div className="mt-6 border-t border-gray-100 pt-8">
-                    <h2 className="text-lg font-bold text-[#1C1C1E]">
+                  <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
+                    <h2 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
                       {lang === "id" ? "Fasilitas" : "Facilities"}
                     </h2>
-                    <p className="mt-1 text-sm text-gray-600">
+                    <p className="mt-1 text-sm leading-6 text-gray-600">
                       {lang === "id"
                         ? "Pilih fasilitas yang tersedia."
                         : "Select the available facilities."}
                     </p>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
+                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                       {[
                         { key: "fac_ac", label: lang === "id" ? "AC" : "AC" },
                         {
@@ -601,7 +601,7 @@ export default function ListingForm(props: Props) {
                         return (
                           <label
                             key={item.key}
-                            className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition ${
+                            className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 transition sm:px-4 ${
                               checked ? "border-[#1C1C1E]" : "border-gray-200"
                             }`}
                           >
@@ -617,9 +617,9 @@ export default function ListingForm(props: Props) {
                                   },
                                 }))
                               }
-                              className="h-4 w-4"
+                              className="mt-0.5 h-4 w-4"
                             />
-                            <span className="text-sm font-semibold text-[#1C1C1E]">
+                            <span className="text-sm font-semibold leading-5 text-[#1C1C1E]">
                               {item.label}
                             </span>
                           </label>
@@ -628,17 +628,17 @@ export default function ListingForm(props: Props) {
                     </div>
                   </div>
 
-                  <div className="mt-6 border-t border-gray-100 pt-8">
-                    <h2 className="text-lg font-bold text-[#1C1C1E]">
+                  <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
+                    <h2 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
                       {lang === "id" ? "Terdekat" : "Nearby"}
                     </h2>
-                    <p className="mt-1 text-sm text-gray-600">
+                    <p className="mt-1 text-sm leading-6 text-gray-600">
                       {lang === "id"
                         ? "Pilih fasilitas umum terdekat."
                         : "Select nearby public facilities."}
                     </p>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
+                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                       {[
                         {
                           key: "near_toll",
@@ -679,7 +679,7 @@ export default function ListingForm(props: Props) {
                         return (
                           <label
                             key={item.key}
-                            className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition ${
+                            className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 transition sm:px-4 ${
                               checked ? "border-[#1C1C1E]" : "border-gray-200"
                             }`}
                           >
@@ -695,9 +695,9 @@ export default function ListingForm(props: Props) {
                                   },
                                 }))
                               }
-                              className="h-4 w-4"
+                              className="mt-0.5 h-4 w-4"
                             />
-                            <span className="text-sm font-semibold text-[#1C1C1E]">
+                            <span className="text-sm font-semibold leading-5 text-[#1C1C1E]">
                               {item.label}
                             </span>
                           </label>
@@ -710,12 +710,12 @@ export default function ListingForm(props: Props) {
             )}
 
             {showLegalFields && (
-              <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="mt-6 grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
                     {lang === "id" ? "Sertifikat" : "Certificate"}
                   </label>
-                  <div className="mt-4">
+                  <div className="mt-2">
                     <TetamoSelect
                       value={draft?.sertifikat ?? ""}
                       placeholder={lang === "id" ? "Pilih" : "Select"}
@@ -861,13 +861,13 @@ export default function ListingForm(props: Props) {
               </div>
             )}
 
-            <div className="mt-10">
+            <div className="mt-8 sm:mt-10">
               <button
                 type="button"
                 onClick={onNext}
                 disabled={!isValid}
                 className={[
-                  "w-full rounded-2xl px-6 py-4 text-center font-semibold transition",
+                  "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition sm:py-4 sm:text-base",
                   isValid
                     ? "bg-[#1C1C1E] text-white hover:opacity-90"
                     : "cursor-not-allowed bg-gray-200 text-gray-500",
