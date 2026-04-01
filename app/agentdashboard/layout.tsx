@@ -403,6 +403,13 @@ export default function AgentDashboardLayout({
                     </Link>
 
                     <Link
+                      href="/agentdashboard/jadwal-viewing"
+                      className={menuItemClass("/agentdashboard/jadwal-viewing")}
+                    >
+                      Jadwal Viewing
+                    </Link>
+
+                    <Link
                       href="/agentdashboard/propertilokasi"
                       className={menuItemClass("/agentdashboard/propertilokasi")}
                     >
@@ -437,6 +444,13 @@ export default function AgentDashboardLayout({
                       className={menuItemClass("/agentdashboard/paket")}
                     >
                       Paket
+                    </Link>
+
+                    <Link
+                      href="/agentdashboard/tagihan"
+                      className={menuItemClass("/agentdashboard/tagihan")}
+                    >
+                      Tagihan
                     </Link>
 
                     <Link
