@@ -99,44 +99,46 @@ export default function PemilikPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-6xl px-6 py-14">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 md:py-14">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#1C1C1E]">
+          <h1 className="text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl md:text-4xl">
             {lang === "id"
               ? "Iklan, Sewakan atau Jualkan Properti Anda di Tetamo"
               : "Advertise, Rent, or Sell Your Property on Tetamo"}
           </h1>
 
-          <div className="h-6" />
+          <div className="h-4 sm:h-5 md:h-6" />
 
-          <p className="mx-auto mt-4 max-w-3xl text-gray-600">
+          <p className="mx-auto max-w-3xl text-sm leading-6 text-gray-600 sm:text-base">
             {lang === "id"
               ? "Marketplace properti yang fokus pada transparansi, listing serius, dan kemudahan booking viewing — tanpa drama, tanpa spam."
               : "A property marketplace focused on transparency, serious listings, and easy viewings"}
           </p>
         </div>
 
-        <div className="h-10" />
+        <div className="h-8 sm:h-10" />
 
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:mt-10 sm:gap-6 md:grid-cols-3">
           {BENEFITS.map((b) => {
             const Icon = b.icon;
 
             return (
               <div
                 key={b.title}
-                className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+                className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6"
               >
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 rounded-xl border border-gray-200 bg-gray-50 p-2">
-                    <Icon className="h-5 w-5 text-[#1C1C1E]" />
+                    <Icon className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
                   </div>
 
                   <div>
-                    <div className="font-semibold text-[#1C1C1E]">
+                    <div className="text-base font-semibold text-[#1C1C1E] sm:text-[17px]">
                       {b.title}
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">{b.desc}</div>
+                    <div className="mt-1 text-sm leading-6 text-gray-600">
+                      {b.desc}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -144,16 +146,16 @@ export default function PemilikPage() {
           })}
         </div>
 
-        <div className="h-20" />
+        <div className="h-12 sm:h-16 md:h-20" />
 
-        <div className="mt-8 mx-auto grid max-w-6xl gap-6 md:grid-cols-3">
+        <div className="mx-auto mt-6 grid max-w-6xl gap-4 sm:mt-8 sm:gap-6 md:grid-cols-3">
           {OWNER_PACKAGES.map((pkg) => {
             const checked = selectedPlan === pkg.id;
 
             return (
               <div
                 key={pkg.id}
-                className={`rounded-2xl border bg-white p-7 shadow-sm transition ${
+                className={`rounded-2xl border bg-white p-5 shadow-sm transition sm:p-6 md:p-7 ${
                   checked
                     ? "border-[#1C1C1E]"
                     : "border-gray-200 hover:border-gray-300"
@@ -168,7 +170,7 @@ export default function PemilikPage() {
                       <Crown className="h-4 w-4 text-yellow-500" />
                     )}
 
-                    <h3 className="text-xl font-semibold text-[#1C1C1E]">
+                    <h3 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
                       {pkg.name}
                     </h3>
                   </div>
@@ -178,32 +180,32 @@ export default function PemilikPage() {
                     name="plan"
                     checked={checked}
                     onChange={() => setSelectedPlan(pkg.id)}
-                    className="h-4 w-4"
+                    className="mt-1 h-4 w-4"
                   />
                 </div>
 
-                <div className="mt-6">
-                  <div className="text-4xl font-bold text-[#1C1C1E]">
+                <div className="mt-5 sm:mt-6">
+                  <div className="text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl md:text-4xl">
                     Rp {pkg.priceIdr.toLocaleString("id-ID")}
                   </div>
-                  <div className="mt-1 text-gray-600">
+                  <div className="mt-1 text-sm text-gray-600 sm:text-base">
                     / {pkg.durationDays} {lang === "id" ? "hari" : "days"}
                   </div>
                 </div>
 
-                <ul className="mt-6 space-y-3 text-gray-700">
+                <ul className="mt-5 space-y-2.5 text-sm text-gray-700 sm:mt-6 sm:space-y-3 sm:text-base">
                   {(pkg.features ?? []).map((feature, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      <span className="text-green-600">✅</span>
-                      <span>{translateFeature(feature)}</span>
+                      <span className="mt-0.5 text-green-600">✅</span>
+                      <span className="leading-6">{translateFeature(feature)}</span>
                     </li>
                   ))}
                 </ul>
 
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <Link
                     href={`/signup?role=owner&plan=${pkg.id}`}
-                    className="inline-block rounded-lg bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
                   >
                     {lang === "id" ? "Lanjut Iklan" : "List Now"}
                   </Link>
@@ -213,62 +215,62 @@ export default function PemilikPage() {
           })}
 
           {agentPackage && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-7 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6 md:p-7">
               <div className="flex items-center gap-2">
                 <Crown className="h-4 w-4 text-yellow-500" />
-                <h3 className="text-xl font-semibold text-[#1C1C1E]">
+                <h3 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
                   {lang === "id" ? "Agen Properti" : "Property Agent"}
                 </h3>
               </div>
 
-              <div className="mt-6">
-                <div className="text-4xl font-bold text-[#1C1C1E]">
+              <div className="mt-5 sm:mt-6">
+                <div className="text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl md:text-4xl">
                   Rp {agentPackage.priceIdr.toLocaleString("id-ID")}
                 </div>
               </div>
 
-              <ul className="mt-6 space-y-3 text-gray-700">
+              <ul className="mt-5 space-y-2.5 text-sm text-gray-700 sm:mt-6 sm:space-y-3 sm:text-base">
                 {(agentPackage.features ?? []).map((feature, idx) => (
                   <li key={idx} className="flex items-start gap-2">
-                    <span className="text-green-600">✅</span>
-                    <span>{translateFeature(feature)}</span>
+                    <span className="mt-0.5 text-green-600">✅</span>
+                    <span className="leading-6">{translateFeature(feature)}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="mt-6">
+              <div className="mt-5 sm:mt-6">
                 <Link
-  href={`/signup?role=agent&package=${agentPackage.id}&from=agent-button&next=/agentdashboard/paket`}
-  className="inline-block rounded-lg bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
->
-  {lang === "id" ? "Daftar Agen" : "Register as Agent"}
-</Link>
+                  href={`/signup?role=agent&package=${agentPackage.id}&from=agent-button&next=/agentdashboard/paket`}
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
+                >
+                  {lang === "id" ? "Daftar Agen" : "Register as Agent"}
+                </Link>
               </div>
             </div>
           )}
         </div>
 
-        <div className="h-16" />
+        <div className="h-12 sm:h-14 md:h-16" />
 
-        <div className="mt-10 mx-auto max-w-5xl rounded-3xl border border-gray-200 bg-gray-50 p-8">
+        <div className="mx-auto mt-8 max-w-5xl rounded-3xl border border-gray-200 bg-gray-50 p-5 sm:mt-10 sm:p-8">
           <div className="text-center">
-            <h3 className="text-2xl font-semibold text-[#1C1C1E]">
+            <h3 className="text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
               {lang === "id"
                 ? "Siap Iklankan Properti Anda?"
                 : "Ready to List Your Property?"}
             </h3>
 
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-sm leading-6 text-gray-600 sm:text-base">
               {lang === "id"
                 ? "Buat listing yang rapi, transparan, dan mudah ditemukan pembeli/penyewa serius."
                 : "Create a clean, transparent listing that serious buyers and renters can easily discover."}
             </p>
 
-            <div className="mt-6 flex justify-center">
+            <div className="mt-5 flex justify-center sm:mt-6">
               <button
                 type="button"
                 onClick={() => router.push("/properti")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-6 py-3 font-semibold text-white transition hover:opacity-90"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto sm:px-6"
               >
                 <Store className="h-4 w-4" />
                 {lang === "id" ? "Lihat Marketplace" : "View Marketplace"}
