@@ -551,7 +551,7 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
                       <p className="mt-1 text-sm text-gray-500">{lead.buyerPhone}</p>
 
                       {lead.buyerEmail !== "-" ? (
-                        <p className="text-sm text-gray-500 break-all">{lead.buyerEmail}</p>
+                        <p className="break-all text-sm text-gray-500">{lead.buyerEmail}</p>
                       ) : null}
 
                       <p className="mt-3 text-sm leading-6 text-gray-700">
@@ -609,7 +609,7 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
                       </div>
                     </div>
 
-                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row xl:shrink-0">
+                    <div className="grid w-full grid-cols-2 gap-2 xl:w-auto xl:min-w-[220px]">
                       <a
                         href={callPhone ? `tel:${callPhone}` : "#"}
                         onClick={() => {
@@ -640,7 +640,7 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
         )}
 
         {filteredLeads.length > 0 && (
-          <div className="flex flex-col gap-4 border-t border-gray-100 px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 border-t border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <p className="text-sm text-gray-500">
               Menampilkan {startItem}–{endItem} dari {filteredLeads.length} leads
             </p>
