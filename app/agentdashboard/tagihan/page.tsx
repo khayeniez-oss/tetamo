@@ -174,52 +174,54 @@ function normalizeHistoryStatus(
   return "unpaid";
 }
 
-function statusUI(status: HistoryDisplayStatus, lang: "id" | "en") {
+function statusUI(status: HistoryDisplayStatus, lang: string) {
+  const currentLang = lang === "id" ? "id" : "en";
+
   switch (status) {
     case "paid":
       return {
-        label: lang === "id" ? "Lunas" : "Paid",
+        label: currentLang === "id" ? "Lunas" : "Paid",
         badge: "bg-green-50 text-green-700 border-green-200",
       };
     case "initiated":
       return {
-        label: lang === "id" ? "Dimulai" : "Initiated",
+        label: currentLang === "id" ? "Dimulai" : "Initiated",
         badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
       };
     case "pending":
       return {
-        label: lang === "id" ? "Pending" : "Pending",
+        label: "Pending",
         badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
       };
     case "failed":
       return {
-        label: lang === "id" ? "Gagal" : "Failed",
+        label: currentLang === "id" ? "Gagal" : "Failed",
         badge: "bg-red-50 text-red-700 border-red-200",
       };
     case "expired":
       return {
-        label: lang === "id" ? "Kedaluwarsa" : "Expired",
+        label: currentLang === "id" ? "Kedaluwarsa" : "Expired",
         badge: "bg-orange-50 text-orange-700 border-orange-200",
       };
     case "refunded":
       return {
-        label: lang === "id" ? "Refund" : "Refunded",
+        label: currentLang === "id" ? "Refund" : "Refunded",
         badge: "bg-blue-50 text-blue-700 border-blue-200",
       };
     case "overdue":
       return {
-        label: lang === "id" ? "Jatuh Tempo" : "Overdue",
+        label: currentLang === "id" ? "Jatuh Tempo" : "Overdue",
         badge: "bg-orange-50 text-orange-700 border-orange-200",
       };
     case "cancelled":
       return {
-        label: lang === "id" ? "Dibatalkan" : "Cancelled",
+        label: currentLang === "id" ? "Dibatalkan" : "Cancelled",
         badge: "bg-gray-100 text-gray-700 border-gray-200",
       };
     case "unpaid":
     default:
       return {
-        label: lang === "id" ? "Belum Dibayar" : "Unpaid",
+        label: currentLang === "id" ? "Belum Dibayar" : "Unpaid",
         badge: "bg-gray-100 text-gray-700 border-gray-200",
       };
   }
@@ -299,14 +301,11 @@ function inferPackageName(payment?: PaymentRow, billing?: BillingRow) {
   if (text.includes("homepage spotlight")) return "Homepage Spotlight";
   if (text.includes("spotlight")) return "Homepage Spotlight";
   if (text.includes("boost")) return "Boost Listing";
+
   if (text.includes("membership")) {
-    return (
-      cleanText(billing?.plan_code) !== "-"
-        ? cleanText(billing?.plan_code)
-        : cleanText(payment?.product_name) !== "-"
-        ? cleanText(payment?.product_name)
-        : cleanText(payment?.payment_title)
-    );
+    if (cleanText(billing?.plan_code) !== "-") return cleanText(billing?.plan_code);
+    if (cleanText(payment?.product_name) !== "-") return cleanText(payment?.product_name);
+    return cleanText(payment?.payment_title);
   }
 
   return cleanText(
@@ -319,7 +318,13 @@ function inferPackageName(payment?: PaymentRow, billing?: BillingRow) {
   );
 }
 
-function inferBillingType(payment?: PaymentRow, billing?: BillingRow, lang: "id" | "en" = "id") {
+function inferBillingType(
+  payment?: PaymentRow,
+  billing?: BillingRow,
+  lang: string = "id"
+) {
+  const currentLang = lang === "id" ? "id" : "en";
+
   const text = joinTexts([
     billing?.plan_code,
     billing?.bill_type,
@@ -331,7 +336,7 @@ function inferBillingType(payment?: PaymentRow, billing?: BillingRow, lang: "id"
   ]);
 
   if (text.includes("monthly") || text.includes("bulanan")) {
-    return lang === "id" ? "Bulanan" : "Monthly";
+    return currentLang === "id" ? "Bulanan" : "Monthly";
   }
 
   if (
@@ -340,7 +345,7 @@ function inferBillingType(payment?: PaymentRow, billing?: BillingRow, lang: "id"
     text.includes("annual") ||
     text.includes("per year")
   ) {
-    return lang === "id" ? "Tahunan" : "Yearly";
+    return currentLang === "id" ? "Tahunan" : "Yearly";
   }
 
   if (
@@ -349,7 +354,7 @@ function inferBillingType(payment?: PaymentRow, billing?: BillingRow, lang: "id"
     text.includes("addon") ||
     text.includes("add-on")
   ) {
-    return lang === "id" ? "Add-On" : "Add-On";
+    return "Add-On";
   }
 
   return "-";
@@ -486,6 +491,13 @@ export default function AgentTagihanPage() {
           billing.status
         );
 
+        const methodText = cleanText(
+          latestPayment?.payment_method ||
+            latestPayment?.method ||
+            latestPayment?.gateway ||
+            latestPayment?.provider
+        );
+
         return {
           id: billing.id,
           billingId: billing.id,
@@ -515,30 +527,17 @@ export default function AgentTagihanPage() {
             latestPayment?.currency ?? billing.currency ?? "IDR"
           ),
 
-          method:
-            cleanText(
-              latestPayment?.payment_method ||
-                latestPayment?.method ||
-                latestPayment?.gateway ||
-                latestPayment?.provider
-            ) === "-"
-              ? "-"
-              : cleanText(
-                  latestPayment?.payment_method ||
-                    latestPayment?.method ||
-                    latestPayment?.gateway ||
-                    latestPayment?.provider
-                ),
-
+          method: methodText,
           createdDate: formatDate(billing.created_at),
           dueDate: formatDate(billing.due_at),
           paidDate: formatDate(latestPayment?.paid_at || billing.paid_at),
           expiryDate: formatDate(latestPayment?.expires_at || null),
 
           status,
-          checkoutUrl: cleanText(latestPayment?.checkout_url) === "-"
-            ? ""
-            : cleanText(latestPayment?.checkout_url),
+          checkoutUrl:
+            cleanText(latestPayment?.checkout_url) === "-"
+              ? ""
+              : cleanText(latestPayment?.checkout_url),
         };
       });
 
@@ -547,53 +546,50 @@ export default function AgentTagihanPage() {
           (payment) =>
             !payment.billing_record_id || !billingMap.has(payment.billing_record_id)
         )
-        .map((payment) => ({
-          id: payment.id,
-          billingId: "",
-          paymentId: payment.id,
-          sortDate: payment.created_at || new Date().toISOString(),
+        .map((payment) => {
+          const methodText = cleanText(
+            payment.payment_method ||
+              payment.method ||
+              payment.gateway ||
+              payment.provider
+          );
 
-          title: buildTitleFromPayment(payment),
-          packageName: inferPackageName(payment, undefined),
-          billingType: inferBillingType(payment, undefined, lang),
-          category: inferCategory(payment, undefined),
+          return {
+            id: payment.id,
+            billingId: "",
+            paymentId: payment.id,
+            sortDate: payment.created_at || new Date().toISOString(),
 
-          listingCode: cleanText(payment.listing_code),
-          invoiceNumber: "-",
-          receiptNumber: cleanText(payment.receipt_number),
-          planCode: "-",
-          billType: "-",
+            title: buildTitleFromPayment(payment),
+            packageName: inferPackageName(payment, undefined),
+            billingType: inferBillingType(payment, undefined, lang),
+            category: inferCategory(payment, undefined),
 
-          amount: formatAmount(
-            payment.amount ?? 0,
-            payment.amount_idr ?? null,
-            payment.currency
-          ),
+            listingCode: cleanText(payment.listing_code),
+            invoiceNumber: "-",
+            receiptNumber: cleanText(payment.receipt_number),
+            planCode: "-",
+            billType: "-",
 
-          method:
-            cleanText(
-              payment.payment_method ||
-                payment.method ||
-                payment.gateway ||
-                payment.provider
-            ) === "-"
-              ? "-"
-              : cleanText(
-                  payment.payment_method ||
-                    payment.method ||
-                    payment.gateway ||
-                    payment.provider
-                ),
+            amount: formatAmount(
+              payment.amount ?? 0,
+              payment.amount_idr ?? null,
+              payment.currency
+            ),
 
-          createdDate: formatDate(payment.created_at),
-          dueDate: "-",
-          paidDate: formatDate(payment.paid_at),
-          expiryDate: formatDate(payment.expires_at),
+            method: methodText,
+            createdDate: formatDate(payment.created_at),
+            dueDate: "-",
+            paidDate: formatDate(payment.paid_at),
+            expiryDate: formatDate(payment.expires_at),
 
-          status: normalizeHistoryStatus(payment.status, null),
-          checkoutUrl:
-            cleanText(payment.checkout_url) === "-" ? "" : cleanText(payment.checkout_url),
-        }));
+            status: normalizeHistoryStatus(payment.status, null),
+            checkoutUrl:
+              cleanText(payment.checkout_url) === "-"
+                ? ""
+                : cleanText(payment.checkout_url),
+          };
+        });
 
       const merged = [...billingItems, ...orphanPayments].sort((a, b) => {
         return new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
@@ -740,7 +736,11 @@ export default function AgentTagihanPage() {
                         </span>
 
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 sm:px-3 sm:text-xs">
-                          {item.billingType === "-" ? (lang === "id" ? "Tagihan" : "Billing") : item.billingType}
+                          {item.billingType === "-"
+                            ? lang === "id"
+                              ? "Tagihan"
+                              : "Billing"
+                            : item.billingType}
                         </span>
                       </div>
 
@@ -754,7 +754,7 @@ export default function AgentTagihanPage() {
 
                       <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-1.5 text-[11px] leading-relaxed text-gray-500 sm:grid-cols-2 sm:text-sm">
                         <p>
-                          {lang === "id" ? "Package:" : "Package:"}{" "}
+                          Package:{" "}
                           <span className="font-medium text-gray-700">
                             {item.packageName}
                           </span>
@@ -766,37 +766,37 @@ export default function AgentTagihanPage() {
                           </span>
                         </p>
                         <p>
-                          {lang === "id" ? "Plan Code:" : "Plan Code:"}{" "}
+                          Plan Code:{" "}
                           <span className="font-medium text-gray-700">
                             {item.planCode}
                           </span>
                         </p>
                         <p>
-                          {lang === "id" ? "Bill Type:" : "Bill Type:"}{" "}
+                          Bill Type:{" "}
                           <span className="font-medium text-gray-700">
                             {item.billType}
                           </span>
                         </p>
                         <p>
-                          {lang === "id" ? "Listing Code:" : "Listing Code:"}{" "}
+                          Listing Code:{" "}
                           <span className="font-medium text-gray-700">
                             {item.listingCode}
                           </span>
                         </p>
                         <p>
-                          {lang === "id" ? "Method:" : "Method:"}{" "}
+                          Method:{" "}
                           <span className="font-medium text-gray-700">
                             {item.method}
                           </span>
                         </p>
                         <p>
-                          {lang === "id" ? "Invoice:" : "Invoice:"}{" "}
+                          Invoice:{" "}
                           <span className="font-medium text-gray-700">
                             {item.invoiceNumber}
                           </span>
                         </p>
                         <p>
-                          {lang === "id" ? "Receipt:" : "Receipt:"}{" "}
+                          Receipt:{" "}
                           <span className="font-medium text-gray-700">
                             {item.receiptNumber === "-"
                               ? lang === "id"
@@ -829,13 +829,13 @@ export default function AgentTagihanPage() {
                     <div className="flex flex-wrap items-start gap-2 lg:min-w-[190px] lg:flex-col lg:items-end">
                       {item.invoiceNumber !== "-" ? (
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 sm:text-xs">
-                          {lang === "id" ? "Invoice Ready" : "Invoice Ready"}
+                          Invoice Ready
                         </span>
                       ) : null}
 
                       {item.receiptNumber !== "-" && item.paymentId ? (
                         <Link
-                          href={`/agentdashboard/pembayaran/receipt/${item.paymentId}`}
+                          href={`/agentdashboard/tagihan/receipt/${item.paymentId}`}
                           className="inline-flex rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-medium text-green-700 transition hover:bg-green-100 sm:px-4 sm:text-sm"
                         >
                           {lang === "id" ? "Lihat Receipt" : "View Receipt"}
