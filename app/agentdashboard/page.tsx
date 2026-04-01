@@ -148,14 +148,16 @@ function StatCard({
   Icon: ElementType;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-[#1C1C1E]">{value}</p>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500 sm:text-sm">{title}</p>
+          <p className="mt-2 text-2xl font-semibold text-[#1C1C1E] sm:text-3xl">
+            {value}
+          </p>
         </div>
 
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-11 sm:w-11">
           <Icon className="h-5 w-5 text-[#1C1C1E]" />
         </div>
       </div>
@@ -583,8 +585,8 @@ export default function AgentDashboardPage() {
   if (loadingProfile || loadingDashboard) {
     return (
       <main className="min-h-screen bg-[#F7F7F8]">
-        <div className="mx-auto max-w-7xl px-6 py-10">
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-500 shadow-sm sm:p-8">
             {lang === "id" ? "Memuat dashboard..." : "Loading dashboard..."}
           </div>
         </div>
@@ -594,24 +596,24 @@ export default function AgentDashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#F7F7F8]">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#1C1C1E]">
+            <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl lg:text-3xl">
               {lang === "id" ? "Dashboard Agen" : "Agent Dashboard"}
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm leading-6 text-gray-500">
               {lang === "id"
                 ? "Kelola listing agent, leads, dan update properti Anda."
                 : "Manage your agent listings, leads, and property updates."}
             </p>
           </div>
 
-          <div className="flex flex-col items-start lg:items-end">
+          <div className="flex w-full flex-col items-start sm:w-auto lg:items-end">
             <button
               onClick={handleCreateListing}
               disabled={checkingMembership}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5"
             >
               <Plus className="h-4 w-4" />
               {checkingMembership
@@ -624,7 +626,7 @@ export default function AgentDashboardPage() {
             </button>
 
             {!checkingMembership && (
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-gray-500 lg:text-right">
                 {hasActiveMembership
                   ? lang === "id"
                     ? `Membership aktif${activeMembershipLabel ? `: ${activeMembershipLabel}` : ""}`
@@ -643,7 +645,7 @@ export default function AgentDashboardPage() {
           </div>
         )}
 
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:mb-8 xl:grid-cols-4">
           <StatCard
             title={lang === "id" ? "Total Listing" : "Total Listings"}
             value={dashboardData.stats.totalListing}
@@ -666,7 +668,7 @@ export default function AgentDashboardPage() {
           />
         </div>
 
-        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-md">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -682,7 +684,7 @@ export default function AgentDashboardPage() {
             />
           </div>
 
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 md:text-right">
             {lang === "id"
               ? `Menampilkan ${filteredListings.length} listing`
               : `Showing ${filteredListings.length} listings`}
@@ -690,11 +692,11 @@ export default function AgentDashboardPage() {
         </div>
 
         {filteredListings.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
-            <h2 className="text-xl font-semibold text-[#1C1C1E]">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm sm:p-10">
+            <h2 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
               {lang === "id" ? "Belum ada listing" : "No listings yet"}
             </h2>
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm leading-6 text-gray-500">
               {lang === "id"
                 ? "Buat listing pertama Anda untuk mulai menerima leads."
                 : "Create your first listing to start receiving leads."}
@@ -703,7 +705,7 @@ export default function AgentDashboardPage() {
             <button
               onClick={handleCreateListing}
               disabled={checkingMembership}
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5"
             >
               <Plus className="h-4 w-4" />
               {checkingMembership
@@ -717,7 +719,7 @@ export default function AgentDashboardPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
               {paginatedListings.map((listing) => {
                 const statusData = leadStatusUI(listing.leadStatus, lang);
                 const coverPhoto = listing.photos?.[0] || "";
@@ -725,9 +727,9 @@ export default function AgentDashboardPage() {
                 return (
                   <div
                     key={listing.id}
-                    className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                    className="mx-auto w-full overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                   >
-                    <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
+                    <div className="aspect-[4/3] w-full overflow-hidden bg-gray-100 sm:aspect-[16/10]">
                       <img
                         src={coverPhoto}
                         alt={listing.title}
@@ -735,19 +737,19 @@ export default function AgentDashboardPage() {
                       />
                     </div>
 
-                    <div className="p-5">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                    <div className="p-4 sm:p-5">
+                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 sm:text-xs">
                             {listing.kode}
                           </p>
-                          <h3 className="mt-1 line-clamp-2 text-lg font-semibold text-[#1C1C1E]">
+                          <h3 className="mt-1 line-clamp-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
                             {listing.title}
                           </h3>
                         </div>
 
                         <div
-                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${statusData.badgeClass}`}
+                          className={`inline-flex w-fit items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${statusData.badgeClass}`}
                         >
                           <statusData.Icon className="h-3.5 w-3.5" />
                           {statusData.label}
@@ -759,11 +761,11 @@ export default function AgentDashboardPage() {
                         <p>{listing.postedDate}</p>
                       </div>
 
-                      <p className="mt-4 text-xl font-bold text-[#1C1C1E]">
+                      <p className="mt-4 text-lg font-bold text-[#1C1C1E] sm:text-xl">
                         {listing.price}
                       </p>
 
-                      <div className="mt-4 flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
+                      <div className="mt-4 flex flex-col gap-3 rounded-2xl bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="text-xs text-gray-400">
                             {lang === "id" ? "Total Leads" : "Total Leads"}
@@ -785,7 +787,7 @@ export default function AgentDashboardPage() {
                         </button>
                       </div>
 
-                      <div className="mt-4 flex gap-3">
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                         <button
                           onClick={() =>
                             router.push(
@@ -814,7 +816,7 @@ export default function AgentDashboardPage() {
             </div>
 
             {totalPages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-2">
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
                   disabled={currentPage === 1}

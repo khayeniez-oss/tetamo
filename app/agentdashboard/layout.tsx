@@ -117,7 +117,7 @@ export default function AgentDashboardLayout({
 
   const menuItemClass = (href: string) =>
     [
-      "block px-3 py-3 rounded-xl transition",
+      "block rounded-xl px-3 py-3 text-sm transition lg:text-base",
       pathname === href
         ? "bg-white/10 text-white font-semibold"
         : "text-white/85 hover:bg-white/10 hover:text-white",
@@ -276,15 +276,18 @@ export default function AgentDashboardLayout({
   return (
     <AgentProfileContext.Provider value={contextValue}>
       <AgentListingDraftProvider>
-        <div className="min-h-screen bg-[#F7F7F7] p-10">
-          <div className="flex">
+        <div className="min-h-screen bg-[#F7F7F7] p-4 sm:p-6 lg:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:gap-8">
             <aside
               className="
-                w-72
-                min-h-screen
+                w-full
+                lg:w-72
+                lg:min-h-screen
                 rounded-3xl
                 bg-[#1C1C1E]
-                px-10 py-10
+                px-5 py-6
+                sm:px-6 sm:py-7
+                lg:px-8 lg:py-8
                 text-white
                 shadow-[0_20px_60px_rgba(0,0,0,0.35)]
                 ring-1 ring-white/10
@@ -292,8 +295,8 @@ export default function AgentDashboardLayout({
               "
             >
               <div>
-                <div className="flex flex-col">
-                  <div className="mb-6 h-36 w-36 overflow-hidden rounded-xl border border-white/10 bg-white/10">
+                <div className="flex flex-col gap-4 sm:flex-row lg:flex-col lg:gap-0">
+                  <div className="h-24 w-24 overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:h-28 sm:w-28 lg:mb-5 lg:h-32 lg:w-32">
                     <img
                       src={agent.photo}
                       alt={agent.name}
@@ -301,12 +304,12 @@ export default function AgentDashboardLayout({
                     />
                   </div>
 
-                  <div>
-                    <p className="mt-1 text-2xl font-bold tracking-tight">
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold tracking-tight sm:text-xl lg:text-2xl">
                       {agent.name}
                     </p>
 
-                    <p className="mt-1 text-lg font-bold tracking-tight">
+                    <p className="mt-1 text-sm font-bold tracking-tight sm:text-base lg:text-lg">
                       {agent.role}
                     </p>
 
@@ -314,7 +317,7 @@ export default function AgentDashboardLayout({
                       {agent.number || "-"}
                     </p>
 
-                    <p className="mt-2 break-all text-xs text-white/60">
+                    <p className="mt-2 break-all text-[11px] text-white/60 sm:text-xs">
                       {agent.email || "-"}
                     </p>
 
@@ -337,10 +340,12 @@ export default function AgentDashboardLayout({
                 </div>
               </div>
 
-              <div className="my-8 border-t border-white/10" />
+              <div className="my-6 border-t border-white/10 lg:my-8" />
 
-              <nav className="space-y-3 text-base">
-                <p className="mt-2 text-xs uppercase text-white/40">Overview</p>
+              <nav className="space-y-2 lg:space-y-3">
+                <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-white/40">
+                  Overview
+                </p>
 
                 <Link
                   href="/agentdashboard"
@@ -370,7 +375,7 @@ export default function AgentDashboardLayout({
                   Buat Iklan
                 </Link>
 
-                <p className="mt-6 text-xs uppercase text-white/40">
+                <p className="mt-5 text-[11px] uppercase tracking-[0.2em] text-white/40 lg:mt-6">
                   Membership
                 </p>
 
@@ -389,13 +394,22 @@ export default function AgentDashboardLayout({
                 </Link>
 
                 <Link
+                  href="/agentdashboard/komisi"
+                  className={menuItemClass("/agentdashboard/komisi")}
+                >
+                  Komisi
+                </Link>
+
+                <Link
                   href="/agentdashboard/sukses"
                   className={menuItemClass("/agentdashboard/sukses")}
                 >
                   Sukses
                 </Link>
 
-                <p className="mt-6 text-xs uppercase text-white/40">Support</p>
+                <p className="mt-5 text-[11px] uppercase tracking-[0.2em] text-white/40 lg:mt-6">
+                  Support
+                </p>
 
                 <Link
                   href="/agentdashboard/pengaturan"
@@ -406,7 +420,9 @@ export default function AgentDashboardLayout({
               </nav>
             </aside>
 
-            <main className="flex-1 px-10 py-10">{children}</main>
+            <main className="min-w-0 flex-1 px-0 py-0 lg:px-2 lg:py-2">
+              {children}
+            </main>
           </div>
         </div>
       </AgentListingDraftProvider>
