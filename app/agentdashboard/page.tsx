@@ -740,18 +740,21 @@ export default function AgentDashboardPage() {
                     </div>
 
                     <div className="p-4 sm:p-6">
-                      <div className="flex items-center justify-between gap-3 text-[10px] font-medium text-gray-400 sm:text-xs">
-                        <p className="uppercase tracking-[0.08em]">{listing.kode}</p>
-                        <p>{listing.postedDate}</p>
-                      </div>
+                      <p className="text-[15px] font-bold tracking-tight text-[#1C1C1E] sm:text-[20px]">
+                        {listing.price}
+                      </p>
 
-                      <h3 className="mt-3 line-clamp-2 text-[14px] font-semibold leading-6 text-[#1C1C1E] sm:text-[22px] sm:leading-8">
+                      <p className="mt-1 text-[12px] text-gray-500 sm:text-[15px]">
+                        {listing.city}
+                      </p>
+
+                      <h3 className="mt-2 line-clamp-2 text-[14px] font-semibold leading-6 text-[#1C1C1E] sm:text-[22px] sm:leading-8">
                         {listing.title}
                       </h3>
 
-                      <div className="mt-2.5 flex items-center justify-between gap-3">
-                        <p className="text-[12px] text-gray-500 sm:text-[15px]">
-                          {listing.city}
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <p className="min-w-0 truncate text-[10px] text-gray-400 sm:text-xs">
+                          {listing.kode} <span className="mx-1">•</span> {listing.postedDate}
                         </p>
 
                         <div
@@ -762,15 +765,11 @@ export default function AgentDashboardPage() {
                         </div>
                       </div>
 
-                      <p className="mt-4 text-[16px] font-bold tracking-tight text-[#1C1C1E] sm:text-[20px]">
-                        {listing.price}
-                      </p>
-
-                      <div className="mt-4 rounded-[20px] border border-gray-100 bg-[#F8F8F8] px-4 py-2.5 sm:py-4">
+                      <div className="mt-4 flex items-center justify-between rounded-[18px] border border-gray-100 bg-[#F8F8F8] px-4 py-2.5">
                         <p className="text-[10px] font-medium text-gray-400 sm:text-xs">
                           {lang === "id" ? "Total Leads" : "Total Leads"}
                         </p>
-                        <p className="mt-0.5 text-base font-semibold text-[#1C1C1E] sm:mt-1 sm:text-xl">
+                        <p className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                           {listing.totalLeads}
                         </p>
                       </div>
