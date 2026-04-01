@@ -596,7 +596,7 @@ export default function AgentDashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#F7F7F8]">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
         <div className="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl lg:text-3xl">
@@ -645,7 +645,7 @@ export default function AgentDashboardPage() {
           </div>
         )}
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:mb-8 xl:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:mb-8 xl:grid-cols-4">
           <StatCard
             title={lang === "id" ? "Total Listing" : "Total Listings"}
             value={dashboardData.stats.totalListing}
@@ -729,7 +729,7 @@ export default function AgentDashboardPage() {
                     key={listing.id}
                     className="mx-auto w-full overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                   >
-                    <div className="aspect-[4/3] w-full overflow-hidden bg-gray-100 sm:aspect-[16/10]">
+                    <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
                       <img
                         src={coverPhoto}
                         alt={listing.title}
@@ -765,29 +765,27 @@ export default function AgentDashboardPage() {
                         {listing.price}
                       </p>
 
-                      <div className="mt-4 flex flex-col gap-3 rounded-2xl bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-xs text-gray-400">
-                            {lang === "id" ? "Total Leads" : "Total Leads"}
-                          </p>
-                          <p className="text-base font-semibold text-[#1C1C1E]">
-                            {listing.totalLeads}
-                          </p>
-                        </div>
+                      <div className="mt-4 rounded-2xl bg-gray-50 px-4 py-3">
+                        <p className="text-xs text-gray-400">
+                          {lang === "id" ? "Total Leads" : "Total Leads"}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-[#1C1C1E]">
+                          {listing.totalLeads}
+                        </p>
+                      </div>
 
+                      <div className="mt-4 grid grid-cols-3 gap-2">
                         <button
                           onClick={() =>
                             router.push(
                               `/agentdashboard/leads?kode=${encodeURIComponent(listing.kode)}`
                             )
                           }
-                          className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          className="rounded-xl border border-gray-300 px-2 py-3 text-xs font-medium text-gray-700 hover:bg-gray-100 sm:px-3 sm:text-sm"
                         >
-                          {lang === "id" ? "Lihat Leads" : "View Leads"}
+                          {lang === "id" ? "Leads" : "Leads"}
                         </button>
-                      </div>
 
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                         <button
                           onClick={() =>
                             router.push(
@@ -796,15 +794,15 @@ export default function AgentDashboardPage() {
                               )}`
                             )
                           }
-                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-gray-300 px-2 py-3 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:px-3 sm:text-sm"
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           Edit
                         </button>
 
                         <button
                           onClick={() => router.push(`/properti/${listing.id}`)}
-                          className="flex-1 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
+                          className="rounded-xl bg-[#1C1C1E] px-2 py-3 text-xs font-medium text-white hover:opacity-90 sm:px-3 sm:text-sm"
                         >
                           {lang === "id" ? "Lihat Iklan" : "View Listing"}
                         </button>
