@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type LeadStatus = "new" | "contacted" | "viewing" | "interested" | "closed";
@@ -410,22 +411,25 @@ export default function AgentLeadsPage() {
   const endItem = Math.min(currentPage * ITEMS_PER_PAGE, filteredLeads.length);
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">Leads</h1>
-        <p className="text-sm text-gray-500">
+    <div className="min-w-0">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">Leads</h1>
+        <p className="mt-1 text-sm text-gray-500">
           Kelola leads buyer dan pantau progres follow-up.
         </p>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cari buyer, kode listing, lokasi, pesan..."
-          className="w-full rounded-2xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] md:max-w-md"
-        />
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative w-full lg:max-w-md">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari buyer, kode listing, lokasi, pesan..."
+            className="w-full rounded-2xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#1C1C1E]"
+          />
+        </div>
 
         <div className="flex flex-wrap gap-2">
           {[
@@ -459,9 +463,11 @@ export default function AgentLeadsPage() {
         </div>
       ) : null}
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="font-semibold text-[#1C1C1E]">Daftar Leads</h2>
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 p-4 sm:p-6">
+          <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            Daftar Leads
+          </h2>
         </div>
 
         {loading ? (
@@ -511,120 +517,121 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
               const isUpdating = updatingId === lead.id;
 
               return (
-                <div
-                  key={lead.id}
-                  className="p-6 flex items-start justify-between gap-6"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span
-                        className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badgeClass}`}
-                      >
-                        {ui.label}
-                      </span>
-
-                      {lead.leadType === "viewing" ? (
-                        <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
-                          Viewing Request
-                        </span>
-                      ) : null}
-
-                      {viewingUi ? (
+                <div key={lead.id} className="p-4 sm:p-5 lg:p-6">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between xl:gap-6">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${viewingUi.badgeClass}`}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${ui.badgeClass}`}
                         >
-                          {viewingUi.label}
+                          {ui.label}
                         </span>
+
+                        {lead.leadType === "viewing" ? (
+                          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
+                            Viewing Request
+                          </span>
+                        ) : null}
+
+                        {viewingUi ? (
+                          <span
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${viewingUi.badgeClass}`}
+                          >
+                            {viewingUi.label}
+                          </span>
+                        ) : null}
+
+                        <div className="text-xs text-gray-500">{lead.createdAt}</div>
+                      </div>
+
+                      <p className="mt-3 text-base font-semibold text-[#1C1C1E]">
+                        {lead.buyerName}
+                      </p>
+
+                      <p className="mt-1 text-sm text-gray-500">{lead.buyerPhone}</p>
+
+                      {lead.buyerEmail !== "-" ? (
+                        <p className="text-sm text-gray-500 break-all">{lead.buyerEmail}</p>
                       ) : null}
 
-                      <div className="text-xs text-gray-500">{lead.createdAt}</div>
-                    </div>
+                      <p className="mt-3 text-sm leading-6 text-gray-700">
+                        {lead.message}
+                      </p>
 
-                    <p className="mt-3 font-medium text-[#1C1C1E]">
-                      {lead.buyerName}
-                    </p>
-
-                    <p className="text-sm text-gray-500">{lead.buyerPhone}</p>
-
-                    {lead.buyerEmail !== "-" ? (
-                      <p className="text-sm text-gray-500">{lead.buyerEmail}</p>
-                    ) : null}
-
-                    <p className="mt-3 text-sm text-gray-700">{lead.message}</p>
-
-                    <div className="mt-3 text-xs text-gray-500">
-                      Properti: {lead.propertyTitle} • Kode: {lead.listingKode}
-                    </div>
-
-                    <div className="mt-1 text-xs text-gray-500">
-                      Lokasi: {lead.propertyLocation} • Harga: {lead.propertyPrice}
-                    </div>
-
-                    {lead.leadType === "viewing" &&
-                    (lead.viewingDate || lead.viewingTime) ? (
-                      <div className="mt-2 text-xs text-amber-700">
-                        Jadwal diminta: {lead.viewingDate || "-"} • {lead.viewingTime || "-"}
+                      <div className="mt-3 text-xs leading-5 text-gray-500">
+                        Properti: {lead.propertyTitle} • Kode: {lead.listingKode}
                       </div>
-                    ) : null}
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {lead.status !== "viewing" && (
-                        <button
-                          type="button"
-                          onClick={() => updateLeadStatus(lead.id, "viewing")}
-                          disabled={isUpdating}
-                          className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
-                        >
-                          Viewing
-                        </button>
-                      )}
+                      <div className="mt-1 text-xs leading-5 text-gray-500">
+                        Lokasi: {lead.propertyLocation} • Harga: {lead.propertyPrice}
+                      </div>
 
-                      {lead.status !== "interested" && (
-                        <button
-                          type="button"
-                          onClick={() => updateLeadStatus(lead.id, "interested")}
-                          disabled={isUpdating}
-                          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:opacity-50"
-                        >
-                          Interested
-                        </button>
-                      )}
+                      {lead.leadType === "viewing" &&
+                      (lead.viewingDate || lead.viewingTime) ? (
+                        <div className="mt-2 text-xs text-amber-700">
+                          Jadwal diminta: {lead.viewingDate || "-"} • {lead.viewingTime || "-"}
+                        </div>
+                      ) : null}
 
-                      {lead.status !== "closed" && (
-                        <button
-                          type="button"
-                          onClick={() => updateLeadStatus(lead.id, "closed")}
-                          disabled={isUpdating}
-                          className="rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                        >
-                          Closed
-                        </button>
-                      )}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {lead.status !== "viewing" && (
+                          <button
+                            type="button"
+                            onClick={() => updateLeadStatus(lead.id, "viewing")}
+                            disabled={isUpdating}
+                            className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
+                          >
+                            Viewing
+                          </button>
+                        )}
+
+                        {lead.status !== "interested" && (
+                          <button
+                            type="button"
+                            onClick={() => updateLeadStatus(lead.id, "interested")}
+                            disabled={isUpdating}
+                            className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:opacity-50"
+                          >
+                            Interested
+                          </button>
+                        )}
+
+                        {lead.status !== "closed" && (
+                          <button
+                            type="button"
+                            onClick={() => updateLeadStatus(lead.id, "closed")}
+                            disabled={isUpdating}
+                            className="rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                          >
+                            Closed
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <a
-                      href={callPhone ? `tel:${callPhone}` : "#"}
-                      onClick={() => {
-                        void markAsContacted(lead.id);
-                      }}
-                      className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Hubungi
-                    </a>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row xl:shrink-0">
+                      <a
+                        href={callPhone ? `tel:${callPhone}` : "#"}
+                        onClick={() => {
+                          void markAsContacted(lead.id);
+                        }}
+                        className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        Hubungi
+                      </a>
 
-                    <a
-                      href={whatsappLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        void markAsContacted(lead.id);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm hover:opacity-90"
-                    >
-                      WhatsApp
-                    </a>
+                      <a
+                        href={whatsappLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => {
+                          void markAsContacted(lead.id);
+                        }}
+                        className="inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white hover:opacity-90"
+                      >
+                        WhatsApp
+                      </a>
+                    </div>
                   </div>
                 </div>
               );
@@ -633,16 +640,16 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
         )}
 
         {filteredLeads.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+          <div className="flex flex-col gap-4 border-t border-gray-100 px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-500">
               Menampilkan {startItem}–{endItem} dari {filteredLeads.length} leads
             </p>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 rounded-xl border border-gray-200 bg-[#1C1C1E] text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-xl border border-gray-200 bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Sebelumnya
               </button>
@@ -652,9 +659,9 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
                   key={page}
                   onClick={() => setCurrentPage(page)}
                   className={[
-                    "px-3 py-2 rounded-xl text-sm border",
+                    "rounded-xl border px-3 py-2 text-sm",
                     currentPage === page
-                      ? "bg-[#1C1C1E] text-white border-[#1C1C1E]"
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                       : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
                   ].join(" ")}
                 >
@@ -665,7 +672,7 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-2 rounded-xl border border-gray-200 bg-[#1C1C1E] text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-xl border border-gray-200 bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Berikutnya
               </button>
