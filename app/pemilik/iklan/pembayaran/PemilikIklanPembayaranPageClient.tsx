@@ -439,7 +439,7 @@ export default function PemilikIklanPembayaranPageClient() {
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           onClick={onBack}
           className="text-sm text-gray-600 hover:text-gray-900"
@@ -448,43 +448,51 @@ export default function PemilikIklanPembayaranPageClient() {
           ← Kembali
         </button>
 
-        <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-[#1C1C1E]">
+        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
           Step 5 • Pembayaran
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm leading-6 text-gray-600">
           Pilih paket iklan dan lanjutkan pembayaran.
         </p>
 
-        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
+          <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               {isAddon ? "Ringkasan Add-On" : "Ringkasan Iklan"}
             </h2>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-gray-200 p-4">
                 <div className="text-xs text-gray-500">Tipe Listing</div>
-                <div className="mt-1 font-semibold">{listingTypeLabel}</div>
+                <div className="mt-1 text-sm font-semibold sm:text-base">
+                  {listingTypeLabel}
+                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 p-4">
                 <div className="text-xs text-gray-500">Lokasi</div>
-                <div className="mt-1 font-semibold">{lokasiLabel}</div>
+                <div className="mt-1 text-sm font-semibold sm:text-base">
+                  {lokasiLabel}
+                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 p-4">
                 <div className="text-xs text-gray-500">Judul</div>
-                <div className="mt-1 font-semibold">{judulLabel}</div>
+                <div className="mt-1 text-sm font-semibold sm:text-base">
+                  {judulLabel}
+                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 p-4">
                 <div className="text-xs text-gray-500">Foto</div>
-                <div className="mt-1 font-semibold">{fotoCount} foto</div>
+                <div className="mt-1 text-sm font-semibold sm:text-base">
+                  {fotoCount} foto
+                </div>
               </div>
             </div>
 
             {loadingExistingProperty && needsExistingProperty && (
-              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                 <div className="text-sm text-gray-600">
                   Memuat data listing...
                 </div>
@@ -492,8 +500,8 @@ export default function PemilikIklanPembayaranPageClient() {
             )}
 
             {existingPropertyError && needsExistingProperty && (
-              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
-                <div className="font-semibold text-red-700">
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:mt-5">
+                <div className="text-sm font-semibold text-red-700 sm:text-base">
                   Gagal memuat listing
                 </div>
                 <div className="mt-1 text-sm text-red-600">
@@ -503,45 +511,47 @@ export default function PemilikIklanPembayaranPageClient() {
             )}
 
             {!isReadyToPay && !needsExistingProperty && (
-              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <div className="font-semibold">Belum bisa bayar</div>
-                <div className="mt-1 text-sm text-gray-600">
+              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
+                <div className="text-sm font-semibold sm:text-base">
+                  Belum bisa bayar
+                </div>
+                <div className="mt-1 text-sm leading-6 text-gray-600">
                   Pastikan: tipe listing, lokasi, minimal 3 foto, judul &
                   deskripsi, dan form verifikasi sudah terisi.
                 </div>
               </div>
             )}
 
-            <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-              <div className="font-semibold text-blue-700">
+            <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:mt-5">
+              <div className="text-sm font-semibold text-blue-700 sm:text-base">
                 Aktivasi dilakukan setelah pembayaran terkonfirmasi
               </div>
-              <div className="mt-1 text-sm text-blue-700">
+              <div className="mt-1 text-sm leading-6 text-blue-700">
                 Halaman ini sekarang hanya membuat payment checkout. Listing,
                 renew, boost, atau spotlight tidak diaktifkan dari sini.
               </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
+          <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               {selectedProduct?.paymentTitle ?? "Pembayaran"}
             </h2>
 
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm leading-6 text-gray-600">
               {selectedProduct?.paymentDescription ??
                 "Detail pembayaran akan mengikuti produk yang dipilih."}
             </p>
 
             {isRenew && (
-              <p className="mt-3 text-sm text-gray-600">
+              <p className="mt-3 text-sm leading-6 text-gray-600">
                 {selectedProduct?.renewalLabel ??
                   "Perpanjangan produk akan mengikuti paket yang dipilih."}
               </p>
             )}
 
             {isAddon && (
-              <p className="mt-3 text-sm text-gray-600">
+              <p className="mt-3 text-sm leading-6 text-gray-600">
                 Add-on ini akan diterapkan ke listing dengan kode{" "}
                 <span className="font-semibold">
                   {finalKodeForDisplay(existingProperty?.kode, draft?.kode, kode)}
@@ -552,8 +562,8 @@ export default function PemilikIklanPembayaranPageClient() {
 
             <div className="mt-4 rounded-2xl border border-gray-200 p-4">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="font-semibold text-[#1C1C1E]">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                     {selectedProduct?.name ?? "-"}
                   </div>
 
@@ -563,7 +573,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 </div>
 
                 {"badge" in (selectedProduct || {}) ? (
-                  <span className="inline-flex items-center rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
+                  <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                     {(selectedProduct as any).badge}
                   </span>
                 ) : null}
@@ -621,7 +631,7 @@ export default function PemilikIklanPembayaranPageClient() {
                   {selectedProduct.features.map((feature, idx) => (
                     <li
                       key={idx}
-                      className="flex items-start gap-2 text-sm text-gray-700"
+                      className="flex items-start gap-2 text-sm leading-6 text-gray-700"
                     >
                       <span className="text-green-600">✓</span>
                       <span>{feature}</span>
@@ -632,14 +642,14 @@ export default function PemilikIklanPembayaranPageClient() {
             ) : null}
 
             <div className="mt-5 rounded-2xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
                   Total
                 </div>
                 <div className="text-sm font-semibold">{money(total)}</div>
               </div>
 
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-2 text-xs leading-5 text-gray-500">
                 {selectedProduct?.billingNote ??
                   "Detail pembayaran akan mengikuti produk yang dipilih."}
               </div>
@@ -659,7 +669,7 @@ export default function PemilikIklanPembayaranPageClient() {
               {submitting ? "Membuat Checkout..." : "Bayar Sekarang"}
             </button>
 
-            <p className="mt-3 text-xs text-gray-500">
+            <p className="mt-3 text-xs leading-5 text-gray-500">
               Checkout akan dibuat otomatis saat tombol ditekan.
             </p>
           </div>
