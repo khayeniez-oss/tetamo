@@ -838,21 +838,23 @@ export default function PemilikIklanSuksesPage() {
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+      <div className="mx-auto max-w-3xl px-4 py-10 text-center sm:px-6 sm:py-14 md:py-16">
         <div
           className={[
-            "mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border text-2xl font-bold",
+            "mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border text-xl font-bold sm:h-14 sm:w-14 sm:text-2xl",
             statusUI.boxClass,
           ].join(" ")}
         >
           {statusUI.icon}
         </div>
 
-        <h1 className="mt-6 text-4xl font-bold text-[#1C1C1E]">
+        <h1 className="mt-5 text-2xl font-bold leading-tight text-[#1C1C1E] sm:mt-6 sm:text-3xl md:text-4xl">
           {statusUI.title}
         </h1>
 
-        <p className="mt-3 text-gray-600">{content.description}</p>
+        <p className="mt-3 text-sm leading-6 text-gray-600 sm:text-base">
+          {content.description}
+        </p>
 
         {loading ? (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
@@ -867,51 +869,51 @@ export default function PemilikIklanSuksesPage() {
         ) : null}
 
         {!loading && !isEditApprovalFlow && productName ? (
-          <div className="mt-6 inline-flex items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-[#1C1C1E]">
-            {productName}
+          <div className="mt-6 inline-flex max-w-full items-center rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-[#1C1C1E]">
+            <span className="truncate">{productName}</span>
           </div>
         ) : null}
 
         {!loading && !isEditApprovalFlow ? (
-          <div className="mt-8 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-3 text-left sm:mt-8 sm:gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.statusLabel}</p>
-              <p className="mt-1 font-semibold text-[#1C1C1E]">
+              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 {resolvedStatus}
               </p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.amountLabel}</p>
-              <p className="mt-1 font-semibold text-[#1C1C1E]">
+              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 {formatCurrency(payment?.amount, payment?.currency, locale)}
               </p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.gatewayLabel}</p>
-              <p className="mt-1 font-semibold text-[#1C1C1E]">
+              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 {humanizeGateway(payment?.gateway)}
               </p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.methodLabel}</p>
-              <p className="mt-1 font-semibold text-[#1C1C1E]">
+              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 {humanizePaymentMethod(payment?.payment_method)}
               </p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.codeLabel}</p>
-              <p className="mt-1 font-semibold text-[#1C1C1E]">
+              <p className="mt-1 break-words text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 {resolvedKode}
               </p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.createdLabel}</p>
-              <p className="mt-1 font-semibold text-[#1C1C1E]">
+              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 {formatDate(payment?.created_at, locale)}
               </p>
             </div>
@@ -919,7 +921,7 @@ export default function PemilikIklanSuksesPage() {
             {payment?.paid_at ? (
               <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:col-span-2">
                 <p className="text-xs text-gray-500">{t.paidAtLabel}</p>
-                <p className="mt-1 font-semibold text-[#1C1C1E]">
+                <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
                   {formatDate(payment.paid_at, locale)}
                 </p>
               </div>
@@ -928,7 +930,7 @@ export default function PemilikIklanSuksesPage() {
         ) : null}
 
         {content.points?.length ? (
-          <div className="mt-8 rounded-3xl border border-gray-200 bg-gray-50 p-6 text-left">
+          <div className="mt-6 rounded-3xl border border-gray-200 bg-gray-50 p-5 text-left sm:mt-8 sm:p-6">
             <div className="text-sm font-semibold text-[#1C1C1E]">
               {t.whatNow}
             </div>
@@ -937,7 +939,7 @@ export default function PemilikIklanSuksesPage() {
               {content.points.map((point, idx) => (
                 <li
                   key={idx}
-                  className="flex items-start gap-2 text-sm text-gray-700"
+                  className="flex items-start gap-2 text-sm leading-6 text-gray-700"
                 >
                   <span className="text-green-600">✓</span>
                   <span>{point}</span>
@@ -947,20 +949,20 @@ export default function PemilikIklanSuksesPage() {
           </div>
         ) : null}
 
-        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:mt-10 sm:flex-row sm:items-center">
           {shouldShowContinuePayment ? (
             <a
               href={payment?.checkout_url || "#"}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-2xl bg-[#1C1C1E] px-6 py-3 font-semibold text-white transition hover:opacity-90"
+              className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
             >
               {t.continuePayment}
             </a>
           ) : (
             <Link
               href={primaryHref}
-              className="rounded-2xl bg-[#1C1C1E] px-6 py-3 font-semibold text-white transition hover:opacity-90"
+              className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
             >
               {primaryLabel}
             </Link>
@@ -968,13 +970,13 @@ export default function PemilikIklanSuksesPage() {
 
           <Link
             href={secondaryHref}
-            className="rounded-2xl border border-gray-200 px-6 py-3 font-semibold transition hover:bg-gray-50"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold transition hover:bg-gray-50 sm:w-auto"
           >
             {secondaryLabel}
           </Link>
         </div>
 
-        <div className="mt-8 text-xs text-gray-500">
+        <div className="mt-8 text-xs leading-5 text-gray-500">
           {isEditApprovalFlow ? t.editApprovalFooter : t.paymentFooter}
         </div>
       </div>
