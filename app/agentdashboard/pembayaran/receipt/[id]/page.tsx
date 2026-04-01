@@ -293,26 +293,26 @@ export default function AgentReceiptDetailPage() {
                 />
 
                 <div className="min-w-0">
-                  <p className="text-sm font-bold leading-tight text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
+                  <p className="text-xs font-bold leading-tight text-[#1C1C1E] sm:text-sm md:text-lg lg:text-xl">
                     Tetamo Pty Ltd
                   </p>
-                  <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
+                  <p className="mt-1 text-[10px] text-gray-500 sm:text-xs md:text-sm">
                     ABN 18 689 780 970
                   </p>
-                  <p className="mt-1.5 text-[11px] leading-5 text-gray-500 sm:text-xs sm:leading-5 md:text-sm md:leading-6">
+                  <p className="mt-1.5 text-[10px] leading-5 text-gray-500 sm:text-xs sm:leading-5 md:text-sm md:leading-6">
                     Suite 809 168 Kent Street Sydney NSW 2000
                   </p>
-                  <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
+                  <p className="text-[10px] text-gray-500 sm:text-xs md:text-sm">
                     www.tetamo.com
                   </p>
                 </div>
               </div>
 
               <div className="text-left md:text-right">
-                <p className="text-lg font-bold tracking-tight text-[#1C1C1E] sm:text-xl md:text-2xl lg:text-3xl">
+                <p className="text-sm font-bold tracking-tight text-[#1C1C1E] sm:text-lg md:text-2xl lg:text-3xl">
                   Receipt
                 </p>
-                <p className="mt-1 break-words text-xs font-medium text-gray-500 sm:text-sm md:text-sm lg:text-base">
+                <p className="mt-1 break-words text-[11px] font-medium text-gray-500 sm:text-sm md:text-sm lg:text-base">
                   {payment.receipt_number || "-"}
                 </p>
                 <span
@@ -331,16 +331,16 @@ export default function AgentReceiptDetailPage() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-[11px] md:text-xs">
                 {lang === "id" ? "Diterima Dari" : "Received From"}
               </p>
-              <p className="mt-3 text-sm font-semibold text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
+              <p className="mt-3 text-xs font-semibold text-[#1C1C1E] sm:text-sm md:text-lg lg:text-xl">
                 {billing?.customer_name || "Unknown"}
               </p>
-              <p className="mt-1 text-xs text-gray-500 sm:text-sm md:text-sm">
+              <p className="mt-1 text-[11px] text-gray-500 sm:text-sm md:text-sm">
                 {billing?.customer_email || "-"}
               </p>
-              <p className="text-xs text-gray-500 sm:text-sm md:text-sm">
+              <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
                 {billing?.customer_phone || "-"}
               </p>
-              <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6 md:text-sm md:leading-6">
+              <p className="text-[11px] leading-5 text-gray-500 sm:text-sm sm:leading-6 md:text-sm md:leading-6">
                 {billing?.customer_address || "-"}
               </p>
             </div>
@@ -405,17 +405,17 @@ export default function AgentReceiptDetailPage() {
                       "-"}
                   </p>
 
-                  <p className="mt-2 text-xs text-gray-500 sm:text-sm md:text-sm">
+                  <p className="mt-2 text-[11px] text-gray-500 sm:text-sm md:text-sm">
                     {billing?.listing_code
                       ? `Listing: ${billing.listing_code}`
                       : "Listing: -"}
                   </p>
 
-                  <p className="text-xs text-gray-500 sm:text-sm md:text-sm">
+                  <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
                     {billing?.property_title || "-"}
                   </p>
 
-                  <p className="text-xs text-gray-500 sm:text-sm md:text-sm">
+                  <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
                     {billing?.property_city || "-"}
                     {billing?.property_province
                       ? `, ${billing.property_province}`
@@ -424,7 +424,7 @@ export default function AgentReceiptDetailPage() {
                 </div>
 
                 <div className="text-left md:text-right">
-                  <p className="break-words text-base font-semibold text-[#1C1C1E] sm:text-lg md:text-xl lg:text-2xl">
+                  <p className="break-words text-sm font-semibold text-[#1C1C1E] sm:text-base md:text-xl lg:text-2xl">
                     {paymentAmount}
                   </p>
                 </div>
@@ -435,10 +435,10 @@ export default function AgentReceiptDetailPage() {
 
                 <div className="rounded-3xl bg-gray-50 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold text-[#1C1C1E] sm:text-sm md:text-sm lg:text-base">
+                    <span className="text-[11px] font-semibold text-[#1C1C1E] sm:text-sm md:text-sm lg:text-base">
                       {lang === "id" ? "Jumlah Dibayar" : "Amount Paid"}
                     </span>
-                    <span className="break-words text-sm font-bold text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
+                    <span className="break-words text-xs font-bold text-[#1C1C1E] sm:text-sm md:text-lg lg:text-xl">
                       {paymentAmount}
                     </span>
                   </div>
