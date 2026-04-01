@@ -207,7 +207,8 @@ function getPromotionFlags(item: Listing) {
     (!item.featuredExpiresAt || isFutureDate(item.featuredExpiresAt));
 
   const boostActive =
-    item.boostActive && (!item.boostExpiresAt || isFutureDate(item.boostExpiresAt));
+    item.boostActive &&
+    (!item.boostExpiresAt || isFutureDate(item.boostExpiresAt));
 
   const spotlightActive =
     item.spotlightActive &&
@@ -791,7 +792,7 @@ export default function OwnerDashboardPage() {
           </div>
         ) : (
           <div className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+            <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6 lg:justify-items-center">
               {listings.map((item) => {
                 const effectiveStatus = deriveEffectiveStatus(item);
                 const ui = statusUI(effectiveStatus);
@@ -829,10 +830,10 @@ export default function OwnerDashboardPage() {
                 return (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+                    className="w-full lg:max-w-[520px] rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
                   >
                     <div className="flex flex-col gap-4">
-                      <div className="h-80 w-full overflow-hidden rounded-2xl bg-gray-100 lg:h-64">
+                      <div className="h-100 w-full overflow-hidden rounded-2xl bg-gray-100 lg:h-64">
                         <img
                           src={item.photo}
                           alt={item.title}
