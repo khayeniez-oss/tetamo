@@ -132,10 +132,10 @@ export default function ListingForm(props: Props) {
 
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-6">
           <div>
-            <h1 className="text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl">
+            <h1 className="text-xl font-bold leading-tight text-[#1C1C1E] sm:text-2xl lg:text-3xl">
               {lang === "id" ? "Detail Properti" : "Property Details"}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-gray-600 sm:text-base">
+            <p className="mt-2 text-sm leading-6 text-gray-600">
               {lang === "id"
                 ? "Lengkapi detail agar listing terlihat rapi, premium, dan dipercaya."
                 : "Complete the details so your listing looks neat, premium, and trustworthy."}
@@ -143,7 +143,7 @@ export default function ListingForm(props: Props) {
           </div>
 
           {showPackageBadge && hasPlan && (
-            <span className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold sm:px-5">
+            <span className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold sm:text-sm">
               {lang === "id" ? "Paket:" : "Package:"}{" "}
               {draft?.plan === "featured" ? "Featured" : "Basic"}
             </span>
@@ -151,7 +151,7 @@ export default function ListingForm(props: Props) {
         </div>
 
         <div className="mt-8 rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-10">
-          <div className="p-5 sm:p-8 md:p-10">
+          <div className="p-4 sm:p-6 md:p-8">
             <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-semibold text-[#1C1C1E]">
@@ -554,7 +554,7 @@ export default function ListingForm(props: Props) {
               <div className="md:col-span-2">
                 <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
                   <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
-                    <h2 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                    <h2 className="text-sm font-bold text-[#1C1C1E] sm:text-base">
                       {lang === "id" ? "Fasilitas" : "Facilities"}
                     </h2>
                     <p className="mt-1 text-sm leading-6 text-gray-600">
@@ -629,7 +629,7 @@ export default function ListingForm(props: Props) {
                   </div>
 
                   <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
-                    <h2 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                    <h2 className="text-sm font-bold text-[#1C1C1E] sm:text-base">
                       {lang === "id" ? "Terdekat" : "Nearby"}
                     </h2>
                     <p className="mt-1 text-sm leading-6 text-gray-600">
@@ -861,13 +861,13 @@ export default function ListingForm(props: Props) {
               </div>
             )}
 
-            <div className="mt-8 sm:mt-10">
+            <div className="mt-8">
               <button
                 type="button"
                 onClick={onNext}
                 disabled={!isValid}
                 className={[
-                  "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition sm:py-4 sm:text-base",
+                  "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition",
                   isValid
                     ? "bg-[#1C1C1E] text-white hover:opacity-90"
                     : "cursor-not-allowed bg-gray-200 text-gray-500",

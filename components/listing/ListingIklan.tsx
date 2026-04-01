@@ -383,14 +383,14 @@ export default function ListingIklan({
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-6">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
+              <h1 className="text-xl font-bold leading-tight tracking-tight text-[#1C1C1E] sm:text-2xl lg:text-3xl">
                 {lang === "id" ? "Lokasi Properti" : "Property Location"}
               </h1>
 
               {draft?.mode !== "edit" && draft?.source !== "agent" && (
                 <span
                   className={[
-                    "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs",
+                    "inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-semibold sm:text-[11px]",
                     draft?.plan === "featured"
                       ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600"
                       : draft?.plan === "basic"
@@ -409,7 +409,7 @@ export default function ListingIklan({
               )}
             </div>
 
-            <p className="mt-2 text-sm leading-6 text-gray-600 sm:text-base">
+            <p className="mt-2 text-sm leading-6 text-gray-600">
               {lang === "id"
                 ? "(Step 1) Isi lokasi dulu, lalu lanjut ke detail dan foto."
                 : "(Step 1) Fill in the location first, then continue to details and photos."}
@@ -427,7 +427,7 @@ export default function ListingIklan({
           ) : null}
         </div>
 
-        <div className="h-6 sm:h-8 md:h-10" />
+        <div className="h-5 sm:h-7 md:h-8" />
 
         <div className="mb-6">
           <label className="block text-sm font-semibold text-[#1C1C1E]">
@@ -512,7 +512,7 @@ export default function ListingIklan({
         </div>
 
         <div className="mt-8 rounded-3xl border border-gray-100 bg-white shadow-sm">
-          <div className="p-5 sm:p-8">
+          <div className="p-4 sm:p-6">
             <div ref={addressBoxRef} className="relative">
               <label className="text-sm font-semibold text-[#1C1C1E]">
                 {lang === "id" ? "Alamat Properti" : "Property Address"}{" "}
@@ -708,13 +708,13 @@ export default function ListingIklan({
               />
             </div>
 
-            <div className="mt-8 sm:mt-10">
+            <div className="mt-8">
               <button
                 type="button"
                 onClick={handleNext}
                 disabled={!canNext}
                 className={[
-                  "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition sm:py-4 sm:text-base",
+                  "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition",
                   canNext
                     ? "bg-[#1C1C1E] text-white hover:opacity-90"
                     : "cursor-not-allowed bg-gray-200 text-gray-500",
