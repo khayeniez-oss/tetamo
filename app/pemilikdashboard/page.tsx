@@ -817,7 +817,7 @@ export default function OwnerDashboardPage() {
               return (
                 <div key={item.id} className="p-4 sm:p-6">
                   <div className="flex flex-col gap-4">
-                    <div className="h-44 w-full overflow-hidden rounded-2xl bg-gray-100 sm:h-52">
+                    <div className="h-80 w-full overflow-hidden rounded-2xl bg-gray-100 sm:h-52">
                       <img
                         src={item.photo}
                         alt={item.title}
