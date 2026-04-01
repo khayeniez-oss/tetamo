@@ -629,7 +629,7 @@ export default function ListingFoto({
                 {t.videoOptional}
               </div>
 
-              <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
+              <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
                 {video ? (
                   <video
                     src={video}
