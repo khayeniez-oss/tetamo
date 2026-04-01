@@ -211,14 +211,16 @@ function StatCard({
   Icon: ElementType;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-[#1C1C1E]">{value}</p>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500 sm:text-sm">{title}</p>
+          <p className="mt-2 text-2xl font-semibold text-[#1C1C1E] sm:text-3xl">
+            {value}
+          </p>
         </div>
 
-        <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
           <Icon className="h-5 w-5 text-[#1C1C1E]" />
         </div>
       </div>
@@ -608,18 +610,20 @@ export default function AgentListingSayaPage() {
   const isLoading = loadingProfile || loadingPage;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-8">
+    <div className="min-w-0">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#1C1C1E]">Listing Saya</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+            Listing Saya
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
             Kelola listing yang sedang Anda tangani.
           </p>
         </div>
 
         <button
           onClick={() => router.push("/agentdashboard/leads")}
-          className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto sm:py-2.5"
         >
           + Lihat Leads
         </button>
@@ -631,7 +635,7 @@ export default function AgentListingSayaPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Listing"
           value={isLoading ? "..." : computedStats.totalIklan}
@@ -654,8 +658,8 @@ export default function AgentListingSayaPage() {
         />
       </div>
 
-      <div className="mt-6 relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-700 w-5 h-5" />
+      <div className="relative mt-6">
+        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
 
         <input
           type="text"
@@ -665,17 +669,17 @@ export default function AgentListingSayaPage() {
             setPage(1);
           }}
           placeholder="Cari seperti Google: jakarta rumah 2.5, TTM-2026, apartemen pusat..."
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="w-full rounded-2xl border border-gray-300 pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
         />
       </div>
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 p-4 sm:p-6">
           <div>
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               Listing Saya
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500">
               Daftar listing yang sedang Anda tangani beserta status dan aksi
               cepat.
             </p>
@@ -721,153 +725,161 @@ export default function AgentListingSayaPage() {
               return (
                 <div
                   key={item.id}
-                  className="p-6 flex items-center justify-between gap-6 border-b border-gray-200 last:border-b-0"
+                  className="p-4 sm:p-5 lg:p-6"
                 >
-                  <div className="flex items-center gap-5 min-w-0">
-                    <div className="w-28 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                      <img
-                        src={cover}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                        <div className="h-44 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-24 sm:w-36 lg:h-28 lg:w-40 shrink-0">
+                          <img
+                            src={cover}
+                            alt={item.title}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${ui.badgeClass}`}
+                            >
+                              <BadgeIcon className="h-3.5 w-3.5" />
+                              {ui.label}
+                            </span>
+
+                            {item.boostActive && !isClosed && !isPending && (
+                              <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
+                                <Star className="h-3.5 w-3.5" />
+                                Boosted
+                              </span>
+                            )}
+
+                            {item.spotlightActive && !isClosed && !isPending && (
+                              <span className="inline-flex items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs text-purple-700">
+                                <Gem className="h-4 w-4" />
+                                Spotlight
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                            <span>Kode: {item.kode}</span>
+                            <span className="hidden sm:inline">•</span>
+                            <span>{item.postedDate}</span>
+                            <span className="hidden sm:inline">•</span>
+                            <span>{item.city}</span>
+                          </div>
+
+                          <p className="mt-3 line-clamp-2 text-sm font-medium text-[#1C1C1E] sm:text-base">
+                            {item.title}
+                          </p>
+
+                          <p className="mt-1 text-sm text-gray-500">
+                            {item.price}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <span
-                          className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badgeClass}`}
-                        >
-                          <BadgeIcon className="h-3.5 w-3.5" />
-                          {ui.label}
-                        </span>
-
-                        {item.boostActive && !isClosed && !isPending && (
-                          <span className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
-                            <Star className="h-3.5 w-3.5" />
-                            Boosted
-                          </span>
-                        )}
-
-                        {item.spotlightActive && !isClosed && !isPending && (
-                          <span className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border bg-purple-50 text-purple-700 border-purple-200">
-                            <Gem className="h-4 w-4" />
-                            Spotlight
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-1 flex items-center gap-1 text-xs text-gray-600 flex-wrap">
-                        <span>Kode: {item.kode}</span>
-                        <span>•</span>
-                        <span>{item.postedDate}</span>
-                        <span>•</span>
-                        <span>{item.city}</span>
-                      </div>
-
-                      <p className="mt-3 font-medium text-[#1C1C1E] truncate">
-                        {item.title}
-                      </p>
-
-                      <p className="text-sm text-gray-500">{item.price}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-                    <button
-                      onClick={() =>
-                        router.push(
-                          `/agentdashboard/propertilokasi/edit/${encodeURIComponent(
-                            item.kode
-                          )}`
-                        )
-                      }
-                      className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Edit
-                    </button>
-
-                    {!isClosed &&
-                      !isPending &&
-                      baseStatus === "AKTIF" &&
-                      !item.isPaused && (
-                        <button
-                          onClick={() => toggleJeda(item)}
-                          disabled={isToggling}
-                          className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {isToggling ? "Loading..." : "Jeda"}
-                        </button>
-                      )}
-
-                    {!isClosed && !isPending && item.isPaused && (
-                      <button
-                        onClick={() => toggleJeda(item)}
-                        disabled={isToggling}
-                        className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        {isToggling ? "Loading..." : "Aktifkan"}
-                      </button>
-                    )}
-
-                    {!isClosed && !isPending && (
-                      <>
-                        <button
-                          onClick={() => markTransaction(item, "sold")}
-                          disabled={isMarking}
-                          className="px-4 py-2 rounded-xl border border-emerald-300 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                        >
-                          {isMarking ? "Loading..." : "Sold"}
-                        </button>
-
-                        <button
-                          onClick={() => markTransaction(item, "rented")}
-                          disabled={isMarking}
-                          className="px-4 py-2 rounded-xl border border-sky-300 text-sm text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-                        >
-                          {isMarking ? "Loading..." : "Rented"}
-                        </button>
-                      </>
-                    )}
-
-                    {!isClosed &&
-                      !isPending &&
-                      baseStatus !== "AKTIF" &&
-                      !item.isPaused && (
+                    <div className="w-full xl:w-auto xl:max-w-[520px]">
+                      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                         <button
                           onClick={() =>
-                            openAgentPayment({
-                              kode: item.kode,
-                              propertyId: item.id,
-                              action: "renew",
-                            })
+                            router.push(
+                              `/agentdashboard/propertilokasi/edit/${encodeURIComponent(
+                                item.kode
+                              )}`
+                            )
                           }
-                          className="px-4 py-2 rounded-xl bg-[#1C1C1E] text-white text-sm hover:opacity-90"
+                          className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
-                          Perpanjang
-                        </button>
-                      )}
-
-                    {!isClosed && !isPending && (
-                      <div className="flex items-center gap-2 pl-3 border-l border-gray-200">
-                        <button
-                          onClick={() => activateAddon(item, "boost")}
-                          disabled={isBoosting}
-                          className="px-4 py-2 rounded-xl bg-[#1C1C1E] text-white text-sm hover:opacity-90 inline-flex items-center gap-2 disabled:opacity-50"
-                        >
-                          <Star className="h-4 w-4" />
-                          {isBoosting ? "Loading..." : "Boost"}
+                          Edit
                         </button>
 
-                        <button
-                          onClick={() => activateAddon(item, "spotlight")}
-                          disabled={isSpotlighting}
-                          className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2 disabled:opacity-50"
-                        >
-                          <Gem className="h-4 w-4" />
-                          {isSpotlighting ? "Loading..." : "Spotlight"}
-                        </button>
+                        {!isClosed &&
+                          !isPending &&
+                          baseStatus === "AKTIF" &&
+                          !item.isPaused && (
+                            <button
+                              onClick={() => toggleJeda(item)}
+                              disabled={isToggling}
+                              className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            >
+                              {isToggling ? "Loading..." : "Jeda"}
+                            </button>
+                          )}
+
+                        {!isClosed && !isPending && item.isPaused && (
+                          <button
+                            onClick={() => toggleJeda(item)}
+                            disabled={isToggling}
+                            className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            {isToggling ? "Loading..." : "Aktifkan"}
+                          </button>
+                        )}
+
+                        {!isClosed && !isPending && (
+                          <>
+                            <button
+                              onClick={() => markTransaction(item, "sold")}
+                              disabled={isMarking}
+                              className="rounded-xl border border-emerald-300 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                            >
+                              {isMarking ? "Loading..." : "Sold"}
+                            </button>
+
+                            <button
+                              onClick={() => markTransaction(item, "rented")}
+                              disabled={isMarking}
+                              className="rounded-xl border border-sky-300 px-4 py-2 text-sm text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+                            >
+                              {isMarking ? "Loading..." : "Rented"}
+                            </button>
+                          </>
+                        )}
+
+                        {!isClosed &&
+                          !isPending &&
+                          baseStatus !== "AKTIF" &&
+                          !item.isPaused && (
+                            <button
+                              onClick={() =>
+                                openAgentPayment({
+                                  kode: item.kode,
+                                  propertyId: item.id,
+                                  action: "renew",
+                                })
+                              }
+                              className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90"
+                            >
+                              Perpanjang
+                            </button>
+                          )}
                       </div>
-                    )}
+
+                      {!isClosed && !isPending && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 xl:justify-end xl:border-l xl:border-gray-200 xl:pl-3">
+                          <button
+                            onClick={() => activateAddon(item, "boost")}
+                            disabled={isBoosting}
+                            className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                          >
+                            <Star className="h-4 w-4" />
+                            {isBoosting ? "Loading..." : "Boost"}
+                          </button>
+
+                          <button
+                            onClick={() => activateAddon(item, "spotlight")}
+                            disabled={isSpotlighting}
+                            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <Gem className="h-4 w-4" />
+                            {isSpotlighting ? "Loading..." : "Spotlight"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -876,17 +888,16 @@ export default function AgentListingSayaPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-6">
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-gray-900">
-          Menampilkan {startItem}–{endItem} dari {filteredListings.length}{" "}
-          listing
+          Menampilkan {startItem}–{endItem} dari {filteredListings.length} listing
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-200 disabled:opacity-60"
+            className="rounded-lg border border-gray-200 bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:opacity-60"
           >
             Sebelumnya
           </button>
@@ -895,10 +906,10 @@ export default function AgentListingSayaPage() {
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`rounded-lg border px-3 py-2 text-sm ${
                 page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-400 bg-white text-gray-700"
               }`}
             >
               {p}
@@ -908,7 +919,7 @@ export default function AgentListingSayaPage() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-400 disabled:opacity-60"
+            className="rounded-lg border border-gray-400 bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:opacity-60"
           >
             Berikutnya
           </button>
