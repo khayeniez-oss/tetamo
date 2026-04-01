@@ -505,7 +505,7 @@ export default function ListingFoto({
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           onClick={onBack}
           className="text-sm text-gray-700 hover:text-[#1C1C1E]"
@@ -514,18 +514,20 @@ export default function ListingFoto({
           ← {t.back}
         </button>
 
-        <h1 className="mt-4 text-4xl font-bold text-[#1C1C1E]">
+        <h1 className="mt-4 text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
           {t.pageTitle}
         </h1>
-        <p className="mt-2 max-w-3xl text-gray-600">{t.pageSubtitle}</p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base">
+          {t.pageSubtitle}
+        </p>
 
-        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
           <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm lg:col-span-2">
-            <div className="flex items-center justify-between gap-3 p-5">
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <label
                 htmlFor={photoInputId}
                 className={[
-                  "rounded-2xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white",
+                  "inline-flex items-center justify-center rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white",
                   uploadingPhotos
                     ? "cursor-not-allowed opacity-60"
                     : "cursor-pointer",
@@ -546,7 +548,7 @@ export default function ListingFoto({
 
               <button
                 onClick={clearAllPhotos}
-                className="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold"
+                className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold"
                 type="button"
                 disabled={uploadingPhotos || photos.length === 0}
               >
@@ -564,14 +566,14 @@ export default function ListingFoto({
               />
             </div>
 
-            <div className="px-5 pb-5">
-              <div className="mb-3 text-xs text-gray-500">
+            <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+              <div className="mb-3 text-xs leading-5 text-gray-500">
                 {t.uploadPhotoHint}
               </div>
 
               <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
                 {photos.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-gray-500">
+                  <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
                     {t.noPhotosYet}
                   </div>
                 ) : (
@@ -581,7 +583,7 @@ export default function ListingFoto({
                       className="h-full w-full object-cover"
                       alt="Property"
                     />
-                    <div className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
+                    <div className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-[11px] text-white sm:text-xs">
                       TETAMO
                     </div>
                   </>
@@ -589,10 +591,10 @@ export default function ListingFoto({
               </div>
 
               {photos.length > 0 ? (
-                <p className="mt-3 text-xs text-gray-500">{t.coverNote}</p>
+                <p className="mt-3 text-xs leading-5 text-gray-500">{t.coverNote}</p>
               ) : null}
 
-              <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-6">
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
                 {photos.map((src, idx) => (
                   <div key={idx} className="relative">
                     <button
@@ -614,7 +616,7 @@ export default function ListingFoto({
 
                     <button
                       onClick={() => removePhoto(idx)}
-                      className="absolute -left-2 -top-2 h-6 w-6 rounded-full border border-gray-200 bg-white text-xs"
+                      className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs"
                       type="button"
                     >
                       ×
@@ -623,10 +625,10 @@ export default function ListingFoto({
                 ))}
               </div>
 
-              <div className="mt-10">
-                <div className="flex justify-between text-sm">
+              <div className="mt-8 sm:mt-10">
+                <div className="flex items-center justify-between gap-3 text-sm">
                   <label className="font-semibold">{t.propertyTitle} *</label>
-                  <span className="text-gray-500">
+                  <span className="shrink-0 text-gray-500">
                     {title.length}/{MAX_TITLE}
                   </span>
                 </div>
@@ -639,7 +641,7 @@ export default function ListingFoto({
                       setTitle(nextValue);
                     }
                   }}
-                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-[#1C1C1E] focus:ring-0"
+                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] focus:ring-0"
                   maxLength={MAX_TITLE}
                 />
 
@@ -651,9 +653,9 @@ export default function ListingFoto({
                   </ul>
                 </div>
 
-                <div className="mt-6 flex justify-between text-sm">
+                <div className="mt-6 flex items-center justify-between gap-3 text-sm">
                   <label className="font-semibold">{t.description} *</label>
-                  <span className="text-gray-500">
+                  <span className="shrink-0 text-gray-500">
                     {description.length}/{MAX_DESC}
                   </span>
                 </div>
@@ -665,7 +667,7 @@ export default function ListingFoto({
                       setDescription(capitalizeFirstLetter(e.target.value));
                     }
                   }}
-                  className="mt-2 min-h-[260px] w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-3 outline-none focus:border-[#1C1C1E] focus:ring-0"
+                  className="mt-2 min-h-[220px] w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] focus:ring-0 sm:min-h-[240px] md:min-h-[260px]"
                   maxLength={MAX_DESC}
                 />
 
@@ -678,14 +680,14 @@ export default function ListingFoto({
                 </div>
 
                 {!canContinue ? (
-                  <p className="mt-3 text-xs text-gray-500">{helperMessage}</p>
+                  <p className="mt-3 text-xs leading-5 text-gray-500">{helperMessage}</p>
                 ) : null}
 
                 <button
                   onClick={handleNext}
                   disabled={!canContinue || uploadingPhotos || uploadingVideo}
                   className={[
-                    "mt-8 w-full rounded-2xl py-4 font-semibold transition",
+                    "mt-6 w-full rounded-2xl py-3.5 text-sm font-semibold transition sm:mt-8 sm:py-4 sm:text-base",
                     canContinue && !uploadingPhotos && !uploadingVideo
                       ? "bg-[#1C1C1E] text-white hover:opacity-90"
                       : "cursor-not-allowed bg-gray-200 text-gray-500",
@@ -698,8 +700,10 @@ export default function ListingFoto({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 font-semibold">{t.videoOptional}</div>
+          <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-3 text-sm font-semibold sm:text-base">
+              {t.videoOptional}
+            </div>
 
             <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
               {video ? (
@@ -709,7 +713,7 @@ export default function ListingFoto({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-gray-500">
+                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
                   {t.noVideoYet}
                 </div>
               )}
@@ -718,7 +722,7 @@ export default function ListingFoto({
             <label
               htmlFor={videoInputId}
               className={[
-                "mt-4 block w-full rounded-2xl border border-gray-200 bg-gray-100 py-3 text-center font-semibold",
+                "mt-4 block w-full rounded-2xl border border-gray-200 bg-gray-100 py-3 text-center text-sm font-semibold sm:text-base",
                 uploadingVideo ? "cursor-not-allowed opacity-60" : "cursor-pointer",
               ].join(" ")}
               onClick={(e) => {
@@ -748,7 +752,7 @@ export default function ListingFoto({
             {video ? (
               <button
                 onClick={clearVideo}
-                className="mt-3 w-full rounded-2xl border border-gray-200 py-3 font-semibold"
+                className="mt-3 w-full rounded-2xl border border-gray-200 py-3 text-sm font-semibold sm:text-base"
                 type="button"
               >
                 {t.removeVideo}
