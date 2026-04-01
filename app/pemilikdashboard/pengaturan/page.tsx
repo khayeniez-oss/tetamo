@@ -338,13 +338,13 @@ export default function PemilikPengaturanPage() {
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold text-[#1C1C1E]">{t.pageTitle}</h1>
-        <p className="text-sm text-gray-500">{t.pageSubtitle}</p>
+        <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <input
             ref={fileInputRef}
             id="owner-photo-upload"
@@ -382,10 +382,10 @@ export default function PemilikPengaturanPage() {
             </div>
           </button>
 
-          <p className="mt-2 text-xs text-gray-500">{t.photoHint}</p>
+          <p className="mt-2 text-xs leading-5 text-gray-500">{t.photoHint}</p>
 
           {selectedPhotoFile ? (
-            <p className="mt-1 text-xs font-medium text-[#1C1C1E]">
+            <p className="mt-1 break-words text-xs font-medium text-[#1C1C1E]">
               {t.selectedFile} {selectedPhotoFile.name}
             </p>
           ) : null}
@@ -396,17 +396,17 @@ export default function PemilikPengaturanPage() {
           <p className="text-sm text-gray-500">
             {loadingProfile ? t.loading : owner.agency || "-"}
           </p>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 break-words text-sm text-gray-500">
             {loadingProfile ? t.loading : owner.number || "-"}
           </p>
         </div>
 
         <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 p-6">
+          <div className="border-b border-gray-100 p-5 sm:p-6">
             <h2 className="font-semibold text-[#1C1C1E]">{t.profileOwner}</h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 p-5 sm:p-6 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium text-[#1C1C1E]">
                 {t.fullName}
@@ -473,10 +473,10 @@ export default function PemilikPengaturanPage() {
             </div>
           </div>
 
-          <div className="px-6 pb-6">
-            <div className="border-t border-gray-100 pt-6">
+          <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+            <div className="border-t border-gray-100 pt-5 sm:pt-6">
               <h3 className="font-semibold text-[#1C1C1E]">{t.socialMedia}</h3>
-              <p className="mt-1 text-sm text-gray-500">{t.socialMediaDesc}</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">{t.socialMediaDesc}</p>
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -552,53 +552,53 @@ export default function PemilikPengaturanPage() {
             </div>
           </div>
 
-          <div className="px-6 pb-6">
-            <div className="border-t border-gray-100 pt-6">
+          <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+            <div className="border-t border-gray-100 pt-5 sm:pt-6">
               <h3 className="font-semibold text-[#1C1C1E]">{t.notifications}</h3>
-              <p className="mt-1 text-sm text-gray-500">{t.notificationsDesc}</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">{t.notificationsDesc}</p>
 
               <div className="mt-4 space-y-4">
-                <label className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                  <div>
+                <label className="flex flex-col gap-3 rounded-xl border border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-[#1C1C1E]">
                       {t.newLeadNotif}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs leading-5 text-gray-500">
                       {t.newLeadNotifDesc}
                     </p>
                   </div>
-                  <input type="checkbox" defaultChecked />
+                  <input type="checkbox" defaultChecked className="shrink-0" />
                 </label>
 
-                <label className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                  <div>
+                <label className="flex flex-col gap-3 rounded-xl border border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-[#1C1C1E]">
                       {t.adRenewalReminder}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs leading-5 text-gray-500">
                       {t.adRenewalReminderDesc}
                     </p>
                   </div>
-                  <input type="checkbox" defaultChecked />
+                  <input type="checkbox" defaultChecked className="shrink-0" />
                 </label>
 
-                <label className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                  <div>
+                <label className="flex flex-col gap-3 rounded-xl border border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-[#1C1C1E]">
                       {t.paymentUpdates}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs leading-5 text-gray-500">
                       {t.paymentUpdatesDesc}
                     </p>
                   </div>
-                  <input type="checkbox" defaultChecked />
+                  <input type="checkbox" defaultChecked className="shrink-0" />
                 </label>
               </div>
             </div>
           </div>
 
           {message ? (
-            <div className="px-6 pb-2">
+            <div className="px-5 pb-2 sm:px-6">
               <p
                 className={`text-sm ${
                   messageType === "error" ? "text-red-600" : "text-green-600"
@@ -609,14 +609,16 @@ export default function PemilikPengaturanPage() {
             </div>
           ) : null}
 
-          <div className="flex justify-end px-6 pb-6">
-            <button
-              onClick={handleSave}
-              disabled={loadingProfile || saving || uploadingPhoto}
-              className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
-            >
-              {saving || uploadingPhoto ? t.saving : t.saveChanges}
-            </button>
+          <div className="px-5 pb-5 sm:px-6 sm:pb-6">
+            <div className="flex justify-stretch sm:justify-end">
+              <button
+                onClick={handleSave}
+                disabled={loadingProfile || saving || uploadingPhoto}
+                className="w-full rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:w-auto"
+              >
+                {saving || uploadingPhoto ? t.saving : t.saveChanges}
+              </button>
+            </div>
           </div>
         </div>
       </div>
