@@ -5,6 +5,7 @@ import {
   getAnyProductById,
   getOwnerPackageById,
   getAgentPackageById,
+  getAddOnProductById,
 } from "@/app/data/pricelist";
 import type {
   TetamoGateway,
@@ -38,6 +39,13 @@ type CreatePaymentBody = Partial<TetamoPayment> & {
   successUrl?: string;
   cancelUrl?: string;
 };
+
+type PaymentMetadata = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
+type BillingCycle = "monthly" | "yearly";
 
 function normalizePaymentMethod(value: unknown): TetamoPaymentMethod {
   const v = String(value || "card").toLowerCase();
@@ -100,20 +108,144 @@ function normalizeFlow(
   return "new-listing";
 }
 
-function buildProductName(payment: TetamoPayment) {
+function normalizeBillingCycle(value: unknown): BillingCycle | null {
+  const v = String(value || "").toLowerCase();
+
+  if (v === "monthly" || v === "yearly") {
+    return v;
+  }
+
+  return null;
+}
+
+function getMetadataString(
+  metadata: PaymentMetadata | undefined,
+  key: string
+): string | null {
+  const value = metadata?.[key];
+
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  return null;
+}
+
+function resolveSelectedBillingCycle(body: CreatePaymentBody): BillingCycle | null {
+  const metadata = (body?.metadata || {}) as PaymentMetadata;
+
+  return (
+    normalizeBillingCycle(metadata.selectedBillingCycle) ||
+    normalizeBillingCycle(metadata.billingCycle) ||
+    null
+  );
+}
+
+function resolveProductConfig(
+  productId: string,
+  userType: TetamoUserType,
+  productType: TetamoProductType
+) {
+  const normalizedProductId = String(productId || "").toLowerCase();
+
+  if (!normalizedProductId) return null;
+
+  if (productType === "membership" && userType === "agent") {
+    return getAgentPackageById(normalizedProductId);
+  }
+
+  if (productType === "listing" && userType === "owner") {
+    return getOwnerPackageById(normalizedProductId);
+  }
+
+  if (productType === "addon") {
+    return getAddOnProductById(normalizedProductId);
+  }
+
+  return getAnyProductById(normalizedProductId);
+}
+
+function buildProductName(
+  payment: TetamoPayment,
+  productConfig: any,
+  selectedBillingCycle: BillingCycle | null
+) {
   if (payment.productType === "membership") {
-    return `Tetamo Agent Membership - ${payment.productId}`;
+    const packageName = productConfig?.name || payment.productId;
+
+    if (selectedBillingCycle === "monthly") {
+      return `${packageName} - Monthly Billing`;
+    }
+
+    return `${packageName} - Yearly Billing`;
   }
 
   if (payment.productType === "addon") {
-    return `Tetamo Add-On - ${payment.productId}`;
+    return productConfig?.name || `Tetamo Add-On - ${payment.productId}`;
   }
 
   if (payment.flow === "renew-listing") {
     return `Tetamo Listing Renewal - ${payment.listingCode || payment.productId}`;
   }
 
-  return `Tetamo Listing Payment - ${payment.productId}`;
+  return productConfig?.name || `Tetamo Listing Payment - ${payment.productId}`;
+}
+
+function buildPaymentText(
+  payment: TetamoPayment,
+  productConfig: any,
+  selectedBillingCycle: BillingCycle | null
+) {
+  const fallbackName = buildProductName(payment, productConfig, selectedBillingCycle);
+
+  if (payment.productType === "membership") {
+    const packageName = productConfig?.name || payment.productId;
+
+    if (selectedBillingCycle === "monthly") {
+      return {
+        productName: `${packageName} - Monthly Billing`,
+        paymentTitle: `${packageName} Membership - Monthly Billing`,
+        paymentDescription:
+          productConfig?.paymentDescription ||
+          `Monthly billing for ${packageName} membership.`,
+        billingNote:
+          productConfig?.monthlyBillingNote ||
+          productConfig?.billingNote ||
+          `Monthly billing is active for this package.`,
+      };
+    }
+
+    return {
+      productName: packageName,
+      paymentTitle: productConfig?.paymentTitle || `${packageName} Membership`,
+      paymentDescription:
+        productConfig?.paymentDescription ||
+        `Yearly billing for ${packageName} membership.`,
+      billingNote:
+        productConfig?.billingNote ||
+        `Yearly billing is active for this package.`,
+    };
+  }
+
+  if (payment.productType === "addon") {
+    return {
+      productName: productConfig?.name || fallbackName,
+      paymentTitle: productConfig?.paymentTitle || fallbackName,
+      paymentDescription:
+        productConfig?.paymentDescription || `Payment for ${fallbackName}.`,
+      billingNote:
+        productConfig?.billingNote || `Billing note for ${fallbackName}.`,
+    };
+  }
+
+  return {
+    productName: productConfig?.name || fallbackName,
+    paymentTitle: productConfig?.paymentTitle || fallbackName,
+    paymentDescription:
+      productConfig?.paymentDescription || `Payment for ${fallbackName}.`,
+    billingNote:
+      productConfig?.billingNote || `Billing note for ${fallbackName}.`,
+  };
 }
 
 function buildDefaultSuccessUrl(origin: string, payment: TetamoPayment): string {
@@ -192,17 +324,38 @@ function resolveAuthoritativeAmount(
   productId: string,
   userType: TetamoUserType,
   productType: TetamoProductType,
-  fallbackAmount: number
+  fallbackAmount: number,
+  selectedBillingCycle: BillingCycle | null
 ) {
   const normalizedProductId = String(productId || "").toLowerCase();
 
-  const anyProduct = getAnyProductById(normalizedProductId);
-  if (anyProduct && typeof anyProduct.priceIdr === "number" && anyProduct.priceIdr > 0) {
-    return anyProduct.priceIdr;
+  if (
+    productType === "membership" &&
+    userType === "agent"
+  ) {
+    const agentPackage: any = getAgentPackageById(normalizedProductId);
+
+    if (agentPackage) {
+      if (
+        selectedBillingCycle === "monthly" &&
+        typeof agentPackage.monthlyPriceIdr === "number" &&
+        agentPackage.monthlyPriceIdr > 0
+      ) {
+        return agentPackage.monthlyPriceIdr;
+      }
+
+      if (
+        typeof agentPackage.priceIdr === "number" &&
+        agentPackage.priceIdr > 0
+      ) {
+        return agentPackage.priceIdr;
+      }
+    }
   }
 
   if (productType === "listing" && userType === "owner") {
     const ownerPackage = getOwnerPackageById(normalizedProductId);
+
     if (
       ownerPackage &&
       typeof ownerPackage.priceIdr === "number" &&
@@ -212,15 +365,22 @@ function resolveAuthoritativeAmount(
     }
   }
 
-  if (productType === "membership" && userType === "agent") {
-    const agentPackage = getAgentPackageById(normalizedProductId);
+  if (productType === "addon") {
+    const addOnProduct = getAddOnProductById(normalizedProductId);
+
     if (
-      agentPackage &&
-      typeof agentPackage.priceIdr === "number" &&
-      agentPackage.priceIdr > 0
+      addOnProduct &&
+      typeof addOnProduct.priceIdr === "number" &&
+      addOnProduct.priceIdr > 0
     ) {
-      return agentPackage.priceIdr;
+      return addOnProduct.priceIdr;
     }
+  }
+
+  const anyProduct = getAnyProductById(normalizedProductId);
+
+  if (anyProduct && typeof anyProduct.priceIdr === "number" && anyProduct.priceIdr > 0) {
+    return anyProduct.priceIdr;
   }
 
   return Number(fallbackAmount || 0);
@@ -240,19 +400,22 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json()) as CreatePaymentBody;
+    const bodyMetadata = (body?.metadata || {}) as PaymentMetadata;
 
     const paymentMethod = normalizePaymentMethod(body?.paymentMethod);
     const userType = normalizeUserType(body?.userType);
     const productType = normalizeProductType(body?.productType);
     const flow = normalizeFlow(body?.flow, productType);
     const gateway = normalizeGateway(body?.gateway, paymentMethod);
+    const selectedBillingCycle = resolveSelectedBillingCycle(body);
 
     const requestedAmount = Number(body?.amount || 0);
     const authoritativeAmount = resolveAuthoritativeAmount(
       String(body?.productId || ""),
       userType,
       productType,
-      requestedAmount
+      requestedAmount,
+      selectedBillingCycle
     );
 
     const paymentRequest: TetamoPayment = {
@@ -282,7 +445,12 @@ export async function POST(req: Request) {
       updatedAt: new Date().toISOString(),
       paidAt: undefined,
       expiresAt: undefined,
-      metadata: body?.metadata ?? {},
+      metadata: {
+        ...bodyMetadata,
+        selectedBillingCycle:
+          selectedBillingCycle ||
+          getMetadataString(bodyMetadata, "selectedBillingCycle"),
+      },
     };
 
     if (!paymentRequest.userId) {
@@ -315,6 +483,18 @@ export async function POST(req: Request) {
       );
     }
 
+    const productConfig = resolveProductConfig(
+      paymentRequest.productId,
+      paymentRequest.userType,
+      paymentRequest.productType
+    );
+
+    const textData = buildPaymentText(
+      paymentRequest,
+      productConfig,
+      selectedBillingCycle
+    );
+
     const requestOrigin = new URL(req.url).origin;
     const successUrl =
       body.successUrl || buildDefaultSuccessUrl(requestOrigin, paymentRequest);
@@ -330,6 +510,11 @@ export async function POST(req: Request) {
       product_id: paymentRequest.productId,
       product_type: paymentRequest.productType,
       listing_code: paymentRequest.listingCode || null,
+
+      product_name: textData.productName,
+      payment_title: textData.paymentTitle,
+      payment_description: textData.paymentDescription,
+      billing_note: textData.billingNote,
 
       amount: paymentRequest.amount,
       currency: paymentRequest.currency,
@@ -354,6 +539,7 @@ export async function POST(req: Request) {
         stage: "created",
         requestedAmount,
         authoritativeAmount,
+        selectedBillingCycle,
       },
 
       created_at: paymentRequest.createdAt,
@@ -389,6 +575,7 @@ export async function POST(req: Request) {
             stage: "gateway_not_implemented",
             gateway,
             message: "Xendit checkout is not implemented yet.",
+            selectedBillingCycle,
           },
         })
         .eq("id", paymentRequest.id);
@@ -415,6 +602,7 @@ export async function POST(req: Request) {
           raw_response: {
             stage: "stripe_not_configured",
             message: "STRIPE_SECRET_KEY is missing.",
+            selectedBillingCycle,
           },
         })
         .eq("id", paymentRequest.id);
@@ -444,6 +632,7 @@ export async function POST(req: Request) {
         productId: paymentRequest.productId,
         productType: paymentRequest.productType,
         listingCode: paymentRequest.listingCode || "",
+        selectedBillingCycle: selectedBillingCycle || "",
       },
 
       line_items: [
@@ -451,7 +640,7 @@ export async function POST(req: Request) {
           price_data: {
             currency: "idr",
             product_data: {
-              name: buildProductName(paymentRequest),
+              name: textData.productName,
             },
             unit_amount: stripeAmount,
           },
@@ -468,6 +657,10 @@ export async function POST(req: Request) {
     const { error: updateError } = await admin
       .from("payments")
       .update({
+        product_name: textData.productName,
+        payment_title: textData.paymentTitle,
+        payment_description: textData.paymentDescription,
+        billing_note: textData.billingNote,
         checkout_url: session.url ?? null,
         gateway_reference: session.id,
         reference: session.id,
@@ -487,6 +680,7 @@ export async function POST(req: Request) {
           cancelUrl,
           requestedAmount,
           authoritativeAmount,
+          selectedBillingCycle,
           stripeAmount,
         },
       })
