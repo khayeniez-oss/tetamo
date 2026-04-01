@@ -277,24 +277,24 @@ Are you still interested?`,
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold text-[#1C1C1E]">{t.pageTitle}</h1>
-        <p className="text-sm text-gray-500">{t.pageSubtitle}</p>
+        <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 p-6">
+        <div className="border-b border-gray-100 p-4 sm:p-6">
           <h2 className="font-semibold text-[#1C1C1E]">{t.listTitle}</h2>
         </div>
 
         {isLoading ? (
-          <div className="p-6 text-sm text-gray-500">{t.loadingLeads}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.loadingLeads}</div>
         ) : errorMessage ? (
-          <div className="p-6 text-sm text-red-600">
+          <div className="p-4 text-sm text-red-600 sm:p-6">
             {t.failedToLoad} {errorMessage}
           </div>
         ) : leads.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">{t.emptyLeads}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.emptyLeads}</div>
         ) : (
           <div className="divide-y divide-gray-100">
             {leads.map((lead) => {
@@ -305,9 +305,9 @@ Are you still interested?`,
               return (
                 <div
                   key={lead.id}
-                  className="flex items-start justify-between gap-6 p-6"
+                  className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
                       <span
                         className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${ui.badgeClass}`}
@@ -324,7 +324,7 @@ Are you still interested?`,
                       </div>
                     </div>
 
-                    <p className="mt-3 font-medium text-[#1C1C1E]">
+                    <p className="mt-3 break-words text-sm font-medium text-[#1C1C1E] sm:text-base">
                       {lead.sender_name || t.noName}
                     </p>
 
@@ -333,34 +333,38 @@ Are you still interested?`,
                     </p>
 
                     {lead.sender_email ? (
-                      <p className="text-sm text-gray-500">{lead.sender_email}</p>
+                      <p className="break-words text-sm text-gray-500">
+                        {lead.sender_email}
+                      </p>
                     ) : null}
 
                     {lead.message ? (
-                      <p className="mt-3 text-sm text-gray-700">{lead.message}</p>
+                      <p className="mt-3 text-sm leading-6 text-gray-700">
+                        {lead.message}
+                      </p>
                     ) : null}
 
                     {lead.lead_type === "viewing" ? (
-                      <div className="mt-3 text-xs text-blue-600">
+                      <div className="mt-3 text-xs leading-5 text-blue-600">
                         {t.viewingSchedule}:{" "}
                         {viewingScheduleLabel(lead.viewing_date, lead.viewing_time)}
                       </div>
                     ) : null}
 
                     {lead.notes ? (
-                      <div className="mt-2 text-xs text-gray-500">
+                      <div className="mt-2 text-xs leading-5 text-gray-500">
                         {t.notes}: {lead.notes}
                       </div>
                     ) : null}
 
                     {lead.priority ? (
-                      <div className="mt-1 text-xs text-gray-500">
+                      <div className="mt-1 text-xs leading-5 text-gray-500">
                         {t.priority}: {lead.priority}
                       </div>
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
                     <button
                       onClick={() => handleCall(lead)}
                       disabled={isUpdating || !hasPhone}
