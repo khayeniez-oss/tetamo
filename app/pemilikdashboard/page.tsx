@@ -272,14 +272,16 @@ function StatCard({
   Icon: ElementType;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-[#1C1C1E]">{value}</p>
+          <p className="mt-2 text-2xl font-semibold text-[#1C1C1E] sm:text-3xl">
+            {value}
+          </p>
         </div>
 
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
           <Icon className="h-5 w-5 text-[#1C1C1E]" />
         </div>
       </div>
@@ -716,15 +718,15 @@ export default function OwnerDashboardPage() {
 
   return (
     <div>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1C1C1E]">{t.pageTitle}</h1>
-          <p className="text-sm text-gray-500">{t.pageSubtitle}</p>
+          <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
         </div>
 
         <button
           onClick={() => router.push("/pemilik/iklan")}
-          className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+          className="inline-flex items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
         >
           {t.createListing}
         </button>
@@ -736,7 +738,7 @@ export default function OwnerDashboardPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title={t.totalListings}
           value={isLoading ? "..." : computedStats.totalIklan}
@@ -760,7 +762,7 @@ export default function OwnerDashboardPage() {
       </div>
 
       <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-100 p-6">
+        <div className="border-b border-gray-100 p-4 sm:p-6">
           <div>
             <h2 className="text-lg font-semibold text-[#1C1C1E]">
               {t.myListings}
@@ -770,9 +772,9 @@ export default function OwnerDashboardPage() {
         </div>
 
         {isLoading ? (
-          <div className="p-6 text-sm text-gray-500">{t.loadingDashboard}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.loadingDashboard}</div>
         ) : listings.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">{t.noListings}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.noListings}</div>
         ) : (
           <div className="divide-y divide-gray-100">
             {listings.map((item) => {
@@ -811,10 +813,10 @@ export default function OwnerDashboardPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between gap-6 border-b border-gray-200 p-6 last:border-b-0"
+                  className="flex flex-col gap-4 p-4 sm:p-6 xl:flex-row xl:items-center xl:justify-between xl:gap-6"
                 >
-                  <div className="flex min-w-0 items-center gap-5">
-                    <div className="h-20 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                  <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+                    <div className="h-24 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-28 sm:shrink-0">
                       <img
                         src={item.photo}
                         alt={item.title}
@@ -855,16 +857,16 @@ export default function OwnerDashboardPage() {
                           </span>
                         ) : null}
 
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                           <span>
                             {t.code}: {item.kode}
                           </span>
-                          <span>•</span>
+                          <span className="hidden sm:inline">•</span>
                           <span>{item.postedDate}</span>
                         </div>
                       </div>
 
-                      <p className="mt-3 truncate font-medium text-[#1C1C1E]">
+                      <p className="mt-3 break-words text-sm font-medium text-[#1C1C1E] sm:text-base">
                         {item.title}
                       </p>
 
@@ -872,7 +874,7 @@ export default function OwnerDashboardPage() {
                         {formatCurrency(item.price, locale)}
                       </p>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
                         <span>
                           {t.listingUntil}:{" "}
                           {formatDisplayDate(item.listingExpiresAt, locale)}
@@ -916,7 +918,7 @@ export default function OwnerDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                     <button
                       onClick={() => {
                         if (!canEdit) return;
