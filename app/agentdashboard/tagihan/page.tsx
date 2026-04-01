@@ -1,59 +1,106 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import type { ElementType } from "react";
-import {
-  CreditCard,
-  RefreshCcw,
-  FileText,
-  ShieldCheck,
-} from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { AGENT_PACKAGES } from "@/app/data/pricelist";
-import { useAgentProfile } from "../layout";
+import {
+  CalendarDays,
+  RotateCcw,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 
-type BillingStatus =
-  | "pending"
-  | "paid"
-  | "failed"
-  | "expired"
-  | "cancelled"
-  | "refunded";
+type ViewingStatus = "scheduled" | "rescheduled" | "done" | "no_show";
+type LeadDbStatus = "new" | "contacted" | "viewing" | "interested" | "closed";
 
-type PaymentRow = {
+type LeadRow = {
   id: string;
-  product_id: string | null;
-  product_type: string | null;
-  flow: string | null;
-  amount: number | null;
-  currency: string | null;
-  status: BillingStatus | null;
-  gateway: string | null;
-  payment_method: string | null;
-  checkout_url: string | null;
-  gateway_reference: string | null;
-  auto_renew: boolean | null;
-  paid_at: string | null;
-  expires_at: string | null;
+  property_id: string | null;
+  sender_name: string | null;
+  sender_phone: string | null;
+  sender_email: string | null;
+  message: string | null;
   created_at: string | null;
+  status: string | null;
+  lead_type: string | null;
+  viewing_date: string | null;
+  viewing_time: string | null;
+  viewing_status: string | null;
+  receiver_user_id: string | null;
+  receiver_role: string | null;
 };
 
-type BillingItem = {
+type PropertyRow = {
   id: string;
-  title: string;
-  amount: number;
-  status: BillingStatus;
-  gateway: string;
-  paymentMethod: string;
-  createdAt: string;
-  paidAt: string | null;
-  checkoutUrl: string;
-  autoRenew: boolean;
-  productId: string;
-  productType: string;
-  flow: string;
+  kode: string | null;
+  title: string | null;
+  city: string | null;
+  area: string | null;
+  province: string | null;
 };
+
+type Viewing = {
+  id: string;
+  listingKode: string;
+  propertyTitle: string;
+  buyerName: string;
+  buyerPhone: string;
+  buyerEmail: string;
+  viewingDate: string;
+  viewingTime: string;
+  viewingDateRaw: string | null;
+  viewingTimeRaw: string | null;
+  location: string;
+  status: ViewingStatus;
+  dbStatus: LeadDbStatus;
+};
+
+function normalizeLeadDbStatus(value?: string | null): LeadDbStatus {
+  const v = (value || "").trim().toLowerCase();
+
+  if (v === "contacted") return "contacted";
+  if (v === "viewing") return "viewing";
+  if (v === "interested") return "interested";
+  if (v === "closed") return "closed";
+  return "new";
+}
+
+function normalizeViewingStatus(value?: string | null): ViewingStatus {
+  const v = (value || "").trim().toLowerCase();
+
+  if (v === "rescheduled") return "rescheduled";
+  if (v === "done") return "done";
+  if (v === "no_show") return "no_show";
+  return "scheduled";
+}
+
+function viewingStatusUI(status: ViewingStatus) {
+  if (status === "scheduled") {
+    return {
+      label: "Jadwal Viewing",
+      badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    };
+  }
+
+  if (status === "rescheduled") {
+    return {
+      label: "Dijadwalkan Ulang",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
+    };
+  }
+
+  if (status === "done") {
+    return {
+      label: "Selesai",
+      badgeClass: "bg-green-50 text-green-700 border-green-200",
+    };
+  }
+
+  return {
+    label: "No Show",
+    badgeClass: "bg-red-50 text-red-700 border-red-200",
+  };
+}
 
 function StatCard({
   title,
@@ -64,24 +111,17 @@ function StatCard({
   value: string | number;
   Icon: ElementType;
 }) {
-  const isLongText = typeof value === "string" && value.length > 12;
-
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <p className="text-xs text-gray-500 sm:text-sm">{title}</p>
-          <p
-            className={[
-              "mt-2 break-words font-semibold leading-tight text-[#1C1C1E]",
-              isLongText ? "text-base sm:text-lg" : "text-2xl sm:text-3xl",
-            ].join(" ")}
-          >
+          <p className="mt-2 text-2xl font-semibold leading-none text-[#1C1C1E] sm:text-3xl">
             {value}
           </p>
         </div>
 
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-11 sm:w-11">
           <Icon className="h-5 w-5 text-[#1C1C1E]" />
         </div>
       </div>
@@ -89,19 +129,11 @@ function StatCard({
   );
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 function formatDate(value?: string | null) {
   if (!value) return "-";
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+  if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
@@ -110,263 +142,351 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-function addDays(dateValue: string, days: number) {
-  const d = new Date(dateValue);
-  if (Number.isNaN(d.getTime())) return "-";
-  d.setDate(d.getDate() + days);
-  return formatDate(d.toISOString());
+function normalizePhoneForWhatsapp(phone?: string | null) {
+  if (!phone) return "";
+  const digits = phone.replace(/[^\d]/g, "");
+
+  if (digits.startsWith("62")) return digits;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  if (digits.startsWith("8")) return `62${digits}`;
+
+  return digits;
 }
 
-function normalizeStatus(value?: string | null): BillingStatus {
-  const v = String(value || "").toLowerCase();
-
-  if (
-    v === "paid" ||
-    v === "failed" ||
-    v === "expired" ||
-    v === "cancelled" ||
-    v === "refunded"
-  ) {
-    return v;
-  }
-
-  return "pending";
+function normalizePhoneForCall(phone?: string | null) {
+  if (!phone) return "";
+  return phone.replace(/[^\d+]/g, "");
 }
 
-function paymentStatusUI(status: BillingStatus) {
-  if (status === "paid") {
-    return {
-      label: "Paid",
-      className: "bg-green-50 text-green-700 border-green-200",
-    };
-  }
-
-  if (status === "pending") {
-    return {
-      label: "Pending",
-      className: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    };
-  }
-
-  if (status === "expired") {
-    return {
-      label: "Expired",
-      className: "bg-orange-50 text-orange-700 border-orange-200",
-    };
-  }
-
-  if (status === "cancelled") {
-    return {
-      label: "Cancelled",
-      className: "bg-gray-100 text-gray-700 border-gray-200",
-    };
-  }
-
-  if (status === "refunded") {
-    return {
-      label: "Refunded",
-      className: "bg-sky-50 text-sky-700 border-sky-200",
-    };
-  }
-
-  return {
-    label: "Failed",
-    className: "bg-red-50 text-red-700 border-red-200",
-  };
+function buildLocation(property?: PropertyRow | null) {
+  if (!property) return "-";
+  return (
+    [property.area, property.city, property.province]
+      .filter(Boolean)
+      .join(", ") || "-"
+  );
 }
 
-function humanizeGateway(value?: string | null) {
-  if (!value) return "-";
-  if (value.toLowerCase() === "stripe") return "Stripe";
-  if (value.toLowerCase() === "xendit") return "Xendit";
-  return value;
+function sortViewingItems(items: Viewing[]) {
+  return [...items].sort((a, b) => {
+    const aDate = a.viewingDateRaw
+      ? new Date(`${a.viewingDateRaw}T${a.viewingTimeRaw || "00:00"}`).getTime()
+      : 0;
+    const bDate = b.viewingDateRaw
+      ? new Date(`${b.viewingDateRaw}T${b.viewingTimeRaw || "00:00"}`).getTime()
+      : 0;
+
+    if (aDate === bDate) return b.id.localeCompare(a.id);
+    if (aDate === 0) return 1;
+    if (bDate === 0) return -1;
+
+    return aDate - bDate;
+  });
 }
 
-function humanizePaymentMethod(value?: string | null) {
-  if (!value) return "-";
-
-  const v = value.toLowerCase();
-
-  if (v === "card") return "Card";
-  if (v === "bank_transfer") return "Bank Transfer";
-  if (v === "virtual_account") return "Virtual Account";
-  if (v === "qris") return "QRIS";
-  if (v === "ewallet") return "E-Wallet";
-
-  return value;
-}
-
-function buildBillingTitle(row: PaymentRow) {
-  const productType = String(row.product_type || "").toLowerCase();
-  const productId = String(row.product_id || "").toLowerCase();
-  const flow = String(row.flow || "").toLowerCase();
-
-  if (productType === "membership") {
-    const matchedPackage = AGENT_PACKAGES.find((pkg) => pkg.id === productId);
-    return matchedPackage?.name || "Membership Agent";
-  }
-
-  if (productType === "addon") {
-    if (productId === "boost-listing") return "Boost Listing";
-    if (productId === "homepage-spotlight") return "Homepage Spotlight";
-    return "Add-On";
-  }
-
-  if (flow === "renew-listing") {
-    return "Renew Listing";
-  }
-
-  return "Pembayaran Listing";
-}
-
-export default function AgentTagihanPage() {
-  const sp = useSearchParams();
-  const { userId } = useAgentProfile();
-
-  const [billingHistory, setBillingHistory] = useState<BillingItem[]>([]);
+export default function AgentJadwalViewingPage() {
+  const [viewings, setViewings] = useState<Viewing[]>([]);
+  const [agentName, setAgentName] = useState("Agent TETAMO");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const paymentState = sp.get("payment");
-  const justPaid = paymentState === "success";
-  const justCancelled = paymentState === "cancelled";
+  const [rescheduleTarget, setRescheduleTarget] = useState<Viewing | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
+
+  const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
-    let ignore = false;
+    let isMounted = true;
 
-    async function loadPayments() {
-      if (!userId) {
-        setBillingHistory([]);
-        setLoading(false);
-        setErrorMessage("User agent tidak ditemukan.");
-        return;
-      }
-
+    async function loadViewings() {
       setLoading(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase
-        .from("payments")
-        .select(
-          "id, product_id, product_type, flow, amount, currency, status, gateway, payment_method, checkout_url, gateway_reference, auto_renew, paid_at, expires_at, created_at"
-        )
-        .eq("user_id", userId)
-        .eq("user_type", "agent")
-        .order("created_at", { ascending: false });
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      if (ignore) return;
+      if (!isMounted) return;
 
-      if (error) {
-        setBillingHistory([]);
+      if (authError || !user) {
+        setViewings([]);
         setLoading(false);
-        setErrorMessage(error.message || "Gagal memuat tagihan.");
+        setErrorMessage("Silakan login sebagai agent terlebih dahulu.");
         return;
       }
 
-      const mapped: BillingItem[] = ((data || []) as PaymentRow[]).map((row) => ({
-        id: row.id,
-        title: buildBillingTitle(row),
-        amount: Number(row.amount || 0),
-        status: normalizeStatus(row.status),
-        gateway: humanizeGateway(row.gateway),
-        paymentMethod: humanizePaymentMethod(row.payment_method),
-        createdAt: formatDate(row.created_at),
-        paidAt: row.paid_at,
-        checkoutUrl: row.checkout_url || "",
-        autoRenew: Boolean(row.auto_renew),
-        productId: row.product_id || "",
-        productType: row.product_type || "",
-        flow: row.flow || "",
-      }));
+      const [{ data: profileData }, { data: leadsData, error: leadsError }] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("leads")
+            .select(
+              "id, property_id, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role"
+            )
+            .eq("receiver_user_id", user.id)
+            .eq("receiver_role", "agent")
+            .eq("lead_type", "viewing")
+            .order("created_at", { ascending: false }),
+        ]);
 
-      setBillingHistory(mapped);
+      if (!isMounted) return;
+
+      if (profileData?.full_name) {
+        setAgentName(profileData.full_name);
+      }
+
+      if (leadsError) {
+        setViewings([]);
+        setLoading(false);
+        setErrorMessage(leadsError.message);
+        return;
+      }
+
+      const leadRows = (leadsData || []) as LeadRow[];
+
+      const propertyIds = Array.from(
+        new Set(leadRows.map((lead) => lead.property_id).filter(Boolean))
+      ) as string[];
+
+      let propertyMap = new Map<string, PropertyRow>();
+
+      if (propertyIds.length > 0) {
+        const { data: propertiesData, error: propertiesError } = await supabase
+          .from("properties")
+          .select("id, kode, title, city, area, province")
+          .in("id", propertyIds);
+
+        if (!isMounted) return;
+
+        if (propertiesError) {
+          setViewings([]);
+          setLoading(false);
+          setErrorMessage(propertiesError.message);
+          return;
+        }
+
+        propertyMap = new Map(
+          ((propertiesData || []) as PropertyRow[]).map((item) => [item.id, item])
+        );
+      }
+
+      const mapped = sortViewingItems(
+        leadRows.map((lead) => {
+          const property = lead.property_id ? propertyMap.get(lead.property_id) : null;
+
+          return {
+            id: lead.id,
+            listingKode: property?.kode || "-",
+            propertyTitle: property?.title || "Properti",
+            buyerName: lead.sender_name || "Tanpa Nama",
+            buyerPhone: lead.sender_phone || "-",
+            buyerEmail: lead.sender_email || "-",
+            viewingDate: formatDate(lead.viewing_date),
+            viewingTime: lead.viewing_time || "-",
+            viewingDateRaw: lead.viewing_date,
+            viewingTimeRaw: lead.viewing_time,
+            location: buildLocation(property),
+            status: normalizeViewingStatus(lead.viewing_status),
+            dbStatus: normalizeLeadDbStatus(lead.status),
+          } satisfies Viewing;
+        })
+      );
+
+      setViewings(mapped);
       setLoading(false);
     }
 
-    loadPayments();
+    loadViewings();
 
     return () => {
-      ignore = true;
+      isMounted = false;
     };
-  }, [userId]);
-
-  const latestMembershipPayment = useMemo(() => {
-    return billingHistory.find(
-      (item) => item.productType.toLowerCase() === "membership"
-    );
-  }, [billingHistory]);
-
-  const latestPaidMembership = useMemo(() => {
-    return billingHistory.find(
-      (item) =>
-        item.productType.toLowerCase() === "membership" && item.status === "paid"
-    );
-  }, [billingHistory]);
-
-  const membership = useMemo(() => {
-    const productId = latestMembershipPayment?.productId || "";
-    return (
-      AGENT_PACKAGES.find((pkg) => pkg.id === productId) || AGENT_PACKAGES[0]
-    );
-  }, [latestMembershipPayment]);
+  }, []);
 
   const summary = useMemo(() => {
-    const paidCount = billingHistory.filter((item) => item.status === "paid").length;
-    const pendingCount = billingHistory.filter(
-      (item) => item.status === "pending"
-    ).length;
-
-    const lastPaid = billingHistory.find((item) => item.status === "paid");
-
     return {
-      totalInvoices: billingHistory.length,
-      paidCount,
-      pendingCount,
-      lastPaidAmount: lastPaid ? formatCurrency(lastPaid.amount) : "-",
+      scheduled: viewings.filter((v) => v.status === "scheduled").length,
+      rescheduled: viewings.filter((v) => v.status === "rescheduled").length,
+      done: viewings.filter((v) => v.status === "done").length,
+      noShow: viewings.filter((v) => v.status === "no_show").length,
     };
-  }, [billingHistory]);
+  }, [viewings]);
 
-  const membershipStatus = useMemo(() => {
-    if (latestPaidMembership) return "Aktif";
-    if (latestMembershipPayment?.status === "pending") return "Pending Payment";
-    if (latestMembershipPayment?.status === "failed") return "Failed";
-    if (latestMembershipPayment?.status === "cancelled") return "Cancelled";
-    if (latestMembershipPayment?.status === "expired") return "Expired";
-    return "Belum ada pembayaran";
-  }, [latestMembershipPayment, latestPaidMembership]);
+  const totalPages = Math.max(1, Math.ceil(viewings.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
 
-  const nextRenewal = useMemo(() => {
-    if (!latestPaidMembership?.paidAt) return "-";
-    return addDays(latestPaidMembership.paidAt, membership.durationDays);
-  }, [latestPaidMembership, membership.durationDays]);
+  const paginatedViewings = useMemo(() => {
+    const start = (safePage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return viewings.slice(start, end);
+  }, [viewings, safePage]);
 
-  const latestPaymentMethod = useMemo(() => {
-    if (!latestMembershipPayment) return "-";
-    return `${latestMembershipPayment.paymentMethod} • ${latestMembershipPayment.gateway}`;
-  }, [latestMembershipPayment]);
+  const startItem = viewings.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+  const endItem = Math.min(safePage * ITEMS_PER_PAGE, viewings.length);
+
+  async function updateViewingInDb(
+    viewingId: string,
+    payload: {
+      status?: string;
+      viewing_status?: string;
+      viewing_date?: string | null;
+      viewing_time?: string | null;
+    }
+  ) {
+    setUpdatingId(viewingId);
+
+    const { error } = await supabase
+      .from("leads")
+      .update(payload)
+      .eq("id", viewingId);
+
+    if (error) {
+      setUpdatingId(null);
+      alert(error.message || "Gagal memperbarui viewing.");
+      return false;
+    }
+
+    setUpdatingId(null);
+    return true;
+  }
+
+  async function markAsContacted(viewing: Viewing) {
+    if (viewing.dbStatus !== "new") return;
+
+    const ok = await updateViewingInDb(viewing.id, {
+      status: "contacted",
+    });
+
+    if (!ok) return;
+
+    setViewings((prev) =>
+      prev.map((item) =>
+        item.id === viewing.id ? { ...item, dbStatus: "contacted" } : item
+      )
+    );
+  }
+
+  function openReschedule(viewing: Viewing) {
+    setRescheduleTarget(viewing);
+    setRescheduleDate(viewing.viewingDateRaw || "");
+    setRescheduleTime(viewing.viewingTimeRaw || "");
+  }
+
+  function closeReschedule() {
+    setRescheduleTarget(null);
+    setRescheduleDate("");
+    setRescheduleTime("");
+  }
+
+  async function handleRescheduleSubmit() {
+    if (!rescheduleTarget || !rescheduleDate || !rescheduleTime) return;
+
+    const nextDbStatus =
+      rescheduleTarget.dbStatus === "interested" ||
+      rescheduleTarget.dbStatus === "closed"
+        ? rescheduleTarget.dbStatus
+        : "viewing";
+
+    const ok = await updateViewingInDb(rescheduleTarget.id, {
+      status: nextDbStatus,
+      viewing_status: "rescheduled",
+      viewing_date: rescheduleDate,
+      viewing_time: rescheduleTime,
+    });
+
+    if (!ok) return;
+
+    setViewings((prev) =>
+      sortViewingItems(
+        prev.map((item) =>
+          item.id === rescheduleTarget.id
+            ? {
+                ...item,
+                dbStatus: nextDbStatus,
+                status: "rescheduled",
+                viewingDateRaw: rescheduleDate,
+                viewingTimeRaw: rescheduleTime,
+                viewingDate: formatDate(rescheduleDate),
+                viewingTime: rescheduleTime,
+              }
+            : item
+        )
+      )
+    );
+
+    closeReschedule();
+  }
+
+  async function handleDone(viewing: Viewing) {
+    const nextDbStatus =
+      viewing.dbStatus === "interested" || viewing.dbStatus === "closed"
+        ? viewing.dbStatus
+        : "viewing";
+
+    const ok = await updateViewingInDb(viewing.id, {
+      status: nextDbStatus,
+      viewing_status: "done",
+    });
+
+    if (!ok) return;
+
+    setViewings((prev) =>
+      prev.map((item) =>
+        item.id === viewing.id
+          ? {
+              ...item,
+              dbStatus: nextDbStatus,
+              status: "done",
+            }
+          : item
+      )
+    );
+  }
+
+  async function handleNoShow(viewing: Viewing) {
+    const nextDbStatus =
+      viewing.dbStatus === "interested" || viewing.dbStatus === "closed"
+        ? viewing.dbStatus
+        : "viewing";
+
+    const ok = await updateViewingInDb(viewing.id, {
+      status: nextDbStatus,
+      viewing_status: "no_show",
+    });
+
+    if (!ok) return;
+
+    setViewings((prev) =>
+      prev.map((item) =>
+        item.id === viewing.id
+          ? {
+              ...item,
+              dbStatus: nextDbStatus,
+              status: "no_show",
+            }
+          : item
+      )
+    );
+  }
 
   return (
     <div>
       <div className="mb-6 sm:mb-8">
         <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
-          Tagihan
+          Jadwal Viewing
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Kelola membership, status tagihan, dan riwayat pembayaran Anda.
+          Daftar jadwal kunjungan properti bersama calon buyer.
         </p>
       </div>
-
-      {justPaid ? (
-        <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-          Pembayaran berhasil dibuat. Status akan berubah setelah pembayaran terkonfirmasi.
-        </div>
-      ) : null}
-
-      {justCancelled ? (
-        <div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
-          Pembayaran dibatalkan atau belum diselesaikan.
-        </div>
-      ) : null}
 
       {errorMessage ? (
         <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -374,226 +494,288 @@ export default function AgentTagihanPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Membership" value={membership.name} Icon={ShieldCheck} />
+      <div className="mb-8 mt-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard
-          title="Tagihan Dibayar"
-          value={summary.paidCount}
-          Icon={CreditCard}
+          title="Terjadwal"
+          value={loading ? "..." : summary.scheduled}
+          Icon={CalendarDays}
         />
         <StatCard
-          title="Tagihan Pending"
-          value={summary.pendingCount}
-          Icon={RefreshCcw}
+          title="Dijadwalkan Ulang"
+          value={loading ? "..." : summary.rescheduled}
+          Icon={RotateCcw}
         />
         <StatCard
-          title="Pembayaran Terakhir"
-          value={summary.lastPaidAmount}
-          Icon={FileText}
+          title="Selesai"
+          value={loading ? "..." : summary.done}
+          Icon={CheckCircle2}
+        />
+        <StatCard
+          title="No Show"
+          value={loading ? "..." : summary.noShow}
+          Icon={XCircle}
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 md:p-6 xl:col-span-2">
-          <div className="flex flex-col gap-3 border-b border-gray-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-                Membership Agent
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Ringkasan paket membership agent yang sedang digunakan.
-              </p>
-            </div>
-
-            <span className="inline-flex w-fit items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[11px] font-semibold text-green-700 sm:text-xs">
-              Tersambung ke data billing
-            </span>
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-gray-200 p-4 sm:p-5">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="min-w-0">
-                <p className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-                  {membership.name}
-                </p>
-                <p className="mt-1 text-sm text-gray-500">
-                  {membership.paymentDescription}
-                </p>
-              </div>
-
-              <div className="text-left md:text-right">
-                <p className="text-sm text-gray-500">Harga Membership</p>
-                <p className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
-                  {formatCurrency(membership.priceIdr)}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {membership.durationDays} hari
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Status</p>
-                <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {loading ? "Loading..." : membershipStatus}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Auto Renew</p>
-                <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {latestMembershipPayment
-                    ? latestMembershipPayment.autoRenew
-                      ? "Aktif"
-                      : "Nonaktif"
-                    : membership.autoRenewDefault
-                    ? "Aktif (Default)"
-                    : "Nonaktif"}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Maks Listing</p>
-                <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {membership.maxListings} listing
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Maks Featured</p>
-                <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {membership.maxFeaturedListings} featured listing
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5">
-              <p className="text-sm font-semibold text-[#1C1C1E]">
-                Yang Anda Dapatkan
-              </p>
-
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {membership.features.map((feature, index) => (
-                  <div
-                    key={index}
-                    className="flex items-start gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700"
-                  >
-                    <span className="mt-0.5 text-green-600">✓</span>
-                    <span>{feature}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 md:p-6">
-          <h2 className="text-lg font-semibold text-[#1C1C1E]">
-            Status Tagihan
-          </h2>
-
-          <div className="mt-5 space-y-3 sm:space-y-4">
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500">Tagihan Terakhir</p>
-              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                {latestMembershipPayment
-                  ? formatCurrency(latestMembershipPayment.amount)
-                  : "Belum ada"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500">Renewal Berikutnya</p>
-              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                {nextRenewal}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500">Metode Pembayaran</p>
-              <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base break-words">
-                {latestPaymentMethod}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500">Catatan</p>
-              <p className="mt-1 text-sm text-gray-600">
-                Status pembayaran agent sekarang diambil langsung dari tabel payments.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-4 sm:p-5 md:p-6">
-          <h2 className="text-lg font-semibold text-[#1C1C1E]">
-            Riwayat Pembayaran
-          </h2>
-          <p className="text-sm text-gray-500">
-            Daftar invoice dan pembayaran membership atau add-on Anda.
-          </p>
+          <h2 className="font-semibold text-[#1C1C1E]">Daftar Viewing</h2>
         </div>
 
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500 sm:p-8">
-            Loading riwayat pembayaran...
+          <div className="p-4 text-sm text-gray-500 sm:p-6">
+            Loading viewing...
           </div>
-        ) : billingHistory.length === 0 ? (
-          <div className="p-6 text-center text-sm text-gray-500 sm:p-8">
-            Belum ada riwayat pembayaran yang ditampilkan.
+        ) : paginatedViewings.length === 0 ? (
+          <div className="p-4 text-sm text-gray-500 sm:p-6">
+            Belum ada jadwal viewing untuk agent ini.
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {billingHistory.map((item) => {
-              const ui = paymentStatusUI(item.status);
+            {paginatedViewings.map((viewing) => {
+              const ui = viewingStatusUI(viewing.status);
+
+              const message = encodeURIComponent(
+                `Halo ${viewing.buyerName},
+
+Saya ${agentName}, agent dari TETAMO.
+
+Saya ingin mengonfirmasi jadwal viewing untuk properti berikut:
+
+🏠 ${viewing.propertyTitle}
+📍 ${viewing.location}
+📅 ${viewing.viewingDate}
+⏰ ${viewing.viewingTime}
+
+https://tetamo.com/listing/${viewing.listingKode}
+
+Apakah jadwal ini masih sesuai untuk Anda?`
+              );
+
+              const whatsappPhone = normalizePhoneForWhatsapp(viewing.buyerPhone);
+              const callPhone = normalizePhoneForCall(viewing.buyerPhone);
+              const whatsappLink = whatsappPhone
+                ? `https://wa.me/${whatsappPhone}?text=${message}`
+                : "#";
+
+              const isUpdating = updatingId === viewing.id;
+              const isClosed =
+                viewing.status === "done" || viewing.status === "no_show";
 
               return (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-4 p-4 sm:p-5 md:p-6 lg:flex-row lg:items-center lg:justify-between"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <p className="text-sm font-medium text-[#1C1C1E] sm:text-base">
-                        {item.title}
-                      </p>
+                <div key={viewing.id} className="p-4 sm:p-5 md:p-6">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold ${ui.className}`}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium ${ui.badgeClass}`}
                       >
                         {ui.label}
                       </span>
+
+                      <div className="text-xs text-gray-500">
+                        {viewing.viewingDate} • {viewing.viewingTime}
+                      </div>
                     </div>
 
-                    <p className="mt-1 text-xs text-gray-500 sm:text-sm break-words">
-                      {item.gateway} • {item.paymentMethod} • {item.createdAt}
-                    </p>
-                  </div>
+                    <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+                      <div className="min-w-0">
+                        <p className="text-base font-semibold leading-snug text-[#1C1C1E] sm:text-lg">
+                          {viewing.propertyTitle}
+                        </p>
 
-                  <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:w-auto lg:justify-end">
-                    <div className="shrink-0 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                      {formatCurrency(item.amount)}
+                        <p className="mt-1 text-sm text-gray-500">
+                          Kode: {viewing.listingKode}
+                        </p>
+
+                        <div className="mt-4">
+                          <p className="text-sm font-medium text-[#1C1C1E] sm:text-base">
+                            {viewing.buyerName}
+                          </p>
+                          <p className="mt-1 text-sm text-gray-500">
+                            {viewing.buyerPhone}
+                          </p>
+                          {viewing.buyerEmail !== "-" ? (
+                            <p className="break-all text-sm text-gray-500">
+                              {viewing.buyerEmail}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-3 text-xs leading-5 text-gray-500 sm:text-sm">
+                          Lokasi: {viewing.location}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
+                        <a
+                          href={callPhone ? `tel:${callPhone}` : "#"}
+                          onClick={() => {
+                            void markAsContacted(viewing);
+                          }}
+                          className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-3 py-2.5 text-center text-sm text-gray-700 transition hover:bg-gray-50"
+                        >
+                          Hubungi
+                        </a>
+
+                        <a
+                          href={whatsappLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            void markAsContacted(viewing);
+                          }}
+                          className="inline-flex items-center justify-center rounded-xl bg-green-600 px-3 py-2.5 text-center text-sm text-white transition hover:opacity-90"
+                        >
+                          WhatsApp
+                        </a>
+
+                        {!isClosed && (
+                          <>
+                            <button
+                              onClick={() => openReschedule(viewing)}
+                              disabled={isUpdating}
+                              className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-3 py-2.5 text-center text-sm text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                            >
+                              Reschedule
+                            </button>
+
+                            <button
+                              onClick={() => void handleDone(viewing)}
+                              disabled={isUpdating}
+                              className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-3 py-2.5 text-center text-sm text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                            >
+                              Selesai
+                            </button>
+
+                            <button
+                              onClick={() => void handleNoShow(viewing)}
+                              disabled={isUpdating}
+                              className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-3 py-2.5 text-center text-sm text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                            >
+                              No Show
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-
-                    {item.status === "pending" && item.checkoutUrl ? (
-                      <a
-                        href={item.checkoutUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center rounded-xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-                      >
-                        Lanjutkan Bayar
-                      </a>
-                    ) : null}
                   </div>
                 </div>
               );
             })}
           </div>
         )}
+
+        {viewings.length > 0 && (
+          <div className="flex flex-col gap-4 border-t border-gray-100 px-4 py-4 sm:px-6">
+            <p className="text-sm text-gray-500">
+              Menampilkan {startItem}–{endItem} dari {viewings.length} viewing
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Sebelumnya
+              </button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={[
+                      "rounded-xl border px-3 py-2 text-sm",
+                      safePage === page
+                        ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                        : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={safePage === totalPages}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Berikutnya
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {rescheduleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button
+            type="button"
+            onClick={closeReschedule}
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close reschedule popup"
+          />
+
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-bold text-[#1C1C1E]">
+                Reschedule Viewing
+              </h3>
+
+              <button
+                type="button"
+                onClick={closeReschedule}
+                className="rounded-full px-3 py-1 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  Tanggal Baru
+                </label>
+                <input
+                  type="date"
+                  value={rescheduleDate}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 outline-none focus:border-[#1C1C1E]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  Jam Baru
+                </label>
+                <input
+                  type="time"
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 outline-none focus:border-[#1C1C1E]"
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={
+                  !rescheduleDate ||
+                  !rescheduleTime ||
+                  updatingId === rescheduleTarget.id
+                }
+                onClick={() => void handleRescheduleSubmit()}
+                className="w-full rounded-2xl bg-[#1C1C1E] py-3 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                Simpan Jadwal Baru
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
