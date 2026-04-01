@@ -260,7 +260,7 @@ export default function ListingVerifikasi({
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="max-w-5xl mx-auto px-6 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           type="button"
           onClick={onBack}
@@ -269,14 +269,16 @@ export default function ListingVerifikasi({
           ← {t.back}
         </button>
 
-        <h1 className="mt-4 text-4xl font-bold text-[#1C1C1E]">
+        <h1 className="mt-4 text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
           {t.pageTitle}
         </h1>
-        <p className="mt-2 max-w-3xl text-gray-600">{t.subtitle}</p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base">
+          {t.subtitle}
+        </p>
 
-        <div className="h-12" />
+        <div className="h-8 sm:h-10 md:h-12" />
 
-        <div className="mt-8 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:mt-8 sm:p-6">
           {/* Relationship */}
           <div>
             <div className="text-sm font-semibold text-[#1C1C1E]">
@@ -295,7 +297,7 @@ export default function ListingVerifikasi({
                   type="button"
                   onClick={() => setRelationship(opt.key as any)}
                   className={[
-                    "rounded-2xl border px-4 py-3 text-left font-semibold transition",
+                    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition sm:text-base",
                     relationship === opt.key
                       ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                       : "border-gray-200 hover:bg-gray-50",
@@ -327,14 +329,14 @@ export default function ListingVerifikasi({
                 type="button"
                 onClick={() => setSellMode("jual_sendiri")}
                 className={[
-                  "rounded-2xl border px-4 py-3 text-left font-semibold transition",
+                  "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition sm:text-base",
                   sellMode === "jual_sendiri"
                     ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                     : "border-gray-200 hover:bg-gray-50",
                 ].join(" ")}
               >
                 {t.sellMyself}
-                <div className="mt-1 text-xs font-normal opacity-80">
+                <div className="mt-1 text-xs font-normal leading-5 opacity-80 sm:text-sm">
                   {t.sellMyselfDesc}
                 </div>
               </button>
@@ -343,14 +345,14 @@ export default function ListingVerifikasi({
                 type="button"
                 onClick={() => setSellMode("pakai_agen")}
                 className={[
-                  "rounded-2xl border px-4 py-3 text-left font-semibold transition",
+                  "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition sm:text-base",
                   sellMode === "pakai_agen"
                     ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                     : "border-gray-200 hover:bg-gray-50",
                 ].join(" ")}
               >
                 {t.useAgent}
-                <div className="mt-1 text-xs font-normal opacity-80">
+                <div className="mt-1 text-xs font-normal leading-5 opacity-80 sm:text-sm">
                   {t.useAgentDesc}
                 </div>
               </button>
@@ -373,7 +375,7 @@ export default function ListingVerifikasi({
                   type="button"
                   onClick={() => setNeedAgentRecommendation(opt.key as any)}
                   className={[
-                    "rounded-2xl border px-4 py-3 text-left font-semibold transition",
+                    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition sm:text-base",
                     needAgentRecommendation === opt.key
                       ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                       : "border-gray-200 hover:bg-gray-50",
@@ -401,7 +403,7 @@ export default function ListingVerifikasi({
                   type="button"
                   onClick={() => setNeedTransactionSupport(opt.key as any)}
                   className={[
-                    "rounded-2xl border px-4 py-3 text-left font-semibold transition",
+                    "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition sm:text-base",
                     needTransactionSupport === opt.key
                       ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                       : "border-gray-200 hover:bg-gray-50",
@@ -412,7 +414,7 @@ export default function ListingVerifikasi({
               ))}
             </div>
 
-            <div className="mt-2 text-xs text-gray-500">{t.supportNote}</div>
+            <div className="mt-2 text-xs leading-5 text-gray-500">{t.supportNote}</div>
           </div>
 
           {/* PDF upload dummy */}
@@ -421,19 +423,19 @@ export default function ListingVerifikasi({
               <div className="text-sm font-semibold text-[#1C1C1E]">
                 {t.ownershipPdfTitle}
               </div>
-              <div className="mt-1 text-xs text-gray-500">
+              <div className="mt-1 text-xs leading-5 text-gray-500">
                 {t.ownershipPdfDesc}
               </div>
 
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   onClick={() => ownershipRef.current?.click()}
-                  className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-2 font-semibold transition hover:bg-gray-50"
+                  className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-semibold transition hover:bg-gray-50"
                 >
                   {t.choosePdf}
                 </button>
-                <div className="truncate text-sm text-gray-700">
+                <div className="min-w-0 truncate text-sm text-gray-700">
                   {ownershipPdfName ? ownershipPdfName : t.noFileYet}
                 </div>
                 <input
@@ -453,19 +455,19 @@ export default function ListingVerifikasi({
               <div className="text-sm font-semibold text-[#1C1C1E]">
                 {t.authorizationPdfTitle}
               </div>
-              <div className="mt-1 text-xs text-gray-500">
+              <div className="mt-1 text-xs leading-5 text-gray-500">
                 {t.authorizationPdfDesc}
               </div>
 
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   onClick={() => authorizationRef.current?.click()}
-                  className="rounded-2xl border border-gray-200 bg-gray-100 px-4 py-2 font-semibold transition hover:bg-gray-50"
+                  className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-gray-100 px-4 py-2 text-sm font-semibold transition hover:bg-gray-50"
                 >
                   {t.choosePdf}
                 </button>
-                <div className="truncate text-sm text-gray-700">
+                <div className="min-w-0 truncate text-sm text-gray-700">
                   {authorizationPdfName ? authorizationPdfName : t.noFileYet}
                 </div>
                 <input
@@ -491,7 +493,7 @@ export default function ListingVerifikasi({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={t.notePlaceholder}
-              className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+              className="mt-2 min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
             />
           </div>
 
@@ -501,7 +503,7 @@ export default function ListingVerifikasi({
               type="button"
               onClick={handleNext}
               className={[
-                "w-full rounded-2xl px-6 py-4 font-semibold transition",
+                "w-full rounded-2xl px-6 py-3.5 text-sm font-semibold transition sm:py-4 sm:text-base",
                 canSubmit
                   ? "bg-[#1C1C1E] text-white hover:opacity-90"
                   : "bg-gray-200 text-gray-500",
@@ -511,7 +513,7 @@ export default function ListingVerifikasi({
             </button>
 
             {!canSubmit && (
-              <p className="mt-3 text-xs text-gray-500">{t.incompleteNote}</p>
+              <p className="mt-3 text-xs leading-5 text-gray-500">{t.incompleteNote}</p>
             )}
           </div>
         </div>
