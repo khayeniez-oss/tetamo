@@ -309,8 +309,8 @@ export default function AgentDashboardLayout({
                 flex flex-col
               "
             >
-              <div className="flex items-start gap-4">
-                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-[1.4rem] border border-white/10 bg-white/10 sm:h-28 sm:w-28">
+              <div className="flex items-start gap-4 lg:flex-col lg:items-start lg:gap-0">
+                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-[1.4rem] border border-white/10 bg-white/10 sm:h-28 sm:w-28 lg:h-32 lg:w-32">
                   <img
                     src={agent.photo}
                     alt={agent.name}
@@ -318,7 +318,7 @@ export default function AgentDashboardLayout({
                   />
                 </div>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 lg:mt-5 lg:w-full">
                   <p className="text-xl font-bold tracking-tight sm:text-2xl">
                     {agent.name}
                   </p>
