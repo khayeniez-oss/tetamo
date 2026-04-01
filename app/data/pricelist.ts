@@ -128,12 +128,28 @@ export type AgentPackage = {
   audience: "agent";
   productType: "membership";
 
+  // Main / default billing cycle shown on package card
   billingCycle: "monthly" | "yearly";
 
+  // Supported billing options for this package
+  availableBillingCycles: Array<"monthly" | "yearly">;
+
+  // Main price (for the main/default billing cycle)
   priceIdr: number;
+
+  // Package stays active for this duration
   durationDays: number;
+
   renewable: boolean;
   autoRenewDefault: boolean;
+
+  // Billing / subscription logic
+  packageTermDays: number;
+  billingIntervalDays: number;
+  cancelStopsFutureRenewalOnly: boolean;
+  monthlyPriceIdr?: number;
+  monthlyCommitmentMonths?: number;
+  monthlyBillingNote?: string;
 
   maxListings: number;
   maxFeaturedListings: number;
@@ -143,6 +159,16 @@ export type AgentPackage = {
   hasSocialMediaPromotion: boolean;
   hasBuyerRecommendation: boolean;
   hasAdminSupport: boolean;
+
+  hasSocialMediaIntegration: boolean;
+  hasViewingSchedule: boolean;
+  hasLeadsDashboard: boolean;
+  hasBillingAccess: boolean;
+  hasAnalyticsInsights: boolean;
+  hasCommissionTracking: boolean;
+  hasBoostSpotlightAccess: boolean;
+  hasFeaturedAgentPlacement: boolean;
+  featuredAgentSlotsLimit?: number;
 
   paymentTitle: string;
   paymentDescription: string;
@@ -154,88 +180,190 @@ export type AgentPackage = {
 
 export const AGENT_PACKAGES: AgentPackage[] = [
   {
-    id: "agent-pro-monthly",
-    name: "Agen Properti TETAMO - Monthly",
-    audience: "agent",
-    productType: "membership",
-
-    billingCycle: "monthly",
-
-    priceIdr: 250000,
-    durationDays: 30,
-    renewable: true,
-    autoRenewDefault: true,
-
-    maxListings: 100,
-    maxFeaturedListings: 3,
-
-    hasProfileWebsite: true,
-    hasAiAvatar: true,
-    hasSocialMediaPromotion: true,
-    hasBuyerRecommendation: true,
-    hasAdminSupport: true,
-
-    paymentTitle: "Agent Membership - Monthly",
-    paymentDescription:
-      "Keanggotaan bulanan untuk agen properti yang ingin mengelola listing, membangun profil profesional, dan mendapatkan eksposur lebih besar di TETAMO.",
-    renewalLabel: "Perpanjang Agent Membership Monthly",
-    billingNote:
-      "Membership aktif selama 30 hari dan diperpanjang otomatis kecuali Anda menonaktifkan auto renew dari dashboard.",
-
-    features: [
-      "100 Listing Aktif",
-      "Membership aktif selama 30 hari",
-      "Website Profil Agen (Terhubung ke Media Sosial)",
-      "1 AI Avatar Video Perkenalan",
-      "3 Featured Listing Slot",
-      "Prioritas Lead dari Buyer, WhatsApp Langsung dari Listing",
-      "Optimasi Judul & Deskripsi (SEO Friendly)",
-      "Promosi Featured Listing di Media Sosial TETAMO",
-      "Direkomendasikan ke Buyer sesuai Area",
-      "Support Admin 09.00 – 14.00",
-      "Auto renew aktif secara default",
-    ],
-  },
-  {
-    id: "agent-pro-yearly",
-    name: "Agen Properti TETAMO - Yearly",
+    id: "silver",
+    name: "Silver",
     audience: "agent",
     productType: "membership",
 
     billingCycle: "yearly",
+    availableBillingCycles: ["yearly"],
+
+    priceIdr: 499000,
+    durationDays: 365,
+    renewable: true,
+    autoRenewDefault: true,
+
+    packageTermDays: 365,
+    billingIntervalDays: 365,
+    cancelStopsFutureRenewalOnly: true,
+
+    maxListings: 50,
+    maxFeaturedListings: 0,
+
+    hasProfileWebsite: true,
+    hasAiAvatar: false,
+    hasSocialMediaPromotion: false,
+    hasBuyerRecommendation: false,
+    hasAdminSupport: false,
+
+    hasSocialMediaIntegration: true,
+    hasViewingSchedule: true,
+    hasLeadsDashboard: true,
+    hasBillingAccess: true,
+    hasAnalyticsInsights: true,
+    hasCommissionTracking: true,
+    hasBoostSpotlightAccess: true,
+    hasFeaturedAgentPlacement: false,
+
+    paymentTitle: "Silver Membership - Yearly",
+    paymentDescription:
+      "Paket tahunan untuk agen properti yang ingin mulai tampil profesional, mengelola listing aktif, leads, viewing, billing, dan insight dalam satu dashboard TETAMO.",
+    renewalLabel: "Perpanjang Silver Membership",
+    billingNote:
+      "Membership aktif selama 1 tahun dan diperpanjang otomatis secara tahunan kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif saat ini.",
+
+    features: [
+      "50 Listing Aktif",
+      "Membership aktif selama 1 tahun",
+      "Website Profil Agen",
+      "Integrasi Media Sosial",
+      "Dashboard Leads",
+      "Jadwal Viewing",
+      "Paket & Tagihan",
+      "Pembayaran / Receipt",
+      "Analytics / Insights",
+      "Tracking Komisi",
+      "Akses Boost & Spotlight",
+      "Auto renew aktif secara default",
+    ],
+  },
+  {
+    id: "gold",
+    name: "Gold",
+    audience: "agent",
+    productType: "membership",
+
+    billingCycle: "yearly",
+    availableBillingCycles: ["yearly"],
 
     priceIdr: 1800000,
     durationDays: 365,
     renewable: true,
     autoRenewDefault: true,
 
+    packageTermDays: 365,
+    billingIntervalDays: 365,
+    cancelStopsFutureRenewalOnly: true,
+
     maxListings: 100,
     maxFeaturedListings: 3,
 
     hasProfileWebsite: true,
     hasAiAvatar: true,
     hasSocialMediaPromotion: true,
-    hasBuyerRecommendation: true,
-    hasAdminSupport: true,
+    hasBuyerRecommendation: false,
+    hasAdminSupport: false,
 
-    paymentTitle: "Agent Membership - Yearly",
+    hasSocialMediaIntegration: true,
+    hasViewingSchedule: true,
+    hasLeadsDashboard: true,
+    hasBillingAccess: true,
+    hasAnalyticsInsights: true,
+    hasCommissionTracking: true,
+    hasBoostSpotlightAccess: true,
+    hasFeaturedAgentPlacement: false,
+
+    paymentTitle: "Gold Membership - Yearly",
     paymentDescription:
-      "Keanggotaan tahunan untuk agen properti yang ingin mengelola listing, membangun profil profesional, dan mendapatkan eksposur lebih besar di TETAMO.",
-    renewalLabel: "Perpanjang Agent Membership Yearly",
+      "Paket tahunan untuk agen aktif yang ingin branding lebih kuat, visibilitas lebih tinggi, dan fitur marketing tambahan di TETAMO.",
+    renewalLabel: "Perpanjang Gold Membership",
     billingNote:
-      "Membership aktif selama 365 hari dan diperpanjang otomatis kecuali Anda menonaktifkan auto renew dari dashboard.",
+      "Membership aktif selama 1 tahun dan diperpanjang otomatis secara tahunan kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif saat ini.",
 
     features: [
       "100 Listing Aktif",
       "Membership aktif selama 1 tahun",
-      "Website Profil Agen (Terhubung ke Media Sosial)",
+      "Website Profil Agen",
+      "Integrasi Media Sosial",
+      "Dashboard Leads",
+      "Jadwal Viewing",
+      "Paket & Tagihan",
+      "Pembayaran / Receipt",
+      "Analytics / Insights",
+      "Tracking Komisi",
+      "Akses Boost & Spotlight",
       "1 AI Avatar Video Perkenalan",
-      "3 Featured Listing Slot",
-      "Prioritas Lead dari Buyer, WhatsApp Langsung dari Listing",
-      "Optimasi Judul & Deskripsi (SEO Friendly)",
-      "Promosi Featured Listing di Media Sosial TETAMO",
-      "Direkomendasikan ke Buyer sesuai Area",
-      "Support Admin 09.00 – 14.00",
+      "3 Listing Unggulan Gratis (90 hari masing-masing)",
+      "Visibilitas listing lebih tinggi",
+      "Auto renew aktif secara default",
+    ],
+  },
+  {
+    id: "agent-pro",
+    name: "Agent Pro",
+    audience: "agent",
+    productType: "membership",
+
+    billingCycle: "yearly",
+    availableBillingCycles: ["yearly", "monthly"],
+
+    priceIdr: 3999000,
+    durationDays: 365,
+    renewable: true,
+    autoRenewDefault: true,
+
+    packageTermDays: 365,
+    billingIntervalDays: 365,
+    cancelStopsFutureRenewalOnly: true,
+    monthlyPriceIdr: 399000,
+    monthlyCommitmentMonths: 12,
+    monthlyBillingNote:
+      "Tersedia opsi bayar bulanan dengan komitmen 12 bulan. Membership tetap aktif untuk 1 tahun penuh. Jika auto renew dimatikan, renewal berikutnya akan berhenti setelah masa komitmen berakhir.",
+
+    maxListings: 500,
+    maxFeaturedListings: 3,
+
+    hasProfileWebsite: true,
+    hasAiAvatar: true,
+    hasSocialMediaPromotion: true,
+    hasBuyerRecommendation: false,
+    hasAdminSupport: false,
+
+    hasSocialMediaIntegration: true,
+    hasViewingSchedule: true,
+    hasLeadsDashboard: true,
+    hasBillingAccess: true,
+    hasAnalyticsInsights: true,
+    hasCommissionTracking: true,
+    hasBoostSpotlightAccess: true,
+    hasFeaturedAgentPlacement: true,
+    featuredAgentSlotsLimit: 7,
+
+    paymentTitle: "Agent Pro Membership",
+    paymentDescription:
+      "Paket tahunan premium untuk agen serius dan agensi yang ingin skala lebih besar, eksposur premium, dan opsi bayar bulanan dengan komitmen 12 bulan.",
+    renewalLabel: "Perpanjang Agent Pro Membership",
+    billingNote:
+      "Membership aktif selama 1 tahun. Tersedia pembayaran tahunan penuh atau pembayaran bulanan dengan komitmen 12 bulan. Auto renew aktif secara default kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif / komitmen saat ini.",
+
+    features: [
+      "500 Listing Aktif",
+      "Membership aktif selama 1 tahun",
+      "Website Profil Agen",
+      "Integrasi Media Sosial",
+      "Dashboard Leads",
+      "Jadwal Viewing",
+      "Paket & Tagihan",
+      "Pembayaran / Receipt",
+      "Analytics / Insights",
+      "Tracking Komisi",
+      "Akses Boost & Spotlight",
+      "1 AI Avatar Video Perkenalan",
+      "3 Listing Unggulan Gratis (90 hari masing-masing)",
+      "Penempatan Agen Unggulan",
+      "Eksposur premium di platform",
+      "Slot terbatas (7 agen saja)",
+      "Tersedia opsi bayar bulanan",
       "Auto renew aktif secara default",
     ],
   },
