@@ -148,19 +148,19 @@ function StatCard({
   Icon: ElementType;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-4">
-      <div className="flex items-start justify-between gap-2.5">
+    <div className="rounded-[26px] border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-5">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] leading-5 text-gray-500 sm:text-xs">
+          <p className="text-[11px] font-medium text-gray-500 sm:text-xs">
             {title}
           </p>
-          <p className="mt-1.5 text-xl font-semibold text-[#1C1C1E] sm:mt-2 sm:text-2xl">
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
             {value}
           </p>
         </div>
 
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
-          <Icon className="h-4.5 w-4.5 text-[#1C1C1E] sm:h-5 sm:w-5" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#F5F5F5] sm:h-11 sm:w-11">
+          <Icon className="h-5 w-5 text-[#1C1C1E]" />
         </div>
       </div>
     </div>
@@ -588,7 +588,7 @@ export default function AgentDashboardPage() {
     return (
       <main className="min-h-screen bg-[#F7F7F8]">
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-10">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-500 shadow-sm sm:p-6">
+          <div className="rounded-[26px] border border-gray-200 bg-white p-5 text-sm text-gray-500 shadow-sm sm:p-6">
             {lang === "id" ? "Memuat dashboard..." : "Loading dashboard..."}
           </div>
         </div>
@@ -601,7 +601,7 @@ export default function AgentDashboardPage() {
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
         <div className="mb-5 flex flex-col gap-3 lg:mb-7 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-lg font-bold text-[#1C1C1E] sm:text-xl lg:text-3xl">
+            <h1 className="text-lg font-bold tracking-tight text-[#1C1C1E] sm:text-xl lg:text-3xl">
               {lang === "id" ? "Dashboard Agen" : "Agent Dashboard"}
             </h1>
             <p className="mt-1 text-[13px] leading-5 text-gray-500 sm:text-sm sm:leading-6">
@@ -615,7 +615,7 @@ export default function AgentDashboardPage() {
             <button
               onClick={handleCreateListing}
               disabled={checkingMembership}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5 sm:text-sm"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5 sm:text-sm"
             >
               <Plus className="h-4 w-4" />
               {checkingMembership
@@ -670,7 +670,7 @@ export default function AgentDashboardPage() {
           />
         </div>
 
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-5 flex flex-col gap-3 rounded-[26px] border border-gray-200 bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-4 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-md">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -682,7 +682,7 @@ export default function AgentDashboardPage() {
                   ? "Cari judul, kode, atau kota..."
                   : "Search title, code, or city..."
               }
-              className="w-full rounded-2xl border border-gray-200 bg-white py-2.5 pl-11 pr-4 text-[13px] outline-none focus:ring-2 focus:ring-black/10 sm:text-sm"
+              className="w-full rounded-2xl border border-gray-200 bg-white py-2.5 pl-11 pr-4 text-[13px] outline-none transition focus:ring-2 focus:ring-black/10 sm:text-sm"
             />
           </div>
 
@@ -694,7 +694,7 @@ export default function AgentDashboardPage() {
         </div>
 
         {filteredListings.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm sm:p-8">
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 text-center shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-8">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               {lang === "id" ? "Belum ada listing" : "No listings yet"}
             </h2>
@@ -707,7 +707,7 @@ export default function AgentDashboardPage() {
             <button
               onClick={handleCreateListing}
               disabled={checkingMembership}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5 sm:text-sm"
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5 sm:text-sm"
             >
               <Plus className="h-4 w-4" />
               {checkingMembership
@@ -721,7 +721,7 @@ export default function AgentDashboardPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
               {paginatedListings.map((listing) => {
                 const statusData = leadStatusUI(listing.leadStatus, lang);
                 const coverPhoto = listing.photos?.[0] || "";
@@ -729,7 +729,7 @@ export default function AgentDashboardPage() {
                 return (
                   <div
                     key={listing.id}
-                    className="mx-auto w-full overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                    className="overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
                   >
                     <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
                       <img
@@ -739,54 +739,52 @@ export default function AgentDashboardPage() {
                       />
                     </div>
 
-                    <div className="p-4 sm:p-5">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 sm:text-xs">
-                          {listing.kode}
-                        </p>
-                        <p className="text-[11px] text-gray-400 sm:text-xs">
+                    <div className="p-5 sm:p-6">
+                      <div className="flex items-center justify-between gap-3 text-[11px] font-medium tracking-[0.08em] text-gray-400 sm:text-xs">
+                        <p className="uppercase">{listing.kode}</p>
+                        <p className="normal-case tracking-normal">
                           {listing.postedDate}
                         </p>
                       </div>
 
-                      <h3 className="line-clamp-2 text-[15px] font-semibold leading-7 text-[#1C1C1E] sm:text-lg">
+                      <h3 className="mt-3 line-clamp-2 text-[18px] font-semibold leading-8 tracking-tight text-[#1C1C1E] sm:text-[22px]">
                         {listing.title}
                       </h3>
 
                       <div className="mt-3 flex items-center justify-between gap-3">
-                        <p className="text-[13px] text-gray-500 sm:text-sm">
+                        <p className="text-[14px] text-gray-500 sm:text-[15px]">
                           {listing.city}
                         </p>
 
                         <div
-                          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusData.badgeClass}`}
+                          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusData.badgeClass}`}
                         >
                           <statusData.Icon className="h-3.5 w-3.5" />
                           {statusData.label}
                         </div>
                       </div>
 
-                      <p className="mt-4 text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+                      <p className="mt-5 text-[18px] font-bold tracking-tight text-[#1C1C1E] sm:text-[20px]">
                         {listing.price}
                       </p>
 
-                      <div className="mt-4 rounded-2xl bg-gray-50 px-4 py-3">
-                        <p className="text-[11px] text-gray-400 sm:text-xs">
+                      <div className="mt-5 rounded-[24px] border border-gray-100 bg-[#F8F8F8] px-4 py-4">
+                        <p className="text-[11px] font-medium text-gray-400 sm:text-xs">
                           {lang === "id" ? "Total Leads" : "Total Leads"}
                         </p>
-                        <p className="mt-1 text-lg font-semibold text-[#1C1C1E] sm:text-base">
+                        <p className="mt-1 text-xl font-semibold text-[#1C1C1E]">
                           {listing.totalLeads}
                         </p>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="mt-5 grid grid-cols-3 gap-2.5">
                         <button
                           onClick={() =>
                             router.push(
                               `/agentdashboard/leads?kode=${encodeURIComponent(listing.kode)}`
                             )
                           }
-                          className="rounded-xl border border-gray-300 px-2 py-2.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 sm:px-3 sm:text-sm"
+                          className="inline-flex h-11 items-center justify-center rounded-2xl border border-gray-300 bg-white px-2 text-[11px] font-medium text-gray-700 transition hover:bg-gray-100 sm:text-sm"
                         >
                           {lang === "id" ? "Leads" : "Leads"}
                         </button>
@@ -799,7 +797,7 @@ export default function AgentDashboardPage() {
                               )}`
                             )
                           }
-                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-gray-300 px-2 py-2.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 sm:px-3 sm:text-sm"
+                          className="inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-2 text-[11px] font-medium text-gray-700 transition hover:bg-gray-50 sm:text-sm"
                         >
                           <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           Edit
@@ -807,7 +805,7 @@ export default function AgentDashboardPage() {
 
                         <button
                           onClick={() => router.push(`/properti/${listing.id}`)}
-                          className="rounded-xl bg-[#1C1C1E] px-2 py-2.5 text-[11px] font-medium text-white hover:opacity-90 sm:px-3 sm:text-sm"
+                          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 text-[11px] font-medium text-white transition hover:opacity-90 sm:text-sm"
                         >
                           {lang === "id" ? "Lihat Iklan" : "View Listing"}
                         </button>
