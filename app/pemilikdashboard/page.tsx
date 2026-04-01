@@ -120,7 +120,9 @@ function computeLifecycleStatus(listingExpiresAt: string | null): ListingStatus 
   return "AKTIF";
 }
 
-function mapTransactionStatus(value: string | null | undefined): TransactionStatus {
+function mapTransactionStatus(
+  value: string | null | undefined
+): TransactionStatus {
   if (value === "sold") return "sold";
   if (value === "rented") return "rented";
   return "available";
@@ -148,7 +150,10 @@ function formatDisplayDate(dateString: string | null, locale: string) {
 }
 
 function pickPostedDate(property: PropertyRow, locale: string) {
-  return formatDisplayDate(property.posted_date || property.created_at || null, locale);
+  return formatDisplayDate(
+    property.posted_date || property.created_at || null,
+    locale
+  );
 }
 
 function mapPropertiesWithImages(
@@ -202,8 +207,7 @@ function getPromotionFlags(item: Listing) {
     (!item.featuredExpiresAt || isFutureDate(item.featuredExpiresAt));
 
   const boostActive =
-    item.boostActive &&
-    (!item.boostExpiresAt || isFutureDate(item.boostExpiresAt));
+    item.boostActive && (!item.boostExpiresAt || isFutureDate(item.boostExpiresAt));
 
   const spotlightActive =
     item.spotlightActive &&
@@ -550,7 +554,11 @@ export default function OwnerDashboardPage() {
         return;
       }
 
-      const mappedListings = mapPropertiesWithImages(propertyRows, imageRows, locale);
+      const mappedListings = mapPropertiesWithImages(
+        propertyRows,
+        imageRows,
+        locale
+      );
 
       setListings(mappedListings);
       setTotalLeads(leadsCount || 0);
@@ -778,246 +786,254 @@ export default function OwnerDashboardPage() {
             {t.loadingDashboard}
           </div>
         ) : listings.length === 0 ? (
-          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.noListings}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">
+            {t.noListings}
+          </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {listings.map((item) => {
-              const effectiveStatus = deriveEffectiveStatus(item);
-              const ui = statusUI(effectiveStatus);
-              const BadgeIcon = ui.Icon;
-              const isToggling = togglingId === item.id;
-              const isMarking = markingId === item.id;
-              const isClosed = item.transactionStatus !== "available";
-              const hasKode = Boolean(item.kode && item.kode !== "-");
-              const isBoosting = activatingAddonId === `${item.id}-boost`;
-              const isSpotlighting = activatingAddonId === `${item.id}-spotlight`;
+          <div className="p-4 sm:p-6">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+              {listings.map((item) => {
+                const effectiveStatus = deriveEffectiveStatus(item);
+                const ui = statusUI(effectiveStatus);
+                const BadgeIcon = ui.Icon;
+                const isToggling = togglingId === item.id;
+                const isMarking = markingId === item.id;
+                const isClosed = item.transactionStatus !== "available";
+                const hasKode = Boolean(item.kode && item.kode !== "-");
+                const isBoosting = activatingAddonId === `${item.id}-boost`;
+                const isSpotlighting =
+                  activatingAddonId === `${item.id}-spotlight`;
 
-              const { featuredActive, boostActive, spotlightActive } =
-                getPromotionFlags(item);
+                const { featuredActive, boostActive, spotlightActive } =
+                  getPromotionFlags(item);
 
-              const canEdit = hasKode;
-              const canBuyAddon =
-                hasKode &&
-                !isClosed &&
-                effectiveStatus !== "KADALUWARSA" &&
-                effectiveStatus !== "PENDING_PAYMENT" &&
-                !item.isPaused;
+                const canEdit = hasKode;
+                const canBuyAddon =
+                  hasKode &&
+                  !isClosed &&
+                  effectiveStatus !== "KADALUWARSA" &&
+                  effectiveStatus !== "PENDING_PAYMENT" &&
+                  !item.isPaused;
 
-              const canPause =
-                !isClosed &&
-                effectiveStatus !== "PENDING_PAYMENT";
+                const canPause =
+                  !isClosed &&
+                  effectiveStatus !== "PENDING_PAYMENT";
 
-              const canRenew =
-                hasKode &&
-                !isClosed &&
-                !item.isPaused &&
-                (effectiveStatus === "AKAN_KADALUWARSA" ||
-                  effectiveStatus === "KADALUWARSA");
+                const canRenew =
+                  hasKode &&
+                  !isClosed &&
+                  !item.isPaused &&
+                  (effectiveStatus === "AKAN_KADALUWARSA" ||
+                    effectiveStatus === "KADALUWARSA");
 
-              return (
-                <div key={item.id} className="p-4 sm:p-6">
-                  <div className="flex flex-col gap-4">
-                    <div className="h-80 w-full overflow-hidden rounded-2xl bg-gray-100 sm:h-52">
-                      <img
-                        src={item.photo}
-                        alt={item.title}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${ui.badgeClass}`}
-                        >
-                          <BadgeIcon className="h-3 w-3" />
-                          {ui.label}
-                        </span>
-
-                        {item.verifiedOk ? (
-                          <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] text-green-700">
-                            {t.verified}
-                          </span>
-                        ) : null}
-
-                        {featuredActive ? (
-                          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] text-purple-700">
-                            {t.featured}
-                          </span>
-                        ) : null}
-
-                        {boostActive && !isClosed ? (
-                          <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] text-sky-700">
-                            {t.boostActive}
-                          </span>
-                        ) : null}
-
-                        {spotlightActive && !isClosed ? (
-                          <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">
-                            {t.spotlightActive}
-                          </span>
-                        ) : null}
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4">
+                      <div className="h-80 w-full overflow-hidden rounded-2xl bg-gray-100 lg:h-64">
+                        <img
+                          src={item.photo}
+                          alt={item.title}
+                          className="h-full w-full object-cover"
+                        />
                       </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
-                        <span>
-                          {t.code}: {item.kode}
-                        </span>
-                        <span>{item.postedDate}</span>
-                      </div>
-
-                      <p className="mt-3 break-words text-base font-medium text-[#1C1C1E]">
-                        {item.title}
-                      </p>
-
-                      <p className="mt-1 text-sm text-gray-500">
-                        {formatCurrency(item.price, locale)}
-                      </p>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                        <span>
-                          {t.listingUntil}:{" "}
-                          {formatDisplayDate(item.listingExpiresAt, locale)}
-                        </span>
-
-                        {featuredActive ? (
-                          <span>
-                            {t.featuredUntil}:{" "}
-                            {formatDisplayDate(item.featuredExpiresAt, locale)}
-                          </span>
-                        ) : null}
-
-                        {boostActive && !isClosed ? (
-                          <span>
-                            {t.boostUntil}:{" "}
-                            {formatDisplayDate(item.boostExpiresAt, locale)}
-                          </span>
-                        ) : null}
-
-                        {spotlightActive && !isClosed ? (
-                          <span>
-                            {t.spotlightUntil}:{" "}
-                            {formatDisplayDate(item.spotlightExpiresAt, locale)}
-                          </span>
-                        ) : null}
-
-                        {item.transactionStatus === "sold" ? (
-                          <span>
-                            {t.soldAt}:{" "}
-                            {formatDisplayDate(item.transactionClosedAt, locale)}
-                          </span>
-                        ) : null}
-
-                        {item.transactionStatus === "rented" ? (
-                          <span>
-                            {t.rentedAt}:{" "}
-                            {formatDisplayDate(item.transactionClosedAt, locale)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
-                      <button
-                        onClick={() => {
-                          if (!canEdit) return;
-                          router.push(
-                            `/pemilik/iklan/edit/${encodeURIComponent(item.kode)}`
-                          );
-                        }}
-                        disabled={!canEdit}
-                        className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {t.edit}
-                      </button>
-
-                      {!boostActive && canBuyAddon ? (
-                        <button
-                          onClick={() => activateAddon(item, "boost")}
-                          disabled={isBoosting}
-                          className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
-                        >
-                          {isBoosting ? t.loading : t.boost}
-                        </button>
-                      ) : null}
-
-                      {!spotlightActive && canBuyAddon ? (
-                        <button
-                          onClick={() => activateAddon(item, "spotlight")}
-                          disabled={isSpotlighting}
-                          className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                        >
-                          {isSpotlighting ? t.loading : t.spotlight}
-                        </button>
-                      ) : null}
-
-                      {!isClosed && canPause && !item.isPaused ? (
-                        <button
-                          onClick={() => toggleJeda(item)}
-                          disabled={isToggling}
-                          className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {isToggling ? t.loading : t.pause}
-                        </button>
-                      ) : null}
-
-                      {!isClosed && canPause && item.isPaused ? (
-                        <button
-                          onClick={() => toggleJeda(item)}
-                          disabled={isToggling}
-                          className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {isToggling ? t.loading : t.activate}
-                        </button>
-                      ) : null}
-
-                      {!isClosed ? (
-                        <>
-                          <button
-                            onClick={() => markTransaction(item, "sold")}
-                            disabled={
-                              isMarking ||
-                              effectiveStatus === "PENDING_PAYMENT" ||
-                              effectiveStatus === "PENDING_APPROVAL"
-                            }
-                            className="shrink-0 rounded-xl border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${ui.badgeClass}`}
                           >
-                            {isMarking ? t.loading : t.sold}
-                          </button>
+                            <BadgeIcon className="h-3 w-3" />
+                            {ui.label}
+                          </span>
 
-                          <button
-                            onClick={() => markTransaction(item, "rented")}
-                            disabled={
-                              isMarking ||
-                              effectiveStatus === "PENDING_PAYMENT" ||
-                              effectiveStatus === "PENDING_APPROVAL"
-                            }
-                            className="shrink-0 rounded-xl border border-sky-300 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
-                          >
-                            {isMarking ? t.loading : t.rented}
-                          </button>
-                        </>
-                      ) : null}
+                          {item.verifiedOk ? (
+                            <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] text-green-700">
+                              {t.verified}
+                            </span>
+                          ) : null}
 
-                      {canRenew ? (
+                          {featuredActive ? (
+                            <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] text-purple-700">
+                              {t.featured}
+                            </span>
+                          ) : null}
+
+                          {boostActive && !isClosed ? (
+                            <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] text-sky-700">
+                              {t.boostActive}
+                            </span>
+                          ) : null}
+
+                          {spotlightActive && !isClosed ? (
+                            <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-700">
+                              {t.spotlightActive}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+                          <span>
+                            {t.code}: {item.kode}
+                          </span>
+                          <span>{item.postedDate}</span>
+                        </div>
+
+                        <p className="mt-3 break-words text-base font-medium text-[#1C1C1E]">
+                          {item.title}
+                        </p>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          {formatCurrency(item.price, locale)}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                          <span>
+                            {t.listingUntil}:{" "}
+                            {formatDisplayDate(item.listingExpiresAt, locale)}
+                          </span>
+
+                          {featuredActive ? (
+                            <span>
+                              {t.featuredUntil}:{" "}
+                              {formatDisplayDate(item.featuredExpiresAt, locale)}
+                            </span>
+                          ) : null}
+
+                          {boostActive && !isClosed ? (
+                            <span>
+                              {t.boostUntil}:{" "}
+                              {formatDisplayDate(item.boostExpiresAt, locale)}
+                            </span>
+                          ) : null}
+
+                          {spotlightActive && !isClosed ? (
+                            <span>
+                              {t.spotlightUntil}:{" "}
+                              {formatDisplayDate(item.spotlightExpiresAt, locale)}
+                            </span>
+                          ) : null}
+
+                          {item.transactionStatus === "sold" ? (
+                            <span>
+                              {t.soldAt}:{" "}
+                              {formatDisplayDate(item.transactionClosedAt, locale)}
+                            </span>
+                          ) : null}
+
+                          {item.transactionStatus === "rented" ? (
+                            <span>
+                              {t.rentedAt}:{" "}
+                              {formatDisplayDate(item.transactionClosedAt, locale)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
                         <button
-                          onClick={() =>
+                          onClick={() => {
+                            if (!canEdit) return;
                             router.push(
-                              `/pemilik/iklan/pembayaran?kode=${encodeURIComponent(
-                                item.kode
-                              )}&action=renew`
-                            )
-                          }
-                          className="shrink-0 rounded-xl bg-[#1C1C1E] px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+                              `/pemilik/iklan/edit/${encodeURIComponent(item.kode)}`
+                            );
+                          }}
+                          disabled={!canEdit}
+                          className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {t.renew}
+                          {t.edit}
                         </button>
-                      ) : null}
+
+                        {!boostActive && canBuyAddon ? (
+                          <button
+                            onClick={() => activateAddon(item, "boost")}
+                            disabled={isBoosting}
+                            className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+                          >
+                            {isBoosting ? t.loading : t.boost}
+                          </button>
+                        ) : null}
+
+                        {!spotlightActive && canBuyAddon ? (
+                          <button
+                            onClick={() => activateAddon(item, "spotlight")}
+                            disabled={isSpotlighting}
+                            className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                          >
+                            {isSpotlighting ? t.loading : t.spotlight}
+                          </button>
+                        ) : null}
+
+                        {!isClosed && canPause && !item.isPaused ? (
+                          <button
+                            onClick={() => toggleJeda(item)}
+                            disabled={isToggling}
+                            className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            {isToggling ? t.loading : t.pause}
+                          </button>
+                        ) : null}
+
+                        {!isClosed && canPause && item.isPaused ? (
+                          <button
+                            onClick={() => toggleJeda(item)}
+                            disabled={isToggling}
+                            className="shrink-0 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            {isToggling ? t.loading : t.activate}
+                          </button>
+                        ) : null}
+
+                        {!isClosed ? (
+                          <>
+                            <button
+                              onClick={() => markTransaction(item, "sold")}
+                              disabled={
+                                isMarking ||
+                                effectiveStatus === "PENDING_PAYMENT" ||
+                                effectiveStatus === "PENDING_APPROVAL"
+                              }
+                              className="shrink-0 rounded-xl border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                            >
+                              {isMarking ? t.loading : t.sold}
+                            </button>
+
+                            <button
+                              onClick={() => markTransaction(item, "rented")}
+                              disabled={
+                                isMarking ||
+                                effectiveStatus === "PENDING_PAYMENT" ||
+                                effectiveStatus === "PENDING_APPROVAL"
+                              }
+                              className="shrink-0 rounded-xl border border-sky-300 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+                            >
+                              {isMarking ? t.loading : t.rented}
+                            </button>
+                          </>
+                        ) : null}
+
+                        {canRenew ? (
+                          <button
+                            onClick={() =>
+                              router.push(
+                                `/pemilik/iklan/pembayaran?kode=${encodeURIComponent(
+                                  item.kode
+                                )}&action=renew`
+                              )
+                            }
+                            className="shrink-0 rounded-xl bg-[#1C1C1E] px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+                          >
+                            {t.renew}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
