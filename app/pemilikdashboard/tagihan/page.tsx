@@ -480,9 +480,9 @@ export default function PemilikTagihanPage() {
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold text-[#1C1C1E]">{t.pageTitle}</h1>
-        <p className="text-sm text-gray-500">{t.pageSubtitle}</p>
+        <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
       </div>
 
       {justPaid ? (
@@ -497,31 +497,31 @@ export default function PemilikTagihanPage() {
         </div>
       ) : null}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <p className="text-sm text-gray-500">{t.totalRecords}</p>
           <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
             {bills.length}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <p className="text-sm text-gray-500">{t.totalPaid}</p>
-          <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+          <p className="mt-2 break-words text-2xl font-bold text-[#1C1C1E]">
             {formatCurrency(totalPaidAmount, "IDR", locale)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <p className="text-sm text-gray-500">{t.totalPending}</p>
-          <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+          <p className="mt-2 break-words text-2xl font-bold text-[#1C1C1E]">
             {formatCurrency(totalPendingAmount, "IDR", locale)}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <p className="text-sm text-gray-500">{t.latestSuccessfulPayment}</p>
-          <p className="mt-2 text-lg font-bold text-[#1C1C1E]">
+          <p className="mt-2 text-base font-bold text-[#1C1C1E] sm:text-lg">
             {latestPaidBill
               ? formatDateTime(latestPaidBill.paidAt, locale)
               : "-"}
@@ -530,18 +530,18 @@ export default function PemilikTagihanPage() {
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 p-6">
+        <div className="border-b border-gray-100 p-4 sm:p-6">
           <h2 className="font-semibold text-[#1C1C1E]">{t.historyTitle}</h2>
         </div>
 
         {isLoading ? (
-          <div className="p-6 text-sm text-gray-500">{t.loadingBills}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.loadingBills}</div>
         ) : errorMessage ? (
-          <div className="p-6 text-sm text-red-600">
+          <div className="p-4 text-sm text-red-600 sm:p-6">
             {t.loadFailed} {errorMessage}
           </div>
         ) : bills.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">{t.noBills}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.noBills}</div>
         ) : (
           <div className="divide-y divide-gray-100">
             {bills.map((bill) => {
@@ -551,7 +551,7 @@ export default function PemilikTagihanPage() {
               return (
                 <div
                   key={bill.id}
-                  className="flex flex-col gap-4 p-6 md:flex-row md:items-start md:justify-between"
+                  className="flex flex-col gap-4 p-4 sm:p-6 md:flex-row md:items-start md:justify-between"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
@@ -571,7 +571,7 @@ export default function PemilikTagihanPage() {
                       </div>
                     </div>
 
-                    <p className="mt-3 font-medium text-[#1C1C1E]">
+                    <p className="mt-3 break-words text-sm font-medium text-[#1C1C1E] sm:text-base">
                       {bill.title}
                     </p>
 
@@ -579,32 +579,32 @@ export default function PemilikTagihanPage() {
                       {formatCurrency(bill.amount, bill.currency, locale)}
                     </p>
 
-                    <div className="mt-3 text-xs text-gray-500">
+                    <div className="mt-3 text-xs leading-5 text-gray-500">
                       {t.code}: {bill.listingCode} • {t.type}:{" "}
                       {buildTypeLabel(bill, lang)}
                     </div>
 
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 text-xs leading-5 text-gray-500">
                       {t.gateway}: {bill.gateway} • {t.method}:{" "}
                       {bill.paymentMethod}
                     </div>
 
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 break-all text-xs leading-5 text-gray-500">
                       {t.reference}: {bill.gatewayReference}
                     </div>
 
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 text-xs leading-5 text-gray-500">
                       {t.autoRenew}: {bill.autoRenew ? t.active : t.inactive}
                     </div>
 
                     {bill.expiresAt ? (
-                      <div className="mt-1 text-xs text-gray-500">
+                      <div className="mt-1 text-xs leading-5 text-gray-500">
                         {t.expiresAt}: {formatDateTime(bill.expiresAt, locale)}
                       </div>
                     ) : null}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
                     {bill.status === "pending" && bill.checkoutUrl ? (
                       <button
                         onClick={() => handleContinuePayment(bill)}
@@ -629,9 +629,9 @@ export default function PemilikTagihanPage() {
       </div>
 
       {bills.length > 0 ? (
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <p className="text-sm text-gray-500">{t.noteTitle}</p>
-          <p className="mt-2 text-sm text-gray-700">{t.noteBody}</p>
+          <p className="mt-2 text-sm leading-6 text-gray-700">{t.noteBody}</p>
         </div>
       ) : null}
     </div>
