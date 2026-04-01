@@ -252,11 +252,11 @@ export default function AgentReceiptDetailPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-6 md:px-8 md:py-8">
-      <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-5 sm:py-6 md:px-6 md:py-7 lg:px-8 lg:py-8">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href="/agentdashboard/pembayaran"
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50 sm:px-4 sm:text-sm"
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50 sm:px-3.5 sm:text-xs md:px-4 md:text-sm"
         >
           <ArrowLeft size={15} />
           {lang === "id" ? "Kembali ke Pembayaran" : "Back to Payment"}
@@ -265,7 +265,7 @@ export default function AgentReceiptDetailPage() {
         <button
           type="button"
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-3.5 py-2 text-xs font-medium text-white shadow-sm transition hover:opacity-90 sm:px-4 sm:text-sm"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-3 py-2 text-[11px] font-medium text-white shadow-sm transition hover:opacity-90 sm:px-3.5 sm:text-xs md:px-4 md:text-sm"
         >
           <Printer size={15} />
           {lang === "id" ? "Cetak" : "Print"}
@@ -273,50 +273,50 @@ export default function AgentReceiptDetailPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-[24px] border border-gray-200 bg-white p-5 text-xs text-gray-500 shadow-sm sm:rounded-[28px] sm:p-8 sm:text-sm">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-5 text-xs text-gray-500 shadow-sm sm:rounded-[26px] sm:p-6 md:rounded-[28px] md:p-8 md:text-sm">
           {lang === "id" ? "Memuat receipt..." : "Loading receipt..."}
         </div>
       ) : error || !payment ? (
-        <div className="rounded-[24px] border border-gray-200 bg-white p-5 text-xs text-red-600 shadow-sm sm:rounded-[28px] sm:p-8 sm:text-sm">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-5 text-xs text-red-600 shadow-sm sm:rounded-[26px] sm:p-6 md:rounded-[28px] md:p-8 md:text-sm">
           {error ||
             (lang === "id" ? "Receipt tidak ditemukan." : "Receipt not found.")}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm sm:rounded-[28px]">
-          <div className="border-b border-gray-100 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
-            <div className="flex flex-col gap-6 sm:gap-7 md:flex-row md:items-start md:justify-between md:gap-8">
+        <div className="overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm sm:rounded-[26px] md:rounded-[28px]">
+          <div className="border-b border-gray-100 px-4 py-5 sm:px-5 sm:py-6 md:px-7 md:py-7 lg:px-8 lg:py-8">
+            <div className="flex flex-col gap-5 sm:gap-6 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-3 sm:gap-4">
                 <img
                   src="/tetamo-logo-transparent1.png"
                   alt="Tetamo"
-                  className="h-12 w-12 rounded-2xl border border-gray-200 bg-white object-contain p-2 sm:h-14 sm:w-14 md:h-16 md:w-16"
+                  className="h-11 w-11 rounded-2xl border border-gray-200 bg-white object-contain p-2 sm:h-12 sm:w-12 md:h-14 md:w-14 lg:h-16 lg:w-16"
                 />
 
                 <div className="min-w-0">
-                  <p className="text-lg font-bold leading-tight text-[#1C1C1E] sm:text-xl md:text-2xl">
+                  <p className="text-sm font-bold leading-tight text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
                     Tetamo Pty Ltd
                   </p>
-                  <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+                  <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
                     ABN 18 689 780 970
                   </p>
-                  <p className="mt-2 text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
+                  <p className="mt-1.5 text-[11px] leading-5 text-gray-500 sm:text-xs sm:leading-5 md:text-sm md:leading-6">
                     Suite 809 168 Kent Street Sydney NSW 2000
                   </p>
-                  <p className="text-xs text-gray-500 sm:text-sm">
+                  <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
                     www.tetamo.com
                   </p>
                 </div>
               </div>
 
               <div className="text-left md:text-right">
-                <p className="text-2xl font-bold tracking-tight text-[#1C1C1E] sm:text-[28px] md:text-3xl">
-                  {lang === "id" ? "Receipt" : "Receipt"}
+                <p className="text-lg font-bold tracking-tight text-[#1C1C1E] sm:text-xl md:text-2xl lg:text-3xl">
+                  Receipt
                 </p>
-                <p className="mt-1.5 break-words text-sm font-medium text-gray-500 sm:mt-2 sm:text-base md:text-lg">
+                <p className="mt-1 break-words text-xs font-medium text-gray-500 sm:text-sm md:text-sm lg:text-base">
                   {payment.receipt_number || "-"}
                 </p>
                 <span
-                  className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:mt-4 sm:px-3 sm:text-xs ${paymentStatusClasses(
+                  className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] md:text-xs ${paymentStatusClasses(
                     payment.status
                   )}`}
                 >
@@ -326,27 +326,27 @@ export default function AgentReceiptDetailPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 border-b border-gray-100 px-4 py-5 sm:gap-8 sm:px-6 sm:py-6 md:grid-cols-2 md:px-8 md:py-8">
+          <div className="grid gap-5 border-b border-gray-100 px-4 py-5 sm:px-5 sm:py-6 md:grid-cols-2 md:px-7 md:py-7 lg:px-8 lg:py-8">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-[11px] md:text-xs">
                 {lang === "id" ? "Diterima Dari" : "Received From"}
               </p>
-              <p className="mt-3 text-lg font-semibold text-[#1C1C1E] sm:mt-4 sm:text-xl md:text-2xl">
+              <p className="mt-3 text-sm font-semibold text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
                 {billing?.customer_name || "Unknown"}
               </p>
-              <p className="mt-1 text-sm text-gray-500 sm:text-base">
+              <p className="mt-1 text-xs text-gray-500 sm:text-sm md:text-sm">
                 {billing?.customer_email || "-"}
               </p>
-              <p className="text-sm text-gray-500 sm:text-base">
+              <p className="text-xs text-gray-500 sm:text-sm md:text-sm">
                 {billing?.customer_phone || "-"}
               </p>
-              <p className="text-sm leading-6 text-gray-500 sm:text-base sm:leading-7">
+              <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6 md:text-sm md:leading-6">
                 {billing?.customer_address || "-"}
               </p>
             </div>
 
-            <div className="grid gap-3 text-sm sm:gap-4 sm:text-[15px] md:text-base">
-              <div className="flex items-center justify-between gap-4 sm:gap-6">
+            <div className="grid gap-2.5 text-xs sm:gap-3 sm:text-sm md:gap-4 md:text-sm">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-500">
                   {lang === "id" ? "Tanggal Receipt" : "Receipt Date"}
                 </span>
@@ -355,7 +355,7 @@ export default function AgentReceiptDetailPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-4 sm:gap-6">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-500">
                   {lang === "id" ? "Nomor Invoice" : "Invoice Number"}
                 </span>
@@ -364,7 +364,7 @@ export default function AgentReceiptDetailPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-4 sm:gap-6">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-500">
                   {lang === "id" ? "Metode Pembayaran" : "Payment Method"}
                 </span>
@@ -377,7 +377,7 @@ export default function AgentReceiptDetailPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-4 sm:gap-6">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-500">
                   {lang === "id" ? "Referensi" : "Reference"}
                 </span>
@@ -388,15 +388,15 @@ export default function AgentReceiptDetailPage() {
             </div>
           </div>
 
-          <div className="border-b border-gray-100 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
+          <div className="border-b border-gray-100 px-4 py-5 sm:px-5 sm:py-6 md:px-7 md:py-7 lg:px-8 lg:py-8">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-[11px] md:text-xs">
               {lang === "id" ? "Detail Pembayaran" : "Payment Details"}
             </p>
 
-            <div className="mt-4 rounded-3xl border border-gray-200 sm:mt-5">
-              <div className="grid gap-4 border-b border-gray-100 px-4 py-4 sm:gap-5 sm:px-6 sm:py-6 md:grid-cols-[1fr_auto]">
+            <div className="mt-4 rounded-3xl border border-gray-200">
+              <div className="grid gap-4 border-b border-gray-100 px-4 py-4 sm:px-5 sm:py-5 md:grid-cols-[1fr_auto] md:px-6 md:py-6">
                 <div className="min-w-0">
-                  <p className="text-lg font-semibold leading-snug text-[#1C1C1E] sm:text-xl md:text-2xl">
+                  <p className="text-sm font-semibold leading-snug text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
                     {payment.product_name ||
                       payment.payment_title ||
                       payment.payment_description ||
@@ -405,21 +405,17 @@ export default function AgentReceiptDetailPage() {
                       "-"}
                   </p>
 
-                  <p className="mt-2 text-sm text-gray-500 sm:text-base">
+                  <p className="mt-2 text-xs text-gray-500 sm:text-sm md:text-sm">
                     {billing?.listing_code
-                      ? lang === "id"
-                        ? `Listing: ${billing.listing_code}`
-                        : `Listing: ${billing.listing_code}`
-                      : lang === "id"
-                      ? "Listing: -"
+                      ? `Listing: ${billing.listing_code}`
                       : "Listing: -"}
                   </p>
 
-                  <p className="text-sm text-gray-500 sm:text-base">
+                  <p className="text-xs text-gray-500 sm:text-sm md:text-sm">
                     {billing?.property_title || "-"}
                   </p>
 
-                  <p className="text-sm text-gray-500 sm:text-base">
+                  <p className="text-xs text-gray-500 sm:text-sm md:text-sm">
                     {billing?.property_city || "-"}
                     {billing?.property_province
                       ? `, ${billing.property_province}`
@@ -428,21 +424,21 @@ export default function AgentReceiptDetailPage() {
                 </div>
 
                 <div className="text-left md:text-right">
-                  <p className="break-words text-xl font-semibold text-[#1C1C1E] sm:text-2xl md:text-3xl">
+                  <p className="break-words text-base font-semibold text-[#1C1C1E] sm:text-lg md:text-xl lg:text-2xl">
                     {paymentAmount}
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-5 px-4 py-4 sm:gap-8 sm:px-6 sm:py-6 md:grid-cols-[1fr_280px]">
+              <div className="grid gap-4 px-4 py-4 sm:px-5 sm:py-5 md:grid-cols-[1fr_240px] md:px-6 md:py-6 lg:grid-cols-[1fr_260px]">
                 <div />
 
-                <div className="rounded-3xl bg-gray-50 p-4 sm:p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm font-semibold text-[#1C1C1E] sm:text-base md:text-lg">
+                <div className="rounded-3xl bg-gray-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-[#1C1C1E] sm:text-sm md:text-sm lg:text-base">
                       {lang === "id" ? "Jumlah Dibayar" : "Amount Paid"}
                     </span>
-                    <span className="break-words text-lg font-bold text-[#1C1C1E] sm:text-xl md:text-2xl">
+                    <span className="break-words text-sm font-bold text-[#1C1C1E] sm:text-base md:text-lg lg:text-xl">
                       {paymentAmount}
                     </span>
                   </div>
@@ -451,12 +447,12 @@ export default function AgentReceiptDetailPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 px-4 py-5 sm:gap-8 sm:px-6 sm:py-6 md:grid-cols-2 md:px-8 md:py-8">
+          <div className="grid gap-5 px-4 py-5 sm:px-5 sm:py-6 md:grid-cols-2 md:px-7 md:py-7 lg:px-8 lg:py-8">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-[11px] md:text-xs">
                 {lang === "id" ? "Catatan" : "Notes"}
               </p>
-              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
+              <p className="mt-3 whitespace-pre-line text-xs leading-6 text-gray-600 sm:text-sm md:text-sm lg:text-base lg:leading-7">
                 {payment.billing_note ||
                   payment.payment_description ||
                   billing?.notes ||
@@ -467,10 +463,10 @@ export default function AgentReceiptDetailPage() {
             </div>
 
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-[11px] md:text-xs">
                 {lang === "id" ? "Konfirmasi" : "Confirmation"}
               </p>
-              <p className="mt-3 text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
+              <p className="mt-3 text-xs leading-6 text-gray-600 sm:text-sm md:text-sm lg:text-base lg:leading-7">
                 {lang === "id"
                   ? "Receipt ini mengonfirmasi bahwa pembayaran telah diterima oleh sistem billing Tetamo."
                   : "This receipt confirms that payment has been received by the Tetamo billing system."}
