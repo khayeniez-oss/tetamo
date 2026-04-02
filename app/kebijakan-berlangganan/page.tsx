@@ -10,7 +10,6 @@ import {
   Pencil,
   Save,
   X,
-  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { useLanguage } from "@/app/context/LanguageContext";
@@ -61,6 +60,7 @@ function normalizeRole(role?: string | null) {
 
 function isAdminRole(role?: string | null) {
   const normalized = normalizeRole(role);
+
   return (
     normalized === "admin" ||
     normalized === "super_admin" ||
@@ -88,7 +88,6 @@ export default function SubscriptionPolicyPage() {
 
   const [openSections, setOpenSections] = useState<string[]>(["1"]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [checkingAdmin, setCheckingAdmin] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
   const t = (value: LocalizedText) => (lang === "id" ? value.id : value.en);
@@ -97,15 +96,6 @@ export default function SubscriptionPolicyPage() {
     () => ({
       backToHome: lang === "id" ? "Kembali ke Beranda" : "Back to Home",
       policyType: lang === "id" ? "Kebijakan Platform" : "Platform Policy",
-      readOnly: lang === "id" ? "Mode Baca" : "Read Only",
-      viewerModeText:
-        lang === "id"
-          ? "Pengunjung hanya dapat membaca halaman ini."
-          : "Viewers can only read this page.",
-      adminModeText:
-        lang === "id"
-          ? "Admin dapat mengedit konten halaman ini."
-          : "Admins can edit this page content.",
       edit: lang === "id" ? "Edit" : "Edit",
       save: lang === "id" ? "Simpan" : "Save",
       cancel: lang === "id" ? "Batal" : "Cancel",
@@ -119,12 +109,27 @@ export default function SubscriptionPolicyPage() {
       bodyLabel: lang === "id" ? "Isi" : "Body",
       indonesianLabel: "ID",
       englishLabel: "EN",
-      adminChecking:
+      quickOverview: lang === "id" ? "Ringkasan" : "Overview",
+      quickOverviewText:
         lang === "id"
-          ? "Memeriksa akses admin..."
-          : "Checking admin access...",
+          ? "Klik setiap bagian untuk membuka isi kebijakan berlangganan."
+          : "Click each section to open the subscription policy content.",
+      lastUpdated: lang === "id" ? "Terakhir diperbarui" : "Last updated",
+      stillNeedHelp: lang === "id" ? "Masih butuh bantuan?" : "Still need help?",
+      stillNeedHelpText:
+        lang === "id"
+          ? "Jika Anda memiliki pertanyaan terkait kebijakan berlangganan, silakan hubungi kami."
+          : "If you have questions regarding the subscription policy, please contact us.",
     }),
     [lang]
+  );
+
+  const lastUpdated = useMemo(
+    () => ({
+      id: "26 Maret 2026",
+      en: "26 March 2026",
+    }),
+    []
   );
 
   useEffect(() => {
@@ -136,10 +141,7 @@ export default function SubscriptionPolicyPage() {
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
         if (!supabaseUrl || !supabaseAnonKey) {
-          if (mounted) {
-            setIsAdmin(false);
-            setCheckingAdmin(false);
-          }
+          if (mounted) setIsAdmin(false);
           return;
         }
 
@@ -152,7 +154,6 @@ export default function SubscriptionPolicyPage() {
 
         if (!user) {
           setIsAdmin(false);
-          setCheckingAdmin(false);
           return;
         }
 
@@ -163,7 +164,6 @@ export default function SubscriptionPolicyPage() {
 
         if (directRoles.some((role) => isAdminRole(role))) {
           setIsAdmin(true);
-          setCheckingAdmin(false);
           return;
         }
 
@@ -179,20 +179,13 @@ export default function SubscriptionPolicyPage() {
           if (!error && data?.role && isAdminRole(data.role)) {
             if (!mounted) return;
             setIsAdmin(true);
-            setCheckingAdmin(false);
             return;
           }
         }
 
-        if (mounted) {
-          setIsAdmin(false);
-          setCheckingAdmin(false);
-        }
+        if (mounted) setIsAdmin(false);
       } catch {
-        if (mounted) {
-          setIsAdmin(false);
-          setCheckingAdmin(false);
-        }
+        if (mounted) setIsAdmin(false);
       }
     }
 
@@ -244,15 +237,15 @@ export default function SubscriptionPolicyPage() {
   };
 
   const updateMetaField = (
-    index: number,
+    key: string,
     type: "label" | "value",
     langKey: "id" | "en",
     value: string
   ) => {
     setDraftPageContent((current) => ({
       ...current,
-      metadata: current.metadata.map((item, itemIndex) =>
-        itemIndex === index
+      metadata: current.metadata.map((item) =>
+        item.key === key
           ? {
               ...item,
               [type]: {
@@ -289,38 +282,49 @@ export default function SubscriptionPolicyPage() {
   const visiblePageContent = isEditing ? draftPageContent : pageContent;
   const visibleSections = isEditing ? draftSections : sections;
 
+  const visibleMetadata = visiblePageContent.metadata.filter(
+    (item) => item.key !== "contactEmail"
+  );
+
+  const contactEmailValue =
+    visiblePageContent.metadata.find((item) => item.key === "contactEmail")
+      ?.value ?? {
+      id: "support@tetamo.com",
+      en: "support@tetamo.com",
+    };
+
+  const inputClass =
+    "w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] text-gray-900 outline-none focus:border-gray-400 sm:px-4 sm:py-3 sm:text-sm";
+
   const renderMetaValue = (item: SubscriptionPolicyMetaItem) => {
     const value = t(item.value);
 
     if (isEditing) {
-      const metaIndex = visiblePageContent.metadata.findIndex(
-        (metaItem) => metaItem.key === item.key
-      );
-
       return (
         <div className="space-y-3">
           <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+            <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
               {ui.indonesianLabel}
             </div>
             <input
-              value={visiblePageContent.metadata[metaIndex].value.id}
+              value={item.value.id}
               onChange={(e) =>
-                updateMetaField(metaIndex, "value", "id", e.target.value)
+                updateMetaField(item.key, "value", "id", e.target.value)
               }
-              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+              className={inputClass}
             />
           </div>
+
           <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+            <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
               {ui.englishLabel}
             </div>
             <input
-              value={visiblePageContent.metadata[metaIndex].value.en}
+              value={item.value.en}
               onChange={(e) =>
-                updateMetaField(metaIndex, "value", "en", e.target.value)
+                updateMetaField(item.key, "value", "en", e.target.value)
               }
-              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+              className={inputClass}
             />
           </div>
         </div>
@@ -332,7 +336,7 @@ export default function SubscriptionPolicyPage() {
         <Link
           href={`https://${value.replace(/^https?:\/\//, "")}`}
           target="_blank"
-          className="break-all text-sm font-medium text-gray-900 underline underline-offset-4"
+          className="break-all text-[13px] font-medium text-gray-900 underline underline-offset-4 sm:text-sm"
         >
           {value}
         </Link>
@@ -343,60 +347,41 @@ export default function SubscriptionPolicyPage() {
       return (
         <Link
           href={`mailto:${value}`}
-          className="break-all text-sm font-medium text-gray-900 underline underline-offset-4"
+          className="break-all text-[13px] font-medium text-gray-900 underline underline-offset-4 sm:text-sm"
         >
           {value}
         </Link>
       );
     }
 
-    return <p className="text-sm font-medium text-gray-900">{value}</p>;
+    return <p className="text-[13px] font-medium text-gray-900 sm:text-sm">{value}</p>;
   };
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-[#111111]">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <div className="mb-6">
+      <div className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
+        <div className="mb-4 sm:mb-5">
           <Link
             href="/"
-            className="inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:text-black"
+            className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3.5 py-2 text-[11px] font-medium text-gray-700 transition hover:border-gray-300 hover:text-black sm:px-4 sm:text-sm"
           >
             {ui.backToHome}
           </Link>
         </div>
 
-        <div className="overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white px-5 py-8 sm:px-8">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-600">
+        <div className="overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-sm sm:rounded-[24px] lg:rounded-[28px]">
+          <div className="border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-600 sm:text-[10px]">
                 {ui.policyType}
               </span>
-
-              <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-600">
-                {ui.readOnly}
-              </span>
-
-              {checkingAdmin ? (
-                <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600">
-                  {ui.adminChecking}
-                </span>
-              ) : isAdmin ? (
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  {ui.adminModeText}
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600">
-                  {ui.viewerModeText}
-                </span>
-              )}
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-3.5 sm:space-y-4.5">
               {isEditing ? (
                 <>
                   <div>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                       {ui.titleLabel} · {ui.indonesianLabel}
                     </div>
                     <input
@@ -404,12 +389,12 @@ export default function SubscriptionPolicyPage() {
                       onChange={(e) =>
                         updatePageLocalizedField("title", "id", e.target.value)
                       }
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-2xl font-semibold outline-none focus:border-gray-400"
+                      className={`${inputClass} text-base font-semibold sm:text-lg lg:text-xl`}
                     />
                   </div>
 
                   <div>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                       {ui.titleLabel} · {ui.englishLabel}
                     </div>
                     <input
@@ -417,12 +402,12 @@ export default function SubscriptionPolicyPage() {
                       onChange={(e) =>
                         updatePageLocalizedField("title", "en", e.target.value)
                       }
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-lg font-medium outline-none focus:border-gray-400"
+                      className={`${inputClass} font-medium`}
                     />
                   </div>
 
                   <div>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                       {ui.summaryLabel} · {ui.indonesianLabel}
                     </div>
                     <textarea
@@ -430,13 +415,13 @@ export default function SubscriptionPolicyPage() {
                       onChange={(e) =>
                         updatePageLocalizedField("summary", "id", e.target.value)
                       }
-                      rows={3}
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                      rows={4}
+                      className={`${inputClass} min-h-[110px] resize-y py-3`}
                     />
                   </div>
 
                   <div>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                       {ui.summaryLabel} · {ui.englishLabel}
                     </div>
                     <textarea
@@ -444,17 +429,17 @@ export default function SubscriptionPolicyPage() {
                       onChange={(e) =>
                         updatePageLocalizedField("summary", "en", e.target.value)
                       }
-                      rows={3}
-                      className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                      rows={4}
+                      className={`${inputClass} min-h-[110px] resize-y py-3`}
                     />
                   </div>
                 </>
               ) : (
                 <>
-                  <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-[#111111] sm:text-4xl">
+                  <h1 className="max-w-4xl text-[1.35rem] font-semibold leading-tight tracking-tight text-[#111111] sm:text-[1.9rem] lg:text-[2.35rem]">
                     {t(visiblePageContent.title)}
                   </h1>
-                  <p className="max-w-3xl text-sm leading-7 text-gray-600 sm:text-base">
+                  <p className="max-w-3xl text-[13px] leading-6 text-gray-600 sm:text-[14px] sm:leading-7 lg:text-[15px]">
                     {t(visiblePageContent.summary)}
                   </p>
                 </>
@@ -462,11 +447,11 @@ export default function SubscriptionPolicyPage() {
             </div>
 
             {isAdmin && (
-              <div className="mt-6 flex flex-wrap items-center gap-3">
+              <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
                 {!isEditing ? (
                   <button
                     onClick={startEditing}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-[#111111] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-[#111111] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
                   >
                     <Pencil className="h-4 w-4" />
                     {ui.edit}
@@ -475,19 +460,21 @@ export default function SubscriptionPolicyPage() {
                   <>
                     <button
                       onClick={saveEditing}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-[#111111] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                      className="inline-flex items-center gap-2 rounded-2xl bg-[#111111] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
                     >
                       <Save className="h-4 w-4" />
                       {ui.save}
                     </button>
+
                     <button
                       onClick={cancelEditing}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:text-black"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-gray-700 transition hover:border-gray-300 hover:text-black sm:text-sm"
                     >
                       <X className="h-4 w-4" />
                       {ui.cancel}
                     </button>
-                    <span className="text-sm text-gray-500">
+
+                    <span className="text-[11px] text-gray-500 sm:text-xs">
                       {ui.editingNote}
                     </span>
                   </>
@@ -496,68 +483,71 @@ export default function SubscriptionPolicyPage() {
             )}
           </div>
 
-          <div className="border-b border-gray-200 px-5 py-6 sm:px-8">
-            <div className="grid gap-4 md:grid-cols-3">
-              {visiblePageContent.metadata.map((item, index) => {
+          <div className="border-b border-gray-200 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+            <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+              {visibleMetadata.map((item) => {
                 const labelText = t(item.label);
+
                 const icon =
                   item.key === "effectiveDate" ? (
-                    <CalendarDays className="h-5 w-5 text-gray-500" />
+                    <CalendarDays className="h-4 w-4 text-gray-500 sm:h-[18px] sm:w-[18px]" />
                   ) : item.key === "website" ? (
-                    <Globe className="h-5 w-5 text-gray-500" />
+                    <Globe className="h-4 w-4 text-gray-500 sm:h-[18px] sm:w-[18px]" />
                   ) : (
-                    <Mail className="h-5 w-5 text-gray-500" />
+                    <Mail className="h-4 w-4 text-gray-500 sm:h-[18px] sm:w-[18px]" />
                   );
 
                 return (
                   <div
                     key={item.key}
-                    className="rounded-[24px] border border-gray-200 bg-gray-50 p-5"
+                    className="rounded-[18px] border border-gray-200 bg-gray-50 p-4 sm:rounded-[22px] sm:p-5"
                   >
-                    <div className="mb-4 flex items-center gap-3">
+                    <div className="mb-3 flex items-start gap-3">
                       <div className="rounded-2xl border border-gray-200 bg-white p-2">
                         {icon}
                       </div>
+
                       {isEditing ? (
                         <div className="w-full space-y-3">
                           <div>
-                            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                            <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                               {ui.indonesianLabel}
                             </div>
                             <input
-                              value={visiblePageContent.metadata[index].label.id}
+                              value={item.label.id}
                               onChange={(e) =>
                                 updateMetaField(
-                                  index,
+                                  item.key,
                                   "label",
                                   "id",
                                   e.target.value
                                 )
                               }
-                              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                              className={inputClass}
                             />
                           </div>
+
                           <div>
-                            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                            <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                               {ui.englishLabel}
                             </div>
                             <input
-                              value={visiblePageContent.metadata[index].label.en}
+                              value={item.label.en}
                               onChange={(e) =>
                                 updateMetaField(
-                                  index,
+                                  item.key,
                                   "label",
                                   "en",
                                   e.target.value
                                 )
                               }
-                              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                              className={inputClass}
                             />
                           </div>
                         </div>
                       ) : (
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                             {labelText}
                           </p>
                         </div>
@@ -571,14 +561,28 @@ export default function SubscriptionPolicyPage() {
             </div>
           </div>
 
-          <div className="px-5 py-6 sm:px-8">
+          <div className="border-b border-gray-200 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+            <div className="rounded-[18px] border border-gray-200 bg-gray-50 p-4 sm:rounded-[22px] sm:p-5">
+              <div className="text-[14px] font-semibold text-[#111111] sm:text-[15px]">
+                {ui.quickOverview}
+              </div>
+              <p className="mt-2 text-[13px] leading-6 text-gray-600 sm:text-sm">
+                {ui.quickOverviewText}
+              </p>
+              <div className="mt-3 text-[11px] text-gray-600 sm:mt-4 sm:text-xs">
+                {ui.lastUpdated}: {t(lastUpdated)}
+              </div>
+            </div>
+          </div>
+
+          <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
             <div className="mb-4">
-              <h2 className="text-lg font-semibold text-[#111111]">
+              <h2 className="text-[15px] font-semibold text-[#111111] sm:text-base lg:text-lg">
                 {ui.sectionLabel}
               </h2>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {visibleSections.map((section) => {
                 const isOpen = openSections.includes(section.id);
                 const isSubSection = section.level === 2;
@@ -586,19 +590,21 @@ export default function SubscriptionPolicyPage() {
                 return (
                   <div
                     key={section.id}
-                    className={`overflow-hidden rounded-[28px] border border-gray-200 bg-white ${
-                      isSubSection ? "ml-0 sm:ml-6" : ""
+                    className={`overflow-hidden rounded-[18px] border border-gray-200 bg-white sm:rounded-[22px] lg:rounded-[24px] ${
+                      isSubSection ? "ml-0 md:ml-5" : ""
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => toggleSection(section.id)}
-                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left sm:px-6"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:px-5 sm:py-4.5 lg:px-6"
                     >
                       <div className="min-w-0">
                         <h3
-                          className={`font-semibold text-[#111111] ${
-                            isSubSection ? "text-base" : "text-lg"
+                          className={`leading-6 font-semibold text-[#111111] ${
+                            isSubSection
+                              ? "text-[13px] sm:text-[14px] lg:text-[15px]"
+                              : "text-[13px] sm:text-[15px] lg:text-[17px]"
                           }`}
                         >
                           {t(section.title)}
@@ -613,12 +619,12 @@ export default function SubscriptionPolicyPage() {
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-gray-200 bg-gray-50 px-5 py-5 sm:px-6">
+                      <div className="border-t border-gray-200 bg-gray-50 px-4 py-4 sm:px-5 sm:py-5 lg:px-6">
                         {isEditing ? (
-                          <div className="space-y-5">
+                          <div className="space-y-4">
                             <div className="grid gap-4 lg:grid-cols-2">
                               <div>
-                                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                                   {ui.titleLabel} · {ui.indonesianLabel}
                                 </div>
                                 <input
@@ -631,12 +637,12 @@ export default function SubscriptionPolicyPage() {
                                       e.target.value
                                     )
                                   }
-                                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                                  className={inputClass}
                                 />
                               </div>
 
                               <div>
-                                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                                   {ui.titleLabel} · {ui.englishLabel}
                                 </div>
                                 <input
@@ -649,14 +655,14 @@ export default function SubscriptionPolicyPage() {
                                       e.target.value
                                     )
                                   }
-                                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                                  className={inputClass}
                                 />
                               </div>
                             </div>
 
                             <div className="grid gap-4 lg:grid-cols-2">
                               <div>
-                                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                                   {ui.bodyLabel} · {ui.indonesianLabel}
                                 </div>
                                 <textarea
@@ -670,12 +676,12 @@ export default function SubscriptionPolicyPage() {
                                     )
                                   }
                                   rows={10}
-                                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                                  className={`${inputClass} min-h-[220px] resize-y py-3`}
                                 />
                               </div>
 
                               <div>
-                                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[10px]">
                                   {ui.bodyLabel} · {ui.englishLabel}
                                 </div>
                                 <textarea
@@ -689,13 +695,13 @@ export default function SubscriptionPolicyPage() {
                                     )
                                   }
                                   rows={10}
-                                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                                  className={`${inputClass} min-h-[220px] resize-y py-3`}
                                 />
                               </div>
                             </div>
                           </div>
                         ) : (
-                          <div className="whitespace-pre-line text-sm leading-7 text-gray-700">
+                          <div className="whitespace-pre-line text-[13px] leading-6 text-gray-700 sm:text-sm sm:leading-7">
                             {t(section.body)}
                           </div>
                         )}
@@ -706,6 +712,18 @@ export default function SubscriptionPolicyPage() {
               })}
             </div>
           </div>
+        </div>
+
+        <div className="mt-6 rounded-[20px] border border-gray-200 bg-white p-4 shadow-sm sm:mt-8 sm:rounded-[24px] sm:p-5 lg:p-6">
+          <div className="text-[15px] font-semibold text-[#111111] sm:text-base lg:text-lg">
+            {ui.stillNeedHelp}
+          </div>
+          <p className="mt-2 text-[13px] leading-6 text-gray-600 sm:text-sm">
+            {ui.stillNeedHelpText}
+          </p>
+          <p className="mt-4 break-all text-[13px] font-semibold text-[#111111] sm:text-sm">
+            {t(contactEmailValue)}
+          </p>
         </div>
       </div>
     </div>
