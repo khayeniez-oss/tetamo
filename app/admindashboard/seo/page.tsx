@@ -84,6 +84,18 @@ function mapRowToSEOPage(row: SEORow): SEOPage {
   };
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -159,7 +171,17 @@ export default function AdminSEOPage() {
     });
   }, [pages, searchQuery]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, pages.length]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const paginated = filtered.slice(
     (page - 1) * ITEMS_PER_PAGE,
@@ -171,11 +193,10 @@ export default function AdminSEOPage() {
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filtered.length);
 
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
 
   async function toggleIndex(id: string) {
     const target = pages.find((p) => p.id === id);
@@ -317,26 +338,26 @@ export default function AdminSEOPage() {
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           SEO Manager
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Kelola metadata, template SEO, canonical, sitemap, dan indexing halaman Tetamo.
         </p>
       </div>
 
       {loadError ? (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {loadError}
         </div>
       ) : null}
 
-      <div className="mt-6 relative">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -347,11 +368,11 @@ export default function AdminSEOPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="divide-y divide-gray-100">
           {loading ? (
             <div className="p-6 text-sm text-gray-500">Loading SEO pages...</div>
@@ -361,197 +382,243 @@ export default function AdminSEOPage() {
             </div>
           ) : (
             paginated.map((seo) => {
-              const typeUI = seoTypeUI(seo.type);
+              const typeBadge = seoTypeUI(seo.type);
               const isEditing = editingId === seo.id && draft;
               const isWorking = workingId === seo.id;
 
               return (
-                <div
-                  key={seo.id}
-                  className="p-6 flex items-start justify-between gap-6"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex text-xs px-3 py-1 rounded-full border ${
-                          seo.indexed
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : "bg-gray-100 text-gray-700 border-gray-200"
-                        }`}
-                      >
-                        {seo.indexed ? "Indexed" : "No Index"}
-                      </span>
+                <div key={seo.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3.5">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${
+                            seo.indexed
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-gray-100 text-gray-700 border-gray-200"
+                          }`}
+                        >
+                          {seo.indexed ? "Indexed" : "No Index"}
+                        </span>
 
-                      <span
-                        className={`inline-flex text-xs px-3 py-1 rounded-full border ${typeUI.badge}`}
-                      >
-                        {typeUI.label}
-                      </span>
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${typeBadge.badge}`}
+                        >
+                          {typeBadge.label}
+                        </span>
 
-                      <span
-                        className={`inline-flex text-xs px-3 py-1 rounded-full border ${
-                          seo.includedInSitemap
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-gray-100 text-gray-700 border-gray-200"
-                        }`}
-                      >
-                        {seo.includedInSitemap ? "In Sitemap" : "Not in Sitemap"}
-                      </span>
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${
+                            seo.includedInSitemap
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-gray-100 text-gray-700 border-gray-200"
+                          }`}
+                        >
+                          {seo.includedInSitemap ? "In Sitemap" : "Not in Sitemap"}
+                        </span>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="mt-3 grid grid-cols-1 gap-2.5">
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Page Name
+                              </label>
+                              <input
+                                type="text"
+                                value={draft.page}
+                                onChange={(e) =>
+                                  setDraft({ ...draft, page: e.target.value })
+                                }
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Slug
+                              </label>
+                              <input
+                                type="text"
+                                value={draft.slug}
+                                onChange={(e) =>
+                                  setDraft({ ...draft, slug: e.target.value })
+                                }
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              SEO Title
+                            </label>
+                            <input
+                              type="text"
+                              value={draft.title}
+                              onChange={(e) =>
+                                setDraft({ ...draft, title: e.target.value })
+                              }
+                              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Meta Description
+                            </label>
+                            <textarea
+                              value={draft.description}
+                              onChange={(e) =>
+                                setDraft({ ...draft, description: e.target.value })
+                              }
+                              rows={3}
+                              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Canonical
+                              </label>
+                              <input
+                                type="text"
+                                value={draft.canonical}
+                                onChange={(e) =>
+                                  setDraft({ ...draft, canonical: e.target.value })
+                                }
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Type
+                              </label>
+                              <select
+                                value={draft.type}
+                                onChange={(e) =>
+                                  setDraft({
+                                    ...draft,
+                                    type: e.target.value as SEOType,
+                                  })
+                                }
+                                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+                              >
+                                <option value="STATIC">STATIC</option>
+                                <option value="TEMPLATE">TEMPLATE</option>
+                                <option value="TECHNICAL">TECHNICAL</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                            {seo.page}
+                          </p>
+
+                          <div className="mt-3 grid grid-cols-2 gap-2.5">
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Slug
+                              </p>
+                              <p className="mt-1 break-words text-[11px] text-gray-600 sm:text-xs md:text-sm">
+                                {seo.slug}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Canonical
+                              </p>
+                              <p className="mt-1 break-words text-[11px] text-gray-600 sm:text-xs md:text-sm">
+                                {seo.canonical || "-"}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                SEO Title
+                              </p>
+                              <p className="mt-1 text-[11px] leading-5 text-gray-600 sm:text-xs md:text-sm">
+                                {seo.title}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Description
+                              </p>
+                              <p className="mt-1 text-[11px] leading-5 text-gray-600 sm:text-xs md:text-sm">
+                                {seo.description || "-"}
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
 
-                    {isEditing ? (
-                      <div className="mt-4 space-y-3">
-                        <div>
-                          <label className="text-xs text-gray-500">Page Name</label>
-                          <input
-                            type="text"
-                            value={draft.page}
-                            onChange={(e) =>
-                              setDraft({ ...draft, page: e.target.value })
-                            }
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#1C1C1E]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs text-gray-500">Slug</label>
-                          <input
-                            type="text"
-                            value={draft.slug}
-                            onChange={(e) =>
-                              setDraft({ ...draft, slug: e.target.value })
-                            }
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#1C1C1E]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs text-gray-500">SEO Title</label>
-                          <input
-                            type="text"
-                            value={draft.title}
-                            onChange={(e) =>
-                              setDraft({ ...draft, title: e.target.value })
-                            }
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#1C1C1E]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs text-gray-500">Meta Description</label>
-                          <textarea
-                            value={draft.description}
-                            onChange={(e) =>
-                              setDraft({ ...draft, description: e.target.value })
-                            }
-                            rows={3}
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#1C1C1E]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs text-gray-500">Canonical</label>
-                          <input
-                            type="text"
-                            value={draft.canonical}
-                            onChange={(e) =>
-                              setDraft({ ...draft, canonical: e.target.value })
-                            }
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#1C1C1E]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs text-gray-500">Type</label>
-                          <select
-                            value={draft.type}
-                            onChange={(e) =>
-                              setDraft({
-                                ...draft,
-                                type: e.target.value as SEOType,
-                              })
-                            }
-                            className="mt-1 w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none focus:border-[#1C1C1E]"
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={saveEdit}
+                            disabled={isWorking}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 text-[12px] font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50 sm:text-sm"
+                            type="button"
                           >
-                            <option value="STATIC">STATIC</option>
-                            <option value="TEMPLATE">TEMPLATE</option>
-                            <option value="TECHNICAL">TECHNICAL</option>
-                          </select>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="mt-2 font-medium text-[#1C1C1E]">
-                          {seo.page}
-                        </p>
+                            <Save size={15} />
+                            <span>Save</span>
+                          </button>
 
-                        <p className="text-sm text-gray-500">
-                          {seo.slug}
-                        </p>
+                          <button
+                            onClick={cancelEdit}
+                            disabled={isWorking}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:text-sm"
+                            type="button"
+                          >
+                            <X size={15} />
+                            <span>Cancel</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => startEdit(seo)}
+                            disabled={isWorking}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:text-sm"
+                            type="button"
+                          >
+                            <Pencil size={15} />
+                            <span>Edit</span>
+                          </button>
 
-                        <p className="text-xs text-gray-500 mt-1">
-                          {seo.title}
-                        </p>
+                          <button
+                            onClick={() => toggleIndex(seo.id)}
+                            disabled={isWorking}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:text-sm"
+                            type="button"
+                            title="Toggle Index"
+                          >
+                            <Globe size={15} />
+                            <span>Index</span>
+                          </button>
 
-                        <p className="text-xs text-gray-500 mt-1">
-                          {seo.description}
-                        </p>
-
-                        <p className="text-xs text-gray-400 mt-2">
-                          Canonical: {seo.canonical || "-"}
-                        </p>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isEditing ? (
-                      <>
-                        <button
-                          onClick={saveEdit}
-                          disabled={isWorking}
-                          className="px-3 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <Save size={16} />
-                        </button>
-
-                        <button
-                          onClick={cancelEdit}
-                          disabled={isWorking}
-                          className="px-3 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <X size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => startEdit(seo)}
-                          disabled={isWorking}
-                          className="px-3 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <Pencil size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => toggleIndex(seo.id)}
-                          disabled={isWorking}
-                          className="px-3 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                          title="Toggle Index"
-                        >
-                          <Globe size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => toggleSitemap(seo.id)}
-                          disabled={isWorking}
-                          className="px-3 py-2 border rounded-lg hover:bg-gray-50 text-xs font-medium disabled:opacity-50"
-                          title="Toggle Sitemap"
-                        >
-                          SM
-                        </button>
-                      </>
-                    )}
+                          <button
+                            onClick={() => toggleSitemap(seo.id)}
+                            disabled={isWorking}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 sm:text-sm"
+                            type="button"
+                            title="Toggle Sitemap"
+                          >
+                            <span>SM</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -560,29 +627,31 @@ export default function AdminSEOPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-6">
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filtered.length} halaman
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Sebelumnya
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                 page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
+              type="button"
             >
               {p}
             </button>
@@ -591,7 +660,8 @@ export default function AdminSEOPage() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Berikutnya
           </button>
