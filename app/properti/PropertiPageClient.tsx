@@ -17,6 +17,7 @@ import {
   Bookmark,
   Heart,
   Star,
+  Search,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
@@ -1065,6 +1066,7 @@ export default function PropertiPageClient() {
   const [ratingSummaryMap, setRatingSummaryMap] = useState<
     Record<string, RatingSummary>
   >({});
+  const [marketplaceSearch, setMarketplaceSearch] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -1554,6 +1556,22 @@ export default function PropertiPageClient() {
     }
   }
 
+  function handleMarketplaceSearchSubmit(
+    e: React.FormEvent<HTMLFormElement>
+  ) {
+    e.preventDefault();
+
+    const value = marketplaceSearch.trim();
+
+    if (!value) {
+      router.push("/search");
+      return;
+    }
+
+    const encoded = encodeURIComponent(value);
+    router.push(`/search?q=${encoded}&query=${encoded}`);
+  }
+
   const filtered = useMemo(() => {
     let list = [...all];
 
@@ -1612,15 +1630,51 @@ export default function PropertiPageClient() {
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <div className="rounded-3xl bg-[#F7F7F8] px-5 py-6 sm:px-7 sm:py-8">
-          <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
-            {lang === "id" ? "Marketplace Properti" : "Property Marketplace"}
-          </h1>
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
+                {lang === "id" ? "Marketplace Properti" : "Property Marketplace"}
+              </h1>
 
-          <p className="mt-2 text-sm leading-7 text-gray-600 sm:text-base">
-            {lang === "id"
-              ? "Temukan listing properti dari pemilik, agen, dan developer yang aktif."
-              : "Discover active property listings from owners, agents, and developers."}
-          </p>
+              <p className="mt-2 text-sm leading-7 text-gray-600 sm:text-base">
+                {lang === "id"
+                  ? "Temukan listing properti dari pemilik, agen, dan developer yang aktif."
+                  : "Discover active property listings from owners, agents, and developers."}
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleMarketplaceSearchSubmit}
+              className="w-full xl:max-w-[420px]"
+            >
+              <div className="rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#F7F7F8] text-gray-500">
+                    <Search className="h-4 w-4" />
+                  </div>
+
+                  <input
+                    type="text"
+                    value={marketplaceSearch}
+                    onChange={(e) => setMarketplaceSearch(e.target.value)}
+                    placeholder={
+                      lang === "id"
+                        ? "Cari properti di halaman search..."
+                        : "Search properties on the search page..."
+                    }
+                    className="min-w-0 flex-1 bg-transparent text-[13px] text-[#1C1C1E] outline-none placeholder:text-gray-400 sm:text-sm"
+                  />
+
+                  <button
+                    type="submit"
+                    className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
+                  >
+                    {lang === "id" ? "Cari" : "Search"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
             <FilterChip
@@ -1676,17 +1730,17 @@ export default function PropertiPageClient() {
           </div>
         )}
 
-        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className="mt-10 flex items-center justify-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:w-auto"
+            className="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-gray-200 px-3 py-2.5 text-[13px] font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:min-w-[110px] sm:px-4 sm:py-3 sm:text-sm"
           >
             {lang === "id" ? "Sebelumnya" : "Prev"}
           </button>
 
-          <div className="text-sm text-gray-600">
+          <div className="shrink-0 text-center text-[13px] text-gray-600 sm:text-sm">
             {lang === "id" ? "Halaman" : "Page"}{" "}
             <span className="font-semibold">{page}</span> /{" "}
             <span className="font-semibold">{totalPages}</span>
@@ -1696,7 +1750,7 @@ export default function PropertiPageClient() {
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:w-auto"
+            className="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-gray-200 px-3 py-2.5 text-[13px] font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:min-w-[110px] sm:px-4 sm:py-3 sm:text-sm"
           >
             {lang === "id" ? "Berikutnya" : "Next"}
           </button>

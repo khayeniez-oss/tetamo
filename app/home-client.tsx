@@ -838,13 +838,13 @@ export default function HomeClient() {
     <main className="min-h-screen overflow-x-hidden bg-white text-gray-900">
       <section className="bg-[#F7F7F8] px-4 pb-10 pt-8 text-center sm:px-6 sm:pb-12 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
         <div className="mx-auto max-w-5xl">
-          <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.02em] text-[#1C1C1E] sm:text-[36px] md:text-5xl lg:text-[52px]">
+          <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[35px] md:text-5xl lg:text-[42px]">
             {lang === "id"
-              ? "Pasang Iklan dan Temukan Properti Anda di TeTaMo"
+              ? "Pasang Iklan dan Temukan Properti anda di TeTaMo"
               : "Advertise and Find Your Property at TeTaMo"}
           </h1>
 
-          <p className="mx-auto mt-4 max-w-3xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
+          <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
             {lang === "id"
               ? "Platform properti all-in-one di Indonesia — transparan, profesional, dan fokus pada pembeli serius."
               : "Indonesia's all-in-one real estate hub — transparent, professional, and focused on serious buyers."}
