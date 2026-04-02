@@ -504,6 +504,19 @@ const INITIAL_FAQS: FAQItem[] = [
   },
 ];
 
+function normalizeRole(role?: string | null) {
+  return (role || "").toLowerCase().replace(/\s+/g, "_");
+}
+
+function isAdminRole(role?: string | null) {
+  const normalized = normalizeRole(role);
+  return (
+    normalized === "admin" ||
+    normalized === "super_admin" ||
+    normalized === "superadmin"
+  );
+}
+
 export default function FAQPage() {
   const { lang } = useLanguage();
   const isID = lang === "id";
@@ -569,14 +582,34 @@ export default function FAQPage() {
           return;
         }
 
-        const { data } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
+        const directRoles = [
+          normalizeRole(user.app_metadata?.role),
+          normalizeRole(user.user_metadata?.role),
+        ];
+
+        if (directRoles.some((role) => isAdminRole(role))) {
+          setIsAdmin(true);
+          return;
+        }
+
+        const tablesToCheck = ["profiles", "users"];
+
+        for (const tableName of tablesToCheck) {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (!error && data?.role && isAdminRole(data.role)) {
+            if (!mounted) return;
+            setIsAdmin(true);
+            return;
+          }
+        }
 
         if (!mounted) return;
-        setIsAdmin(data?.role === "admin");
+        setIsAdmin(false);
       } catch {
         if (!mounted) return;
         setIsAdmin(false);
@@ -618,6 +651,10 @@ export default function FAQPage() {
   }, [faqs, isID, query]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   const paginatedFaqs = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -703,30 +740,33 @@ export default function FAQPage() {
     return isID ? text.id : text.en;
   }
 
+  const inputClass =
+    "w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] text-[#1C1C1E] outline-none focus:border-gray-400 sm:px-4 sm:py-3 sm:text-sm";
+
   return (
-    <main className="min-h-screen bg-white text-[#1C1C1E]">
-      <section className="relative h-[300px] overflow-hidden md:h-[380px]">
+    <main className="min-h-screen bg-[#fafafa] text-[#1C1C1E]">
+      <section className="relative h-[220px] overflow-hidden sm:h-[260px] lg:h-[320px]">
         <img
           src={heroUrl}
           alt="FAQ Hero"
           className="h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-black/45" />
 
         <div className="absolute inset-x-0 bottom-0">
-          <div className="mx-auto max-w-6xl px-6 pb-10 md:px-8 md:pb-12">
+          <div className="mx-auto w-full max-w-5xl px-3 pb-5 sm:px-5 sm:pb-7 lg:px-8 lg:pb-8">
             <div className="max-w-3xl text-white">
-              <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+              <h1 className="text-[1.9rem] font-semibold tracking-tight sm:text-[2.4rem] lg:text-[3rem]">
                 {t.heroTitle}
               </h1>
 
-              <p className="mt-4 text-base leading-7 text-white/90 md:text-lg">
+              <p className="mt-2 max-w-2xl text-[13px] leading-6 text-white/90 sm:mt-3 sm:text-[14px] sm:leading-7 lg:text-[15px]">
                 {t.heroSubtitle}
               </p>
 
               {isAdmin && (
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center rounded-full border border-white/25 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/15">
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
+                  <label className="inline-flex cursor-pointer items-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur transition hover:bg-white/15 sm:px-5 sm:py-2.5 sm:text-sm">
                     {t.replaceImage}
                     <input
                       type="file"
@@ -739,12 +779,14 @@ export default function FAQPage() {
                   <button
                     type="button"
                     onClick={addFaq}
-                    className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/15"
+                    className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur transition hover:bg-white/15 sm:px-5 sm:py-2.5 sm:text-sm"
                   >
                     {t.addFaq}
                   </button>
 
-                  <span className="text-sm text-white/80">{t.adminMode}</span>
+                  <span className="text-[11px] text-white/80 sm:text-xs">
+                    {t.adminMode}
+                  </span>
                 </div>
               )}
             </div>
@@ -752,10 +794,10 @@ export default function FAQPage() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl px-6 py-14 md:px-8 md:py-16">
-        <div className="rounded-[28px] border border-gray-200 bg-white px-5 py-4 shadow-sm md:px-6">
+      <div className="mx-auto w-full max-w-5xl px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
+        <div className="rounded-[20px] border border-gray-200 bg-white px-4 py-3.5 shadow-sm sm:rounded-[24px] sm:px-5 sm:py-4">
           <div className="flex items-center gap-3">
-            <span className="text-gray-500" aria-hidden>
+            <span className="text-sm text-gray-500" aria-hidden>
               🔍
             </span>
 
@@ -763,14 +805,14 @@ export default function FAQPage() {
               value={query}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={t.searchPlaceholder}
-              className="w-full bg-transparent text-[15px] text-[#1C1C1E] outline-none placeholder:text-gray-400"
+              className="w-full bg-transparent text-[13px] text-[#1C1C1E] outline-none placeholder:text-gray-400 sm:text-sm"
             />
 
             {query.trim().length > 0 && (
               <button
                 type="button"
                 onClick={() => handleSearchChange("")}
-                className="rounded-2xl px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 hover:text-[#1C1C1E]"
+                className="rounded-2xl px-2.5 py-1.5 text-[12px] font-semibold text-gray-600 transition hover:bg-gray-50 hover:text-[#1C1C1E] sm:px-3 sm:py-2 sm:text-sm"
               >
                 {t.clear}
               </button>
@@ -778,12 +820,19 @@ export default function FAQPage() {
           </div>
         </div>
 
-        <p className="mt-3 text-sm text-gray-500">{t.faqOnlySearch}</p>
-        {isAdmin && <p className="mt-2 text-sm text-gray-500">{t.editNote}</p>}
+        <p className="mt-3 text-[12px] text-gray-500 sm:text-sm">
+          {t.faqOnlySearch}
+        </p>
 
-        <div className="mt-10 space-y-4">
+        {isAdmin && (
+          <p className="mt-1.5 text-[12px] text-gray-500 sm:mt-2 sm:text-sm">
+            {t.editNote}
+          </p>
+        )}
+
+        <div className="mt-6 space-y-3 sm:mt-8 sm:space-y-4">
           {filtered.length === 0 ? (
-            <div className="rounded-[28px] border border-gray-200 bg-gray-50 px-8 py-10 text-center text-base text-gray-600">
+            <div className="rounded-[20px] border border-gray-200 bg-gray-50 px-5 py-8 text-center text-[14px] text-gray-600 sm:rounded-[24px] sm:px-8 sm:py-10 sm:text-base">
               {t.noResults} <b>“{query}”</b>.
             </div>
           ) : (
@@ -794,24 +843,24 @@ export default function FAQPage() {
               return (
                 <div
                   key={item.id}
-                  className="overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm"
+                  className="overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-sm sm:rounded-[24px]"
                 >
                   <button
                     type="button"
                     onClick={() => toggleFaq(item.id)}
-                    className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-gray-50"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition hover:bg-gray-50 sm:px-5 sm:py-4.5 lg:px-6"
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold text-gray-500">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500 sm:text-[12px]">
                         {getText(item.category)}
                       </div>
 
-                      <div className="mt-1 text-[18px] font-semibold leading-7 text-[#1C1C1E] md:text-[20px]">
+                      <div className="mt-1 text-[14px] font-semibold leading-6 text-[#1C1C1E] sm:text-[15px] lg:text-[17px]">
                         {getText(item.question)}
                       </div>
                     </div>
 
-                    <span className="mr-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#1C1C1E]">
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#1C1C1E] sm:h-10 sm:w-10">
                       <svg
                         width="18"
                         height="18"
@@ -834,14 +883,14 @@ export default function FAQPage() {
                   </button>
 
                   {isOpen && (
-                    <div className="border-t border-gray-100 px-6 pb-6 pt-5">
-                      <div className="rounded-[24px] bg-gray-50 px-5 py-5 text-[16px] leading-8 text-gray-700 md:text-[17px]">
+                    <div className="border-t border-gray-100 px-4 pb-4 pt-4 sm:px-5 sm:pb-5 sm:pt-5 lg:px-6">
+                      <div className="rounded-[18px] bg-gray-50 px-4 py-4 text-[13px] leading-6 text-gray-700 sm:rounded-[22px] sm:px-5 sm:py-5 sm:text-sm sm:leading-7">
                         {getText(item.answer)}
                       </div>
 
                       {isAdmin && (
                         <div className="mt-4">
-                          <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                             <button
                               type="button"
                               onClick={() =>
@@ -849,7 +898,7 @@ export default function FAQPage() {
                                   prev === item.id ? null : item.id
                                 )
                               }
-                              className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="rounded-full border border-gray-200 px-4 py-2 text-[13px] font-semibold text-[#1C1C1E] transition hover:bg-gray-50 sm:text-sm"
                             >
                               {isEditing ? t.doneEditing : t.editFaq}
                             </button>
@@ -857,14 +906,14 @@ export default function FAQPage() {
                             <button
                               type="button"
                               onClick={() => deleteFaq(item.id)}
-                              className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                              className="rounded-full border border-red-200 px-4 py-2 text-[13px] font-semibold text-red-600 transition hover:bg-red-50 sm:text-sm"
                             >
                               {t.deleteFaq}
                             </button>
                           </div>
 
                           {isEditing && (
-                            <div className="mt-5 space-y-4 rounded-[24px] border border-gray-200 bg-white p-5">
+                            <div className="mt-4 space-y-4 rounded-[18px] border border-gray-200 bg-white p-4 sm:rounded-[22px] sm:p-5">
                               <input
                                 value={getText(item.category)}
                                 onChange={(e) =>
@@ -875,7 +924,7 @@ export default function FAQPage() {
                                   )
                                 }
                                 placeholder={t.categoryPlaceholder}
-                                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none focus:border-gray-400"
+                                className={inputClass}
                               />
 
                               <textarea
@@ -888,7 +937,7 @@ export default function FAQPage() {
                                   )
                                 }
                                 placeholder={t.questionPlaceholder}
-                                className="min-h-[90px] w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[15px] font-semibold text-[#1C1C1E] outline-none focus:border-gray-400"
+                                className="min-h-[90px] w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[13px] font-semibold text-[#1C1C1E] outline-none focus:border-gray-400 sm:text-sm"
                               />
 
                               <textarea
@@ -901,7 +950,7 @@ export default function FAQPage() {
                                   )
                                 }
                                 placeholder={t.answerPlaceholder}
-                                className="min-h-[150px] w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-[15px] leading-7 text-gray-700 outline-none focus:border-gray-400"
+                                className="min-h-[150px] w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-[13px] leading-6 text-gray-700 outline-none focus:border-gray-400 sm:text-sm sm:leading-7"
                               />
                             </div>
                           )}
@@ -916,19 +965,19 @@ export default function FAQPage() {
         </div>
 
         {filtered.length > 0 && (
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-gray-500">
+          <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p className="text-[12px] text-gray-500 sm:text-sm">
               {t.showing} {(currentPage - 1) * ITEMS_PER_PAGE + 1}–
               {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} {t.of}{" "}
               {filtered.length}
             </p>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-[12px] font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
               >
                 {t.previous}
               </button>
@@ -939,7 +988,7 @@ export default function FAQPage() {
                     key={pageNumber}
                     type="button"
                     onClick={() => setCurrentPage(pageNumber)}
-                    className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                    className={`min-w-[38px] rounded-xl border px-3 py-2 text-[12px] font-semibold transition sm:min-w-[42px] sm:px-4 sm:text-sm ${
                       currentPage === pageNumber
                         ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
                         : "border-gray-200 hover:bg-gray-50"
@@ -956,7 +1005,7 @@ export default function FAQPage() {
                   setCurrentPage((p) => Math.min(totalPages, p + 1))
                 }
                 disabled={currentPage === totalPages}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-[12px] font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
               >
                 {t.next}
               </button>
