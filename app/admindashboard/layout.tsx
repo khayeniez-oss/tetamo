@@ -50,6 +50,17 @@ type PlatformSettingsRow = {
   support_phone: string | null;
 };
 
+type NavItem = {
+  href: string;
+  label: string;
+  badgeCount?: number;
+};
+
+type NavSection = {
+  title: string;
+  items: NavItem[];
+};
+
 const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   platformName: "Tetamo",
   supportPhone: "",
@@ -87,7 +98,7 @@ function SidebarBadge({
   if (count <= 0 || hidden) return null;
 
   return (
-    <span className="min-w-[24px] h-6 px-2 rounded-full bg-white text-[#1C1C1E] text-xs font-bold flex items-center justify-center">
+    <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#1C1C1E] sm:min-w-[24px] sm:text-[11px]">
       {count}
     </span>
   );
@@ -110,36 +121,27 @@ export default function AdminDashboardLayout({
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [newBuyerRequestsCount, setNewBuyerRequestsCount] = useState(0);
 
-  const menuItemClass = (href: string) =>
-    [
-      "block px-3 py-3 rounded-xl transition",
-      pathname === href
-        ? "bg-white/10 text-white font-semibold"
+  function isActive(href: string) {
+    return pathname === href;
+  }
+
+  function sidebarLinkClass(href: string) {
+    return [
+      "flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
+      isActive(href)
+        ? "bg-white text-[#1C1C1E] font-semibold shadow-sm"
         : "text-white/85 hover:bg-white/10 hover:text-white",
     ].join(" ");
+  }
 
-  const menuItemWithBadgeClass = (href: string) =>
-    [menuItemClass(href), "flex items-center justify-between gap-3"].join(" ");
-
-  const notificationsMenuClass = useMemo(
-    () => menuItemWithBadgeClass("/admindashboard/notifications"),
-    [pathname]
-  );
-
-  const leadsMenuClass = useMemo(
-    () => menuItemWithBadgeClass("/admindashboard/leads"),
-    [pathname]
-  );
-
-  const approvalsMenuClass = useMemo(
-    () => menuItemWithBadgeClass("/admindashboard/approvals"),
-    [pathname]
-  );
-
-  const buyerRequestsMenuClass = useMemo(
-    () => menuItemWithBadgeClass("/admindashboard/buyer-requests"),
-    [pathname]
-  );
+  function mobileLinkClass(href: string) {
+    return [
+      "flex min-h-[48px] items-center justify-between gap-2 rounded-2xl border px-3 py-3 text-left text-[13px] font-medium transition sm:text-sm",
+      isActive(href)
+        ? "border-white bg-white text-[#1C1C1E] shadow-sm"
+        : "border-white/10 bg-white/5 text-white/90 hover:bg-white/10",
+    ].join(" ");
+  }
 
   async function refreshSidebarCounts() {
     try {
@@ -506,267 +508,253 @@ export default function AdminDashboardLayout({
     };
   }, []);
 
+  const navSections = useMemo<NavSection[]>(
+    () => [
+      {
+        title: "Overview",
+        items: [
+          { href: "/admindashboard", label: "Dashboard" },
+          { href: "/admindashboard/analytics", label: "Analytics" },
+        ],
+      },
+      {
+        title: "Marketplace",
+        items: [
+          { href: "/admindashboard/listings", label: "Listings" },
+          {
+            href: "/admindashboard/leads",
+            label: "Leads",
+            badgeCount: newLeadsCount,
+          },
+          { href: "/admindashboard/viewings", label: "Viewings" },
+          { href: "/admindashboard/owners", label: "Owners" },
+          { href: "/admindashboard/agents", label: "Agents" },
+          {
+            href: "/admindashboard/approvals",
+            label: "Approvals",
+            badgeCount: pendingApprovalsCount,
+          },
+        ],
+      },
+      {
+        title: "Revenue",
+        items: [
+          { href: "/admindashboard/sales", label: "Sales" },
+          { href: "/admindashboard/payments", label: "Payments" },
+          { href: "/admindashboard/invoices", label: "Invoices" },
+          { href: "/admindashboard/receipts", label: "Receipts" },
+          { href: "/admindashboard/pricing-plans", label: "Pricing Plans" },
+          {
+            href: "/admindashboard/revenue-analytics",
+            label: "Revenue Analytics",
+          },
+        ],
+      },
+      {
+        title: "Content",
+        items: [
+          { href: "/admindashboard/blogs", label: "Blogs" },
+          {
+            href: "/admindashboard/notifications",
+            label: "Notifications",
+            badgeCount: adminNotificationCount,
+          },
+          { href: "/admindashboard/seo", label: "SEO" },
+        ],
+      },
+      {
+        title: "Platform",
+        items: [
+          { href: "/admindashboard/support", label: "Support" },
+          { href: "/admindashboard/settings", label: "Settings" },
+          { href: "/admindashboard/logs", label: "Logs" },
+          { href: "/admindashboard/ai-insights", label: "AI Insights" },
+          {
+            href: "/admindashboard/buyer-requests",
+            label: "Buyer Requests",
+            badgeCount: newBuyerRequestsCount,
+          },
+        ],
+      },
+    ],
+    [
+      adminNotificationCount,
+      newLeadsCount,
+      pendingApprovalsCount,
+      newBuyerRequestsCount,
+    ]
+  );
+
+  const socialLinks = [
+    {
+      href: "https://www.instagram.com/tetamoid/",
+      label: "Instagram",
+    },
+    {
+      href: "https://facebook.com/tetamoindonesia",
+      label: "Facebook",
+    },
+    {
+      href: "https://tiktok.com/@tetamo.com",
+      label: "TikTok",
+    },
+  ];
+
+  function renderProfileBlock(compact = false) {
+    return (
+      <div>
+        <div className={compact ? "flex items-start gap-3" : "flex flex-col"}>
+          <div
+            className={
+              compact
+                ? "h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/10"
+                : "mb-5 h-24 w-24 overflow-hidden rounded-2xl border border-white/10 bg-white/10"
+            }
+          >
+            <img
+              src={admin.photo}
+              alt={admin.name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+
+          <div className="min-w-0">
+            <p
+              className={
+                compact
+                  ? "text-lg font-semibold tracking-tight text-white"
+                  : "text-xl font-semibold tracking-tight text-white"
+              }
+            >
+              {admin.name}
+            </p>
+
+            <p
+              className={
+                compact
+                  ? "mt-1 text-sm text-white/75"
+                  : "mt-1 text-sm text-white/75"
+              }
+            >
+              {admin.role}
+            </p>
+
+            <p className="mt-2 text-sm text-white/90">{admin.number || "-"}</p>
+
+            <p className="mt-2 break-all text-xs text-white/55">
+              {admin.email || "-"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {socialLinks.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full bg-white/10 px-3 py-1.5 text-[11px] text-white/85 transition hover:bg-white/20"
+            >
+              {item.label}
+            </a>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderDesktopNav() {
+    return (
+      <nav className="mt-6 space-y-6">
+        {navSections.map((section) => (
+          <div key={section.title}>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/35">
+              {section.title}
+            </p>
+
+            <div className="space-y-1.5">
+              {section.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={sidebarLinkClass(item.href)}
+                >
+                  <span>{item.label}</span>
+                  <SidebarBadge
+                    count={item.badgeCount ?? 0}
+                    hidden={isActive(item.href)}
+                  />
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+    );
+  }
+
+  function renderMobileNav() {
+    return (
+      <div className="mt-5 space-y-5">
+        {navSections.map((section) => (
+          <div key={section.title}>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/35">
+              {section.title}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {section.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={mobileLinkClass(item.href)}
+                >
+                  <span className="leading-5">{item.label}</span>
+                  <SidebarBadge
+                    count={item.badgeCount ?? 0}
+                    hidden={isActive(item.href)}
+                  />
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <AdminProfileContext.Provider
       value={{ admin, setAdmin, platformSettings, setPlatformSettings }}
     >
-      <div className="min-h-screen bg-[#F7F7F7] p-10">
-        <div className="flex">
-          <aside
-            className="
-              w-72
-              bg-[#1C1C1E]
-              text-white
-              min-h-screen
-              px-10 py-10
-              flex flex-col
-              rounded-3xl
-              shadow-[0_20px_60px_rgba(0,0,0,0.35)]
-              ring-1 ring-white/10
-            "
-          >
-            <div>
-              <div className="flex flex-col">
-                <div className="w-36 h-36 rounded-xl overflow-hidden bg-white/10 border border-white/10 mb-6">
-                  <img
-                    src={admin.photo}
-                    alt={admin.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+      <div className="min-h-screen bg-[#F7F7F7] px-4 py-4 sm:px-6 sm:py-6 xl:px-8 xl:py-8">
+        <div className="xl:flex xl:items-start xl:gap-6">
+          {/* Desktop sidebar */}
 
-                <div>
-                  <p className="font-bold text-2xl mt-1 tracking-tight">
-                    {admin.name}
-                  </p>
-                  <p className="font-bold text-1xl mt-1 tracking-tight">
-                    {admin.role}
-                  </p>
-                  <p className="text-s font-medium mt-1">
-                    {admin.number || "-"}
-                  </p>
-                  <p className="text-xs text-white/60 mt-2 break-all">
-                    {admin.email || "-"}
-                  </p>
-                </div>
-              </div>
+          <aside className="hidden xl:flex xl:w-[300px] xl:shrink-0 xl:flex-col">
+            <div className="sticky top-6 rounded-[28px] bg-[#1C1C1E] px-6 py-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/10">
+              {renderProfileBlock(false)}
+              <div className="my-6 border-t border-white/10" />
+              {renderDesktopNav()}
+            </div>
+          </aside>
 
-              <div className="mt-4 flex gap-2">
-                <a
-                  href="https://www.instagram.com/tetamoid/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition"
-                >
-                  Instagram
-                </a>
+          {/* Main content area */}
 
-                <a
-                  href="https://facebook.com/tetamoindonesia"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition"
-                >
-                  Facebook
-                </a>
+          <div className="min-w-0 flex-1">
+            {/* Mobile / tablet sidebar card */}
 
-                <a
-                  href="https://tiktok.com/@tetamo.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition"
-                >
-                  TikTok
-                </a>
+            <div className="mb-5 xl:hidden">
+              <div className="rounded-[28px] bg-[#1C1C1E] px-4 py-5 text-white shadow-[0_20px_60px_rgba(0,0,0,0.22)] ring-1 ring-white/10 sm:px-5 sm:py-6">
+                {renderProfileBlock(true)}
+                <div className="my-5 border-t border-white/10" />
+                {renderMobileNav()}
               </div>
             </div>
 
-            <div className="border-t border-white/10 my-8" />
-
-            <nav className="space-y-3 text-base">
-              <p className="text-xs uppercase text-white/40 mt-2">Overview</p>
-
-              <Link
-                href="/admindashboard"
-                className={menuItemClass("/admindashboard")}
-              >
-                Dashboard
-              </Link>
-
-              <Link
-                href="/admindashboard/analytics"
-                className={menuItemClass("/admindashboard/analytics")}
-              >
-                Analytics
-              </Link>
-
-              <p className="text-xs uppercase text-white/40 mt-6">Marketplace</p>
-
-              <Link
-                href="/admindashboard/listings"
-                className={menuItemClass("/admindashboard/listings")}
-              >
-                Listings
-              </Link>
-
-              <Link
-                href="/admindashboard/leads"
-                className={leadsMenuClass}
-              >
-                <span>Leads</span>
-                <SidebarBadge
-                  count={newLeadsCount}
-                  hidden={pathname === "/admindashboard/leads"}
-                />
-              </Link>
-
-              <Link
-                href="/admindashboard/viewings"
-                className={menuItemClass("/admindashboard/viewings")}
-              >
-                Viewings
-              </Link>
-
-              <Link
-                href="/admindashboard/owners"
-                className={menuItemClass("/admindashboard/owners")}
-              >
-                Owners
-              </Link>
-
-              <Link
-                href="/admindashboard/agents"
-                className={menuItemClass("/admindashboard/agents")}
-              >
-                Agents
-              </Link>
-
-              <Link
-                href="/admindashboard/approvals"
-                className={approvalsMenuClass}
-              >
-                <span>Approvals</span>
-                <SidebarBadge
-                  count={pendingApprovalsCount}
-                  hidden={pathname === "/admindashboard/approvals"}
-                />
-              </Link>
-
-              <p className="text-xs uppercase text-white/40 mt-6">Revenue</p>
-
-              <Link
-                href="/admindashboard/sales"
-                className={menuItemClass("/admindashboard/sales")}
-              >
-                Sales
-              </Link>
-
-              <Link
-                href="/admindashboard/payments"
-                className={menuItemClass("/admindashboard/payments")}
-              >
-                Payments
-              </Link>
-
-              <Link
-                href="/admindashboard/invoices"
-                className={menuItemClass("/admindashboard/invoices")}
-              >
-                Invoices
-              </Link>
-
-              <Link
-                href="/admindashboard/receipts"
-                className={menuItemClass("/admindashboard/receipts")}
-              >
-                Receipts
-              </Link>
-
-              <Link
-                href="/admindashboard/pricing-plans"
-                className={menuItemClass("/admindashboard/pricing-plans")}
-              >
-                Pricing Plans
-              </Link>
-
-              <Link
-                href="/admindashboard/revenue-analytics"
-                className={menuItemClass("/admindashboard/revenue-analytics")}
-              >
-                Revenue Analytics
-              </Link>
-
-              <p className="text-xs uppercase text-white/40 mt-6">Content</p>
-
-              <Link
-                href="/admindashboard/blogs"
-                className={menuItemClass("/admindashboard/blogs")}
-              >
-                Blogs
-              </Link>
-
-              <Link
-                href="/admindashboard/notifications"
-                className={notificationsMenuClass}
-              >
-                <span>Notifications</span>
-                <SidebarBadge
-                  count={adminNotificationCount}
-                  hidden={pathname === "/admindashboard/notifications"}
-                />
-              </Link>
-
-              <Link
-                href="/admindashboard/seo"
-                className={menuItemClass("/admindashboard/seo")}
-              >
-                SEO
-              </Link>
-
-              <p className="text-xs uppercase text-white/40 mt-6">Platform</p>
-
-              <Link
-                href="/admindashboard/support"
-                className={menuItemClass("/admindashboard/support")}
-              >
-                Support
-              </Link>
-
-              <Link
-                href="/admindashboard/settings"
-                className={menuItemClass("/admindashboard/settings")}
-              >
-                Settings
-              </Link>
-
-              <Link
-                href="/admindashboard/logs"
-                className={menuItemClass("/admindashboard/logs")}
-              >
-                Logs
-              </Link>
-
-              <Link
-                href="/admindashboard/ai-insights"
-                className={menuItemClass("/admindashboard/ai-insights")}
-              >
-                AI Insights
-              </Link>
-
-              <Link
-                href="/admindashboard/buyer-requests"
-                className={buyerRequestsMenuClass}
-              >
-                <span>Buyer Requests</span>
-                <SidebarBadge
-                  count={newBuyerRequestsCount}
-                  hidden={pathname === "/admindashboard/buyer-requests"}
-                />
-              </Link>
-            </nav>
-          </aside>
-
-          <main className="flex-1 px-10 py-10">{children}</main>
+            <main className="min-w-0">{children}</main>
+          </div>
         </div>
       </div>
     </AdminProfileContext.Provider>
