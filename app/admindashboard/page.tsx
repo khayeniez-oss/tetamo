@@ -25,7 +25,6 @@ import {
 ========================= */
 
 type ListingStatus = "PENDING" | "ACTIVE" | "FEATURED" | "REJECTED";
-type TransactionStatus = "available" | "sold" | "rented";
 type ClosedByRole = "owner" | "agent" | "-";
 
 type AdminListing = {
@@ -237,31 +236,6 @@ function transactionUI(status: "sold" | "rented") {
   };
 }
 
-function StatCard({
-  title,
-  value,
-  Icon,
-}: {
-  title: string;
-  value: string | number;
-  Icon: ElementType;
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-[#1C1C1E]">{value}</p>
-        </div>
-
-        <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
-          <Icon className="h-5 w-5 text-[#1C1C1E]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function getProfile(
   input: ProfileRow | ProfileRow[] | null | undefined
 ): ProfileRow | null {
@@ -314,6 +288,35 @@ function resolveListingPosterRole(
   return "-";
 }
 
+function StatCard({
+  title,
+  value,
+  Icon,
+}: {
+  title: string;
+  value: string | number;
+  Icon: ElementType;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+            {title}
+          </p>
+          <p className="mt-2 break-words text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
+            {value}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+          <Icon className="h-5 w-5 text-[#1C1C1E]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* =========================
    PAGE
 ========================= */
@@ -361,9 +364,7 @@ export default function AdminDashboardPage() {
               "status.eq.pending,status.eq.pending_approval,verification_status.eq.pending_verification,verification_status.eq.pending_approval"
             ),
 
-          supabase
-            .from("leads")
-            .select("*", { count: "exact", head: true }),
+          supabase.from("leads").select("*", { count: "exact", head: true }),
 
           supabase.from("profiles").select("id, full_name, role"),
 
@@ -520,7 +521,8 @@ export default function AdminDashboardPage() {
           const photos = getSortedPhotos(item.property_images);
 
           const posterRole = resolveListingPosterRole(item, profile);
-          const displayName = item.contact_name || profile?.full_name || "Unknown User";
+          const displayName =
+            item.contact_name || profile?.full_name || "Unknown User";
 
           return {
             id: item.id,
@@ -666,35 +668,50 @@ export default function AdminDashboardPage() {
 
   const endItem = Math.min(currentPage * ITEMS_PER_PAGE, filteredListings.length);
 
+  const visiblePages = useMemo(() => {
+    const pages: number[] = [];
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, currentPage + 2);
+
+    for (let p = start; p <= end; p += 1) {
+      pages.push(p);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
   return (
-    <div>
+    <div className="space-y-5 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1C1C1E]">
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
             Admin Dashboard
           </h1>
-          <p className="text-sm text-gray-500">
-            Monitor platform, approvals, revenue, marketplace activity, and closed deals.
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
+            Monitor approvals, listings, revenue, marketplace activity, and recent
+            closed deals.
           </p>
         </div>
 
         <button
           onClick={() => router.push("/admindashboard/listings")}
-          className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+          className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 sm:w-auto"
         >
           + Review Listings
         </button>
       </div>
 
       {loadError ? (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {loadError}
         </div>
       ) : null}
 
-      {/* Statistik */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+      {/* Stats */}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Listings"
           value={loading ? "..." : data.stats.totalListings}
@@ -751,42 +768,46 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Search */}
-      <div className="mt-6 relative">
+
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
           size={18}
         />
 
         <input
           type="text"
-          placeholder="Cari listing, owner, agent, kota, status, dll..."
+          placeholder="Search listings, owner, agent, city, status, code..."
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
             setCurrentPage(1);
           }}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder:text-gray-500"
+          className="h-11 w-full rounded-2xl border border-gray-300 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
         />
       </div>
 
-      {/* Listing Queue */}
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div>
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
-              Listing Review Queue
-            </h2>
-            <p className="text-sm text-gray-500">
-              Monitor recent listings, approval status, owner, and assigned agent.
-            </p>
-          </div>
+      {/* Listing Review Queue */}
+
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+          <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            Listing Review Queue
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            Monitor recent listings, approval status, owner, and assigned agent.
+          </p>
         </div>
 
         <div className="divide-y divide-gray-100">
           {loading ? (
-            <div className="p-6 text-sm text-gray-500">Loading listings...</div>
+            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+              Loading listings...
+            </div>
           ) : paginatedListings.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">No listings found.</div>
+            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+              No listings found.
+            </div>
           ) : (
             paginatedListings.map((item) => {
               const ui = listingStatusUI(item.status);
@@ -799,53 +820,68 @@ export default function AdminDashboardPage() {
               return (
                 <div
                   key={item.id}
-                  className="p-6 flex items-center justify-between gap-6 border-b border-gray-200 last:border-b-0"
+                  className="px-4 py-4 sm:px-6 sm:py-5"
                 >
-                  <div className="flex items-center gap-5 min-w-0">
-                    <div className="w-28 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                      <img
-                        src={cover}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                        <div className="h-24 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-28 sm:shrink-0">
+                          <img
+                            src={cover}
+                            alt={item.title}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <span
-                          className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badgeClass}`}
-                        >
-                          <BadgeIcon className="h-3.5 w-3.5" />
-                          {ui.label}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
+                            >
+                              <BadgeIcon className="h-3.5 w-3.5" />
+                              {ui.label}
+                            </span>
 
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <span>Kode: {item.kode}</span>
-                          <span>•</span>
-                          <span>{item.postedDate}</span>
-                          <span>•</span>
-                          <span>{item.city}</span>
+                            <span className="text-[11px] text-gray-500 sm:text-xs">
+                              Code: {item.kode}
+                            </span>
+                            <span className="text-[11px] text-gray-300 sm:text-xs">
+                              •
+                            </span>
+                            <span className="text-[11px] text-gray-500 sm:text-xs">
+                              {item.postedDate}
+                            </span>
+                            <span className="text-[11px] text-gray-300 sm:text-xs">
+                              •
+                            </span>
+                            <span className="text-[11px] text-gray-500 sm:text-xs">
+                              {item.city}
+                            </span>
+                          </div>
+
+                          <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                            {item.title}
+                          </p>
+
+                          <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+
+                          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                            Owner: {item.ownerName}{" "}
+                            <span className="text-gray-300">•</span> Agent:{" "}
+                            {item.agentName}
+                          </p>
                         </div>
                       </div>
-
-                      <p className="mt-3 font-medium text-[#1C1C1E] truncate">
-                        {item.title}
-                      </p>
-
-                      <p className="text-sm text-gray-500">{item.price}</p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        Owner: {item.ownerName} • Agent: {item.agentName}
-                      </p>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => router.push("/admindashboard/listings")}
-                      className="px-4 py-2 rounded-xl border border-gray-400 text-gray-700 hover:bg-gray-50"
-                    >
-                      Review
-                    </button>
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
+                      <button
+                        onClick={() => router.push("/admindashboard/listings")}
+                        className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
+                      >
+                        Review
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -855,23 +891,26 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Recent Closed Deals */}
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div>
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
-              Recent Closed Deals
-            </h2>
-            <p className="text-sm text-gray-500">
-              Properties marked as sold or rented by owner or agent.
-            </p>
-          </div>
+
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+          <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            Recent Closed Deals
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            Properties marked as sold or rented by owner or agent.
+          </p>
         </div>
 
         <div className="divide-y divide-gray-100">
           {loading ? (
-            <div className="p-6 text-sm text-gray-500">Loading closed deals...</div>
+            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+              Loading closed deals...
+            </div>
           ) : data.closedDeals.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">No closed deals yet.</div>
+            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+              No closed deals yet.
+            </div>
           ) : (
             data.closedDeals.slice(0, 12).map((item) => {
               const ui = transactionUI(item.transactionStatus);
@@ -884,53 +923,68 @@ export default function AdminDashboardPage() {
               return (
                 <div
                   key={item.id}
-                  className="p-6 flex items-center justify-between gap-6 border-b border-gray-200 last:border-b-0"
+                  className="px-4 py-4 sm:px-6 sm:py-5"
                 >
-                  <div className="flex items-center gap-5 min-w-0">
-                    <div className="w-28 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                      <img
-                        src={cover}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                        <div className="h-24 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-28 sm:shrink-0">
+                          <img
+                            src={cover}
+                            alt={item.title}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <span
-                          className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badgeClass}`}
-                        >
-                          <BadgeIcon className="h-3.5 w-3.5" />
-                          {ui.label}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
+                            >
+                              <BadgeIcon className="h-3.5 w-3.5" />
+                              {ui.label}
+                            </span>
 
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <span>Kode: {item.kode}</span>
-                          <span>•</span>
-                          <span>{item.closedAt}</span>
-                          <span>•</span>
-                          <span>{item.city}</span>
+                            <span className="text-[11px] text-gray-500 sm:text-xs">
+                              Code: {item.kode}
+                            </span>
+                            <span className="text-[11px] text-gray-300 sm:text-xs">
+                              •
+                            </span>
+                            <span className="text-[11px] text-gray-500 sm:text-xs">
+                              {item.closedAt}
+                            </span>
+                            <span className="text-[11px] text-gray-300 sm:text-xs">
+                              •
+                            </span>
+                            <span className="text-[11px] text-gray-500 sm:text-xs">
+                              {item.city}
+                            </span>
+                          </div>
+
+                          <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                            {item.title}
+                          </p>
+
+                          <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+
+                          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                            Closed by: {item.closedByName}{" "}
+                            <span className="text-gray-300">•</span> Role:{" "}
+                            {item.closedByRole}
+                          </p>
                         </div>
                       </div>
-
-                      <p className="mt-3 font-medium text-[#1C1C1E] truncate">
-                        {item.title}
-                      </p>
-
-                      <p className="text-sm text-gray-500">{item.price}</p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        Closed by: {item.closedByName} • Role: {item.closedByRole}
-                      </p>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => router.push("/admindashboard/listings")}
-                      className="px-4 py-2 rounded-xl border border-gray-400 text-gray-700 hover:bg-gray-50"
-                    >
-                      View
-                    </button>
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
+                      <button
+                        onClick={() => router.push("/admindashboard/listings")}
+                        className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
+                      >
+                        View
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -940,28 +994,29 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-6">
-        <p className="text-sm text-gray-900">
-          Menampilkan {startItem}–{endItem} dari {filteredListings.length} listing
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-gray-500 sm:text-sm">
+          Showing {startItem}–{endItem} of {filteredListings.length} listings
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-200 disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-60"
           >
             Previous
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setCurrentPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
                 currentPage === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
             >
               {p}
@@ -971,7 +1026,7 @@ export default function AdminDashboardPage() {
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-400 disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-60"
           >
             Next
           </button>
