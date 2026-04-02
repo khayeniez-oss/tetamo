@@ -12,6 +12,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type AdminProfile = {
@@ -57,6 +58,7 @@ type NavItem = {
 };
 
 type NavSection = {
+  key: string;
   title: string;
   items: NavItem[];
 };
@@ -136,7 +138,7 @@ export default function AdminDashboardLayout({
 
   function mobileLinkClass(href: string) {
     return [
-      "flex min-h-[48px] items-center justify-between gap-2 rounded-2xl border px-3 py-3 text-left text-[13px] font-medium transition sm:text-sm",
+      "flex min-h-[54px] items-center justify-between gap-2 rounded-[22px] border px-4 py-3 text-left text-[13px] font-medium transition sm:text-sm",
       isActive(href)
         ? "border-white bg-white text-[#1C1C1E] shadow-sm"
         : "border-white/10 bg-white/5 text-white/90 hover:bg-white/10",
@@ -204,6 +206,100 @@ export default function AdminDashboardLayout({
       console.error("Unexpected sidebar count refresh error:", error);
     }
   }
+
+  const navSections = useMemo<NavSection[]>(
+    () => [
+      {
+        key: "overview",
+        title: "Overview",
+        items: [
+          { href: "/admindashboard", label: "Dashboard" },
+          { href: "/admindashboard/analytics", label: "Analytics" },
+        ],
+      },
+      {
+        key: "marketplace",
+        title: "Marketplace",
+        items: [
+          { href: "/admindashboard/listings", label: "Listings" },
+          {
+            href: "/admindashboard/leads",
+            label: "Leads",
+            badgeCount: newLeadsCount,
+          },
+          { href: "/admindashboard/viewings", label: "Viewings" },
+          { href: "/admindashboard/owners", label: "Owners" },
+          { href: "/admindashboard/agents", label: "Agents" },
+          {
+            href: "/admindashboard/approvals",
+            label: "Approvals",
+            badgeCount: pendingApprovalsCount,
+          },
+        ],
+      },
+      {
+        key: "revenue",
+        title: "Revenue",
+        items: [
+          { href: "/admindashboard/sales", label: "Sales" },
+          { href: "/admindashboard/payments", label: "Payments" },
+          { href: "/admindashboard/invoices", label: "Invoices" },
+          { href: "/admindashboard/receipts", label: "Receipts" },
+          { href: "/admindashboard/pricing-plans", label: "Pricing Plans" },
+          {
+            href: "/admindashboard/revenue-analytics",
+            label: "Revenue Analytics",
+          },
+        ],
+      },
+      {
+        key: "content",
+        title: "Content",
+        items: [
+          { href: "/admindashboard/blogs", label: "Blogs" },
+          {
+            href: "/admindashboard/notifications",
+            label: "Notifications",
+            badgeCount: adminNotificationCount,
+          },
+          { href: "/admindashboard/seo", label: "SEO" },
+        ],
+      },
+      {
+        key: "platform",
+        title: "Platform",
+        items: [
+          { href: "/admindashboard/support", label: "Support" },
+          { href: "/admindashboard/settings", label: "Settings" },
+          { href: "/admindashboard/logs", label: "Logs" },
+          { href: "/admindashboard/ai-insights", label: "AI Insights" },
+          {
+            href: "/admindashboard/buyer-requests",
+            label: "Buyer Requests",
+            badgeCount: newBuyerRequestsCount,
+          },
+        ],
+      },
+    ],
+    [
+      adminNotificationCount,
+      newLeadsCount,
+      pendingApprovalsCount,
+      newBuyerRequestsCount,
+    ]
+  );
+
+  function getActiveSectionKey(sections: NavSection[], currentPath: string) {
+    const found = sections.find((section) =>
+      section.items.some((item) => item.href === currentPath)
+    );
+
+    return found?.key ?? sections[0]?.key ?? "overview";
+  }
+
+  const [openMobileSectionKey, setOpenMobileSectionKey] = useState<string | null>(
+  getActiveSectionKey(navSections, pathname)
+);
 
   useEffect(() => {
     let ignore = false;
@@ -314,6 +410,11 @@ export default function AdminDashboardLayout({
   useEffect(() => {
     refreshSidebarCounts();
   }, [pathname]);
+
+  useEffect(() => {
+    const activeKey = getActiveSectionKey(navSections, pathname);
+    setOpenMobileSectionKey(activeKey);
+  }, [pathname, navSections]);
 
   useEffect(() => {
     function handlePlatformSettingsUpdated(event: Event) {
@@ -508,83 +609,6 @@ export default function AdminDashboardLayout({
     };
   }, []);
 
-  const navSections = useMemo<NavSection[]>(
-    () => [
-      {
-        title: "Overview",
-        items: [
-          { href: "/admindashboard", label: "Dashboard" },
-          { href: "/admindashboard/analytics", label: "Analytics" },
-        ],
-      },
-      {
-        title: "Marketplace",
-        items: [
-          { href: "/admindashboard/listings", label: "Listings" },
-          {
-            href: "/admindashboard/leads",
-            label: "Leads",
-            badgeCount: newLeadsCount,
-          },
-          { href: "/admindashboard/viewings", label: "Viewings" },
-          { href: "/admindashboard/owners", label: "Owners" },
-          { href: "/admindashboard/agents", label: "Agents" },
-          {
-            href: "/admindashboard/approvals",
-            label: "Approvals",
-            badgeCount: pendingApprovalsCount,
-          },
-        ],
-      },
-      {
-        title: "Revenue",
-        items: [
-          { href: "/admindashboard/sales", label: "Sales" },
-          { href: "/admindashboard/payments", label: "Payments" },
-          { href: "/admindashboard/invoices", label: "Invoices" },
-          { href: "/admindashboard/receipts", label: "Receipts" },
-          { href: "/admindashboard/pricing-plans", label: "Pricing Plans" },
-          {
-            href: "/admindashboard/revenue-analytics",
-            label: "Revenue Analytics",
-          },
-        ],
-      },
-      {
-        title: "Content",
-        items: [
-          { href: "/admindashboard/blogs", label: "Blogs" },
-          {
-            href: "/admindashboard/notifications",
-            label: "Notifications",
-            badgeCount: adminNotificationCount,
-          },
-          { href: "/admindashboard/seo", label: "SEO" },
-        ],
-      },
-      {
-        title: "Platform",
-        items: [
-          { href: "/admindashboard/support", label: "Support" },
-          { href: "/admindashboard/settings", label: "Settings" },
-          { href: "/admindashboard/logs", label: "Logs" },
-          { href: "/admindashboard/ai-insights", label: "AI Insights" },
-          {
-            href: "/admindashboard/buyer-requests",
-            label: "Buyer Requests",
-            badgeCount: newBuyerRequestsCount,
-          },
-        ],
-      },
-    ],
-    [
-      adminNotificationCount,
-      newLeadsCount,
-      pendingApprovalsCount,
-      newBuyerRequestsCount,
-    ]
-  );
-
   const socialLinks = [
     {
       href: "https://www.instagram.com/tetamoid/",
@@ -629,15 +653,7 @@ export default function AdminDashboardLayout({
               {admin.name}
             </p>
 
-            <p
-              className={
-                compact
-                  ? "mt-1 text-sm text-white/75"
-                  : "mt-1 text-sm text-white/75"
-              }
-            >
-              {admin.role}
-            </p>
+            <p className="mt-1 text-sm text-white/75">{admin.role}</p>
 
             <p className="mt-2 text-sm text-white/90">{admin.number || "-"}</p>
 
@@ -668,7 +684,7 @@ export default function AdminDashboardLayout({
     return (
       <nav className="mt-6 space-y-6">
         {navSections.map((section) => (
-          <div key={section.title}>
+          <div key={section.key}>
             <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/35">
               {section.title}
             </p>
@@ -694,32 +710,62 @@ export default function AdminDashboardLayout({
     );
   }
 
-  function renderMobileNav() {
+  function renderMobileAccordionNav() {
     return (
-      <div className="mt-5 space-y-5">
-        {navSections.map((section) => (
-          <div key={section.title}>
-            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-white/35">
-              {section.title}
-            </p>
+      <div className="mt-5 space-y-3">
+        {navSections.map((section) => {
+          const isOpen = openMobileSectionKey === section.key;
+          const hasActiveItem = section.items.some((item) => isActive(item.href));
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {section.items.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={mobileLinkClass(item.href)}
-                >
-                  <span className="leading-5">{item.label}</span>
-                  <SidebarBadge
-                    count={item.badgeCount ?? 0}
-                    hidden={isActive(item.href)}
-                  />
-                </Link>
-              ))}
+          return (
+            <div
+              key={section.key}
+              className="overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.03]"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenMobileSectionKey((prev) =>
+                    prev === section.key ? null : section.key
+                  )
+                }
+                className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                  hasActiveItem ? "bg-white/10" : "bg-transparent hover:bg-white/5"
+                }`}
+              >
+                <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
+                  {section.title}
+                </span>
+
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-white/70 transition-transform ${
+                    isOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {isOpen ? (
+                <div className="border-t border-white/10 px-4 py-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    {section.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={mobileLinkClass(item.href)}
+                      >
+                        <span className="leading-5">{item.label}</span>
+                        <SidebarBadge
+                          count={item.badgeCount ?? 0}
+                          hidden={isActive(item.href)}
+                        />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -730,8 +776,6 @@ export default function AdminDashboardLayout({
     >
       <div className="min-h-screen bg-[#F7F7F7] px-4 py-4 sm:px-6 sm:py-6 xl:px-8 xl:py-8">
         <div className="xl:flex xl:items-start xl:gap-6">
-          {/* Desktop sidebar */}
-
           <aside className="hidden xl:flex xl:w-[300px] xl:shrink-0 xl:flex-col">
             <div className="sticky top-6 rounded-[28px] bg-[#1C1C1E] px-6 py-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/10">
               {renderProfileBlock(false)}
@@ -740,16 +784,12 @@ export default function AdminDashboardLayout({
             </div>
           </aside>
 
-          {/* Main content area */}
-
           <div className="min-w-0 flex-1">
-            {/* Mobile / tablet sidebar card */}
-
             <div className="mb-5 xl:hidden">
               <div className="rounded-[28px] bg-[#1C1C1E] px-4 py-5 text-white shadow-[0_20px_60px_rgba(0,0,0,0.22)] ring-1 ring-white/10 sm:px-5 sm:py-6">
                 {renderProfileBlock(true)}
                 <div className="my-5 border-t border-white/10" />
-                {renderMobileNav()}
+                {renderMobileAccordionNav()}
               </div>
             </div>
 
