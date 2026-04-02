@@ -201,16 +201,20 @@ export default function AdminReceiptsPage() {
   }, [searchQuery, receipts]);
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">Receipts</h1>
-        <p className="text-sm text-gray-500">Bukti pembayaran yang berhasil.</p>
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
+          Receipts
+        </h1>
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+          Bukti pembayaran yang berhasil.
+        </p>
       </div>
 
-      <div className="relative mt-6">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -218,11 +222,11 @@ export default function AdminReceiptsPage() {
           placeholder="Cari receipt..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-2xl border border-gray-400 py-3 pl-12 pr-4 text-sm outline-none focus:border-[#1C1C1E]"
+          className="h-10 w-full rounded-2xl border border-gray-300 py-3 pl-10 pr-4 text-[13px] outline-none focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
-      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-6 text-sm text-gray-500">Loading receipts...</div>
         ) : error ? (
@@ -235,22 +239,56 @@ export default function AdminReceiptsPage() {
               <Link
                 key={r.id}
                 href={`/admindashboard/receipts/${r.id}`}
-                className="flex items-center justify-between p-6 transition hover:bg-gray-50"
+                className="block px-3.5 py-4 transition hover:bg-gray-50 sm:px-5"
               >
-                <div>
-                  <p className="font-medium text-[#1C1C1E]">{r.receiptNumber}</p>
+                <div className="flex flex-col gap-3.5">
+                  <div className="min-w-0">
+                    <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-700 sm:text-[11px]">
+                      Paid Receipt
+                    </span>
 
-                  <p className="text-sm text-gray-500">Owner: {r.owner}</p>
+                    <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                      {r.receiptNumber}
+                    </p>
 
-                  <p className="text-sm text-gray-500">
-                    Invoice: {r.invoiceNumber}
-                  </p>
-                </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2.5">
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                          Owner
+                        </p>
+                        <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                          {r.owner}
+                        </p>
+                      </div>
 
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">{r.amount}</p>
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                          Invoice
+                        </p>
+                        <p className="mt-1 break-words text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                          {r.invoiceNumber}
+                        </p>
+                      </div>
 
-                  <p className="text-xs text-gray-500">{r.date}</p>
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                          Amount
+                        </p>
+                        <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                          {r.amount}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                          Date
+                        </p>
+                        <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                          {r.date}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </Link>
             ))}
