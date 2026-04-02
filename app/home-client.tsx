@@ -888,20 +888,20 @@ export default function HomeClient() {
             </Link>
 
             <Link
-              href="/pemilik"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-            >
-              {lang === "id"
-                ? "Iklankan Sebagai Pemilik"
-                : "Advertise as Owner"}
-            </Link>
+  href="/signup?role=owner&next=/pemilik"
+  className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+>
+  {lang === "id"
+    ? "Iklankan Sebagai Pemilik"
+    : "Advertise as Owner"}
+</Link>
 
             <Link
-              href="/pemilik"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-            >
-              {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
-            </Link>
+  href="/signup?role=agent&next=/agentdashboard/paket"
+  className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+>
+  {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
+</Link>
           </div>
         </div>
       </section>
