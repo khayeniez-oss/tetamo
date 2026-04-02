@@ -682,16 +682,13 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {/* Header */}
-
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
             Admin Dashboard
           </h1>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
-            Monitor approvals, listings, revenue, marketplace activity, and recent
-            closed deals.
+            Monitor approvals, listings, revenue, marketplace activity, and recent closed deals.
           </p>
         </div>
 
@@ -708,8 +705,6 @@ export default function AdminDashboardPage() {
           {loadError}
         </div>
       ) : null}
-
-      {/* Stats */}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -767,8 +762,6 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      {/* Search */}
-
       <div className="relative">
         <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
@@ -787,249 +780,239 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      {/* Listing Review Queue */}
-
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-          <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-            Listing Review Queue
-          </h2>
-          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-            Monitor recent listings, approval status, owner, and assigned agent.
-          </p>
-        </div>
-
-        <div className="divide-y divide-gray-100">
-          {loading ? (
-            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
-              Loading listings...
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="min-w-0 space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                Listing Review Queue
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                Monitor recent listings, approval status, owner, and assigned agent.
+              </p>
             </div>
-          ) : paginatedListings.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
-              No listings found.
-            </div>
-          ) : (
-            paginatedListings.map((item) => {
-              const ui = listingStatusUI(item.status);
-              const BadgeIcon = ui.Icon;
 
-              const cover =
-                item.photos?.[0] ??
-                "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+            <div className="divide-y divide-gray-100">
+              {loading ? (
+                <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+                  Loading listings...
+                </div>
+              ) : paginatedListings.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+                  No listings found.
+                </div>
+              ) : (
+                paginatedListings.map((item) => {
+                  const ui = listingStatusUI(item.status);
+                  const BadgeIcon = ui.Icon;
 
-              return (
-                <div
-                  key={item.id}
-                  className="px-4 py-4 sm:px-6 sm:py-5"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                        <div className="h-24 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-28 sm:shrink-0">
-                          <img
-                            src={cover}
-                            alt={item.title}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
+                  const cover =
+                    item.photos?.[0] ??
+                    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
-                            >
-                              <BadgeIcon className="h-3.5 w-3.5" />
-                              {ui.label}
-                            </span>
-
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              Code: {item.kode}
-                            </span>
-                            <span className="text-[11px] text-gray-300 sm:text-xs">
-                              •
-                            </span>
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              {item.postedDate}
-                            </span>
-                            <span className="text-[11px] text-gray-300 sm:text-xs">
-                              •
-                            </span>
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              {item.city}
-                            </span>
+                  return (
+                    <div key={item.id} className="px-4 py-4 sm:px-6 sm:py-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="h-28 w-24 shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-28 sm:w-32">
+                            <img
+                              src={cover}
+                              alt={item.title}
+                              className="h-full w-full object-cover"
+                            />
                           </div>
 
-                          <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                            {item.title}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
+                              >
+                                <BadgeIcon className="h-3.5 w-3.5" />
+                                {ui.label}
+                              </span>
 
-                          <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+                              <span className="text-[11px] text-gray-500 sm:text-xs">
+                                Code: {item.kode}
+                              </span>
+                              <span className="text-[11px] text-gray-300 sm:text-xs">
+                                •
+                              </span>
+                              <span className="text-[11px] text-gray-500 sm:text-xs">
+                                {item.postedDate}
+                              </span>
+                              <span className="text-[11px] text-gray-300 sm:text-xs">
+                                •
+                              </span>
+                              <span className="text-[11px] text-gray-500 sm:text-xs">
+                                {item.city}
+                              </span>
+                            </div>
 
-                          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-                            Owner: {item.ownerName}{" "}
-                            <span className="text-gray-300">•</span> Agent:{" "}
-                            {item.agentName}
-                          </p>
+                            <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                              {item.title}
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+
+                            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                              Owner: {item.ownerName}{" "}
+                              <span className="text-gray-300">•</span> Agent:{" "}
+                              {item.agentName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex w-full justify-end">
+                          <button
+                            onClick={() => router.push("/admindashboard/listings")}
+                            className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
+                          >
+                            Review
+                          </button>
                         </div>
                       </div>
                     </div>
-
-                    <div className="flex w-full items-center gap-2 sm:w-auto">
-                      <button
-                        onClick={() => router.push("/admindashboard/listings")}
-                        className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
-                      >
-                        Review
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Recent Closed Deals */}
-
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-          <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-            Recent Closed Deals
-          </h2>
-          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-            Properties marked as sold or rented by owner or agent.
-          </p>
-        </div>
-
-        <div className="divide-y divide-gray-100">
-          {loading ? (
-            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
-              Loading closed deals...
+                  );
+                })
+              )}
             </div>
-          ) : data.closedDeals.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
-              No closed deals yet.
-            </div>
-          ) : (
-            data.closedDeals.slice(0, 12).map((item) => {
-              const ui = transactionUI(item.transactionStatus);
-              const BadgeIcon = ui.Icon;
+          </div>
 
-              const cover =
-                item.photos?.[0] ??
-                "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-gray-500 sm:text-sm">
+              Showing {startItem}–{endItem} of {filteredListings.length} listings
+            </p>
 
-              return (
-                <div
-                  key={item.id}
-                  className="px-4 py-4 sm:px-6 sm:py-5"
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-60"
+              >
+                Previous
+              </button>
+
+              {visiblePages.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
+                    currentPage === p
+                      ? "border-black bg-black text-white"
+                      : "border-gray-300 bg-white text-gray-700"
+                  }`}
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                        <div className="h-24 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-28 sm:shrink-0">
-                          <img
-                            src={cover}
-                            alt={item.title}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
+                  {p}
+                </button>
+              ))}
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
-                            >
-                              <BadgeIcon className="h-3.5 w-3.5" />
-                              {ui.label}
-                            </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-60"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
 
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              Code: {item.kode}
-                            </span>
-                            <span className="text-[11px] text-gray-300 sm:text-xs">
-                              •
-                            </span>
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              {item.closedAt}
-                            </span>
-                            <span className="text-[11px] text-gray-300 sm:text-xs">
-                              •
-                            </span>
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              {item.city}
-                            </span>
+        <div className="min-w-0">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                Recent Closed Deals
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                Properties marked as sold or rented by owner or agent.
+              </p>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {loading ? (
+                <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+                  Loading closed deals...
+                </div>
+              ) : data.closedDeals.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-gray-500 sm:px-6">
+                  No closed deals yet.
+                </div>
+              ) : (
+                data.closedDeals.slice(0, 12).map((item) => {
+                  const ui = transactionUI(item.transactionStatus);
+                  const BadgeIcon = ui.Icon;
+
+                  const cover =
+                    item.photos?.[0] ??
+                    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+
+                  return (
+                    <div key={item.id} className="px-4 py-4 sm:px-6 sm:py-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="h-28 w-24 shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-28 sm:w-32">
+                            <img
+                              src={cover}
+                              alt={item.title}
+                              className="h-full w-full object-cover"
+                            />
                           </div>
 
-                          <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                            {item.title}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
+                              >
+                                <BadgeIcon className="h-3.5 w-3.5" />
+                                {ui.label}
+                              </span>
 
-                          <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+                              <span className="text-[11px] text-gray-500 sm:text-xs">
+                                Code: {item.kode}
+                              </span>
+                              <span className="text-[11px] text-gray-300 sm:text-xs">
+                                •
+                              </span>
+                              <span className="text-[11px] text-gray-500 sm:text-xs">
+                                {item.closedAt}
+                              </span>
+                              <span className="text-[11px] text-gray-300 sm:text-xs">
+                                •
+                              </span>
+                              <span className="text-[11px] text-gray-500 sm:text-xs">
+                                {item.city}
+                              </span>
+                            </div>
 
-                          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-                            Closed by: {item.closedByName}{" "}
-                            <span className="text-gray-300">•</span> Role:{" "}
-                            {item.closedByRole}
-                          </p>
+                            <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                              {item.title}
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+
+                            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                              Closed by: {item.closedByName}{" "}
+                              <span className="text-gray-300">•</span> Role:{" "}
+                              {item.closedByRole}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex w-full justify-end">
+                          <button
+                            onClick={() => router.push("/admindashboard/listings")}
+                            className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
+                          >
+                            View
+                          </button>
                         </div>
                       </div>
                     </div>
-
-                    <div className="flex w-full items-center gap-2 sm:w-auto">
-                      <button
-                        onClick={() => router.push("/admindashboard/listings")}
-                        className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Pagination */}
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-gray-500 sm:text-sm">
-          Showing {startItem}–{endItem} of {filteredListings.length} listings
-        </p>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-60"
-          >
-            Previous
-          </button>
-
-          {visiblePages.map((p) => (
-            <button
-              key={p}
-              onClick={() => setCurrentPage(p)}
-              className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
-                currentPage === p
-                  ? "border-black bg-black text-white"
-                  : "border-gray-300 bg-white text-gray-700"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-60"
-          >
-            Next
-          </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
