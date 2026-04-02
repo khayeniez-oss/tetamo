@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
   CheckCircle,
@@ -129,10 +129,26 @@ function addDaysIso(days: number) {
   return d.toISOString();
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 function mapListingStatus(row: PropertyRow): ListingStatus {
   const status = (row.status || "").toLowerCase();
+  const verificationStatus = (row.verification_status || "").toLowerCase();
 
-  if (status === "rejected") return "REJECTED";
+  if (status === "rejected" || verificationStatus === "rejected") {
+    return "REJECTED";
+  }
+
   if (row.is_paused) return "PAUSED";
 
   if (
@@ -142,7 +158,15 @@ function mapListingStatus(row: PropertyRow): ListingStatus {
     return "FEATURED";
   }
 
-  if (status === "pending") return "PENDING";
+  if (
+    status === "pending" ||
+    status === "pending_approval" ||
+    verificationStatus === "pending_verification" ||
+    verificationStatus === "pending_approval"
+  ) {
+    return "PENDING";
+  }
+
   return "ACTIVE";
 }
 
@@ -185,6 +209,25 @@ function statusUI(status: ListingStatus) {
   };
 }
 
+function SummaryCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+        {title}
+      </p>
+      <p className="mt-2 text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -198,6 +241,7 @@ export default function AdminListingsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
+  const [expandedActionsId, setExpandedActionsId] = useState<string | null>(null);
 
   const ITEMS_PER_PAGE = 12;
 
@@ -347,6 +391,17 @@ export default function AdminListingsPage() {
     });
   }, [searchQuery, listings]);
 
+  const stats = useMemo(() => {
+    return {
+      total: listings.length,
+      pending: listings.filter((item) => item.status === "PENDING").length,
+      active: listings.filter((item) => item.status === "ACTIVE").length,
+      featured: listings.filter((item) => item.status === "FEATURED").length,
+      paused: listings.filter((item) => item.status === "PAUSED").length,
+      rejected: listings.filter((item) => item.status === "REJECTED").length,
+    };
+  }, [listings]);
+
   useEffect(() => {
     setPage(1);
   }, [searchQuery, listings.length]);
@@ -371,6 +426,11 @@ export default function AdminListingsPage() {
     filteredListings.length === 0 ? 0 : (page - 1) * ITEMS_PER_PAGE + 1;
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filteredListings.length);
+
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
 
   /* =========================
   ACTIONS
@@ -650,13 +710,42 @@ export default function AdminListingsPage() {
   UI
   ========================= */
 
+  function ActionButton({
+    onClick,
+    disabled,
+    title,
+    label,
+    className,
+    children,
+  }: {
+    onClick: () => void;
+    disabled: boolean;
+    title: string;
+    label: string;
+    className: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        className={className}
+        type="button"
+      >
+        <span className="shrink-0">{children}</span>
+        <span>{label}</span>
+      </button>
+    );
+  }
+
   return (
-    <div>
+    <div className="space-y-5 sm:space-y-6">
       {toast ? (
-        <div className="fixed right-6 top-6 z-50">
+        <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
           <div
             className={[
-              "min-w-[320px] rounded-2xl border px-4 py-3 shadow-xl backdrop-blur",
+              "min-w-[280px] max-w-[340px] rounded-2xl border px-4 py-3 shadow-xl backdrop-blur",
               toast.type === "success"
                 ? "border-green-200 bg-green-50 text-green-800"
                 : "border-red-200 bg-red-50 text-red-800",
@@ -670,219 +759,452 @@ export default function AdminListingsPage() {
         </div>
       ) : null}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
           Listings Control
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
           Approve, reject, feature, and manage all marketplace listings.
         </p>
       </div>
 
       {loadError ? (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {loadError}
         </div>
       ) : null}
 
-      <div className="mt-6 relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
-        />
-
-        <input
-          type="text"
-          placeholder="Cari listing, owner, agent, kota..."
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            setPage(1);
-          }}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
-        />
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
+        <SummaryCard title="Total Listings" value={stats.total} />
+        <SummaryCard title="Pending" value={stats.pending} />
+        <SummaryCard title="Active" value={stats.active} />
+        <SummaryCard title="Featured" value={stats.featured} />
+        <SummaryCard title="Paused" value={stats.paused} />
+        <SummaryCard title="Rejected" value={stats.rejected} />
       </div>
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="divide-y divide-gray-100">
-          {loading ? (
-            <div className="p-8 text-center text-sm text-gray-500">
-              Loading listings...
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
+        <div className="min-w-0 space-y-5">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+              Listing Overview
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+              Review listing health, search results, and moderation flow.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-gray-200 p-4">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+                  Search Result
+                </p>
+                <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                  {filteredListings.length}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 p-4">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+                  Current Page
+                </p>
+                <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                  {page} / {totalPages}
+                </p>
+              </div>
             </div>
-          ) : paginated.length === 0 ? (
-            <div className="p-8 text-center text-sm text-gray-500">
-              No listings found.
+
+            <div className="mt-4 space-y-3">
+              {(
+                ["PENDING", "ACTIVE", "FEATURED", "PAUSED", "REJECTED"] as ListingStatus[]
+              ).map((status) => {
+                const ui = statusUI(status);
+
+                return (
+                  <div
+                    key={status}
+                    className="flex items-center justify-between rounded-2xl border border-gray-200 px-4 py-3"
+                  >
+                    <span
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badge}`}
+                    >
+                      {ui.label}
+                    </span>
+
+                    <span className="text-sm font-semibold text-[#1C1C1E]">
+                      {status === "PENDING"
+                        ? stats.pending
+                        : status === "ACTIVE"
+                        ? stats.active
+                        : status === "FEATURED"
+                        ? stats.featured
+                        : status === "PAUSED"
+                        ? stats.paused
+                        : stats.rejected}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          ) : (
-            paginated.map((item) => {
-              const ui = statusUI(item.status);
-              const isUpdating = updatingId === item.id;
-              const isDeleting = deletingId === item.id;
-              const isBusy = isUpdating || isDeleting;
+          </div>
 
-              const cover =
-                item.photos?.[0] ??
-                "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+              Action Guide
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+              Use the controls to approve, reject, feature, spotlight, boost, pause, or remove a listing.
+            </p>
 
-              return (
-                <div
-                  key={item.id}
-                  className="p-6 flex items-center justify-between gap-6"
-                >
-                  <div className="flex items-center gap-5 min-w-0">
-                    <div className="w-28 h-20 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                      <img
-                        src={cover}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                <p className="text-sm font-semibold text-green-800">Approve</p>
+                <p className="mt-1 text-xs leading-5 text-green-700">
+                  Marks the property as active and verified.
+                </p>
+              </div>
 
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex items-center text-xs px-3 py-1 rounded-full border ${ui.badge}`}
-                        >
-                          {ui.label}
-                        </span>
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                <p className="text-sm font-semibold text-red-800">Reject / Delete</p>
+                <p className="mt-1 text-xs leading-5 text-red-700">
+                  Rejects a listing or removes it permanently.
+                </p>
+              </div>
 
-                        {item.spotlightActive ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">
-                            <Gem size={12} />
-                            Spotlight
-                          </span>
-                        ) : null}
+              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
+                <p className="text-sm font-semibold text-purple-800">Feature / Spotlight</p>
+                <p className="mt-1 text-xs leading-5 text-purple-700">
+                  Adds premium placement and stronger visibility.
+                </p>
+              </div>
 
-                        {item.boostActive ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                            <Zap size={12} />
-                            Boost
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <p className="mt-2 font-medium text-[#1C1C1E]">
-                        {item.title}
-                      </p>
-
-                      <p className="text-sm text-gray-500">{item.price}</p>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        Owner: {item.owner} • Agent: {item.agent} • {item.city}
-                      </p>
-
-                      <p className="text-xs text-gray-400">
-                        Kode: {item.kode} • {item.postedDate}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    <button
-                      onClick={() => updateStatus(item.id, "ACTIVE")}
-                      disabled={isBusy}
-                      title="Approve / Activate"
-                      className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50"
-                    >
-                      <CheckCircle size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => updateStatus(item.id, "REJECTED")}
-                      disabled={isBusy}
-                      title="Reject"
-                      className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
-                    >
-                      <XCircle size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => updateStatus(item.id, "FEATURED")}
-                      disabled={isBusy}
-                      title="Feature for 30 days"
-                      className="px-3 py-2 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-50"
-                    >
-                      <Star size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => updateStatus(item.id, "SPOTLIGHT")}
-                      disabled={isBusy}
-                      title="Spotlight for 7 days"
-                      className="px-3 py-2 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 disabled:opacity-50"
-                    >
-                      <Gem size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => updateStatus(item.id, "BOOST")}
-                      disabled={isBusy}
-                      title="Boost for 14 days"
-                      className="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                    >
-                      <Zap size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => updateStatus(item.id, "PAUSED")}
-                      disabled={isBusy}
-                      title={item.status === "PAUSED" ? "Unpause" : "Pause"}
-                      className="px-3 py-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                    >
-                      <PauseCircle size={16} />
-                    </button>
-
-                    <button
-                      onClick={() => deleteListing(item.id)}
-                      disabled={isBusy}
-                      title="Delete listing"
-                      className="px-3 py-2 rounded-lg border border-red-300 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-gray-800">Pause / Reactivate</p>
+                <p className="mt-1 text-xs leading-5 text-gray-700">
+                  Temporarily hides the property until reactivated.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center justify-between mt-6">
-        <p className="text-sm text-gray-900">
-          Menampilkan {startItem}–{endItem} dari {filteredListings.length} listing
-        </p>
+        <div className="min-w-0 space-y-5">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                All Listings
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                Search, review, and manage every marketplace listing.
+              </p>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white disabled:opacity-50"
-          >
-            Sebelumnya
-          </button>
+              <div className="relative mt-4">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  size={18}
+                />
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
-                page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+                <input
+                  type="text"
+                  placeholder="Search listing, owner, agent, city, code..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
+                  className="h-11 w-full rounded-2xl border border-gray-300 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
+                />
+              </div>
+            </div>
 
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white disabled:opacity-50"
-          >
-            Berikutnya
-          </button>
+            <div className="divide-y divide-gray-100">
+              {loading ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                  Loading listings...
+                </div>
+              ) : paginated.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                  No listings found.
+                </div>
+              ) : (
+                paginated.map((item) => {
+                  const ui = statusUI(item.status);
+                  const isUpdating = updatingId === item.id;
+                  const isDeleting = deletingId === item.id;
+                  const isBusy = isUpdating || isDeleting;
+
+                  const cover =
+                    item.photos?.[0] ??
+                    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
+
+                  const actionsOpen = expandedActionsId === item.id;
+
+                  return (
+                    <div key={item.id} className="px-4 py-4 sm:px-6 sm:py-5">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                          <div className="h-32 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-28 sm:w-36 sm:shrink-0">
+                            <img
+                              src={cover}
+                              alt={item.title}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badge}`}
+                              >
+                                {ui.label}
+                              </span>
+
+                              {item.spotlightActive ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold text-cyan-700 sm:text-xs">
+                                  <Gem size={12} />
+                                  Spotlight
+                                </span>
+                              ) : null}
+
+                              {item.boostActive ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 sm:text-xs">
+                                  <Zap size={12} />
+                                  Boost
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                              {item.title}
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+
+                            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                              Owner: {item.owner}{" "}
+                              <span className="text-gray-300">•</span> Agent: {item.agent}{" "}
+                              <span className="text-gray-300">•</span> {item.city}
+                            </p>
+
+                            <p className="mt-1 text-[11px] text-gray-400 sm:text-xs">
+                              Code: {item.kode} <span className="text-gray-300">•</span>{" "}
+                              {item.postedDate}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:justify-end lg:gap-2">
+                          <button
+                            onClick={() => updateStatus(item.id, "ACTIVE")}
+                            disabled={isBusy}
+                            title="Approve / Activate"
+                            className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+                            type="button"
+                          >
+                            <CheckCircle size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => updateStatus(item.id, "REJECTED")}
+                            disabled={isBusy}
+                            title="Reject"
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                            type="button"
+                          >
+                            <XCircle size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => updateStatus(item.id, "FEATURED")}
+                            disabled={isBusy}
+                            title="Feature for 30 days"
+                            className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-purple-700 transition hover:bg-purple-100 disabled:opacity-50"
+                            type="button"
+                          >
+                            <Star size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => updateStatus(item.id, "SPOTLIGHT")}
+                            disabled={isBusy}
+                            title="Spotlight for 7 days"
+                            className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-cyan-700 transition hover:bg-cyan-100 disabled:opacity-50"
+                            type="button"
+                          >
+                            <Gem size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => updateStatus(item.id, "BOOST")}
+                            disabled={isBusy}
+                            title="Boost for 14 days"
+                            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                            type="button"
+                          >
+                            <Zap size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => updateStatus(item.id, "PAUSED")}
+                            disabled={isBusy}
+                            title={item.status === "PAUSED" ? "Unpause" : "Pause"}
+                            className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
+                            type="button"
+                          >
+                            <PauseCircle size={16} />
+                          </button>
+
+                          <button
+                            onClick={() => deleteListing(item.id)}
+                            disabled={isBusy}
+                            title="Delete listing"
+                            className="rounded-lg border border-red-300 bg-red-600 px-3 py-2 text-white transition hover:bg-red-700 disabled:opacity-50"
+                            type="button"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        <div className="lg:hidden">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedActionsId((prev) =>
+                                prev === item.id ? null : item.id
+                              )
+                            }
+                            className="flex h-10 w-full items-center justify-between rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                          >
+                            <span>Actions</span>
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${
+                                actionsOpen ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+
+                          {actionsOpen ? (
+                            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              <ActionButton
+                                onClick={() => updateStatus(item.id, "ACTIVE")}
+                                disabled={isBusy}
+                                title="Approve / Activate"
+                                label="Approve"
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 text-sm font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+                              >
+                                <CheckCircle size={16} />
+                              </ActionButton>
+
+                              <ActionButton
+                                onClick={() => updateStatus(item.id, "REJECTED")}
+                                disabled={isBusy}
+                                title="Reject"
+                                label="Reject"
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                              >
+                                <XCircle size={16} />
+                              </ActionButton>
+
+                              <ActionButton
+                                onClick={() => updateStatus(item.id, "FEATURED")}
+                                disabled={isBusy}
+                                title="Feature for 30 days"
+                                label="Feature"
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 text-sm font-medium text-purple-700 transition hover:bg-purple-100 disabled:opacity-50"
+                              >
+                                <Star size={16} />
+                              </ActionButton>
+
+                              <ActionButton
+                                onClick={() => updateStatus(item.id, "SPOTLIGHT")}
+                                disabled={isBusy}
+                                title="Spotlight for 7 days"
+                                label="Spotlight"
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 text-sm font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:opacity-50"
+                              >
+                                <Gem size={16} />
+                              </ActionButton>
+
+                              <ActionButton
+                                onClick={() => updateStatus(item.id, "BOOST")}
+                                disabled={isBusy}
+                                title="Boost for 14 days"
+                                label="Boost"
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                              >
+                                <Zap size={16} />
+                              </ActionButton>
+
+                              <ActionButton
+                                onClick={() => updateStatus(item.id, "PAUSED")}
+                                disabled={isBusy}
+                                title={item.status === "PAUSED" ? "Unpause" : "Pause"}
+                                label={item.status === "PAUSED" ? "Unpause" : "Pause"}
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
+                              >
+                                <PauseCircle size={16} />
+                              </ActionButton>
+
+                              <button
+                                onClick={() => deleteListing(item.id)}
+                                disabled={isBusy}
+                                title="Delete listing"
+                                className="col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-600 px-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50 sm:col-span-3"
+                                type="button"
+                              >
+                                <Trash2 size={16} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-gray-500 sm:text-sm">
+              Showing {startItem}–{endItem} of {filteredListings.length} listings
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-50"
+                type="button"
+              >
+                Previous
+              </button>
+
+              {visiblePages.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
+                    page === p
+                      ? "border-black bg-black text-white"
+                      : "border-gray-300 bg-white text-gray-700"
+                  }`}
+                  type="button"
+                >
+                  {p}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-50"
+                type="button"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
