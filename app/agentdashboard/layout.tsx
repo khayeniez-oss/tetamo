@@ -207,6 +207,7 @@ export default function AgentDashboardLayout({
   const [loadingMembership, setLoadingMembership] = useState(true);
   const [hasActiveMembership, setHasActiveMembership] = useState(false);
   const [membershipEndsAt, setMembershipEndsAt] = useState<string | null>(null);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     overview: true,
@@ -246,27 +247,20 @@ export default function AgentDashboardLayout({
 
       try {
         const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+          data: { session },
+        } = await supabase.auth.getSession();
 
-        if (authError) {
-          console.error("Failed to load auth user:", authError);
-          if (!ignore) {
-            setLoadingProfile(false);
-            setLoadingMembership(false);
-          }
-          return;
-        }
+        if (ignore) return;
+
+        const user = session?.user ?? null;
 
         if (!user) {
-          if (!ignore) {
-            setAgent(DEFAULT_AGENT);
-            setHasActiveMembership(false);
-            setMembershipEndsAt(null);
-            setLoadingProfile(false);
-            setLoadingMembership(false);
-          }
+          setAgent(DEFAULT_AGENT);
+          setHasActiveMembership(false);
+          setMembershipEndsAt(null);
+          setLoadingProfile(false);
+          setLoadingMembership(false);
+          setHasCheckedAuth(true);
           return;
         }
 
@@ -290,70 +284,81 @@ export default function AgentDashboardLayout({
             .limit(20),
         ]);
 
-        if (profileRes.error) {
-          console.error("Failed to load agent profile:", profileRes.error);
-        }
+        if (ignore) return;
 
-        if (membershipRes.error) {
-          console.error("Failed to load agent membership:", membershipRes.error);
-        }
-
-        const profile = profileRes.data as ProfileRow | null;
+        const profile = (profileRes.data as ProfileRow | null) ?? null;
         const membershipRows = (membershipRes.data || []) as MembershipPaymentRow[];
 
         const activeMembership =
           membershipRows.find((payment) => isMembershipPaymentActive(payment)) || null;
 
-        if (!ignore) {
-          setAgent({
-            name:
-              profile?.full_name ||
-              user.user_metadata?.full_name ||
-              "Tetamo Agent",
-            role:
-              profile?.role === "agent"
-                ? "Property Agent"
-                : profile?.role
-                ? String(profile.role)
-                : "Property Agent",
-            number: profile?.phone || "",
-            photo: profile?.photo_url || DEFAULT_AGENT.photo,
-            email: user.email || "",
-            userId: user.id,
-            agency: profile?.agency || "",
-            address: profile?.address || "",
-            instagram: profile?.instagram_url || "",
-            facebook: profile?.facebook_url || "",
-            tiktok: profile?.tiktok_url || "",
-            youtube: profile?.youtube_url || "",
-            linkedin: profile?.linkedin_url || "",
-          });
+        setAgent({
+          name:
+            profile?.full_name ||
+            user.user_metadata?.full_name ||
+            "Tetamo Agent",
+          role:
+            profile?.role === "agent"
+              ? "Property Agent"
+              : profile?.role
+              ? String(profile.role)
+              : "Property Agent",
+          number: profile?.phone || "",
+          photo: profile?.photo_url || DEFAULT_AGENT.photo,
+          email: user.email || "",
+          userId: user.id,
+          agency: profile?.agency || "",
+          address: profile?.address || "",
+          instagram: profile?.instagram_url || "",
+          facebook: profile?.facebook_url || "",
+          tiktok: profile?.tiktok_url || "",
+          youtube: profile?.youtube_url || "",
+          linkedin: profile?.linkedin_url || "",
+        });
 
-          setHasActiveMembership(Boolean(activeMembership));
-          setMembershipEndsAt(
-            activeMembership ? resolveMembershipEndDate(activeMembership) : null
-          );
+        setHasActiveMembership(Boolean(activeMembership));
+        setMembershipEndsAt(
+          activeMembership ? resolveMembershipEndDate(activeMembership) : null
+        );
 
-          setLoadingProfile(false);
-          setLoadingMembership(false);
-        }
-      } catch (error) {
-        console.error("Unexpected agent profile load error:", error);
+        setLoadingProfile(false);
+        setLoadingMembership(false);
+        setHasCheckedAuth(true);
+      } catch {
+        if (ignore) return;
 
-        if (!ignore) {
-          setAgent(DEFAULT_AGENT);
-          setHasActiveMembership(false);
-          setMembershipEndsAt(null);
-          setLoadingProfile(false);
-          setLoadingMembership(false);
-        }
+        setAgent(DEFAULT_AGENT);
+        setHasActiveMembership(false);
+        setMembershipEndsAt(null);
+        setLoadingProfile(false);
+        setLoadingMembership(false);
+        setHasCheckedAuth(true);
       }
     }
 
     loadAgentProfileAndMembership();
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+
+      if (!user) {
+        setAgent(DEFAULT_AGENT);
+        setHasActiveMembership(false);
+        setMembershipEndsAt(null);
+        setLoadingProfile(false);
+        setLoadingMembership(false);
+        setHasCheckedAuth(true);
+        return;
+      }
+
+      loadAgentProfileAndMembership();
+    });
+
     return () => {
       ignore = true;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -367,43 +372,23 @@ export default function AgentDashboardLayout({
     const linkedin = normalizeSocialUrl(agent.linkedin);
 
     if (instagram) {
-      links.push({
-        key: "instagram",
-        label: "Instagram",
-        href: instagram,
-      });
+      links.push({ key: "instagram", label: "Instagram", href: instagram });
     }
 
     if (facebook) {
-      links.push({
-        key: "facebook",
-        label: "Facebook",
-        href: facebook,
-      });
+      links.push({ key: "facebook", label: "Facebook", href: facebook });
     }
 
     if (tiktok) {
-      links.push({
-        key: "tiktok",
-        label: "TikTok",
-        href: tiktok,
-      });
+      links.push({ key: "tiktok", label: "TikTok", href: tiktok });
     }
 
     if (youtube) {
-      links.push({
-        key: "youtube",
-        label: "YouTube",
-        href: youtube,
-      });
+      links.push({ key: "youtube", label: "YouTube", href: youtube });
     }
 
     if (linkedin) {
-      links.push({
-        key: "linkedin",
-        label: "LinkedIn",
-        href: linkedin,
-      });
+      links.push({ key: "linkedin", label: "LinkedIn", href: linkedin });
     }
 
     return links;
@@ -444,8 +429,14 @@ export default function AgentDashboardLayout({
   }
 
   useEffect(() => {
-    if (loadingProfile || loadingMembership) return;
-    if (!agent.userId) return;
+    if (!hasCheckedAuth || loadingProfile || loadingMembership) return;
+
+    if (!agent.userId) {
+      router.replace(
+        `/login?role=agent&next=${encodeURIComponent(pathname || "/agentdashboard/paket")}`
+      );
+      return;
+    }
 
     if (isRestrictedPathWithoutMembership(pathname)) {
       router.replace("/agentdashboard/paket");
@@ -453,6 +444,7 @@ export default function AgentDashboardLayout({
   }, [
     pathname,
     router,
+    hasCheckedAuth,
     loadingProfile,
     loadingMembership,
     agent.userId,
@@ -488,14 +480,8 @@ export default function AgentDashboardLayout({
     );
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }
-
   const isMembershipLocked = !hasActiveMembership;
-  const isLoadingState = loadingProfile || loadingMembership;
+  const isLoadingState = !hasCheckedAuth || loadingProfile || loadingMembership;
 
   return (
     <AgentProfileContext.Provider value={contextValue}>
@@ -626,19 +612,15 @@ export default function AgentDashboardLayout({
                     {renderMenuLink("/agentdashboard", "Dashboard", {
                       locked: isMembershipLocked,
                     })}
-
                     {renderMenuLink("/agentdashboard/listing-saya", "Listing Saya", {
                       locked: isMembershipLocked,
                     })}
-
                     {renderMenuLink("/agentdashboard/leads", "Leads", {
                       locked: isMembershipLocked,
                     })}
-
                     {renderMenuLink("/agentdashboard/jadwal-viewing", "Jadwal Viewing", {
                       locked: isMembershipLocked,
                     })}
-
                     {renderMenuLink("/agentdashboard/propertilokasi", "Buat Iklan", {
                       locked: isMembershipLocked,
                     })}
@@ -669,11 +651,9 @@ export default function AgentDashboardLayout({
                     {renderMenuLink("/agentdashboard/paket", "Paket")}
                     {renderMenuLink("/agentdashboard/tagihan", "Tagihan")}
                     {renderMenuLink("/agentdashboard/pembayaran", "Pembayaran")}
-
                     {renderMenuLink("/agentdashboard/komisi", "Komisi", {
                       locked: isMembershipLocked,
                     })}
-
                     {renderMenuLink("/agentdashboard/sukses", "Sukses")}
                   </div>
                 </div>
@@ -700,12 +680,25 @@ export default function AgentDashboardLayout({
                     } lg:block`}
                   >
                     {renderMenuLink("/agentdashboard/pengaturan", "Pengaturan")}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await supabase.auth.signOut();
+                        router.push("/");
+                        router.refresh();
+                      }}
+                      className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm text-white/85 transition hover:bg-white/10 hover:text-white"
+                    >
+                      <span>Logout</span>
+                    </button>
                   </div>
                 </div>
               </nav>
             </aside>
 
-            <main className="min-w-0 flex-1">{children}</main>
+            <main className="min-w-0 flex-1">
+              {children}
+            </main>
           </div>
         </div>
       </AgentListingDraftProvider>
