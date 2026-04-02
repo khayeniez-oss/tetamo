@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import {
   ChevronDown,
@@ -56,6 +57,7 @@ function getInitials(fullName: string | null, email: string | null) {
 export default function Navbar() {
   const router = useRouter();
   const { lang, setLang } = useLanguage();
+  const { currency, setCurrency } = useCurrency();
 
   const isID = lang === "id";
 
@@ -70,13 +72,13 @@ export default function Navbar() {
     buyers: isID ? "Pembeli" : "Buyers",
 
     account: isID ? "Akun" : "Account",
+    currency: isID ? "Mata Uang" : "Currency",
     loading: isID ? "Memuat..." : "Loading...",
     dashboard: "Dashboard",
     loadingDashboard: isID ? "Memuat dashboard..." : "Loading dashboard...",
     logout: isID ? "Keluar" : "Logout",
 
     login: isID ? "Masuk" : "Login",
-    adminLogin: isID ? "Masuk Admin" : "Admin Login",
     developer: "Developer",
     agentPro: isID ? "Agen Pro" : "Agent Pro",
     signUp: isID ? "Daftar" : "Sign Up",
@@ -91,16 +93,19 @@ export default function Navbar() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   const [langOpen, setLangOpen] = useState(false);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const desktopLangRef = useRef<HTMLDivElement | null>(null);
+  const desktopCurrencyRef = useRef<HTMLDivElement | null>(null);
   const mobileLangRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
 
   function closeAllMenus() {
     setLangOpen(false);
+    setCurrencyOpen(false);
     setAccountOpen(false);
     setMobileMenuOpen(false);
   }
@@ -205,11 +210,17 @@ export default function Navbar() {
 
       const insideDesktopLang =
         desktopLangRef.current?.contains(target) ?? false;
+      const insideDesktopCurrency =
+        desktopCurrencyRef.current?.contains(target) ?? false;
       const insideMobileLang =
         mobileLangRef.current?.contains(target) ?? false;
 
       if (!insideDesktopLang && !insideMobileLang) {
         setLangOpen(false);
+      }
+
+      if (!insideDesktopCurrency) {
+        setCurrencyOpen(false);
       }
 
       if (accountRef.current && !accountRef.current.contains(target)) {
@@ -321,6 +332,7 @@ export default function Navbar() {
                   type="button"
                   onClick={() => {
                     setLangOpen((prev) => !prev);
+                    setCurrencyOpen(false);
                     setAccountOpen(false);
                   }}
                   className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
@@ -365,12 +377,62 @@ export default function Navbar() {
                 )}
               </div>
 
+              <div ref={desktopCurrencyRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrencyOpen((prev) => !prev);
+                    setLangOpen(false);
+                    setAccountOpen(false);
+                  }}
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
+                >
+                  <span>{currency}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+
+                {currencyOpen && (
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrency("IDR");
+                        setCurrencyOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                        currency === "IDR"
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E] hover:bg-gray-50"
+                      }`}
+                    >
+                      IDR
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrency("USD");
+                        setCurrencyOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                        currency === "USD"
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E] hover:bg-gray-50"
+                      }`}
+                    >
+                      USD
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div ref={accountRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
                     setAccountOpen((prev) => !prev);
                     setLangOpen(false);
+                    setCurrencyOpen(false);
                   }}
                   className="inline-flex h-12 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-4 text-[15px] font-semibold text-white transition hover:opacity-90 lg:h-14 lg:px-5"
                 >
@@ -497,6 +559,7 @@ export default function Navbar() {
                   setLangOpen((prev) => !prev);
                   setMobileMenuOpen(false);
                   setAccountOpen(false);
+                  setCurrencyOpen(false);
                 }}
                 className="inline-flex h-10 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
@@ -546,6 +609,7 @@ export default function Navbar() {
                   setMobileMenuOpen((prev) => !prev);
                   setLangOpen(false);
                   setAccountOpen(false);
+                  setCurrencyOpen(false);
                 }}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90"
                 aria-label={t.menu}
@@ -560,6 +624,38 @@ export default function Navbar() {
               {mobileMenuOpen && (
                 <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
                   <div className="p-3">
+                    <div className="mb-3 rounded-[22px] border border-gray-200 bg-[#fafafa] p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                        {t.currency}
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCurrency("IDR")}
+                          className={`rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
+                            currency === "IDR"
+                              ? "bg-[#1C1C1E] text-white"
+                              : "border border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                          }`}
+                        >
+                          IDR
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCurrency("USD")}
+                          className={`rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
+                            currency === "USD"
+                              ? "bg-[#1C1C1E] text-white"
+                              : "border border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                          }`}
+                        >
+                          USD
+                        </button>
+                      </div>
+                    </div>
+
                     <nav className="grid grid-cols-2 gap-2">
                       <Link
                         href="/properti"
