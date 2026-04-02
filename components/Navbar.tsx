@@ -76,7 +76,6 @@ export default function Navbar() {
     logout: isID ? "Keluar" : "Logout",
 
     login: isID ? "Masuk" : "Login",
-    agentLogin: isID ? "Masuk Agen" : "Agent Login",
     adminLogin: isID ? "Masuk Admin" : "Admin Login",
     developer: "Developer",
     agentPro: isID ? "Agen Pro" : "Agent Pro",
@@ -143,10 +142,12 @@ export default function Navbar() {
 
       try {
         const {
-          data: { user },
-        } = await supabase.auth.getUser();
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (!mounted) return;
+
+        const user = session?.user ?? null;
 
         if (!user) {
           setAuthUserEmail(null);
@@ -392,7 +393,7 @@ export default function Navbar() {
                 </button>
 
                 {accountOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
                     {sessionLoading ? (
                       <div className="px-4 py-3 text-sm text-gray-500">
                         {t.loading}
@@ -438,26 +439,40 @@ export default function Navbar() {
                         <Link
                           href="/login"
                           onClick={() => setAccountOpen(false)}
-                          className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
                         >
+                          <User className="h-4 w-4" />
                           {t.login}
                         </Link>
 
                         <Link
-                          href="/login?role=agent"
+                          href="/signup?role=agent&next=/agentdashboard/paket"
                           onClick={() => setAccountOpen(false)}
-                          className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
                         >
-                          {t.agentLogin}
+                          <BriefcaseBusiness className="h-4 w-4" />
+                          {t.agentPro}
+                        </Link>
+
+                        <Link
+                          href="/signup?role=developer"
+                          onClick={() => setAccountOpen(false)}
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          <Building2 className="h-4 w-4" />
+                          {t.developer}
                         </Link>
 
                         <Link
                           href="/login?role=admin"
                           onClick={() => setAccountOpen(false)}
-                          className="block px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
                         >
-                          {t.adminLogin}
+                          <Shield className="h-4 w-4" />
+                          Admin
                         </Link>
+
+                        <div className="border-t border-gray-100" />
 
                         <Link
                           href="/signup"
@@ -640,7 +655,7 @@ export default function Navbar() {
                             </Link>
 
                             <Link
-                              href="/signup?role=agent"
+                              href="/signup?role=agent&next=/agentdashboard/paket"
                               onClick={closeAllMenus}
                               className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                             >
