@@ -18,6 +18,7 @@ import {
   BriefcaseBusiness,
   Building2,
   Shield,
+  BadgeDollarSign,
 } from "lucide-react";
 
 type ProfileData = {
@@ -379,17 +380,18 @@ export default function Navbar() {
 
               <div ref={desktopCurrencyRef} className="relative">
                 <button
-                  type="button"
-                  onClick={() => {
-                    setCurrencyOpen((prev) => !prev);
-                    setLangOpen(false);
-                    setAccountOpen(false);
-                  }}
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
-                >
-                  <span>{currency}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+  type="button"
+  onClick={() => {
+    setCurrencyOpen((prev) => !prev);
+    setLangOpen(false);
+    setAccountOpen(false);
+  }}
+  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
+>
+  <BadgeDollarSign className="h-4 w-4" />
+  <span>{currency}</span>
+  <ChevronDown className="h-4 w-4" />
+</button>
 
                 {currencyOpen && (
                   <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
@@ -624,10 +626,10 @@ export default function Navbar() {
               {mobileMenuOpen && (
                 <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
                   <div className="p-3">
-                    <div className="mb-3 rounded-[22px] border border-gray-200 bg-[#fafafa] p-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                        {t.currency}
-                      </div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500 flex items-center gap-1.5">
+  <BadgeDollarSign className="h-3.5 w-3.5" />
+  {t.currency}
+</div>
 
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
@@ -789,7 +791,6 @@ export default function Navbar() {
                       )}
                     </div>
                   </div>
-                </div>
               )}
             </div>
           </div>
