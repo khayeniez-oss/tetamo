@@ -36,12 +36,6 @@ type DeviceData = {
   visits: number;
 };
 
-type LocationData = {
-  province: string;
-  city: string;
-  visits: number;
-};
-
 type ListingAnalytics = {
   id: string;
   kode: string;
@@ -86,8 +80,6 @@ type RecentEventItem = {
   source_page: string;
 };
 
-const PLACEHOLDER_LOCATIONS: LocationData[] = [];
-
 function StatCard({
   title,
   value,
@@ -100,18 +92,42 @@ function StatCard({
   caption?: string;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-[#1C1C1E]">{value}</p>
-          {caption ? <p className="mt-2 text-xs text-gray-500">{caption}</p> : null}
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+            {title}
+          </p>
+          <p className="mt-2 break-words text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
+            {value}
+          </p>
+          {caption ? (
+            <p className="mt-2 text-xs leading-5 text-gray-500">{caption}</p>
+          ) : null}
         </div>
 
-        <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
           <Icon className="h-5 w-5 text-[#1C1C1E]" />
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlaceholderBlock({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  description: string;
+  icon: ElementType;
+}) {
+  return (
+    <div className="flex h-full min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#FAFAFA] p-8 text-center">
+      <Icon className="mb-3 h-10 w-10 text-gray-400" />
+      <p className="text-sm font-medium text-[#1C1C1E]">{title}</p>
+      <p className="mt-1 max-w-md text-sm text-gray-500">{description}</p>
     </div>
   );
 }
@@ -128,9 +144,12 @@ function formatDateTime(value: string) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
 
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(d);
 }
 
@@ -188,24 +207,6 @@ function eventLabel(eventName: AnalyticsEventName) {
   }
 }
 
-function PlaceholderBlock({
-  title,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  description: string;
-  icon: ElementType;
-}) {
-  return (
-    <div className="h-full rounded-2xl border border-dashed border-gray-300 bg-[#FAFAFA] flex flex-col items-center justify-center text-center p-8">
-      <Icon className="h-10 w-10 text-gray-400 mb-3" />
-      <p className="text-sm font-medium text-[#1C1C1E]">{title}</p>
-      <p className="mt-1 text-sm text-gray-500 max-w-md">{description}</p>
-    </div>
-  );
-}
-
 function getTrafficSourceLabel(event: AnalyticsEventRow) {
   const source = String(event.metadata?.traffic_source ?? "").trim();
   const medium = String(event.metadata?.traffic_medium ?? "").trim();
@@ -222,6 +223,18 @@ function getDeviceLabel(event: AnalyticsEventRow) {
   const device = String(event.metadata?.device_type ?? "").trim();
   if (!device) return "Unknown";
   return device;
+}
+
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
 }
 
 export default function AdminAnalyticsPage() {
@@ -353,12 +366,10 @@ export default function AdminAnalyticsPage() {
     }
 
     return Array.from(map.entries())
-      .map(([name, set]): TrafficSource => {
-        return {
-          name,
-          visits: set.size,
-        };
-      })
+      .map(([name, set]): TrafficSource => ({
+        name,
+        visits: set.size,
+      }))
       .filter((item) => (q ? item.name.toLowerCase().includes(q) : true))
       .sort((a, b) => b.visits - a.visits);
   }, [events, searchQuery]);
@@ -379,12 +390,10 @@ export default function AdminAnalyticsPage() {
     }
 
     return Array.from(map.entries())
-      .map(([name, set]): DeviceData => {
-        return {
-          name,
-          visits: set.size,
-        };
-      })
+      .map(([name, set]): DeviceData => ({
+        name,
+        visits: set.size,
+      }))
       .filter((item) => (q ? item.name.toLowerCase().includes(q) : true))
       .sort((a, b) => b.visits - a.visits);
   }, [events, searchQuery]);
@@ -508,405 +517,463 @@ export default function AdminAnalyticsPage() {
     Math.ceil(recentEvents.length / recentEventsPageSize)
   );
 
+  useEffect(() => {
+    setRecentEventsPage(1);
+  }, [searchQuery, recentEvents.length]);
+
+  useEffect(() => {
+    if (recentEventsPage > recentEventsTotalPages) {
+      setRecentEventsPage(recentEventsTotalPages);
+    }
+  }, [recentEventsPage, recentEventsTotalPages]);
+
   const pagedRecentEvents = recentEvents.slice(
     (recentEventsPage - 1) * recentEventsPageSize,
     recentEventsPage * recentEventsPageSize
   );
 
-  useEffect(() => {
-    setRecentEventsPage(1);
-  }, [searchQuery, recentEvents.length]);
+  const visibleRecentPages = useMemo(
+    () => visiblePageNumbers(recentEventsPage, recentEventsTotalPages),
+    [recentEventsPage, recentEventsTotalPages]
+  );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1C1C1E]">Analytics</h1>
-          <p className="text-sm text-gray-500">
-            Real Supabase event analytics for traffic, devices, listings, conversion, and recent activity.
-          </p>
-        </div>
+    <div className="space-y-5 sm:space-y-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
+          Analytics
+        </h1>
+        <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
+          Real Supabase event analytics for traffic, devices, listings, conversion,
+          and recent activity.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Visitors"
           value={numberFormat(totalVisitors)}
           Icon={Users}
-          caption="Unique visitor_id tracked from browser"
+          caption="Unique visitor_id tracked from browser."
         />
         <StatCard
           title="Total Views"
           value={numberFormat(totalViews)}
           Icon={Globe}
-          caption="Property card views + property detail views"
+          caption="Property card views plus detail views."
         />
         <StatCard
           title="Tracked Clicks"
           value={numberFormat(totalClicks)}
           Icon={MousePointerClick}
-          caption="WhatsApp + View Detail + Schedule Viewing"
+          caption="WhatsApp, view detail, and schedule viewing."
         />
         <StatCard
           title="Active Now"
           value={numberFormat(activeNow)}
           Icon={Activity}
-          caption="Events in the last 15 minutes"
+          caption="Events recorded in the last 15 minutes."
         />
       </div>
 
-      <div className="mt-6 relative">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
           size={18}
         />
 
         <input
           type="text"
-          placeholder="Cari source, device, kota, listing, kode..."
+          placeholder="Search source, device, city, listing, code..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder:text-gray-500"
+          className="h-11 w-full rounded-2xl border border-gray-300 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">Traffic Sources</h2>
-            <p className="text-sm text-gray-500">
-              Real traffic source buckets from referrer + UTM params.
-            </p>
-          </div>
-
-          {loading ? (
-            <div className="p-6 text-sm text-gray-500 text-center">
-              Loading traffic sources...
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
+        <div className="min-w-0 space-y-5">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                Traffic Sources
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                Real traffic source buckets from referrer and UTM parameters.
+              </p>
             </div>
-          ) : trafficSources.length > 0 ? (
-            <div className="divide-y divide-gray-100">
-              {trafficSources.map((source) => (
-                <div
-                  key={source.name}
-                  className="p-4 flex items-center justify-between"
-                >
-                  <p className="text-sm text-[#1C1C1E]">{source.name}</p>
-                  <p className="text-sm font-semibold text-[#1C1C1E]">
-                    {numberFormat(source.visits)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-6 text-sm text-gray-500 text-center">
-              No traffic source data yet.
-            </div>
-          )}
-        </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">Devices</h2>
-            <p className="text-sm text-gray-500">
-              Real device buckets from browser user agent.
-            </p>
-          </div>
-
-          {loading ? (
-            <div className="p-6 text-sm text-gray-500 text-center">
-              Loading devices...
-            </div>
-          ) : devices.length > 0 ? (
-            <div className="divide-y divide-gray-100">
-              {devices.map((device) => {
-                const Icon =
-                  device.name === "Mobile"
-                    ? Smartphone
-                    : device.name === "Tablet"
-                    ? Tablet
-                    : Monitor;
-
-                return (
+            {loading ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                Loading traffic sources...
+              </div>
+            ) : trafficSources.length > 0 ? (
+              <div className="divide-y divide-gray-100">
+                {trafficSources.map((source) => (
                   <div
-                    key={device.name}
-                    className="p-4 flex items-center justify-between"
+                    key={source.name}
+                    className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-gray-100 flex items-center justify-center">
-                        <Icon className="h-4 w-4 text-[#1C1C1E]" />
-                      </div>
-                      <p className="text-sm text-[#1C1C1E]">{device.name}</p>
-                    </div>
-
-                    <p className="text-sm font-semibold text-[#1C1C1E]">
-                      {numberFormat(device.visits)}
+                    <p className="min-w-0 truncate text-sm text-[#1C1C1E]">
+                      {source.name}
                     </p>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="p-6 text-sm text-gray-500 text-center">
-              No device data yet.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
-              Listing Performance
-            </h2>
-            <p className="text-sm text-gray-500">
-              Real data from analytics_events: views, clicks, and leads per listing.
-            </p>
-          </div>
-
-          {loading ? (
-            <div className="p-6 text-sm text-gray-500 text-center">
-              Loading analytics...
-            </div>
-          ) : listingPerformance.length > 0 ? (
-            <div className="divide-y divide-gray-100">
-              {listingPerformance.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-6 flex items-center justify-between gap-6"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                      <span>Kode: {item.kode}</span>
-                      <span>•</span>
-                      <span>{item.city}</span>
-                    </div>
-
-                    <p className="mt-2 font-medium text-[#1C1C1E] truncate">
-                      {item.title}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-8 shrink-0 text-right">
-                    <div>
-                      <p className="text-xs text-gray-500">Views</p>
-                      <p className="text-sm font-semibold text-[#1C1C1E]">
-                        {numberFormat(item.views)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-gray-500">Clicks</p>
-                      <p className="text-sm font-semibold text-[#1C1C1E]">
-                        {numberFormat(item.clicks)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-gray-500">Leads</p>
-                      <p className="text-sm font-semibold text-[#1C1C1E]">
-                        {numberFormat(item.leads)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-6 text-sm text-gray-500 text-center">
-              No tracked listing data yet.
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-[#1C1C1E]">
-              Top Locations
-            </h2>
-            <p className="text-sm text-gray-500">
-              This one stays for later.
-            </p>
-          </div>
-
-          <div className="p-6">
-            <PlaceholderBlock
-              title="Location analytics later"
-              description="City / province usually needs opt-in geolocation or a server-side IP geo source."
-              icon={MapPinned}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
-              <BarChart3 className="h-5 w-5 text-[#1C1C1E]" />
-            </div>
-            <h3 className="font-semibold text-[#1C1C1E]">Conversion Insight</h3>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Views</span>
-              <span className="font-semibold text-[#1C1C1E]">
-                {numberFormat(conversion.views)}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Clicks</span>
-              <span className="font-semibold text-[#1C1C1E]">
-                {numberFormat(conversion.clicks)}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Leads</span>
-              <span className="font-semibold text-[#1C1C1E]">
-                {numberFormat(conversion.leads)}
-              </span>
-            </div>
-
-            <div className="border-t border-gray-100 pt-3 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Click Rate</span>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {percentFormat(conversion.clickRate)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Lead / Click</span>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {percentFormat(conversion.leadRateFromClicks)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Lead / View</span>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {percentFormat(conversion.leadRateFromViews)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-[#1C1C1E]" />
-            </div>
-            <h3 className="font-semibold text-[#1C1C1E]">Traffic Summary</h3>
-          </div>
-
-          <div className="space-y-3">
-            {trafficSources.slice(0, 5).map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between text-sm"
-              >
-                <span className="text-gray-500">{item.name}</span>
-                <span className="font-semibold text-[#1C1C1E]">
-                  {numberFormat(item.visits)}
-                </span>
-              </div>
-            ))}
-
-            {trafficSources.length === 0 ? (
-              <p className="text-sm text-gray-500">No traffic source data yet.</p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
-              <Activity className="h-5 w-5 text-[#1C1C1E]" />
-            </div>
-            <h3 className="font-semibold text-[#1C1C1E]">Real-Time Events</h3>
-          </div>
-
-          {loading ? (
-            <p className="text-sm text-gray-500">Loading recent events...</p>
-          ) : recentEvents.length > 0 ? (
-            <>
-              <div className="space-y-3 min-h-[360px]">
-                {pagedRecentEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="rounded-xl border border-gray-100 bg-gray-50 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#1C1C1E]">
-                          {eventLabel(event.event_name)}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-600 truncate">
-                          {event.title}
-                        </p>
-                        <p className="mt-1 text-xs text-gray-500">
-                          {event.kode} • {event.city}
-                        </p>
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        <p className="text-xs font-medium text-[#1C1C1E]">
-                          {formatRelativeTime(event.created_at)}
-                        </p>
-                        <p className="mt-1 text-[11px] text-gray-500">
-                          {event.source_page}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="mt-2 text-[11px] text-gray-500">
-                      {formatDateTime(event.created_at)}
+                    <p className="shrink-0 text-sm font-semibold text-[#1C1C1E]">
+                      {numberFormat(source.visits)}
                     </p>
                   </div>
                 ))}
               </div>
+            ) : (
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                No traffic source data yet.
+              </div>
+            )}
+          </div>
 
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-xs text-gray-500">
-                  Page {recentEventsPage} / {recentEventsTotalPages}
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-1">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+                <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                  Devices
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                  Device buckets based on browser user agent data.
                 </p>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRecentEventsPage((p) => Math.max(1, p - 1))
-                    }
-                    disabled={recentEventsPage === 1}
-                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-[#1C1C1E] disabled:opacity-40"
-                  >
-                    Prev
-                  </button>
+              {loading ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                  Loading devices...
+                </div>
+              ) : devices.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {devices.map((device) => {
+                    const Icon =
+                      device.name === "Mobile"
+                        ? Smartphone
+                        : device.name === "Tablet"
+                        ? Tablet
+                        : Monitor;
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRecentEventsPage((p) =>
-                        Math.min(recentEventsTotalPages, p + 1)
-                      )
-                    }
-                    disabled={recentEventsPage === recentEventsTotalPages}
-                    className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-[#1C1C1E] disabled:opacity-40"
-                  >
-                    Next
-                  </button>
+                    return (
+                      <div
+                        key={device.name}
+                        className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                            <Icon className="h-4 w-4 text-[#1C1C1E]" />
+                          </div>
+                          <p className="truncate text-sm text-[#1C1C1E]">
+                            {device.name}
+                          </p>
+                        </div>
+
+                        <p className="shrink-0 text-sm font-semibold text-[#1C1C1E]">
+                          {numberFormat(device.visits)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                  No device data yet.
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+                  <BarChart3 className="h-5 w-5 text-[#1C1C1E]" />
+                </div>
+                <h3 className="font-semibold text-[#1C1C1E]">
+                  Conversion Insight
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Views</span>
+                  <span className="font-semibold text-[#1C1C1E]">
+                    {numberFormat(conversion.views)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Clicks</span>
+                  <span className="font-semibold text-[#1C1C1E]">
+                    {numberFormat(conversion.clicks)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Leads</span>
+                  <span className="font-semibold text-[#1C1C1E]">
+                    {numberFormat(conversion.leads)}
+                  </span>
+                </div>
+
+                <div className="space-y-2 border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Click Rate</span>
+                    <span className="font-semibold text-[#1C1C1E]">
+                      {percentFormat(conversion.clickRate)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Lead / Click</span>
+                    <span className="font-semibold text-[#1C1C1E]">
+                      {percentFormat(conversion.leadRateFromClicks)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Lead / View</span>
+                    <span className="font-semibold text-[#1C1C1E]">
+                      {percentFormat(conversion.leadRateFromViews)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </>
-          ) : (
-            <p className="text-sm text-gray-500">
-              No recent tracked events yet.
-            </p>
-          )}
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-5">
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                Listing Performance
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                Real data from analytics_events: views, clicks, and leads per listing.
+              </p>
+            </div>
+
+            {loading ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                Loading analytics...
+              </div>
+            ) : listingPerformance.length > 0 ? (
+              <div className="divide-y divide-gray-100">
+                {listingPerformance.map((item) => (
+                  <div key={item.id} className="px-4 py-4 sm:px-6 sm:py-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+                          <span>Code: {item.kode}</span>
+                          <span className="text-gray-300">•</span>
+                          <span>{item.city}</span>
+                        </div>
+
+                        <p className="mt-2 truncate text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                          {item.title}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 text-right sm:gap-6">
+                        <div>
+                          <p className="text-[11px] text-gray-400 sm:text-xs">
+                            Views
+                          </p>
+                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                            {numberFormat(item.views)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] text-gray-400 sm:text-xs">
+                            Clicks
+                          </p>
+                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                            {numberFormat(item.clicks)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] text-gray-400 sm:text-xs">
+                            Leads
+                          </p>
+                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                            {numberFormat(item.leads)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                No tracked listing data yet.
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+                  <Building2 className="h-5 w-5 text-[#1C1C1E]" />
+                </div>
+                <h3 className="font-semibold text-[#1C1C1E]">Traffic Summary</h3>
+              </div>
+
+              <div className="space-y-3">
+                {trafficSources.slice(0, 5).map((item) => (
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="min-w-0 truncate text-gray-500">
+                      {item.name}
+                    </span>
+                    <span className="shrink-0 font-semibold text-[#1C1C1E]">
+                      {numberFormat(item.visits)}
+                    </span>
+                  </div>
+                ))}
+
+                {trafficSources.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No traffic source data yet.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+                  <MapPinned className="h-5 w-5 text-[#1C1C1E]" />
+                </div>
+                <h3 className="font-semibold text-[#1C1C1E]">Top Locations</h3>
+              </div>
+
+              <PlaceholderBlock
+                title="Location analytics later"
+                description="City or province analytics usually needs opt-in geolocation or a server-side IP geo source."
+                icon={MapPinned}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
+                  <Activity className="h-5 w-5 text-[#1C1C1E]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                    Real-Time Events
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                    Recent tracked interactions from the platform.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="px-4 py-8 text-sm text-gray-500 sm:px-6">
+                Loading recent events...
+              </div>
+            ) : recentEvents.length > 0 ? (
+              <div className="px-4 py-4 sm:px-6 sm:py-5">
+                <div className="min-h-[280px] space-y-3">
+                  {pagedRecentEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="rounded-xl border border-gray-100 bg-gray-50 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                            {eventLabel(event.event_name)}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-gray-600">
+                            {event.title}
+                          </p>
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            {event.kode} <span className="text-gray-300">•</span>{" "}
+                            {event.city}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs font-medium text-[#1C1C1E]">
+                            {formatRelativeTime(event.created_at)}
+                          </p>
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            {event.source_page}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="mt-2 text-[11px] text-gray-500">
+                        {formatDateTime(event.created_at)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-gray-500 sm:text-sm">
+                    Page {recentEventsPage} of {recentEventsTotalPages}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRecentEventsPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={recentEventsPage === 1}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+
+                    {visibleRecentPages.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setRecentEventsPage(p)}
+                        className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
+                          recentEventsPage === p
+                            ? "border-black bg-black text-white"
+                            : "border-gray-300 bg-white text-gray-700"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRecentEventsPage((p) =>
+                          Math.min(recentEventsTotalPages, p + 1)
+                        )
+                      }
+                      disabled={recentEventsPage === recentEventsTotalPages}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-sm text-gray-500 sm:px-6">
+                No recent tracked events yet.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
