@@ -21,7 +21,7 @@ type BillingStatus =
   | null;
 
 type BillingRecordRow = {
-  id: string;
+  id: string | null;
   invoice_number: string | null;
   customer_name: string | null;
   customer_email: string | null;
