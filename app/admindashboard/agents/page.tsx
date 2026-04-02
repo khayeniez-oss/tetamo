@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, UserCheck, UserX, Shield, ChevronDown } from "lucide-react";
+import { Search, UserCheck, UserX, Shield } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 /* =========================
@@ -146,11 +146,11 @@ function SummaryCard({
   value: number;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+      <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 sm:text-[11px]">
         {title}
       </p>
-      <p className="mt-2 text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
+      <p className="mt-1.5 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
         {value}
       </p>
     </div>
@@ -168,7 +168,6 @@ export default function AdminAgentsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [expandedActionsId, setExpandedActionsId] = useState<string | null>(null);
 
   const ITEMS_PER_PAGE = 12;
 
@@ -302,7 +301,7 @@ export default function AdminAgentsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, agents.length]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAgents.length / ITEMS_PER_PAGE));
 
@@ -377,18 +376,18 @@ export default function AdminAgentsPage() {
         className={className}
       >
         <span className="shrink-0">{children}</span>
-        <span>{label}</span>
+        <span className="truncate">{label}</span>
       </button>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Agents Management
         </h1>
-        <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Approve, monitor, and manage marketplace agents.
         </p>
       </div>
@@ -399,45 +398,44 @@ export default function AdminAgentsPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard title="Total Agents" value={stats.total} />
         <SummaryCard title="Active" value={stats.active} />
         <SummaryCard title="Pending" value={stats.pending} />
         <SummaryCard title="Suspended" value={stats.suspended} />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-        <div className="min-w-0 space-y-5">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] xl:gap-5">
+        <div className="min-w-0 space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-4">
+            <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
               Agent Overview
             </h2>
-            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
               Review agent account status, activity, and marketplace participation.
             </p>
 
-            {/* MOBILE SIDE BY SIDE */}
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Search Result
                 </p>
-                <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                <p className="mt-1.5 text-base font-semibold text-[#1C1C1E] sm:text-lg">
                   {filteredAgents.length}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Current Page
                 </p>
-                <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                <p className="mt-1.5 text-base font-semibold text-[#1C1C1E] sm:text-lg">
                   {page} / {totalPages}
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2.5">
               {(["ACTIVE", "PENDING", "SUSPENDED"] as AgentStatus[]).map((status) => {
                 const ui = statusUI(status);
                 const count =
@@ -450,10 +448,10 @@ export default function AdminAgentsPage() {
                 return (
                   <div
                     key={status}
-                    className="flex items-center justify-between rounded-2xl border border-gray-200 px-4 py-3"
+                    className="flex items-center justify-between rounded-2xl border border-gray-200 px-3 py-2.5"
                   >
                     <span
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badge}`}
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
                     >
                       {ui.label}
                     </span>
@@ -467,35 +465,38 @@ export default function AdminAgentsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+          <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-4">
+            <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
               Status Guide
             </h2>
-            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
               Use the controls to keep agent access and approval status updated.
             </p>
 
-            {/* MOBILE SIDE BY SIDE */}
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
-                <p className="text-sm font-semibold text-green-800">Active</p>
-                <p className="mt-1 text-xs leading-5 text-green-700">
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-3">
+                <p className="text-[12px] font-semibold text-green-800 sm:text-sm">
+                  Active
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-green-700 sm:text-xs md:text-sm">
                   The agent can use the platform normally.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4">
-                <p className="text-sm font-semibold text-yellow-800">
+              <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-3">
+                <p className="text-[12px] font-semibold text-yellow-800 sm:text-sm">
                   Pending Approval
                 </p>
-                <p className="mt-1 text-xs leading-5 text-yellow-700">
+                <p className="mt-1 text-[11px] leading-5 text-yellow-700 sm:text-xs md:text-sm">
                   The agent account still needs review or approval.
                 </p>
               </div>
 
-              <div className="col-span-2 rounded-2xl border border-red-200 bg-red-50 p-4">
-                <p className="text-sm font-semibold text-red-800">Suspended</p>
-                <p className="mt-1 text-xs leading-5 text-red-700">
+              <div className="col-span-2 rounded-2xl border border-red-200 bg-red-50 p-3">
+                <p className="text-[12px] font-semibold text-red-800 sm:text-sm">
+                  Suspended
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-red-700 sm:text-xs md:text-sm">
                   The agent account is restricted until reactivated.
                 </p>
               </div>
@@ -503,20 +504,20 @@ export default function AdminAgentsPage() {
           </div>
         </div>
 
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+              <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 All Agents
               </h2>
-              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+              <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                 Search and manage every agent account.
               </p>
 
-              <div className="relative mt-4">
+              <div className="relative mt-3">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-                  size={18}
+                  size={16}
                 />
 
                 <input
@@ -527,139 +528,113 @@ export default function AdminAgentsPage() {
                     setSearchQuery(e.target.value);
                     setPage(1);
                   }}
-                  className="h-11 w-full rounded-2xl border border-gray-300 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
+                  className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:text-sm"
                 />
               </div>
             </div>
 
             <div className="divide-y divide-gray-100">
               {loading ? (
-                <div className="px-4 py-8 text-sm text-gray-500 sm:px-6">
+                <div className="px-4 py-8 text-sm text-gray-500 sm:px-5">
                   Loading agents...
                 </div>
               ) : paginated.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-gray-500 sm:px-6">
+                <div className="px-4 py-8 text-sm text-gray-500 sm:px-5">
                   No agents found.
                 </div>
               ) : (
                 paginated.map((agent) => {
                   const ui = statusUI(agent.status);
                   const isUpdating = updatingId === agent.id;
-                  const actionsOpen = expandedActionsId === agent.id;
 
                   return (
-                    <div key={agent.id} className="px-4 py-4 sm:px-6 sm:py-5">
-                      <div className="flex flex-col gap-4">
+                    <div key={agent.id} className="px-3.5 py-4 sm:px-5">
+                      <div className="flex flex-col gap-3.5">
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badge}`}
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
                             >
                               {ui.label}
                             </span>
                           </div>
 
-                          <p className="mt-3 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                          <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
                             {agent.name}
                           </p>
 
-                          <p className="mt-1 text-sm text-gray-500">
-                            {agent.phone} <span className="text-gray-300">•</span>{" "}
-                            {agent.email}
-                          </p>
+                          <div className="mt-3 grid grid-cols-2 gap-2.5">
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Contact
+                              </p>
+                              <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                                {agent.phone}
+                              </p>
+                              <p className="mt-1 break-words text-[11px] text-gray-500 sm:text-xs">
+                                {agent.email}
+                              </p>
+                            </div>
 
-                          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-                            {agent.agency} <span className="text-gray-300">•</span>{" "}
-                            {agent.city}
-                          </p>
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Agency
+                              </p>
+                              <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                                {agent.agency}
+                              </p>
+                              <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                                {agent.city}
+                              </p>
+                            </div>
 
-                          <p className="mt-1 text-[11px] text-gray-400 sm:text-xs">
-                            Listings: {agent.listings}{" "}
-                            <span className="text-gray-300">•</span> Leads:{" "}
-                            {agent.leads}
-                          </p>
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Listings
+                              </p>
+                              <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                                {agent.listings}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Leads
+                              </p>
+                              <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                                {agent.leads}
+                              </p>
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="hidden lg:flex lg:flex-wrap lg:items-center lg:justify-end lg:gap-2">
-                          <button
+                        <div className="grid grid-cols-3 gap-2">
+                          <ActionButton
                             onClick={() => updateStatus(agent.id, "ACTIVE")}
                             disabled={isUpdating}
-                            className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700 transition hover:bg-green-100 disabled:opacity-50"
-                            type="button"
-                            title="Set Active"
+                            label="Active"
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 text-[12px] font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50 sm:text-sm"
                           >
-                            <UserCheck size={16} />
-                          </button>
+                            <UserCheck size={15} />
+                          </ActionButton>
 
-                          <button
+                          <ActionButton
                             onClick={() => updateStatus(agent.id, "SUSPENDED")}
                             disabled={isUpdating}
-                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 transition hover:bg-red-100 disabled:opacity-50"
-                            type="button"
-                            title="Suspend"
+                            label="Suspend"
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50 sm:text-sm"
                           >
-                            <UserX size={16} />
-                          </button>
+                            <UserX size={15} />
+                          </ActionButton>
 
-                          <button
+                          <ActionButton
                             onClick={() => updateStatus(agent.id, "PENDING")}
                             disabled={isUpdating}
-                            className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-yellow-700 transition hover:bg-yellow-100 disabled:opacity-50"
-                            type="button"
-                            title="Set Pending"
+                            label="Pending"
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-yellow-200 bg-yellow-50 px-3 text-[12px] font-medium text-yellow-700 transition hover:bg-yellow-100 disabled:opacity-50 sm:text-sm"
                           >
-                            <Shield size={16} />
-                          </button>
-                        </div>
-
-                        <div className="lg:hidden">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExpandedActionsId((prev) =>
-                                prev === agent.id ? null : agent.id
-                              )
-                            }
-                            className="flex h-10 w-full items-center justify-between rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-                          >
-                            <span>Actions</span>
-                            <ChevronDown
-                              className={`h-4 w-4 transition-transform ${
-                                actionsOpen ? "rotate-180" : ""
-                              }`}
-                            />
-                          </button>
-
-                          {actionsOpen ? (
-                            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                              <ActionButton
-                                onClick={() => updateStatus(agent.id, "ACTIVE")}
-                                disabled={isUpdating}
-                                label="Active"
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 text-sm font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50"
-                              >
-                                <UserCheck size={16} />
-                              </ActionButton>
-
-                              <ActionButton
-                                onClick={() => updateStatus(agent.id, "SUSPENDED")}
-                                disabled={isUpdating}
-                                label="Suspend"
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
-                              >
-                                <UserX size={16} />
-                              </ActionButton>
-
-                              <ActionButton
-                                onClick={() => updateStatus(agent.id, "PENDING")}
-                                disabled={isUpdating}
-                                label="Pending"
-                                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-yellow-200 bg-yellow-50 px-3 text-sm font-medium text-yellow-700 transition hover:bg-yellow-100 disabled:opacity-50"
-                              >
-                                <Shield size={16} />
-                              </ActionButton>
-                            </div>
-                          ) : null}
+                            <Shield size={15} />
+                          </ActionButton>
                         </div>
                       </div>
                     </div>
@@ -669,8 +644,8 @@ export default function AdminAgentsPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-gray-500 sm:text-sm">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
               Showing {startItem}–{endItem} of {filteredAgents.length} agents
             </p>
 
@@ -678,7 +653,7 @@ export default function AdminAgentsPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
                 type="button"
               >
                 Previous
@@ -688,7 +663,7 @@ export default function AdminAgentsPage() {
                 <button
                   key={p}
                   onClick={() => setPage(p)}
-                  className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
+                  className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                     page === p
                       ? "border-black bg-black text-white"
                       : "border-gray-300 bg-white text-gray-700"
@@ -702,7 +677,7 @@ export default function AdminAgentsPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
                 type="button"
               >
                 Next
