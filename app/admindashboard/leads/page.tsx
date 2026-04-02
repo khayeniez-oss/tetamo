@@ -183,11 +183,11 @@ function SummaryCard({
   value: number;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+      <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 sm:text-[11px]">
         {title}
       </p>
-      <p className="mt-2 text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
+      <p className="mt-1.5 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
         {value}
       </p>
     </div>
@@ -447,14 +447,12 @@ export default function AdminLeadsPage() {
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      {/* Header */}
-
-      <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Leads
         </h1>
-        <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Monitor all leads across owners, agents, and listings.
         </p>
       </div>
@@ -465,9 +463,7 @@ export default function AdminLeadsPage() {
         </div>
       ) : null}
 
-      {/* Summary */}
-
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
         <SummaryCard title="Total Leads" value={stats.total} />
         <SummaryCard title="New" value={stats.newCount} />
         <SummaryCard title="Contacted" value={stats.contacted} />
@@ -476,41 +472,37 @@ export default function AdminLeadsPage() {
         <SummaryCard title="Closed" value={stats.closed} />
       </div>
 
-      {/* Main layout */}
-
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-        {/* Left side */}
-
-        <div className="min-w-0 space-y-5">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] xl:gap-5">
+        <div className="min-w-0 space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-4">
+            <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
               Lead Overview
             </h2>
-            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
               Keep track of buyer activity, listing interest, and lead progress.
             </p>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Search Result
                 </p>
-                <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                <p className="mt-1.5 text-base font-semibold text-[#1C1C1E] sm:text-lg">
                   {filteredLeads.length}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Current Page
                 </p>
-                <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                <p className="mt-1.5 text-base font-semibold text-[#1C1C1E] sm:text-lg">
                   {page} / {totalPages}
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2.5">
               {(["NEW", "CONTACTED", "VIEWING", "INTERESTED", "CLOSED"] as LeadStatus[]).map(
                 (status) => {
                   const ui = leadStatusUI(status);
@@ -519,16 +511,14 @@ export default function AdminLeadsPage() {
                   return (
                     <div
                       key={status}
-                      className="flex items-center justify-between rounded-2xl border border-gray-200 px-4 py-3"
+                      className="flex items-center justify-between rounded-2xl border border-gray-200 px-3 py-2.5"
                     >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                          {ui.label}
-                        </span>
-                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badgeClass}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {ui.label}
+                      </span>
 
                       <span className="text-sm font-semibold text-[#1C1C1E]">
                         {status === "NEW"
@@ -548,15 +538,15 @@ export default function AdminLeadsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+          <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-4">
+            <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
               Lead Status Flow
             </h2>
-            <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
               Review the lead and move it through the next stage when needed.
             </p>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
               {(["NEW", "CONTACTED", "VIEWING", "INTERESTED", "CLOSED"] as LeadStatus[]).map(
                 (status) => {
                   const ui = leadStatusUI(status);
@@ -565,7 +555,7 @@ export default function AdminLeadsPage() {
                   return (
                     <div
                       key={status}
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-2.5 text-[10px] font-medium sm:text-[11px] ${ui.badgeClass}`}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {ui.label}
@@ -577,22 +567,20 @@ export default function AdminLeadsPage() {
           </div>
         </div>
 
-        {/* Right side */}
-
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+              <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 All Marketplace Leads
               </h2>
-              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+              <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                 Track inquiries, assigned agents, and listing interest.
               </p>
 
-              <div className="relative mt-4">
+              <div className="relative mt-3">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-                  size={18}
+                  size={16}
                 />
 
                 <input
@@ -603,18 +591,18 @@ export default function AdminLeadsPage() {
                     setSearchQuery(e.target.value);
                     setPage(1);
                   }}
-                  className="h-11 w-full rounded-2xl border border-gray-300 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
+                  className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:text-sm"
                 />
               </div>
             </div>
 
             <div className="divide-y divide-gray-100">
               {loading ? (
-                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                   Loading leads...
                 </div>
               ) : paginatedLeads.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                   No leads found.
                 </div>
               ) : (
@@ -624,52 +612,56 @@ export default function AdminLeadsPage() {
                   const isUpdating = statusUpdatingId === lead.id;
 
                   return (
-                    <div key={lead.id} className="px-4 py-4 sm:px-6 sm:py-5">
-                      <div className="flex flex-col gap-4">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium sm:text-xs ${ui.badgeClass}`}
-                            >
-                              <BadgeIcon className="h-3.5 w-3.5" />
-                              {ui.label}
-                            </span>
+                    <div key={lead.id} className="px-3.5 py-4 sm:px-5">
+                      <div className="flex flex-col gap-3.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badgeClass}`}
+                              >
+                                <BadgeIcon className="h-3.5 w-3.5" />
+                                {ui.label}
+                              </span>
 
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              {lead.createdAt}
-                            </span>
-                            <span className="text-[11px] text-gray-300 sm:text-xs">
-                              •
-                            </span>
-                            <span className="text-[11px] text-gray-500 sm:text-xs">
-                              Code: {lead.listingKode}
-                            </span>
+                              <span className="text-[10px] text-gray-500 sm:text-[11px]">
+                                {lead.createdAt}
+                              </span>
+
+                              <span className="text-[10px] text-gray-300 sm:text-[11px]">
+                                •
+                              </span>
+
+                              <span className="text-[10px] text-gray-500 sm:text-[11px]">
+                                Code: {lead.listingKode}
+                              </span>
+                            </div>
+
+                            <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                              {lead.buyerName}
+                            </p>
+
+                            <p className="mt-1 text-[12px] text-gray-500 sm:text-[13px]">
+                              {lead.buyerPhone}
+                            </p>
+
+                            <p className="mt-2 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px] md:text-sm">
+                              {lead.propertyTitle}
+                            </p>
+
+                            <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+                              Agent: {lead.agentName}{" "}
+                              <span className="text-gray-300">•</span> Owner:{" "}
+                              {lead.ownerName}
+                            </p>
                           </div>
-
-                          <p className="mt-3 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                            {lead.buyerName}
-                          </p>
-
-                          <p className="mt-1 text-sm text-gray-500">
-                            {lead.buyerPhone}
-                          </p>
-
-                          <p className="mt-2 text-sm text-[#1C1C1E]">
-                            {lead.propertyTitle}
-                          </p>
-
-                          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-                            Agent: {lead.agentName}{" "}
-                            <span className="text-gray-300">•</span> Owner:{" "}
-                            {lead.ownerName}
-                          </p>
                         </div>
 
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => setSelectedLead(lead)}
-                            className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:w-auto"
+                            className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-gray-300 px-3 text-[12px] font-medium text-gray-700 transition hover:bg-gray-50 sm:text-sm"
                           >
                             View
                           </button>
@@ -683,7 +675,7 @@ export default function AdminLeadsPage() {
                                 nextReviewStatus(lead.status)
                               )
                             }
-                            className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
+                            className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-3 text-[12px] font-medium text-white transition hover:opacity-90 disabled:opacity-50 sm:text-sm"
                           >
                             {lead.status === "NEW"
                               ? "Review"
@@ -704,10 +696,8 @@ export default function AdminLeadsPage() {
             </div>
           </div>
 
-          {/* Pagination */}
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-gray-500 sm:text-sm">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
               Showing {startItem}–{endItem} of {filteredLeads.length} leads
             </p>
 
@@ -715,7 +705,7 @@ export default function AdminLeadsPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
                 type="button"
               >
                 Previous
@@ -726,7 +716,7 @@ export default function AdminLeadsPage() {
                   key={p}
                   onClick={() => setPage(p)}
                   type="button"
-                  className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
+                  className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                     page === p
                       ? "border-black bg-black text-white"
                       : "border-gray-300 bg-white text-gray-700"
@@ -739,7 +729,7 @@ export default function AdminLeadsPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-50"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
                 type="button"
               >
                 Next
@@ -749,17 +739,15 @@ export default function AdminLeadsPage() {
         </div>
       </div>
 
-      {/* Lead detail modal */}
-
       {selectedLead ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4 sm:p-5">
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+                <h3 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
                   Lead Details
                 </h3>
-                <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                   Full marketplace lead information.
                 </p>
               </div>
@@ -773,95 +761,95 @@ export default function AdminLeadsPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-6">
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+            <div className="grid grid-cols-2 gap-2.5 p-4 sm:gap-3 sm:p-5">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Buyer
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.buyerName}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Phone
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.buyerPhone}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Property
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.propertyTitle}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Listing Code
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.listingKode}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Agent
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.agentName}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Owner
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.ownerName}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Lead Type
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.leadType || "-"}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Receiver Role
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {selectedLead.receiverRole || "-"}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4 sm:col-span-2">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
+              <div className="col-span-2 rounded-2xl border border-gray-200 p-3">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                   Created At
                 </p>
-                <p className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                <p className="mt-1.5 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                   {formatDateTime(selectedLead.rawCreatedAt)}
                 </p>
               </div>
             </div>
 
-            <div className="border-t border-gray-100 p-4 sm:p-6">
-              <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-gray-400">
+            <div className="border-t border-gray-100 p-4 sm:p-5">
+              <p className="mb-3 text-[10px] uppercase tracking-[0.14em] text-gray-400">
                 Update Status
               </p>
 
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {(
                   ["NEW", "CONTACTED", "VIEWING", "INTERESTED", "CLOSED"] as LeadStatus[]
                 ).map((status) => (
@@ -873,7 +861,7 @@ export default function AdminLeadsPage() {
                       selectedLead.status === status
                     }
                     onClick={() => updateLeadStatus(selectedLead.id, status)}
-                    className={`rounded-2xl px-4 py-2 text-sm font-semibold border transition ${
+                    className={`rounded-2xl border px-3 py-2.5 text-[12px] font-semibold transition sm:text-sm ${
                       selectedLead.status === status
                         ? "border-black bg-black text-white"
                         : "border-gray-300 text-[#1C1C1E] hover:bg-gray-50"
