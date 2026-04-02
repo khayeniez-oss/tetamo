@@ -92,22 +92,24 @@ function StatCard({
   caption?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4 md:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 sm:text-[11px]">
             {title}
           </p>
-          <p className="mt-2 break-words text-xl font-semibold text-[#1C1C1E] sm:text-2xl">
+          <p className="mt-1.5 break-words text-lg font-semibold text-[#1C1C1E] sm:text-xl">
             {value}
           </p>
           {caption ? (
-            <p className="mt-2 text-xs leading-5 text-gray-500">{caption}</p>
+            <p className="mt-1.5 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+              {caption}
+            </p>
           ) : null}
         </div>
 
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
-          <Icon className="h-5 w-5 text-[#1C1C1E]" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
+          <Icon className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
         </div>
       </div>
     </div>
@@ -124,10 +126,14 @@ function PlaceholderBlock({
   icon: ElementType;
 }) {
   return (
-    <div className="flex h-full min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#FAFAFA] p-8 text-center">
-      <Icon className="mb-3 h-10 w-10 text-gray-400" />
-      <p className="text-sm font-medium text-[#1C1C1E]">{title}</p>
-      <p className="mt-1 max-w-md text-sm text-gray-500">{description}</p>
+    <div className="flex h-full min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#FAFAFA] p-5 text-center sm:min-h-[190px] sm:p-6">
+      <Icon className="mb-3 h-8 w-8 text-gray-400 sm:h-9 sm:w-9" />
+      <p className="text-[13px] font-medium text-[#1C1C1E] sm:text-sm">
+        {title}
+      </p>
+      <p className="mt-1 max-w-md text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+        {description}
+      </p>
     </div>
   );
 }
@@ -538,18 +544,18 @@ export default function AdminAnalyticsPage() {
   );
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold tracking-tight text-[#1C1C1E] sm:text-2xl">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Analytics
         </h1>
-        <p className="text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
-          Real Supabase event analytics for traffic, devices, listings, conversion,
-          and recent activity.
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+          Real Supabase event analytics for traffic, devices, listings,
+          conversion, and recent activity.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Visitors"
           value={numberFormat(totalVisitors)}
@@ -579,7 +585,7 @@ export default function AdminAnalyticsPage() {
       <div className="relative">
         <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          size={18}
+          size={16}
         />
 
         <input
@@ -587,24 +593,24 @@ export default function AdminAnalyticsPage() {
           placeholder="Search source, device, city, listing, code..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-11 w-full rounded-2xl border border-gray-300 pl-11 pr-4 text-sm outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
+          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-        <div className="min-w-0 space-y-5">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] xl:gap-5">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+              <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 Traffic Sources
               </h2>
-              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+              <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                 Real traffic source buckets from referrer and UTM parameters.
               </p>
             </div>
 
             {loading ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                 Loading traffic sources...
               </div>
             ) : trafficSources.length > 0 ? (
@@ -612,37 +618,37 @@ export default function AdminAnalyticsPage() {
                 {trafficSources.map((source) => (
                   <div
                     key={source.name}
-                    className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
+                    className="flex items-center justify-between gap-3 px-3.5 py-3.5 sm:px-5"
                   >
-                    <p className="min-w-0 truncate text-sm text-[#1C1C1E]">
+                    <p className="min-w-0 truncate text-[12px] text-[#1C1C1E] sm:text-sm">
                       {source.name}
                     </p>
-                    <p className="shrink-0 text-sm font-semibold text-[#1C1C1E]">
+                    <p className="shrink-0 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                       {numberFormat(source.visits)}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                 No traffic source data yet.
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-1">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-1">
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-                <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+              <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+                <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                   Devices
                 </h2>
-                <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                   Device buckets based on browser user agent data.
                 </p>
               </div>
 
               {loading ? (
-                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                   Loading devices...
                 </div>
               ) : devices.length > 0 ? (
@@ -658,18 +664,18 @@ export default function AdminAnalyticsPage() {
                     return (
                       <div
                         key={device.name}
-                        className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
+                        className="flex items-center justify-between gap-3 px-3.5 py-3.5 sm:px-5"
                       >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gray-100 sm:h-9 sm:w-9">
                             <Icon className="h-4 w-4 text-[#1C1C1E]" />
                           </div>
-                          <p className="truncate text-sm text-[#1C1C1E]">
+                          <p className="truncate text-[12px] text-[#1C1C1E] sm:text-sm">
                             {device.name}
                           </p>
                         </div>
 
-                        <p className="shrink-0 text-sm font-semibold text-[#1C1C1E]">
+                        <p className="shrink-0 text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                           {numberFormat(device.visits)}
                         </p>
                       </div>
@@ -677,38 +683,38 @@ export default function AdminAnalyticsPage() {
                   })}
                 </div>
               ) : (
-                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+                <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                   No device data yet.
                 </div>
               )}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
-                  <BarChart3 className="h-5 w-5 text-[#1C1C1E]" />
+            <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-5">
+              <div className="mb-3 flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
+                  <BarChart3 className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
                 </div>
-                <h3 className="font-semibold text-[#1C1C1E]">
+                <h3 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                   Conversion Insight
                 </h3>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-[12px] sm:text-sm">
                   <span className="text-gray-500">Views</span>
                   <span className="font-semibold text-[#1C1C1E]">
                     {numberFormat(conversion.views)}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between text-[12px] sm:text-sm">
                   <span className="text-gray-500">Clicks</span>
                   <span className="font-semibold text-[#1C1C1E]">
                     {numberFormat(conversion.clicks)}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between text-[12px] sm:text-sm">
                   <span className="text-gray-500">Leads</span>
                   <span className="font-semibold text-[#1C1C1E]">
                     {numberFormat(conversion.leads)}
@@ -716,21 +722,21 @@ export default function AdminAnalyticsPage() {
                 </div>
 
                 <div className="space-y-2 border-t border-gray-100 pt-3">
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-[12px] sm:text-sm">
                     <span className="text-gray-500">Click Rate</span>
                     <span className="font-semibold text-[#1C1C1E]">
                       {percentFormat(conversion.clickRate)}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-[12px] sm:text-sm">
                     <span className="text-gray-500">Lead / Click</span>
                     <span className="font-semibold text-[#1C1C1E]">
                       {percentFormat(conversion.leadRateFromClicks)}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-[12px] sm:text-sm">
                     <span className="text-gray-500">Lead / View</span>
                     <span className="font-semibold text-[#1C1C1E]">
                       {percentFormat(conversion.leadRateFromViews)}
@@ -742,62 +748,63 @@ export default function AdminAnalyticsPage() {
           </div>
         </div>
 
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-              <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+              <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 Listing Performance
               </h2>
-              <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
-                Real data from analytics_events: views, clicks, and leads per listing.
+              <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+                Real data from analytics_events: views, clicks, and leads per
+                listing.
               </p>
             </div>
 
             {loading ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                 Loading analytics...
               </div>
             ) : listingPerformance.length > 0 ? (
               <div className="divide-y divide-gray-100">
                 {listingPerformance.map((item) => (
-                  <div key={item.id} className="px-4 py-4 sm:px-6 sm:py-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div key={item.id} className="px-3.5 py-4 sm:px-5">
+                    <div className="flex flex-col gap-3">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-500 sm:text-[11px]">
                           <span>Code: {item.kode}</span>
                           <span className="text-gray-300">•</span>
                           <span>{item.city}</span>
                         </div>
 
-                        <p className="mt-2 truncate text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                        <p className="mt-2 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
                           {item.title}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4 text-right sm:gap-6">
+                      <div className="grid grid-cols-3 gap-2.5 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center sm:gap-3 sm:text-right sm:bg-transparent sm:p-0">
                         <div>
-                          <p className="text-[11px] text-gray-400 sm:text-xs">
+                          <p className="text-[10px] text-gray-400 sm:text-[11px]">
                             Views
                           </p>
-                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                          <p className="text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                             {numberFormat(item.views)}
                           </p>
                         </div>
 
                         <div>
-                          <p className="text-[11px] text-gray-400 sm:text-xs">
+                          <p className="text-[10px] text-gray-400 sm:text-[11px]">
                             Clicks
                           </p>
-                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                          <p className="text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                             {numberFormat(item.clicks)}
                           </p>
                         </div>
 
                         <div>
-                          <p className="text-[11px] text-gray-400 sm:text-xs">
+                          <p className="text-[10px] text-gray-400 sm:text-[11px]">
                             Leads
                           </p>
-                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                          <p className="text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                             {numberFormat(item.leads)}
                           </p>
                         </div>
@@ -807,26 +814,28 @@ export default function AdminAnalyticsPage() {
                 ))}
               </div>
             ) : (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-6">
+              <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
                 No tracked listing data yet.
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
-                  <Building2 className="h-5 w-5 text-[#1C1C1E]" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-5">
+              <div className="mb-3 flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
+                  <Building2 className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
                 </div>
-                <h3 className="font-semibold text-[#1C1C1E]">Traffic Summary</h3>
+                <h3 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                  Traffic Summary
+                </h3>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {trafficSources.slice(0, 5).map((item) => (
                   <div
                     key={item.name}
-                    className="flex items-center justify-between gap-3 text-sm"
+                    className="flex items-center justify-between gap-3 text-[12px] sm:text-sm"
                   >
                     <span className="min-w-0 truncate text-gray-500">
                       {item.name}
@@ -838,19 +847,21 @@ export default function AdminAnalyticsPage() {
                 ))}
 
                 {trafficSources.length === 0 ? (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-[12px] text-gray-500 sm:text-sm">
                     No traffic source data yet.
                   </p>
                 ) : null}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
-                  <MapPinned className="h-5 w-5 text-[#1C1C1E]" />
+            <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-5">
+              <div className="mb-3 flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
+                  <MapPinned className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
                 </div>
-                <h3 className="font-semibold text-[#1C1C1E]">Top Locations</h3>
+                <h3 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                  Top Locations
+                </h3>
               </div>
 
               <PlaceholderBlock
@@ -862,16 +873,16 @@ export default function AdminAnalyticsPage() {
           </div>
 
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-4 sm:px-6 sm:py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
-                  <Activity className="h-5 w-5 text-[#1C1C1E]" />
+            <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
+                  <Activity className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                  <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                     Real-Time Events
                   </h2>
-                  <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                  <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                     Recent tracked interactions from the platform.
                   </p>
                 </div>
@@ -879,12 +890,12 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {loading ? (
-              <div className="px-4 py-8 text-sm text-gray-500 sm:px-6">
+              <div className="px-4 py-8 text-sm text-gray-500 sm:px-5">
                 Loading recent events...
               </div>
             ) : recentEvents.length > 0 ? (
-              <div className="px-4 py-4 sm:px-6 sm:py-5">
-                <div className="min-h-[280px] space-y-3">
+              <div className="px-3.5 py-4 sm:px-5">
+                <div className="min-h-[250px] space-y-2.5 sm:min-h-[280px]">
                   {pagedRecentEvents.map((event) => (
                     <div
                       key={event.id}
@@ -892,37 +903,37 @@ export default function AdminAnalyticsPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#1C1C1E]">
+                          <p className="text-[12px] font-semibold text-[#1C1C1E] sm:text-sm">
                             {eventLabel(event.event_name)}
                           </p>
-                          <p className="mt-1 truncate text-xs text-gray-600">
+                          <p className="mt-1 truncate text-[11px] text-gray-600 sm:text-xs">
                             {event.title}
                           </p>
-                          <p className="mt-1 text-[11px] text-gray-500">
+                          <p className="mt-1 text-[10px] text-gray-500 sm:text-[11px]">
                             {event.kode} <span className="text-gray-300">•</span>{" "}
                             {event.city}
                           </p>
                         </div>
 
                         <div className="shrink-0 text-right">
-                          <p className="text-xs font-medium text-[#1C1C1E]">
+                          <p className="text-[11px] font-medium text-[#1C1C1E] sm:text-xs">
                             {formatRelativeTime(event.created_at)}
                           </p>
-                          <p className="mt-1 text-[11px] text-gray-500">
+                          <p className="mt-1 max-w-[90px] truncate text-[10px] text-gray-500 sm:max-w-[120px] sm:text-[11px]">
                             {event.source_page}
                           </p>
                         </div>
                       </div>
 
-                      <p className="mt-2 text-[11px] text-gray-500">
+                      <p className="mt-2 text-[10px] text-gray-500 sm:text-[11px]">
                         {formatDateTime(event.created_at)}
                       </p>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-gray-500 sm:text-sm">
+                <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
                     Page {recentEventsPage} of {recentEventsTotalPages}
                   </p>
 
@@ -933,7 +944,7 @@ export default function AdminAnalyticsPage() {
                         setRecentEventsPage((p) => Math.max(1, p - 1))
                       }
                       disabled={recentEventsPage === 1}
-                      className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-40"
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-40 sm:h-10 sm:px-4 sm:text-sm"
                     >
                       Previous
                     </button>
@@ -943,7 +954,7 @@ export default function AdminAnalyticsPage() {
                         key={p}
                         type="button"
                         onClick={() => setRecentEventsPage(p)}
-                        className={`inline-flex h-10 min-w-[40px] items-center justify-center rounded-xl border px-3 text-sm font-medium ${
+                        className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                           recentEventsPage === p
                             ? "border-black bg-black text-white"
                             : "border-gray-300 bg-white text-gray-700"
@@ -961,7 +972,7 @@ export default function AdminAnalyticsPage() {
                         )
                       }
                       disabled={recentEventsPage === recentEventsTotalPages}
-                      className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-4 text-sm font-medium text-white disabled:opacity-40"
+                      className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-40 sm:h-10 sm:px-4 sm:text-sm"
                     >
                       Next
                     </button>
@@ -969,7 +980,7 @@ export default function AdminAnalyticsPage() {
                 </div>
               </div>
             ) : (
-              <div className="px-4 py-8 text-sm text-gray-500 sm:px-6">
+              <div className="px-4 py-8 text-sm text-gray-500 sm:px-5">
                 No recent tracked events yet.
               </div>
             )}
