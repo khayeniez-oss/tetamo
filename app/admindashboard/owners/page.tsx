@@ -41,6 +41,18 @@ function cityFromAddress(address?: string | null) {
   return address;
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -205,6 +217,11 @@ export default function AdminOwnersPage() {
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filteredOwners.length);
 
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
+
   async function deleteOwner(owner: Owner) {
     const confirmed = window.confirm(
       `Delete this owner?\n\n${owner.name}\n${owner.email}\n\nThis will delete:\n- owner profile\n- owner listings\n- property image rows\n- leads received by this owner\n\nThis cannot be undone.`
@@ -275,12 +292,12 @@ export default function AdminOwnersPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-4 sm:space-y-5">
       {toast ? (
-        <div className="fixed right-6 top-6 z-50">
+        <div className="fixed right-3 top-3 z-50 sm:right-6 sm:top-6">
           <div
             className={[
-              "min-w-[320px] rounded-2xl border px-4 py-3 shadow-xl backdrop-blur",
+              "min-w-[250px] max-w-[320px] rounded-2xl border px-4 py-3 shadow-xl backdrop-blur",
               toast.type === "success"
                 ? "border-green-200 bg-green-50 text-green-800"
                 : "border-red-200 bg-red-50 text-red-800",
@@ -289,30 +306,30 @@ export default function AdminOwnersPage() {
             <p className="text-sm font-semibold">
               {toast.type === "success" ? "Success" : "Something went wrong"}
             </p>
-            <p className="mt-1 text-sm">{toast.message}</p>
+            <p className="mt-1 text-xs sm:text-sm">{toast.message}</p>
           </div>
         </div>
       ) : null}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Owners Management
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Monitor and manage property owners.
         </p>
       </div>
 
       {loadError ? (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {loadError}
         </div>
       ) : null}
 
-      <div className="relative mt-6">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -323,11 +340,11 @@ export default function AdminOwnersPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="w-full rounded-2xl border border-gray-400 py-3 pl-12 pr-4 text-sm outline-none placeholder-gray-500 focus:border-[#1C1C1E]"
+          className="h-10 w-full rounded-2xl border border-gray-300 py-3 pl-10 pr-4 text-[13px] outline-none placeholder-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
-      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="divide-y divide-gray-100">
           {loading ? (
             <div className="p-8 text-center text-sm text-gray-500">
@@ -342,39 +359,70 @@ export default function AdminOwnersPage() {
               const isDeleting = deletingId === owner.id;
 
               return (
-                <div
-                  key={owner.id}
-                  className="flex items-center justify-between gap-6 p-6"
-                >
-                  <div className="min-w-0">
-                    <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs text-green-700">
-                      Active
-                    </span>
+                <div key={owner.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-700 sm:text-[11px]">
+                        Active
+                      </span>
 
-                    <p className="mt-2 font-medium text-[#1C1C1E]">
-                      {owner.name}
-                    </p>
+                      <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                        {owner.name}
+                      </p>
 
-                    <p className="text-sm text-gray-500">
-                      {owner.phone} • {owner.email}
-                    </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2.5">
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Contact
+                          </p>
+                          <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                            {owner.phone}
+                          </p>
+                          <p className="mt-1 break-words text-[11px] text-gray-500 sm:text-xs">
+                            {owner.email}
+                          </p>
+                        </div>
 
-                    <p className="mt-1 text-xs text-gray-500">{owner.city}</p>
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Location
+                          </p>
+                          <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                            {owner.city}
+                          </p>
+                        </div>
 
-                    <p className="text-xs text-gray-400">
-                      Listings: {owner.listings} • Leads: {owner.leads}
-                    </p>
-                  </div>
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Listings
+                          </p>
+                          <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                            {owner.listings}
+                          </p>
+                        </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => deleteOwner(owner)}
-                      disabled={isDeleting}
-                      title="Delete owner"
-                      className="rounded-lg border border-red-300 bg-red-600 px-3 py-2 text-white hover:bg-red-700 disabled:opacity-50"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Leads
+                          </p>
+                          <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                            {owner.leads}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 xl:w-[120px] xl:shrink-0">
+                      <button
+                        onClick={() => deleteOwner(owner)}
+                        disabled={isDeleting}
+                        title="Delete owner"
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-red-300 bg-red-600 px-3 text-white transition hover:bg-red-700 disabled:opacity-50"
+                        type="button"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -383,29 +431,31 @@ export default function AdminOwnersPage() {
         </div>
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filteredOwners.length} owner
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Sebelumnya
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`rounded-lg border px-3 py-2 text-sm ${
+              className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                 page === p
                   ? "border-black bg-black text-white"
-                  : "border-gray-400"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
+              type="button"
             >
               {p}
             </button>
@@ -414,7 +464,8 @@ export default function AdminOwnersPage() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Berikutnya
           </button>
