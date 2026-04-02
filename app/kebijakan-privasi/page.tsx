@@ -13,6 +13,19 @@ type LocalizedText = {
   en: string;
 };
 
+function normalizeRole(role?: string | null) {
+  return (role || "").toLowerCase().replace(/\s+/g, "_");
+}
+
+function isAdminRole(role?: string | null) {
+  const normalized = normalizeRole(role);
+  return (
+    normalized === "admin" ||
+    normalized === "super_admin" ||
+    normalized === "superadmin"
+  );
+}
+
 export default function PrivacyPolicyPage() {
   const { lang } = useLanguage();
   const isID = lang === "id";
@@ -101,14 +114,34 @@ export default function PrivacyPolicyPage() {
           return;
         }
 
-        const { data } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
+        const directRoles = [
+          normalizeRole(user.app_metadata?.role),
+          normalizeRole(user.user_metadata?.role),
+        ];
+
+        if (directRoles.some((role) => isAdminRole(role))) {
+          setIsAdmin(true);
+          return;
+        }
+
+        const tablesToCheck = ["profiles", "users"];
+
+        for (const tableName of tablesToCheck) {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (!error && data?.role && isAdminRole(data.role)) {
+            if (!mounted) return;
+            setIsAdmin(true);
+            return;
+          }
+        }
 
         if (!mounted) return;
-        setIsAdmin(data?.role === "admin");
+        setIsAdmin(false);
       } catch {
         if (!mounted) return;
         setIsAdmin(false);
@@ -165,32 +198,40 @@ export default function PrivacyPolicyPage() {
     setEditingId((prev) => (prev === id ? prev : null));
   }
 
+  const inputClass =
+    "w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] text-[#1C1C1E] outline-none focus:border-gray-400 sm:px-4 sm:py-3 sm:text-sm";
+
   return (
-    <main className="min-h-screen bg-white text-[#1C1C1E]">
-      <div className="mx-auto max-w-6xl px-6 py-14 md:px-8 md:py-16">
-        <div className="mb-10 md:mb-12">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50">
+    <main className="min-h-screen bg-[#fafafa] text-[#1C1C1E]">
+      <div className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
+        <div className="mb-6 sm:mb-8 lg:mb-10">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white sm:h-11 sm:w-11">
               <ShieldIcon />
             </div>
 
-            <div>
-              <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+            <div className="min-w-0">
+              <h1 className="text-[1.4rem] font-semibold leading-tight tracking-tight sm:text-[2rem] lg:text-[2.5rem]">
                 {t.title}
               </h1>
-              <p className="mt-3 max-w-3xl text-base leading-7 text-gray-600 md:text-lg">
+
+              <p className="mt-2 max-w-3xl text-[13px] leading-6 text-gray-600 sm:mt-3 sm:text-[14px] sm:leading-7 lg:text-[15px]">
                 {t.subtitle}
               </p>
-              <p className="mt-2 text-sm text-gray-500">{t.pageNote}</p>
+
+              <p className="mt-2 text-[11px] text-gray-500 sm:text-xs">
+                {t.pageNote}
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-gray-500">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-[20px] border border-gray-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 sm:text-[12px]">
               {t.companyName}
             </div>
+
             {isAdmin ? (
               <input
                 value={getText(companyName)}
@@ -200,19 +241,20 @@ export default function PrivacyPolicyPage() {
                     [isID ? "id" : "en"]: e.target.value,
                   }))
                 }
-                className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                className={`${inputClass} mt-3`}
               />
             ) : (
-              <div className="mt-3 text-lg font-semibold text-[#1C1C1E]">
+              <div className="mt-3 break-words text-[14px] font-semibold text-[#1C1C1E] sm:text-[15px] lg:text-base">
                 {getText(companyName)}
               </div>
             )}
           </div>
 
-          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-gray-500">
+          <div className="rounded-[20px] border border-gray-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 sm:text-[12px]">
               {t.effectiveDate}
             </div>
+
             {isAdmin ? (
               <input
                 value={getText(effectiveDate)}
@@ -222,42 +264,44 @@ export default function PrivacyPolicyPage() {
                     [isID ? "id" : "en"]: e.target.value,
                   }))
                 }
-                className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                className={`${inputClass} mt-3`}
               />
             ) : (
-              <div className="mt-3 text-lg font-semibold text-[#1C1C1E]">
+              <div className="mt-3 break-words text-[14px] font-semibold text-[#1C1C1E] sm:text-[15px] lg:text-base">
                 {getText(effectiveDate)}
               </div>
             )}
           </div>
 
-          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="text-sm font-semibold text-gray-500">
+          <div className="rounded-[20px] border border-gray-200 bg-white p-4 shadow-sm sm:rounded-[24px] sm:p-5 sm:col-span-2 xl:col-span-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 sm:text-[12px]">
               {t.contactEmail}
             </div>
+
             {isAdmin ? (
               <input
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
-                className="mt-3 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-400"
+                className={`${inputClass} mt-3`}
               />
             ) : (
-              <div className="mt-3 text-lg font-semibold text-[#1C1C1E]">
+              <div className="mt-3 break-all text-[14px] font-semibold text-[#1C1C1E] sm:text-[15px] lg:text-base">
                 {contactEmail}
               </div>
             )}
           </div>
         </div>
 
-        <div className="mt-6 rounded-[28px] border border-gray-200 bg-gray-50 p-6">
-          <div className="text-sm font-semibold text-[#1C1C1E]">
+        <div className="mt-4 rounded-[20px] border border-gray-200 bg-gray-50 p-4 sm:mt-5 sm:rounded-[24px] sm:p-5">
+          <div className="text-[14px] font-semibold text-[#1C1C1E] sm:text-[15px]">
             {t.quickOverview}
           </div>
-          <p className="mt-2 text-sm leading-6 text-gray-600">
+
+          <p className="mt-2 text-[13px] leading-6 text-gray-600 sm:text-sm">
             {t.quickOverviewText}
           </p>
 
-          <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-gray-600 sm:mt-4 sm:text-xs">
             <span>{t.publicReadOnly}</span>
             {isAdmin && <span>{t.adminCanEdit}</span>}
             {isAdmin && <span>{t.adminMode}</span>}
@@ -267,7 +311,7 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        <div className="mt-10 space-y-4">
+        <div className="mt-6 space-y-3 sm:mt-8 sm:space-y-4">
           {sections.map((section) => {
             const isOpen = openId === section.id;
             const isEditing = editingId === section.id;
@@ -275,20 +319,20 @@ export default function PrivacyPolicyPage() {
             return (
               <div
                 key={section.id}
-                className="overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm"
+                className="overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-sm sm:rounded-[24px]"
               >
                 <button
                   type="button"
                   onClick={() => toggleSection(section.id)}
-                  className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-gray-50"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition hover:bg-gray-50 sm:px-5 sm:py-4.5 lg:px-6"
                 >
                   <div className="min-w-0">
-                    <div className="text-[18px] font-semibold leading-7 text-[#1C1C1E] md:text-[20px]">
+                    <div className="text-[14px] font-semibold leading-6 text-[#1C1C1E] sm:text-[15px] lg:text-[17px]">
                       {getText(section.title)}
                     </div>
                   </div>
 
-                  <span className="mr-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#1C1C1E]">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#1C1C1E] sm:h-10 sm:w-10">
                     <svg
                       width="18"
                       height="18"
@@ -311,8 +355,8 @@ export default function PrivacyPolicyPage() {
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-gray-100 px-6 pb-6 pt-5">
-                    <div className="whitespace-pre-line rounded-[24px] bg-gray-50 px-5 py-5 text-[15px] leading-8 text-gray-700 md:text-[16px]">
+                  <div className="border-t border-gray-100 px-4 pb-4 pt-4 sm:px-5 sm:pb-5 sm:pt-5 lg:px-6">
+                    <div className="whitespace-pre-line rounded-[18px] bg-gray-50 px-4 py-4 text-[13px] leading-6 text-gray-700 sm:rounded-[22px] sm:px-5 sm:py-5 sm:text-sm sm:leading-7">
                       {applyTokens(getText(section.body))}
                     </div>
 
@@ -326,14 +370,14 @@ export default function PrivacyPolicyPage() {
                                 prev === section.id ? null : section.id
                               )
                             }
-                            className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                            className="rounded-full border border-gray-200 px-4 py-2 text-[13px] font-semibold text-[#1C1C1E] transition hover:bg-gray-50 sm:text-sm"
                           >
                             {isEditing ? t.doneEditing : t.editSection}
                           </button>
                         </div>
 
                         {isEditing && (
-                          <div className="mt-5 space-y-4 rounded-[24px] border border-gray-200 bg-white p-5">
+                          <div className="mt-4 space-y-4 rounded-[18px] border border-gray-200 bg-white p-4 sm:rounded-[22px] sm:p-5">
                             <input
                               value={getText(section.title)}
                               onChange={(e) =>
@@ -344,7 +388,7 @@ export default function PrivacyPolicyPage() {
                                 )
                               }
                               placeholder={t.titlePlaceholder}
-                              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[15px] font-semibold text-[#1C1C1E] outline-none focus:border-gray-400"
+                              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[13px] font-semibold text-[#1C1C1E] outline-none focus:border-gray-400 sm:text-sm"
                             />
 
                             <textarea
@@ -357,7 +401,7 @@ export default function PrivacyPolicyPage() {
                                 )
                               }
                               placeholder={t.bodyPlaceholder}
-                              className="min-h-[260px] w-full resize-none rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-[15px] leading-7 text-gray-700 outline-none focus:border-gray-400"
+                              className="min-h-[220px] w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-[13px] leading-6 text-gray-700 outline-none focus:border-gray-400 sm:min-h-[240px] sm:text-sm sm:leading-7"
                             />
                           </div>
                         )}
@@ -370,19 +414,21 @@ export default function PrivacyPolicyPage() {
           })}
         </div>
 
-        <div className="mt-12 rounded-[28px] border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="text-lg font-semibold text-[#1C1C1E]">
+        <div className="mt-8 rounded-[20px] border border-gray-200 bg-white p-4 shadow-sm sm:mt-10 sm:rounded-[24px] sm:p-5 lg:p-6">
+          <div className="text-[15px] font-semibold text-[#1C1C1E] sm:text-base lg:text-lg">
             {t.stillNeedHelp}
           </div>
-          <p className="mt-2 text-sm leading-6 text-gray-600">
+
+          <p className="mt-2 text-[13px] leading-6 text-gray-600 sm:text-sm">
             {t.stillNeedHelpText}
           </p>
-          <p className="mt-4 text-sm font-semibold text-[#1C1C1E]">
+
+          <p className="mt-4 break-all text-[13px] font-semibold text-[#1C1C1E] sm:text-sm">
             {contactEmail}
           </p>
         </div>
 
-        <div className="h-20" />
+        <div className="h-8 sm:h-10 lg:h-12" />
       </div>
     </main>
   );
