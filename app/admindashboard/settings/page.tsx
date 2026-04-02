@@ -94,10 +94,7 @@ export default function AdminSettingsPage() {
       setLoading(true);
 
       try {
-        const [
-          settingsResult,
-          authResult,
-        ] = await Promise.all([
+        const [settingsResult, authResult] = await Promise.all([
           supabase
             .from("platform_settings")
             .select(
@@ -462,16 +459,18 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">Pengaturan</h1>
-        <p className="text-sm text-gray-500">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
+          Pengaturan
+        </h1>
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Kelola profil admin dan pengaturan platform.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
           <input
             ref={fileInputRef}
             id="admin-photo-upload"
@@ -482,62 +481,67 @@ export default function AdminSettingsPage() {
             className="hidden"
           />
 
-          <button
-            type="button"
-            onClick={openPhotoPicker}
-            disabled={loading || saving || uploadingPhoto}
-            className="group block w-fit cursor-pointer disabled:cursor-not-allowed"
-          >
-            <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200">
-              {currentPhoto ? (
-                <img
-                  src={currentPhoto}
-                  alt={name || "Admin"}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
-                  No Photo
+          <div className="flex items-start gap-4">
+            <button
+              type="button"
+              onClick={openPhotoPicker}
+              disabled={loading || saving || uploadingPhoto}
+              className="group block w-fit shrink-0 cursor-pointer disabled:cursor-not-allowed"
+            >
+              <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 sm:h-24 sm:w-24">
+                {currentPhoto ? (
+                  <img
+                    src={currentPhoto}
+                    alt={name || "Admin"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-400">
+                    No Photo
+                  </div>
+                )}
+
+                <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                  <span className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
+                    Ubah
+                  </span>
                 </div>
-              )}
-
-              <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
-                <span className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
-                  Ubah
-                </span>
               </div>
+            </button>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                {loading ? "Loading..." : name || "-"}
+              </h2>
+              <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
+                {loading ? "Loading..." : admin.role || "-"}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
+                {loading ? "Loading..." : number || "-"}
+              </p>
+              <p className="mt-2 text-[10px] leading-5 text-gray-500 sm:text-[11px]">
+                Klik foto untuk upload. JPG, PNG, WEBP. Maksimal 5MB.
+              </p>
+
+              {selectedPhotoFile ? (
+                <p className="mt-1 text-[10px] font-medium text-[#1C1C1E] sm:text-[11px]">
+                  File dipilih: {selectedPhotoFile.name}
+                </p>
+              ) : null}
             </div>
-          </button>
-
-          <p className="mt-2 text-xs text-gray-500">
-            Klik foto untuk upload. JPG, PNG, WEBP. Maksimal 5MB.
-          </p>
-
-          {selectedPhotoFile ? (
-            <p className="mt-1 text-xs font-medium text-[#1C1C1E]">
-              File dipilih: {selectedPhotoFile.name}
-            </p>
-          ) : null}
-
-          <h2 className="mt-4 text-lg font-semibold text-[#1C1C1E]">
-            {loading ? "Loading..." : name || "-"}
-          </h2>
-          <p className="text-sm text-gray-500">
-            {loading ? "Loading..." : admin.role || "-"}
-          </p>
-          <p className="mt-1 text-sm text-gray-500">
-            {loading ? "Loading..." : number || "-"}
-          </p>
+          </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="p-6 border-b border-gray-100">
-            <h2 className="font-semibold text-[#1C1C1E]">Profil Admin</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm lg:col-span-2">
+          <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
+            <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+              Profil Admin
+            </h2>
           </div>
 
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2.5 p-4 sm:gap-4 sm:p-5">
             <div>
-              <label className="text-sm font-medium text-[#1C1C1E]">
+              <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                 Nama Lengkap
               </label>
               <input
@@ -545,12 +549,12 @@ export default function AdminSettingsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={loading || saving}
-                className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
               />
             </div>
 
             <div>
-              <label className="text-sm font-medium text-[#1C1C1E]">
+              <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                 Nomor WhatsApp
               </label>
               <input
@@ -558,12 +562,12 @@ export default function AdminSettingsPage() {
                 value={number}
                 onChange={(e) => setNumber(e.target.value)}
                 disabled={loading || saving}
-                className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
               />
             </div>
 
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium text-[#1C1C1E]">
+            <div className="col-span-2">
+              <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                 Email
               </label>
               <input
@@ -571,23 +575,23 @@ export default function AdminSettingsPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading || saving}
-                className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
               />
             </div>
           </div>
 
-          <div className="px-6 pb-6">
-            <div className="border-t border-gray-100 pt-6">
-              <h3 className="font-semibold text-[#1C1C1E]">
+          <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+            <div className="border-t border-gray-100 pt-4 sm:pt-5">
+              <h3 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
                 Platform Settings
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
                 Konfigurasi utama sistem Tetamo.
               </p>
 
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4">
                 <div>
-                  <label className="text-sm font-medium text-[#1C1C1E]">
+                  <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                     Platform Name
                   </label>
                   <input
@@ -597,12 +601,12 @@ export default function AdminSettingsPage() {
                       updateSetting("platformName", e.target.value)
                     }
                     disabled={loading || saving}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-[#1C1C1E]">
+                  <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                     Agent Commission (%)
                   </label>
                   <input
@@ -612,12 +616,12 @@ export default function AdminSettingsPage() {
                       updateSetting("commissionRate", e.target.value)
                     }
                     disabled={loading || saving}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-[#1C1C1E]">
+                  <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                     Support Email
                   </label>
                   <input
@@ -627,12 +631,12 @@ export default function AdminSettingsPage() {
                       updateSetting("contactEmail", e.target.value)
                     }
                     disabled={loading || saving}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-[#1C1C1E]">
+                  <label className="text-[11px] font-medium text-[#1C1C1E] sm:text-sm">
                     Support Phone
                   </label>
                   <input
@@ -642,27 +646,29 @@ export default function AdminSettingsPage() {
                       updateSetting("supportPhone", e.target.value)
                     }
                     disabled={loading || saving}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-50"
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[12px] outline-none focus:border-[#1C1C1E] disabled:bg-gray-50 sm:px-4 sm:py-3 sm:text-sm"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="px-6 pb-6">
-            <div className="border-t border-gray-100 pt-6">
-              <h3 className="font-semibold text-[#1C1C1E]">Notifikasi Sistem</h3>
-              <p className="mt-1 text-sm text-gray-500">
+          <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+            <div className="border-t border-gray-100 pt-4 sm:pt-5">
+              <h3 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                Notifikasi Sistem
+              </h3>
+              <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
                 Atur fitur dan status platform.
               </p>
 
-              <div className="mt-4 space-y-4">
-                <label className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-[#1C1C1E]">
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4">
+                <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3 py-3 sm:px-4">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
                       AI Automation
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-[10px] leading-5 text-gray-500 sm:text-xs">
                       Enable AI lead response and automation
                     </p>
                   </div>
@@ -673,15 +679,16 @@ export default function AdminSettingsPage() {
                       updateSetting("aiAutomation", e.target.checked)
                     }
                     disabled={loading || saving}
+                    className="shrink-0"
                   />
                 </label>
 
-                <label className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-[#1C1C1E]">
+                <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 px-3 py-3 sm:px-4">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
                       Maintenance Mode
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-[10px] leading-5 text-gray-500 sm:text-xs">
                       Disable public access temporarily
                     </p>
                   </div>
@@ -692,6 +699,7 @@ export default function AdminSettingsPage() {
                       updateSetting("maintenanceMode", e.target.checked)
                     }
                     disabled={loading || saving}
+                    className="shrink-0"
                   />
                 </label>
               </div>
@@ -699,9 +707,9 @@ export default function AdminSettingsPage() {
           </div>
 
           {message ? (
-            <div className="px-6 pb-2">
+            <div className="px-4 pb-2 sm:px-5">
               <p
-                className={`text-sm ${
+                className={`text-[12px] sm:text-sm ${
                   messageType === "error" ? "text-red-600" : "text-green-600"
                 }`}
               >
@@ -710,13 +718,14 @@ export default function AdminSettingsPage() {
             </div>
           ) : null}
 
-          <div className="px-6 pb-6 flex justify-end">
+          <div className="flex justify-end px-4 pb-4 sm:px-5 sm:pb-5">
             <button
               onClick={handleSave}
               disabled={loading || saving || uploadingPhoto}
-              className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-60 sm:h-11 sm:px-5 sm:text-sm"
             >
-              {saving || uploadingPhoto ? "Menyimpan..." : "Simpan Perubahan"}
+              <Save size={15} />
+              <span>{saving || uploadingPhoto ? "Menyimpan..." : "Simpan Perubahan"}</span>
             </button>
           </div>
         </div>
