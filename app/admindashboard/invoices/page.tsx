@@ -217,18 +217,20 @@ export default function AdminInvoicesPage() {
   }, [searchQuery, invoices]);
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">Invoices</h1>
-        <p className="text-sm text-gray-500">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
+          Invoices
+        </h1>
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Semua tagihan yang dibuat oleh sistem.
         </p>
       </div>
 
-      <div className="relative mt-6">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -236,11 +238,11 @@ export default function AdminInvoicesPage() {
           placeholder="Cari invoice..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-2xl border border-gray-400 py-3 pl-12 pr-4 text-sm outline-none focus:border-[#1C1C1E]"
+          className="h-10 w-full rounded-2xl border border-gray-300 py-3 pl-10 pr-4 text-[13px] outline-none focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
-      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-6 text-sm text-gray-500">Loading invoices...</div>
         ) : error ? (
@@ -253,32 +255,69 @@ export default function AdminInvoicesPage() {
               <Link
                 key={invoice.id}
                 href={`/admindashboard/invoices/${invoice.id}`}
-                className="flex items-center justify-between gap-6 p-6 transition hover:bg-gray-50"
+                className="block px-3.5 py-4 transition hover:bg-gray-50 sm:px-5"
               >
-                <div>
-                  <p className="font-medium text-[#1C1C1E]">
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${getStatusClasses(
+                        invoice.status
+                      )}`}
+                    >
+                      {invoice.status}
+                    </span>
+                  </div>
+
+                  <p className="text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
                     {invoice.invoiceNumber}
                   </p>
 
-                  <p className="text-sm text-gray-500">
-                    {invoice.owner} • {invoice.listingCode}
-                  </p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Owner
+                      </p>
+                      <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                        {invoice.owner}
+                      </p>
+                    </div>
 
-                  <p className="text-sm text-gray-500">{invoice.package}</p>
-                </div>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Listing Code
+                      </p>
+                      <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                        {invoice.listingCode}
+                      </p>
+                    </div>
 
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">{invoice.amount}</p>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Package
+                      </p>
+                      <p className="mt-1 text-[11px] leading-5 text-gray-600 sm:text-xs md:text-sm">
+                        {invoice.package}
+                      </p>
+                    </div>
 
-                  <p className="text-xs text-gray-500">{invoice.date}</p>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Amount
+                      </p>
+                      <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                        {invoice.amount}
+                      </p>
+                    </div>
 
-                  <span
-                    className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs ${getStatusClasses(
-                      invoice.status
-                    )}`}
-                  >
-                    {invoice.status}
-                  </span>
+                    <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Date
+                      </p>
+                      <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                        {invoice.date}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </Link>
             ))}
