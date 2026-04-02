@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, MessageCircle, CheckCircle2 } from "lucide-react";
 
 /* =========================
@@ -58,7 +58,6 @@ STATUS UI
 ========================= */
 
 function statusUI(status: TicketStatus) {
-
   if (status === "OPEN")
     return {
       label: "Open",
@@ -75,7 +74,18 @@ function statusUI(status: TicketStatus) {
     label: "Resolved",
     badge: "bg-green-50 text-green-700 border-green-200",
   };
+}
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
 }
 
 /* =========================
@@ -83,7 +93,6 @@ PAGE
 ========================= */
 
 export default function AdminSupportPage() {
-
   const [tickets, setTickets] = useState(DEMO_TICKETS);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -91,27 +100,34 @@ export default function AdminSupportPage() {
   const ITEMS_PER_PAGE = 12;
 
   const filtered = useMemo(() => {
-
     if (!searchQuery.trim()) return tickets;
 
-    const words = searchQuery.toLowerCase().split(" ");
+    const words = searchQuery.toLowerCase().split(" ").filter(Boolean);
 
     return tickets.filter((t) => {
-
       const searchable = `
         ${t.user}
         ${t.email}
         ${t.subject}
         ${t.message}
+        ${t.status}
       `.toLowerCase();
 
       return words.every((w) => searchable.includes(w));
-
     });
-
   }, [tickets, searchQuery]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, tickets.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const paginated = filtered.slice(
     (page - 1) * ITEMS_PER_PAGE,
@@ -123,37 +139,38 @@ export default function AdminSupportPage() {
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filtered.length);
 
-  function resolveTicket(id: string) {
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
 
+  function resolveTicket(id: string) {
     setTickets((prev) =>
       prev.map((t) =>
         t.id === id ? { ...t, status: "RESOLVED" } : t
       )
     );
-
   }
 
   return (
-    <div>
-
+    <div className="space-y-4 sm:space-y-5">
       {/* Header */}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Support Tickets
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Kelola permintaan bantuan dari users.
         </p>
       </div>
 
       {/* Search */}
 
-      <div className="mt-6 relative">
-
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -164,123 +181,143 @@ export default function AdminSupportPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
-
       </div>
 
       {/* Ticket List */}
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="divide-y divide-gray-100">
+          {paginated.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
+              No tickets found.
+            </div>
+          ) : (
+            paginated.map((ticket) => {
+              const ui = statusUI(ticket.status);
 
-          {paginated.map((ticket) => {
+              return (
+                <div key={ticket.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      {/* LEFT */}
 
-            const ui = statusUI(ticket.status);
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
+                          >
+                            {ui.label}
+                          </span>
+                        </div>
 
-            return (
-              <div
-                key={ticket.id}
-                className="p-6 flex items-center justify-between gap-6"
-              >
+                        <p className="mt-2 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                          {ticket.subject}
+                        </p>
 
-                {/* LEFT */}
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Message
+                            </p>
+                            <p className="mt-1 text-[11px] leading-5 text-gray-600 sm:text-xs md:text-sm">
+                              {ticket.message}
+                            </p>
+                          </div>
 
-                <div>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              User
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {ticket.user}
+                            </p>
+                            <p className="mt-1 break-words text-[11px] text-gray-500 sm:text-xs">
+                              {ticket.email}
+                            </p>
+                          </div>
 
-                  <span
-                    className={`inline-flex text-xs px-3 py-1 rounded-full border ${ui.badge}`}
-                  >
-                    {ui.label}
-                  </span>
+                          <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Date
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {ticket.date}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-                  <p className="mt-2 font-medium text-[#1C1C1E]">
-                    {ticket.subject}
-                  </p>
+                      {/* RIGHT */}
 
-                  <p className="text-sm text-gray-500">
-                    {ticket.message}
-                  </p>
+                      <div className="grid grid-cols-2 gap-2 xl:w-[170px] xl:shrink-0">
+                        <button
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-50"
+                          type="button"
+                        >
+                          <MessageCircle size={15} />
+                        </button>
 
-                  <p className="text-xs text-gray-500 mt-1">
-                    {ticket.user} • {ticket.email}
-                  </p>
-
+                        <button
+                          onClick={() => resolveTicket(ticket.id)}
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 transition hover:bg-green-100"
+                          type="button"
+                        >
+                          <CheckCircle2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                {/* RIGHT */}
-
-                <div className="flex items-center gap-2">
-
-                  <button
-                    className="px-3 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    <MessageCircle size={16}/>
-                  </button>
-
-                  <button
-                    onClick={() => resolveTicket(ticket.id)}
-                    className="px-3 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    <CheckCircle2 size={16}/>
-                  </button>
-
-                </div>
-
-              </div>
-            );
-
-          })}
-
+              );
+            })
+          )}
         </div>
-
       </div>
 
       {/* Pagination */}
 
-      <div className="flex items-center justify-between mt-6">
-
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filtered.length} tiket
         </p>
 
-        <div className="flex items-center gap-2">
-
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white"
+            disabled={page === 1}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Sebelumnya
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                 page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
+              type="button"
             >
               {p}
             </button>
           ))}
 
           <button
-            onClick={() =>
-              setPage((p) => Math.min(totalPages, p + 1))
-            }
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Berikutnya
           </button>
-
         </div>
-
       </div>
-
     </div>
   );
 }
