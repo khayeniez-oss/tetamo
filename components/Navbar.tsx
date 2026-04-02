@@ -544,12 +544,12 @@ export default function Navbar() {
 
               {mobileMenuOpen && (
                 <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
-                  <div className="p-4">
+                  <div className="p-3">
                     <nav className="grid grid-cols-2 gap-2">
                       <Link
                         href="/properti"
                         onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.allProperties}
                       </Link>
@@ -557,7 +557,7 @@ export default function Navbar() {
                       <Link
                         href="/properti?jenisListing=dijual"
                         onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.forSale}
                       </Link>
@@ -565,7 +565,7 @@ export default function Navbar() {
                       <Link
                         href="/properti?jenisListing=disewa"
                         onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.forRent}
                       </Link>
@@ -573,19 +573,19 @@ export default function Navbar() {
                       <Link
                         href="/pembeli"
                         onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.buyers}
                       </Link>
                     </nav>
 
-                    <div className="mt-4 rounded-[28px] border border-gray-200 bg-gradient-to-b from-[#fafafa] to-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <div className="mt-3 rounded-[26px] border border-gray-200 bg-gradient-to-b from-[#fafafa] to-white p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                       {sessionLoading ? (
                         <div className="text-sm text-gray-500">{t.loading}</div>
                       ) : isLoggedIn ? (
                         <>
-                          <div className="mb-4 flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1C1C1E] text-xs font-bold text-white">
+                          <div className="mb-3 flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1C1C1E] text-xs font-bold text-white">
                               {initials}
                             </div>
                             <div className="min-w-0">
@@ -602,13 +602,13 @@ export default function Navbar() {
                             <Link
                               href={dashboardHref}
                               onClick={closeAllMenus}
-                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
                             >
                               <LayoutDashboard className="h-4 w-4" />
                               {t.dashboard}
                             </Link>
                           ) : (
-                            <div className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-200 px-4 py-3 text-sm font-medium text-gray-500">
+                            <div className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500">
                               <LayoutDashboard className="h-4 w-4" />
                               {t.loadingDashboard}
                             </div>
@@ -617,7 +617,7 @@ export default function Navbar() {
                           <button
                             type="button"
                             onClick={handleLogout}
-                            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                           >
                             <LogOut className="h-4 w-4" />
                             {t.logout}
@@ -625,15 +625,15 @@ export default function Navbar() {
                         </>
                       ) : (
                         <>
-                          <div className="mb-3 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
                             {t.quickAccess}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-2 gap-2">
                             <Link
                               href="/login"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-3 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
                             >
                               <User className="h-4 w-4" />
                               {t.login}
@@ -642,7 +642,7 @@ export default function Navbar() {
                             <Link
                               href="/signup?role=agent"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                             >
                               <BriefcaseBusiness className="h-4 w-4" />
                               {t.agentPro}
@@ -651,7 +651,7 @@ export default function Navbar() {
                             <Link
                               href="/signup?role=developer"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                             >
                               <Building2 className="h-4 w-4" />
                               {t.developer}
@@ -660,7 +660,7 @@ export default function Navbar() {
                             <Link
                               href="/login?role=admin"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                             >
                               <Shield className="h-4 w-4" />
                               Admin
@@ -670,7 +670,7 @@ export default function Navbar() {
                           <Link
                             href="/signup"
                             onClick={closeAllMenus}
-                            className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-300 px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-[0_12px_30px_-16px_rgba(234,179,8,0.75)] transition hover:brightness-[1.02]"
+                            className="mt-2.5 inline-flex w-full items-center justify-center rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] shadow-[0_12px_30px_-16px_rgba(234,179,8,0.75)] transition hover:brightness-[1.02]"
                           >
                             {t.signUp}
                           </Link>
