@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import MortgageCalculator from "@/components/MortgageCalculator";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/trackEvent";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
@@ -29,7 +30,10 @@ import {
   Heart,
   Bookmark,
   Star,
+  Clock,
 } from "lucide-react";
+
+type RentalType = "monthly" | "yearly" | "";
 
 type PropertyImageRow = {
   image_url: string;
@@ -72,6 +76,7 @@ type PropertyRow = {
   facilities: Record<string, boolean> | null;
   nearby: Record<string, boolean> | null;
   listing_type: string | null;
+  rental_type: string | null;
   property_type: string | null;
   source: string | null;
   status: string | null;
@@ -101,9 +106,11 @@ type PropertyRow = {
 type PropertyItem = {
   id: string;
   jenisListing: "dijual" | "disewa";
+  rentalType: RentalType;
   propertyType: string;
   title: string;
   price: string;
+  priceValue: number;
   province: string;
   area: string;
   furnished: string;
@@ -155,6 +162,8 @@ type DetailChip = {
 const FALLBACK_POSTER_PHOTO =
   "https://randomuser.me/api/portraits/men/32.jpg";
 
+const IDR_PER_USD = 16500;
+
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
   return new Intl.NumberFormat("id-ID", {
@@ -162,6 +171,29 @@ function formatIdr(value: number | null | undefined) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatUsd(value: number | null | undefined) {
+  if (typeof value !== "number") return "$0";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value / IDR_PER_USD);
+}
+
+function formatPriceByCurrency(
+  value: number | null | undefined,
+  currency: "IDR" | "USD"
+) {
+  return currency === "USD" ? formatUsd(value) : formatIdr(value);
+}
+
+function formatSecondaryPrice(
+  value: number | null | undefined,
+  currency: "IDR" | "USD"
+) {
+  return currency === "USD" ? formatIdr(value) : formatUsd(value);
 }
 
 function formatPostedDate(value?: string | null) {
@@ -262,6 +294,42 @@ function normalizePostedByType(
   return "owner";
 }
 
+function normalizeRentalType(value?: string | null): RentalType {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "monthly" || v === "bulanan") return "monthly";
+  if (v === "yearly" || v === "tahunan") return "yearly";
+
+  return "";
+}
+
+function getRentalTypeLabel(
+  rentalType: RentalType,
+  lang: "id" | "en"
+): string {
+  if (rentalType === "monthly") {
+    return lang === "id" ? "Bulanan" : "Monthly";
+  }
+
+  if (rentalType === "yearly") {
+    return lang === "id" ? "Tahunan" : "Yearly";
+  }
+
+  return "";
+}
+
+function rentalTypeBadgeClass(rentalType: RentalType) {
+  if (rentalType === "monthly") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (rentalType === "yearly") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
 function isListingPublic(
   row: Pick<
     PropertyRow,
@@ -350,6 +418,7 @@ function SocialCircle({
 
 export default function PropertyDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
+  const { currency } = useCurrency();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -614,9 +683,11 @@ export default function PropertyDetailClient({ id }: { id: string }) {
       const mapped: PropertyItem = {
         id: row.id,
         jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+        rentalType: normalizeRentalType(row.rental_type),
         propertyType: row.property_type || "",
         title: row.title ?? "-",
         price: formatIdr(row.price ?? 0),
+        priceValue: Number(row.price ?? 0),
         province: row.province ?? "-",
         area: row.city || row.area || "-",
         furnished: mapFurnishing(row.furnishing, lang),
@@ -751,6 +822,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         property_title: property.title,
         property_code: property.kodeListing ?? null,
         listing_type: property.jenisListing,
+        rental_type: property.rentalType || null,
         property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
@@ -762,6 +834,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     property?.title,
     property?.kodeListing,
     property?.jenisListing,
+    property?.rentalType,
     property?.propertyType,
     property?.postedByType,
     property?.area,
@@ -823,7 +896,9 @@ export default function PropertyDetailClient({ id }: { id: string }) {
           setDisplaySaveCount(Number(summary.save_count || 0));
           setDisplayLikeCount(Number(summary.like_count || 0));
           setDisplayRatingCount(Number(summary.rating_count || 0));
-          setDisplayRatingAverage(Number(Number(summary.avg_rating || 0).toFixed(1)));
+          setDisplayRatingAverage(
+            Number(Number(summary.avg_rating || 0).toFixed(1))
+          );
         }
 
         setSaved(Boolean(savedRes.data));
@@ -890,7 +965,9 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     const currentlySaved = saved;
 
     setSaved(!currentlySaved);
-    setDisplaySaveCount((prev) => Math.max(0, prev + (currentlySaved ? -1 : 1)));
+    setDisplaySaveCount((prev) =>
+      Math.max(0, prev + (currentlySaved ? -1 : 1))
+    );
 
     if (currentlySaved) {
       const { error } = await supabase
@@ -928,7 +1005,9 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     const currentlyLiked = liked;
 
     setLiked(!currentlyLiked);
-    setDisplayLikeCount((prev) => Math.max(0, prev + (currentlyLiked ? -1 : 1)));
+    setDisplayLikeCount((prev) =>
+      Math.max(0, prev + (currentlyLiked ? -1 : 1))
+    );
 
     if (currentlyLiked) {
       const { error } = await supabase
@@ -1040,6 +1119,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         property_title: property.title,
         property_code: property.kodeListing ?? null,
         listing_type: property.jenisListing,
+        rental_type: property.rentalType || null,
         property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
@@ -1049,6 +1129,13 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
     openJadwal();
   }
+
+  const displayPrice = property
+    ? formatPriceByCurrency(property.priceValue, currency)
+    : "";
+  const secondaryPrice = property
+    ? formatSecondaryPrice(property.priceValue, currency)
+    : "";
 
   async function handleWhatsAppClick() {
     if (!property) return;
@@ -1069,7 +1156,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 Properti: ${property.title}
 Kode: ${property.kodeListing ?? "-"}
 Lokasi: ${property.area}, ${property.province}
-Harga: ${property.price}
+Harga: ${displayPrice}
 
 Apakah properti ini masih tersedia?`
         : `Hello ${property.receiverName}, I'm interested in this property on TETAMO.
@@ -1077,7 +1164,7 @@ Apakah properti ini masih tersedia?`
 Property: ${property.title}
 Code: ${property.kodeListing ?? "-"}
 Location: ${property.area}, ${property.province}
-Price: ${property.price}
+Price: ${displayPrice}
 
 Is this property still available?`;
 
@@ -1102,6 +1189,7 @@ Is this property still available?`;
           property_title: property.title,
           property_code: property.kodeListing ?? null,
           listing_type: property.jenisListing,
+          rental_type: property.rentalType || null,
           property_type: property.propertyType,
           posted_by_type: property.postedByType,
           area: property.area,
@@ -1417,19 +1505,19 @@ Is this property still available?`;
   const primaryDetailChips: DetailChip[] = [
     {
       key: "type",
-      label: lang === "id" ? "Property Type" : "Property Type",
+      label: "Property Type",
       value: propertyTypeLabel || "-",
       icon: Home,
     },
     {
       key: "bed",
-      label: lang === "id" ? "Bedrooms" : "Bedrooms",
+      label: "Bedrooms",
       value: property.bedroomsValue ? formatNumber(property.bedroomsValue) : "-",
       icon: BedDouble,
     },
     {
       key: "bath",
-      label: lang === "id" ? "Bathrooms" : "Bathrooms",
+      label: "Bathrooms",
       value: property.bathroomsValue
         ? formatNumber(property.bathroomsValue)
         : "-",
@@ -1437,7 +1525,7 @@ Is this property still available?`;
     },
     {
       key: "land",
-      label: lang === "id" ? "Land Size" : "Land Size",
+      label: "Land Size",
       value: property.landSizeValue
         ? `${formatNumber(property.landSizeValue)} m²`
         : "-",
@@ -1445,7 +1533,7 @@ Is this property still available?`;
     },
     {
       key: "building",
-      label: lang === "id" ? "Building Size" : "Building Size",
+      label: "Building Size",
       value: property.buildingSizeValue
         ? `${formatNumber(property.buildingSizeValue)} m²`
         : "-",
@@ -1453,13 +1541,11 @@ Is this property still available?`;
     },
     {
       key: "parking",
-      label: lang === "id" ? "Parking" : "Parking",
+      label: "Parking",
       value: property.parkingValue
         ? formatNumber(property.parkingValue)
         : property.parkingAvailable
-        ? lang === "id"
-          ? "Available"
-          : "Available"
+        ? "Available"
         : "-",
       icon: CarFront,
     },
@@ -1468,34 +1554,43 @@ Is this property still available?`;
   const secondaryDetailChips: DetailChip[] = [
     {
       key: "floors",
-      label: lang === "id" ? "Floors" : "Floors",
+      label: "Floors",
       value: property.floorsValue ? formatNumber(property.floorsValue) : "-",
       icon: Layers3,
     },
     {
       key: "electricity",
-      label: lang === "id" ? "Electricity" : "Electricity",
+      label: "Electricity",
       value: property.electricityValue || "-",
       icon: Zap,
     },
     {
       key: "water",
-      label: lang === "id" ? "Water" : "Water",
+      label: "Water",
       value: property.waterValue || "-",
       icon: Droplets,
     },
     {
       key: "furnishing",
-      label: lang === "id" ? "Furnishing" : "Furnishing",
+      label: "Furnishing",
       value: property.furnished || "-",
       icon: Home,
     },
     {
       key: "certificate",
-      label: lang === "id" ? "Certificate" : "Certificate",
+      label: "Certificate",
       value:
         property.jenisListing === "dijual" ? property.certificate || "-" : "-",
       icon: FileText,
+    },
+    {
+      key: "rentalType",
+      label: "Rental Type",
+      value:
+        property.jenisListing === "disewa" && property.rentalType
+          ? getRentalTypeLabel(property.rentalType, lang)
+          : "-",
+      icon: Clock,
     },
   ].filter(
     (item) =>
@@ -1607,6 +1702,16 @@ Is this property still available?`;
                     : "For Rent"}
                 </span>
 
+                {property.jenisListing === "disewa" && property.rentalType ? (
+                  <span
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs ${rentalTypeBadgeClass(
+                      property.rentalType
+                    )}`}
+                  >
+                    {getRentalTypeLabel(property.rentalType, lang)}
+                  </span>
+                ) : null}
+
                 {propertyTypeLabel ? (
                   <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                     {propertyTypeLabel}
@@ -1636,7 +1741,11 @@ Is this property still available?`;
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
-              {property.price}
+              {displayPrice}
+            </div>
+
+            <div className="mt-1 text-sm text-gray-500 sm:text-[15px]">
+              ≈ {secondaryPrice}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1663,7 +1772,7 @@ Is this property still available?`;
 
               {property.verifiedListing && (
                 <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                  {lang === "id" ? "Verified Listing" : "Verified Listing"}
+                  Verified Listing
                 </span>
               )}
             </div>
@@ -1693,13 +1802,7 @@ Is this property still available?`;
 
                 <div className="min-w-0 flex-1">
                   <div className="text-xs uppercase tracking-wide text-gray-500">
-                    {lang === "id"
-                      ? property.postedByType === "owner"
-                        ? "Owner"
-                        : property.postedByType === "developer"
-                        ? "Developer"
-                        : "Agent"
-                      : property.postedByType === "owner"
+                    {property.postedByType === "owner"
                       ? "Owner"
                       : property.postedByType === "developer"
                       ? "Developer"
@@ -1750,7 +1853,7 @@ Is this property still available?`;
                 onClick={openJadwalWithTracking}
                 className="mt-5 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
               >
-                {lang === "id" ? "Schedule Viewing" : "Schedule Viewing"}
+                Schedule Viewing
               </button>
             </div>
           </div>
@@ -1767,9 +1870,7 @@ Is this property still available?`;
             }`}
           >
             <Bookmark className="h-3.5 w-3.5" />
-            <span>
-              Save ({displaySaveCount})
-            </span>
+            <span>Save ({displaySaveCount})</span>
           </button>
 
           <button
@@ -1782,9 +1883,7 @@ Is this property still available?`;
             }`}
           >
             <Heart className="h-3.5 w-3.5" />
-            <span>
-              Like ({displayLikeCount})
-            </span>
+            <span>Like ({displayLikeCount})</span>
           </button>
 
           <div className="min-h-[62px] rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm">
@@ -1860,25 +1959,23 @@ Is this property still available?`;
           </div>
 
           {secondaryDetailChips.length > 0 ? (
-            <div className="mt-3 grid grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {secondaryDetailChips.map((item) => {
                 const Icon = item.icon;
                 return (
                   <div
                     key={item.key}
-                    className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                    className="rounded-2xl border border-gray-200 bg-white p-3"
                   >
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2 text-gray-500">
-                        <Icon className="h-3.5 w-3.5" />
-                        <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
-                          {item.label}
-                        </div>
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Icon className="h-3.5 w-3.5" />
+                      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
+                        {item.label}
                       </div>
+                    </div>
 
-                      <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
-                        {item.value}
-                      </div>
+                    <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
+                      {item.value}
                     </div>
                   </div>
                 );
@@ -1887,40 +1984,41 @@ Is this property still available?`;
           ) : null}
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Deskripsi Properti" : "Property Description"}
+              {lang === "id" ? "Deskripsi" : "Description"}
             </h2>
 
-            <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-[15px]">
-              {lang === "en" && property.descriptionEn
-                ? property.descriptionEn
-                : property.description}
-            </p>
+            <div className="mt-4 space-y-4 text-sm leading-7 text-gray-700">
+              <p>
+                {lang === "en" && property.descriptionEn
+                  ? property.descriptionEn
+                  : property.description}
+              </p>
+            </div>
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Ringkasan" : "Summary"}
+              {lang === "id" ? "Video" : "Video"}
             </h2>
 
-            <div className="mt-4 space-y-3 text-sm text-gray-700">
-              <div>
-                <span className="font-semibold text-[#1C1C1E]">Price:</span>{" "}
-                {property.price}
+            {property.videoUrl ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200">
+                <video
+                  src={property.videoUrl}
+                  controls
+                  className="h-full w-full"
+                />
               </div>
-
-              <div>
-                <span className="font-semibold text-[#1C1C1E]">Location:</span>{" "}
-                {property.area}, {property.province}
-              </div>
-
-              <div>
-                <span className="font-semibold text-[#1C1C1E]">Type:</span>{" "}
-                {propertyTypeLabel}
-              </div>
-            </div>
+            ) : (
+              <p className="mt-4 text-sm text-gray-500">
+                {lang === "id"
+                  ? "Belum ada video untuk properti ini."
+                  : "No video available for this property yet."}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1990,7 +2088,7 @@ Is this property still available?`;
             onClick={openJadwalWithTracking}
             className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
           >
-            {lang === "id" ? "Schedule Viewing" : "Schedule Viewing"}
+            Schedule Viewing
           </button>
         </div>
 
@@ -2063,19 +2161,18 @@ Is this property still available?`;
 
                 <button
                   type="button"
-                  disabled={!selectedDate || !selectedTime}
                   onClick={handleViewingRequest}
-                  className="w-full rounded-2xl bg-yellow-600 py-2.5 font-bold text-white transition hover:bg-yellow-700 disabled:opacity-40"
+                  disabled={!selectedDate || !selectedTime}
+                  className={[
+                    "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                    selectedDate && selectedTime
+                      ? "bg-[#B8860B] text-white hover:opacity-90"
+                      : "cursor-not-allowed bg-gray-200 text-gray-500",
+                  ].join(" ")}
                 >
-                  {lang === "id" ? "Kirim Jadwal" : "Submit Schedule"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={closeJadwal}
-                  className="w-full rounded-2xl bg-[#1C1C1E] py-2.5 font-semibold text-white hover:opacity-90"
-                >
-                  {lang === "id" ? "Tutup" : "Close"}
+                  {lang === "id"
+                    ? "Kirim Permintaan Viewing"
+                    : "Send Viewing Request"}
                 </button>
               </div>
             </div>

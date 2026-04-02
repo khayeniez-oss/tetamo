@@ -73,7 +73,6 @@ export default function Navbar() {
     buyers: isID ? "Pembeli" : "Buyers",
 
     account: isID ? "Akun" : "Account",
-    currency: isID ? "Mata Uang" : "Currency",
     loading: isID ? "Memuat..." : "Loading...",
     dashboard: "Dashboard",
     loadingDashboard: isID ? "Memuat dashboard..." : "Loading dashboard...",
@@ -101,6 +100,7 @@ export default function Navbar() {
   const desktopLangRef = useRef<HTMLDivElement | null>(null);
   const desktopCurrencyRef = useRef<HTMLDivElement | null>(null);
   const mobileLangRef = useRef<HTMLDivElement | null>(null);
+  const mobileCurrencyRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -215,12 +215,14 @@ export default function Navbar() {
         desktopCurrencyRef.current?.contains(target) ?? false;
       const insideMobileLang =
         mobileLangRef.current?.contains(target) ?? false;
+      const insideMobileCurrency =
+        mobileCurrencyRef.current?.contains(target) ?? false;
 
       if (!insideDesktopLang && !insideMobileLang) {
         setLangOpen(false);
       }
 
-      if (!insideDesktopCurrency) {
+      if (!insideDesktopCurrency && !insideMobileCurrency) {
         setCurrencyOpen(false);
       }
 
@@ -278,7 +280,7 @@ export default function Navbar() {
           <Link
             href="/"
             onClick={closeAllMenus}
-            className="flex min-w-0 max-w-[calc(100%-108px)] items-center gap-3 sm:max-w-none sm:gap-4"
+            className="flex min-w-0 max-w-[calc(100%-132px)] items-center gap-3 sm:max-w-none sm:gap-4"
           >
             <div className="relative h-12 w-12 shrink-0 sm:h-14 sm:w-14 md:h-16 md:w-16">
               <Image
@@ -380,18 +382,18 @@ export default function Navbar() {
 
               <div ref={desktopCurrencyRef} className="relative">
                 <button
-  type="button"
-  onClick={() => {
-    setCurrencyOpen((prev) => !prev);
-    setLangOpen(false);
-    setAccountOpen(false);
-  }}
-  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
->
-  <BadgeDollarSign className="h-4 w-4" />
-  <span>{currency}</span>
-  <ChevronDown className="h-4 w-4" />
-</button>
+                  type="button"
+                  onClick={() => {
+                    setCurrencyOpen((prev) => !prev);
+                    setLangOpen(false);
+                    setAccountOpen(false);
+                  }}
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
+                >
+                  <BadgeDollarSign className="h-4 w-4" />
+                  <span>{currency}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
 
                 {currencyOpen && (
                   <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
@@ -554,14 +556,64 @@ export default function Navbar() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2 md:hidden">
+            <div ref={mobileCurrencyRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrencyOpen((prev) => !prev);
+                  setLangOpen(false);
+                  setMobileMenuOpen(false);
+                  setAccountOpen(false);
+                }}
+                className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+              >
+                <BadgeDollarSign className="h-4 w-4" />
+                <span>{currency}</span>
+              </button>
+
+              {currencyOpen && (
+                <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrency("IDR");
+                      setCurrencyOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                      currency === "IDR"
+                        ? "bg-[#1C1C1E] text-white"
+                        : "text-[#1C1C1E] hover:bg-gray-50"
+                    }`}
+                  >
+                    IDR
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrency("USD");
+                      setCurrencyOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                      currency === "USD"
+                        ? "bg-[#1C1C1E] text-white"
+                        : "text-[#1C1C1E] hover:bg-gray-50"
+                    }`}
+                  >
+                    USD
+                  </button>
+                </div>
+              )}
+            </div>
+
             <div ref={mobileLangRef} className="relative">
               <button
                 type="button"
                 onClick={() => {
                   setLangOpen((prev) => !prev);
+                  setCurrencyOpen(false);
                   setMobileMenuOpen(false);
                   setAccountOpen(false);
-                  setCurrencyOpen(false);
                 }}
                 className="inline-flex h-10 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
@@ -610,8 +662,8 @@ export default function Navbar() {
                 onClick={() => {
                   setMobileMenuOpen((prev) => !prev);
                   setLangOpen(false);
-                  setAccountOpen(false);
                   setCurrencyOpen(false);
+                  setAccountOpen(false);
                 }}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90"
                 aria-label={t.menu}
@@ -626,38 +678,6 @@ export default function Navbar() {
               {mobileMenuOpen && (
                 <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
                   <div className="p-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500 flex items-center gap-1.5">
-  <BadgeDollarSign className="h-3.5 w-3.5" />
-  {t.currency}
-</div>
-
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCurrency("IDR")}
-                          className={`rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-                            currency === "IDR"
-                              ? "bg-[#1C1C1E] text-white"
-                              : "border border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
-                          }`}
-                        >
-                          IDR
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCurrency("USD")}
-                          className={`rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-                            currency === "USD"
-                              ? "bg-[#1C1C1E] text-white"
-                              : "border border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
-                          }`}
-                        >
-                          USD
-                        </button>
-                      </div>
-                    </div>
-
                     <nav className="grid grid-cols-2 gap-2">
                       <Link
                         href="/properti"
@@ -791,6 +811,7 @@ export default function Navbar() {
                       )}
                     </div>
                   </div>
+                </div>
               )}
             </div>
           </div>

@@ -19,9 +19,12 @@ import {
   Star,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/trackEvent";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
+
+type RentalType = "monthly" | "yearly" | "";
 
 type Property = {
   verifiedListing: boolean;
@@ -41,12 +44,13 @@ type Property = {
 
   id: string;
   jenisListing: "dijual" | "disewa";
+  rentalType: RentalType;
   propertyType: string;
   kode?: string;
   postedDate?: string;
 
   title: string;
-  price: string;
+  priceValue: number;
   province: string;
   area: string;
   size: string;
@@ -86,6 +90,7 @@ type PropertyRow = {
   bedrooms: number | null;
   furnishing: string | null;
   listing_type: string | null;
+  rental_type: string | null;
   property_type: string | null;
   source: string | null;
   status: string | null;
@@ -130,6 +135,8 @@ type RatingSummary = {
   avg: number;
   count: number;
 };
+
+const IDR_PER_USD = 16500;
 
 function rotateListingsByReceiver(list: Property[]) {
   const grouped: Record<string, Property[]> = {};
@@ -184,6 +191,29 @@ function formatIdr(value: number | null | undefined) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatUsd(value: number | null | undefined) {
+  if (typeof value !== "number") return "$0";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value / IDR_PER_USD);
+}
+
+function formatPriceByCurrency(
+  value: number | null | undefined,
+  currency: "IDR" | "USD"
+) {
+  return currency === "USD" ? formatUsd(value) : formatIdr(value);
+}
+
+function formatSecondaryPrice(
+  value: number | null | undefined,
+  currency: "IDR" | "USD"
+) {
+  return currency === "USD" ? formatIdr(value) : formatUsd(value);
 }
 
 function formatPostedDate(value?: string | null) {
@@ -269,6 +299,42 @@ function normalizePostedByType(
   return "owner";
 }
 
+function normalizeRentalType(value?: string | null): RentalType {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "monthly" || v === "bulanan") return "monthly";
+  if (v === "yearly" || v === "tahunan") return "yearly";
+
+  return "";
+}
+
+function getRentalTypeLabel(
+  rentalType: RentalType,
+  lang: "id" | "en"
+): string {
+  if (rentalType === "monthly") {
+    return lang === "id" ? "Bulanan" : "Monthly";
+  }
+
+  if (rentalType === "yearly") {
+    return lang === "id" ? "Tahunan" : "Yearly";
+  }
+
+  return "";
+}
+
+function rentalTypeBadgeClass(rentalType: RentalType) {
+  if (rentalType === "monthly") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (rentalType === "yearly") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
 function formatPropertyType(value?: string | null, lang?: string) {
   const raw = String(value || "").trim().toLowerCase();
 
@@ -338,10 +404,14 @@ function PropertyCard({
   onRate: (propertyId: string, rating: number) => void;
 }) {
   const { lang } = useLanguage();
+  const { currency } = useCurrency();
   const router = useRouter();
   const [idx, setIdx] = useState(0);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const cardViewTrackedRef = useRef(false);
+
+  const displayPrice = formatPriceByCurrency(p.priceValue, currency);
+  const secondaryPrice = formatSecondaryPrice(p.priceValue, currency);
 
   const next = () =>
     setIdx((prev) => (prev === p.images.length - 1 ? 0 : prev + 1));
@@ -372,6 +442,7 @@ function PropertyCard({
               property_title: p.title,
               property_code: p.kode ?? null,
               listing_type: p.jenisListing,
+              rental_type: p.rentalType || null,
               property_type: p.propertyType,
               posted_by_type: p.postedByType,
               area: p.area,
@@ -393,6 +464,7 @@ function PropertyCard({
     p.title,
     p.kode,
     p.jenisListing,
+    p.rentalType,
     p.propertyType,
     p.postedByType,
     p.area,
@@ -511,6 +583,7 @@ function PropertyCard({
         property_title: property.title,
         property_code: property.kode ?? null,
         listing_type: property.jenisListing,
+        rental_type: property.rentalType || null,
         property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
@@ -558,7 +631,7 @@ function PropertyCard({
 Properti: ${property.title}
 Kode: ${property.kode ?? "-"}
 Lokasi: ${property.area}, ${property.province}
-Harga: ${property.price}
+Harga: ${displayPrice}
 
 Apakah properti ini masih tersedia?`
         : `Hello ${property.receiverName}, I'm interested in this property on TETAMO.
@@ -566,7 +639,7 @@ Apakah properti ini masih tersedia?`
 Property: ${property.title}
 Code: ${property.kode ?? "-"}
 Location: ${property.area}, ${property.province}
-Price: ${property.price}
+Price: ${displayPrice}
 
 Is this property still available?`;
 
@@ -587,6 +660,7 @@ Is this property still available?`;
           property_title: property.title,
           property_code: property.kode ?? null,
           listing_type: property.jenisListing,
+          rental_type: property.rentalType || null,
           property_type: property.propertyType,
           posted_by_type: property.postedByType,
           area: property.area,
@@ -811,6 +885,16 @@ Is this property still available?`;
               : "For Rent"}
           </div>
 
+          {p.jenisListing === "disewa" && p.rentalType ? (
+            <div
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${rentalTypeBadgeClass(
+                p.rentalType
+              )}`}
+            >
+              {getRentalTypeLabel(p.rentalType, lang)}
+            </div>
+          ) : null}
+
           <div
             className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-sm sm:text-[11px] ${propertyTypeBadgeClass()}`}
           >
@@ -821,7 +905,11 @@ Is this property still available?`;
 
       <div className="p-4 sm:p-5">
         <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
-          {p.price}
+          {displayPrice}
+        </div>
+
+        <div className="mt-1 text-xs text-gray-500 sm:text-sm">
+          ≈ {secondaryPrice}
         </div>
 
         <div className="mt-1 text-xs text-gray-500 sm:text-sm">
@@ -1027,6 +1115,7 @@ export default function PropertiPageClient() {
           bedrooms,
           furnishing,
           listing_type,
+          rental_type,
           property_type,
           source,
           status,
@@ -1147,12 +1236,13 @@ export default function PropertiPageClient() {
 
           id: row.id,
           jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+          rentalType: normalizeRentalType(row.rental_type),
           propertyType: row.property_type || "",
           kode: row.kode ?? undefined,
           postedDate: formatPostedDate(row.posted_date || row.created_at),
 
           title: row.title ?? "-",
-          price: formatIdr(row.price ?? 0),
+          priceValue: Number(row.price ?? 0),
           province: row.province ?? "-",
           area: row.city || row.area || "-",
           size: `${row.building_size ?? row.land_size ?? 0} m²`,
