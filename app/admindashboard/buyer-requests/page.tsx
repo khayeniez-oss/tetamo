@@ -188,6 +188,18 @@ function getLocationScore(agent: Agent, location: string) {
   return score;
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 /* =========================
    PAGE
 ========================= */
@@ -386,6 +398,11 @@ export default function AdminBuyerRequestsPage() {
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filteredRequests.length);
 
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
+
   const recommendedAgents = useMemo(() => {
     if (!selectedRequest) return [];
 
@@ -415,8 +432,8 @@ export default function AdminBuyerRequestsPage() {
     setMatchModalOpen(true);
   }
 
-  function closeMatchModal() {
-    if (matching) return;
+  function closeMatchModal(force = false) {
+    if (matching && !force) return;
     setMatchModalOpen(false);
     setSelectedRequest(null);
     setSelectedAgentId("");
@@ -510,7 +527,7 @@ export default function AdminBuyerRequestsPage() {
 
       window.dispatchEvent(new CustomEvent("tetamo-buyer-requests-updated"));
 
-      closeMatchModal();
+      closeMatchModal(true);
     } catch (error: any) {
       console.error("Match flow error:", error);
       alert(error?.message || "Something went wrong while matching.");
@@ -520,20 +537,20 @@ export default function AdminBuyerRequestsPage() {
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Buyer Requests
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Monitor and manage buyer requests from the Pembeli page.
         </p>
       </div>
 
-      <div className="mt-6 relative">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -541,22 +558,22 @@ export default function AdminBuyerRequestsPage() {
           placeholder="Cari nama, lokasi, budget, tipe properti..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder:text-gray-500"
+          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none focus:border-[#1C1C1E] placeholder:text-gray-400 sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
       {errorMessage ? (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
         </div>
       ) : null}
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-[#1C1C1E]">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+          <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
             All Buyer Requests
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
             Permintaan pembeli yang masuk dari halaman Pembeli.
           </p>
         </div>
@@ -572,79 +589,123 @@ export default function AdminBuyerRequestsPage() {
               const isUpdating = updatingId === item.id;
 
               return (
-                <div
-                  key={item.id}
-                  className="p-6 flex items-center justify-between gap-6 border-b border-gray-200 last:border-b-0"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <span
-                        className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badgeClass}`}
-                      >
-                        {ui.label}
-                      </span>
+                <div key={item.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badgeClass}`}
+                          >
+                            {ui.label}
+                          </span>
 
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <span>{item.createdAt}</span>
-                        <span>•</span>
-                        <span>{searchTypeLabel(item.searchType)}</span>
-                        <span>•</span>
-                        <span>{item.location}</span>
+                          <span className="text-[10px] text-gray-500 sm:text-[11px]">
+                            {item.createdAt}
+                          </span>
+
+                          <span className="text-[10px] text-gray-300 sm:text-[11px]">
+                            •
+                          </span>
+
+                          <span className="text-[10px] text-gray-500 sm:text-[11px]">
+                            {searchTypeLabel(item.searchType)}
+                          </span>
+                        </div>
+
+                        <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                          {item.name}
+                        </p>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Contact
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.phone}
+                            </p>
+                            <p className="mt-1 break-words text-[11px] text-gray-500 sm:text-xs">
+                              {item.email}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Search
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.propertyType}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              {item.location}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Budget
+                            </p>
+                            <p className="mt-1 text-[12px] font-semibold text-[#1C1C1E] sm:text-[13px]">
+                              {item.budget}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              Timeline: {item.timeline}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Preferences
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-600 sm:text-xs md:text-sm">
+                              {item.bedroom || "—"} • {item.bathroom || "—"} •{" "}
+                              {item.furnished || "—"} • {item.certificate || "—"}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              Butuh agen: {item.needAgent === "yes" ? "Ya" : "Tidak"}
+                            </p>
+                          </div>
+
+                          <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Notes / Match
+                            </p>
+                            <p className="mt-1 text-[11px] leading-5 text-gray-600 sm:text-xs md:text-sm">
+                              {item.notes || "No additional notes."}
+                            </p>
+
+                            {item.matchedAgentName ? (
+                              <p className="mt-2 text-[11px] font-medium text-purple-700 sm:text-xs">
+                                Matched Agent: {item.matchedAgentName}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 xl:w-[180px] xl:shrink-0">
+                        <button
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                          onClick={() => updateStatus(item.id, "REVIEWED")}
+                          disabled={isUpdating}
+                          type="button"
+                          title="Mark as reviewed"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-3 text-[12px] font-medium text-white transition hover:opacity-90 disabled:opacity-50 sm:text-sm"
+                          onClick={() => openMatchModal(item)}
+                          disabled={isUpdating}
+                          type="button"
+                        >
+                          <UserCheck className="h-4 w-4" />
+                          <span>Match</span>
+                        </button>
                       </div>
                     </div>
-
-                    <p className="mt-3 font-medium text-[#1C1C1E]">
-                      {item.name}
-                    </p>
-
-                    <p className="text-sm text-gray-500">
-                      {item.phone} • {item.email}
-                    </p>
-
-                    <p className="mt-2 text-sm text-[#1C1C1E]">
-                      {item.propertyType} • {item.budget}
-                    </p>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      {item.bedroom || "—"} • {item.bathroom || "—"} •{" "}
-                      {item.furnished || "—"} • {item.certificate || "—"}
-                    </p>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      Timeline: {item.timeline} • Butuh agen:{" "}
-                      {item.needAgent === "yes" ? "Ya" : "Tidak"}
-                    </p>
-
-                    {item.notes && (
-                      <p className="mt-2 text-xs text-gray-500">{item.notes}</p>
-                    )}
-
-                    {item.matchedAgentName ? (
-                      <p className="mt-2 text-xs font-medium text-purple-700">
-                        Matched Agent: {item.matchedAgentName}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      className="px-4 py-2 rounded-xl border border-gray-400 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      onClick={() => updateStatus(item.id, "REVIEWED")}
-                      disabled={isUpdating}
-                      type="button"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      className="px-4 py-2 rounded-xl bg-[#1C1C1E] text-white text-sm hover:opacity-90 inline-flex items-center gap-2 disabled:opacity-50"
-                      onClick={() => openMatchModal(item)}
-                      disabled={isUpdating}
-                      type="button"
-                    >
-                      <UserCheck className="h-4 w-4" />
-                      Match
-                    </button>
                   </div>
                 </div>
               );
@@ -659,31 +720,31 @@ export default function AdminBuyerRequestsPage() {
         )}
       </div>
 
-      <div className="flex items-center justify-between mt-6">
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filteredRequests.length} buyer
           requests
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-200 disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
             type="button"
           >
             Sebelumnya
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
               type="button"
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                 page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
             >
               {p}
@@ -693,7 +754,7 @@ export default function AdminBuyerRequestsPage() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white border-gray-400 disabled:opacity-50"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
             type="button"
           >
             Berikutnya
@@ -702,44 +763,82 @@ export default function AdminBuyerRequestsPage() {
       </div>
 
       {matchModalOpen && selectedRequest ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
-          <div className="w-full max-w-3xl rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 p-6">
-              <div>
-                <h3 className="text-xl font-semibold text-[#1C1C1E]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4 sm:p-5">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
                   Match Buyer Request to Agent
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                   Buyer: {selectedRequest.name} • Lokasi: {selectedRequest.location}
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={closeMatchModal}
-                className="rounded-xl border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
+                onClick={() => closeMatchModal()}
+                className="rounded-xl border border-gray-200 p-2 text-gray-500 transition hover:bg-gray-50"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="space-y-5 p-4 sm:p-5">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Buyer
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {selectedRequest.name}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Location
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {selectedRequest.location}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Property Type
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {selectedRequest.propertyType}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Budget
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {selectedRequest.budget}
+                  </p>
+                </div>
+              </div>
+
               <div>
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-[11px] font-medium text-gray-700 sm:text-sm">
                   Search Agent
                 </label>
 
-                <div className="mt-2 relative">
+                <div className="relative mt-2">
                   <Search
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-                    size={18}
+                    size={16}
                   />
                   <input
                     type="text"
                     value={agentSearchQuery}
                     onChange={(e) => setAgentSearchQuery(e.target.value)}
                     placeholder="Cari nama, agency, email, area..."
-                    className="w-full rounded-2xl border border-gray-300 pl-11 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+                    className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
                   />
                 </div>
               </div>
@@ -761,16 +860,16 @@ export default function AdminBuyerRequestsPage() {
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="font-medium text-[#1C1C1E]">
+                          <p className="text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
                             {agent.fullName}
                           </p>
-                          <p className="mt-1 text-sm text-gray-500">
+                          <p className="mt-1 text-[11px] text-gray-500 sm:text-sm">
                             {agent.agency}
                           </p>
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 text-[10px] text-gray-500 sm:text-xs">
                             {agent.phone} • {agent.email}
                           </p>
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 text-[10px] text-gray-500 sm:text-xs">
                             {agent.address}
                           </p>
                         </div>
@@ -813,16 +912,16 @@ export default function AdminBuyerRequestsPage() {
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="font-medium text-[#1C1C1E]">
+                          <p className="text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
                             {agent.fullName}
                           </p>
-                          <p className="mt-1 text-sm text-gray-500">
+                          <p className="mt-1 text-[11px] text-gray-500 sm:text-sm">
                             {agent.agency}
                           </p>
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 text-[10px] text-gray-500 sm:text-xs">
                             {agent.phone} • {agent.email}
                           </p>
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 text-[10px] text-gray-500 sm:text-xs">
                             {agent.address}
                           </p>
                         </div>
@@ -841,11 +940,11 @@ export default function AdminBuyerRequestsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-gray-100 p-6">
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 p-4 sm:p-5">
               <button
                 type="button"
-                onClick={closeMatchModal}
-                className="rounded-2xl border border-gray-200 px-5 py-3 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                onClick={() => closeMatchModal()}
+                className="rounded-2xl border border-gray-200 px-4 py-2.5 text-[12px] font-semibold text-[#1C1C1E] hover:bg-gray-50 sm:px-5 sm:py-3 sm:text-sm"
                 disabled={matching}
               >
                 Cancel
@@ -855,7 +954,7 @@ export default function AdminBuyerRequestsPage() {
                 type="button"
                 onClick={handleConfirmMatch}
                 disabled={!selectedAgentId || matching}
-                className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                className="rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50 sm:px-5 sm:py-3 sm:text-sm"
               >
                 {matching ? "Matching..." : "Confirm Match"}
               </button>
