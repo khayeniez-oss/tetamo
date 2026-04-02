@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { BadgeDollarSign, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, XCircle } from "lucide-react";
 
 /* =========================
 TYPES
@@ -88,6 +88,18 @@ function statusUI(status: PaymentStatus) {
   };
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -102,23 +114,33 @@ export default function AdminSalesPage() {
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return sales;
 
-    const words = searchQuery.toLowerCase().split(" ");
+    const words = searchQuery.toLowerCase().split(" ").filter(Boolean);
 
     return sales.filter((s) => {
       const searchable = `
-      ${s.ownerName}
-      ${s.propertyTitle}
-      ${s.listingKode}
-      ${s.packageType}
-      ${s.paymentMethod}
-      ${s.status}
+        ${s.ownerName}
+        ${s.propertyTitle}
+        ${s.listingKode}
+        ${s.packageType}
+        ${s.paymentMethod}
+        ${s.status}
       `.toLowerCase();
 
       return words.every((w) => searchable.includes(w));
     });
   }, [searchQuery, sales]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, sales.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const paginated = filtered.slice(
     (page - 1) * ITEMS_PER_PAGE,
@@ -130,27 +152,30 @@ export default function AdminSalesPage() {
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filtered.length);
 
-  return (
-    <div>
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
 
+  return (
+    <div className="space-y-4 sm:space-y-5">
       {/* Header */}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Sales & Transactions
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Monitor listing purchases, payments, and platform revenue.
         </p>
       </div>
 
       {/* Search */}
 
-      <div className="mt-6 relative">
-
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -161,123 +186,142 @@ export default function AdminSalesPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
-
       </div>
 
       {/* Sales Card */}
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="divide-y divide-gray-100">
+          {paginated.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
+              No transactions found.
+            </div>
+          ) : (
+            paginated.map((item) => {
+              const ui = statusUI(item.status);
+              const Icon = ui.Icon;
 
-          {paginated.map((item) => {
+              return (
+                <div key={item.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      {/* LEFT */}
 
-            const ui = statusUI(item.status);
-            const Icon = ui.Icon;
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
+                          >
+                            <Icon size={13} />
+                            {ui.label}
+                          </span>
+                        </div>
 
-            return (
-              <div
-                key={item.id}
-                className="p-6 flex items-center justify-between gap-6"
-              >
+                        <p className="mt-2 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                          {item.propertyTitle}
+                        </p>
 
-                {/* LEFT */}
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Owner
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.ownerName}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              Listing: {item.listingKode}
+                            </p>
+                          </div>
 
-                <div className="min-w-0">
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Payment
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.paymentMethod}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              Package: {item.packageType}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-                  <span
-                    className={`inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${ui.badge}`}
-                  >
-                    <Icon size={14}/>
-                    {ui.label}
-                  </span>
+                      {/* RIGHT */}
 
-                  <p className="mt-2 font-medium text-[#1C1C1E]">
-                    {item.propertyTitle}
-                  </p>
+                      <div className="grid grid-cols-2 gap-2.5 xl:w-[200px] xl:shrink-0">
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center xl:text-right">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Amount
+                          </p>
+                          <p className="mt-1 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm">
+                            {item.price}
+                          </p>
+                        </div>
 
-                  <p className="text-sm text-gray-500">
-                    Owner: {item.ownerName}
-                  </p>
-
-                  <p className="text-xs text-gray-500 mt-1">
-                    Listing: {item.listingKode}
-                  </p>
-
-                  <p className="text-xs text-gray-400">
-                    Package: {item.packageType} • {item.paymentMethod}
-                  </p>
-
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center xl:text-right">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Date
+                          </p>
+                          <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                            {item.date}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                {/* RIGHT */}
-
-                <div className="text-right">
-
-                  <p className="font-semibold text-[#1C1C1E]">
-                    {item.price}
-                  </p>
-
-                  <p className="text-xs text-gray-500">
-                    {item.date}
-                  </p>
-
-                </div>
-
-              </div>
-            );
-          })}
-
+              );
+            })
+          )}
         </div>
-
       </div>
 
       {/* Pagination */}
 
-      <div className="flex items-center justify-between mt-6">
-
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filtered.length} transaksi
         </p>
 
-        <div className="flex items-center gap-2">
-
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white"
+            disabled={page === 1}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Sebelumnya
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                 page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
+              type="button"
             >
               {p}
             </button>
           ))}
 
           <button
-            onClick={() =>
-              setPage((p) => Math.min(totalPages, p + 1))
-            }
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Berikutnya
           </button>
-
         </div>
-
       </div>
-
     </div>
   );
 }
