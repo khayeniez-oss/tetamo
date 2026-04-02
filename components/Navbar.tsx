@@ -14,6 +14,9 @@ import {
   LayoutDashboard,
   Menu,
   X,
+  BriefcaseBusiness,
+  Building2,
+  Shield,
 } from "lucide-react";
 
 type ProfileData = {
@@ -75,8 +78,11 @@ export default function Navbar() {
     login: isID ? "Masuk" : "Login",
     agentLogin: isID ? "Masuk Agen" : "Agent Login",
     adminLogin: isID ? "Masuk Admin" : "Admin Login",
+    developer: "Developer",
+    agentPro: isID ? "Agen Pro" : "Agent Pro",
     signUp: isID ? "Daftar" : "Sign Up",
     menu: isID ? "Menu" : "Menu",
+    quickAccess: isID ? "Akses Cepat" : "Quick Access",
   };
 
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
@@ -537,13 +543,13 @@ export default function Navbar() {
               </button>
 
               {mobileMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
                   <div className="p-4">
-                    <nav className="grid gap-2">
+                    <nav className="grid grid-cols-2 gap-2">
                       <Link
                         href="/properti"
                         onClick={closeAllMenus}
-                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.allProperties}
                       </Link>
@@ -551,7 +557,7 @@ export default function Navbar() {
                       <Link
                         href="/properti?jenisListing=dijual"
                         onClick={closeAllMenus}
-                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.forSale}
                       </Link>
@@ -559,7 +565,7 @@ export default function Navbar() {
                       <Link
                         href="/properti?jenisListing=disewa"
                         onClick={closeAllMenus}
-                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.forRent}
                       </Link>
@@ -567,13 +573,13 @@ export default function Navbar() {
                       <Link
                         href="/pembeli"
                         onClick={closeAllMenus}
-                        className="rounded-2xl px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
                       >
                         {t.buyers}
                       </Link>
                     </nav>
 
-                    <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="mt-4 rounded-[28px] border border-gray-200 bg-gradient-to-b from-[#fafafa] to-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                       {sessionLoading ? (
                         <div className="text-sm text-gray-500">{t.loading}</div>
                       ) : isLoggedIn ? (
@@ -618,39 +624,57 @@ export default function Navbar() {
                           </button>
                         </>
                       ) : (
-                        <div className="grid gap-2">
-                          <Link
-                            href="/login"
-                            onClick={closeAllMenus}
-                            className="rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
-                          >
-                            {t.login}
-                          </Link>
+                        <>
+                          <div className="mb-3 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                            {t.quickAccess}
+                          </div>
 
-                          <Link
-                            href="/login?role=agent"
-                            onClick={closeAllMenus}
-                            className="rounded-2xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                          >
-                            {t.agentLogin}
-                          </Link>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <Link
+                              href="/login"
+                              onClick={closeAllMenus}
+                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-3 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                            >
+                              <User className="h-4 w-4" />
+                              {t.login}
+                            </Link>
 
-                          <Link
-                            href="/login?role=admin"
-                            onClick={closeAllMenus}
-                            className="rounded-2xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                          >
-                            {t.adminLogin}
-                          </Link>
+                            <Link
+                              href="/signup?role=agent"
+                              onClick={closeAllMenus}
+                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                            >
+                              <BriefcaseBusiness className="h-4 w-4" />
+                              {t.agentPro}
+                            </Link>
+
+                            <Link
+                              href="/signup?role=developer"
+                              onClick={closeAllMenus}
+                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                            >
+                              <Building2 className="h-4 w-4" />
+                              {t.developer}
+                            </Link>
+
+                            <Link
+                              href="/login?role=admin"
+                              onClick={closeAllMenus}
+                              className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                            >
+                              <Shield className="h-4 w-4" />
+                              Admin
+                            </Link>
+                          </div>
 
                           <Link
                             href="/signup"
                             onClick={closeAllMenus}
-                            className="rounded-2xl bg-yellow-500 px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-yellow-400"
+                            className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-300 px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-[0_12px_30px_-16px_rgba(234,179,8,0.75)] transition hover:brightness-[1.02]"
                           >
                             {t.signUp}
                           </Link>
-                        </div>
+                        </>
                       )}
                     </div>
                   </div>
