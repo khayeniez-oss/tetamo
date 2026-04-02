@@ -132,6 +132,18 @@ function formatDate(date: string | null) {
   }).format(parsed);
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -187,7 +199,11 @@ export default function AdminPaymentsPage() {
 
       const rows = (paymentsData || []) as PaymentRow[];
       const userIds = Array.from(
-        new Set(rows.map((row) => row.user_id).filter((value): value is string => Boolean(value)))
+        new Set(
+          rows
+            .map((row) => row.user_id)
+            .filter((value): value is string => Boolean(value))
+        )
       );
 
       let profileMap = new Map<string, ProfileRow>();
@@ -256,7 +272,17 @@ export default function AdminPaymentsPage() {
     });
   }, [searchQuery, payments]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, payments.length]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const safePage = Math.min(page, totalPages);
 
@@ -269,6 +295,11 @@ export default function AdminPaymentsPage() {
     filtered.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
 
   const endItem = Math.min(safePage * ITEMS_PER_PAGE, filtered.length);
+
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(safePage, totalPages),
+    [safePage, totalPages]
+  );
 
   async function updateStatus(id: string, status: PaymentStatus) {
     setSavingId(id);
@@ -294,22 +325,24 @@ export default function AdminPaymentsPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-4 sm:space-y-5">
       {/* Header */}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">Payments</h1>
-        <p className="text-sm text-gray-500">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
+          Payments
+        </h1>
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Monitor dan kelola transaksi pembayaran.
         </p>
       </div>
 
       {/* Search */}
 
-      <div className="relative mt-6">
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -320,13 +353,13 @@ export default function AdminPaymentsPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="w-full rounded-2xl border border-gray-400 py-3 pl-12 pr-4 text-sm outline-none placeholder-gray-500 focus:border-[#1C1C1E]"
+          className="h-10 w-full rounded-2xl border border-gray-300 py-3 pl-10 pr-4 text-[13px] outline-none placeholder-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
       </div>
 
       {/* Payments Card */}
 
-      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-6 text-sm text-gray-500">Loading payments...</div>
         ) : error ? (
@@ -340,74 +373,106 @@ export default function AdminPaymentsPage() {
               const isSaving = savingId === payment.id;
 
               return (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between gap-6 p-6"
-                >
-                  {/* LEFT */}
+                <div key={payment.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      {/* LEFT */}
 
-                  <div>
-                    <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs ${ui.badge}`}
-                    >
-                      {ui.label}
-                    </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
+                          >
+                            {ui.label}
+                          </span>
+                        </div>
 
-                    <p className="mt-2 font-medium text-[#1C1C1E]">
-                      {payment.owner}
-                    </p>
+                        <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                          {payment.owner}
+                        </p>
 
-                    <p className="text-sm text-gray-500">
-                      Listing: {payment.listingKode}
-                    </p>
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Listing
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {payment.listingKode}
+                            </p>
+                          </div>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      {payment.package} • {payment.method}
-                    </p>
-                  </div>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Package
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {payment.package}
+                            </p>
+                          </div>
 
-                  {/* RIGHT */}
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Method
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {payment.method}
+                            </p>
+                          </div>
 
-                  <div className="text-right">
-                    <p className="font-semibold text-[#1C1C1E]">
-                      {payment.amount}
-                    </p>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Date
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {payment.date}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-                    <p className="text-xs text-gray-500">{payment.date}</p>
-                  </div>
+                      {/* RIGHT */}
 
-                  {/* ACTION */}
+                      <div className="grid grid-cols-2 gap-2.5 xl:w-[220px] xl:shrink-0">
+                        <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center xl:text-right">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Amount
+                          </p>
+                          <p className="mt-1 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm">
+                            {payment.amount}
+                          </p>
+                        </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => updateStatus(payment.id, "succeeded")}
-                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      title="Mark as paid"
-                    >
-                      <CheckCircle size={16} />
-                    </button>
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => updateStatus(payment.id, "succeeded")}
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Mark as paid"
+                        >
+                          <CheckCircle size={15} />
+                        </button>
 
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => updateStatus(payment.id, "failed")}
-                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      title="Mark as failed"
-                    >
-                      <XCircle size={16} />
-                    </button>
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => updateStatus(payment.id, "failed")}
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Mark as failed"
+                        >
+                          <XCircle size={15} />
+                        </button>
 
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => updateStatus(payment.id, "refunded")}
-                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      title="Mark as refunded"
-                    >
-                      <RotateCcw size={16} />
-                    </button>
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => updateStatus(payment.id, "refunded")}
+                          className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Mark as refunded"
+                        >
+                          <RotateCcw size={15} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -418,31 +483,31 @@ export default function AdminPaymentsPage() {
 
       {/* Pagination */}
 
-      <div className="mt-6 flex items-center justify-between">
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filtered.length} transaksi
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={safePage === 1 || filtered.length === 0}
-            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:px-4 sm:text-sm"
           >
             Sebelumnya
           </button>
 
           {filtered.length > 0 &&
-            Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            visiblePages.map((p) => (
               <button
                 type="button"
                 key={p}
                 onClick={() => setPage(p)}
-                className={`rounded-lg border px-3 py-2 text-sm ${
+                className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                   safePage === p
                     ? "border-black bg-black text-white"
-                    : "border-gray-400"
+                    : "border-gray-300 bg-white text-gray-700"
                 }`}
               >
                 {p}
@@ -453,7 +518,7 @@ export default function AdminPaymentsPage() {
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={safePage === totalPages || filtered.length === 0}
-            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 sm:h-10 sm:px-4 sm:text-sm"
           >
             Berikutnya
           </button>
