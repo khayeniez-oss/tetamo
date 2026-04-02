@@ -24,6 +24,19 @@ type EditableKey = "about" | "mission" | "vision" | "contactIntro";
 const DEFAULT_HERO =
   "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1800&q=80";
 
+function normalizeRole(role?: string | null) {
+  return (role || "").toLowerCase().replace(/\s+/g, "_");
+}
+
+function isAdminRole(role?: string | null) {
+  const normalized = normalizeRole(role);
+  return (
+    normalized === "admin" ||
+    normalized === "super_admin" ||
+    normalized === "superadmin"
+  );
+}
+
 export default function AboutUsPage() {
   const { lang } = useLanguage();
   const isID = lang === "id";
@@ -50,7 +63,6 @@ export default function AboutUsPage() {
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
-
   const [heroUrl, setHeroUrl] = useState(DEFAULT_HERO);
 
   const [content, setContent] = useState<PageContent>({
@@ -94,15 +106,36 @@ export default function AboutUsPage() {
           return;
         }
 
-        const { data } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
+        const directRoles = [
+          normalizeRole(user.app_metadata?.role),
+          normalizeRole(user.user_metadata?.role),
+        ];
+
+        if (directRoles.some((role) => isAdminRole(role))) {
+          setIsAdmin(true);
+          setAuthLoading(false);
+          return;
+        }
+
+        const tablesToCheck = ["profiles", "users"];
+
+        for (const tableName of tablesToCheck) {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          if (!error && data?.role && isAdminRole(data.role)) {
+            if (!mounted) return;
+            setIsAdmin(true);
+            setAuthLoading(false);
+            return;
+          }
+        }
 
         if (!mounted) return;
-
-        setIsAdmin(data?.role === "admin");
+        setIsAdmin(false);
       } catch {
         if (!mounted) return;
         setIsAdmin(false);
@@ -164,8 +197,8 @@ export default function AboutUsPage() {
     : content.contactIntro.en;
 
   return (
-    <main className="bg-white text-[#1C1C1E]">
-      <section className="relative min-h-[420px] overflow-hidden md:min-h-[580px]">
+    <main className="bg-[#fafafa] text-[#1C1C1E]">
+      <section className="relative min-h-[260px] overflow-hidden sm:min-h-[320px] lg:min-h-[460px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={heroUrl}
@@ -175,24 +208,24 @@ export default function AboutUsPage() {
 
         <div className="absolute inset-0 bg-black/45" />
 
-        <div className="relative mx-auto flex min-h-[420px] max-w-7xl items-end px-6 pb-12 md:min-h-[580px] md:px-8 md:pb-16">
+        <div className="relative mx-auto flex min-h-[260px] max-w-5xl items-end px-3 pb-5 sm:min-h-[320px] sm:px-5 sm:pb-7 lg:min-h-[460px] lg:px-8 lg:pb-10">
           <div className="max-w-4xl text-white">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-white/80 md:text-base">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/80 sm:text-xs">
               {t.pageTitle}
             </p>
 
-            <h1 className="mt-5 text-5xl font-semibold leading-[0.95] tracking-[-0.04em] md:text-7xl">
+            <h1 className="mt-3 text-[2.3rem] font-semibold leading-[0.95] tracking-[-0.05em] sm:mt-4 sm:text-[3.25rem] lg:mt-5 lg:text-[4.75rem]">
               TeTaMo
             </h1>
 
-            <p className="mt-6 max-w-3xl text-lg leading-8 text-white/90 md:text-2xl md:leading-10">
+            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-white/90 sm:mt-4 sm:text-[15px] sm:leading-7 lg:mt-5 lg:text-[18px] lg:leading-8">
               {t.pageIntro}
             </p>
 
             {(isAdmin || authLoading) && (
-              <div className="mt-8 flex flex-wrap items-center gap-4">
+              <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
                 {isAdmin && (
-                  <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-white/25 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur hover:bg-white/15">
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur transition hover:bg-white/15 sm:px-5 sm:py-2.5 sm:text-sm">
                     {t.replaceImage}
                     <input
                       type="file"
@@ -204,9 +237,13 @@ export default function AboutUsPage() {
                 )}
 
                 {authLoading ? (
-                  <span className="text-sm text-white/75">{t.loading}</span>
+                  <span className="text-[11px] text-white/75 sm:text-xs">
+                    {t.loading}
+                  </span>
                 ) : isAdmin ? (
-                  <span className="text-sm text-white/75">{t.adminMode}</span>
+                  <span className="text-[11px] text-white/75 sm:text-xs">
+                    {t.adminMode}
+                  </span>
                 ) : null}
               </div>
             )}
@@ -214,7 +251,7 @@ export default function AboutUsPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-20 md:px-8 md:py-28">
+      <section className="mx-auto max-w-5xl px-3 py-8 sm:px-5 sm:py-10 lg:px-8 lg:py-12">
         <ContentSection
           title={t.aboutTitle}
           value={aboutText}
@@ -238,11 +275,11 @@ export default function AboutUsPage() {
         />
       </section>
 
-      <section className="border-t border-gray-200 bg-[#F7F7F8]">
-        <div className="mx-auto max-w-7xl px-6 py-20 md:px-8 md:py-24">
-          <div className="grid gap-10 md:grid-cols-[240px_1fr] md:gap-16">
+      <section className="border-t border-gray-200 bg-white">
+        <div className="mx-auto max-w-5xl px-3 py-8 sm:px-5 sm:py-10 lg:px-8 lg:py-12">
+          <div className="grid gap-6 sm:gap-8 lg:grid-cols-[220px_1fr] lg:gap-12">
             <div>
-              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#1C1C1E] md:text-5xl">
+              <h2 className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[#1C1C1E] sm:text-[2rem] lg:text-[2.6rem]">
                 {t.contactTitle}
               </h2>
             </div>
@@ -252,10 +289,10 @@ export default function AboutUsPage() {
                 value={contactIntroText}
                 isAdmin={isAdmin}
                 onChange={(value) => updateLocalizedField("contactIntro", value)}
-                minHeight="min-h-[120px]"
+                minHeight="min-h-[100px] sm:min-h-[110px]"
               />
 
-              <div className="mt-10 space-y-6">
+              <div className="mt-6 space-y-4 sm:mt-8 sm:space-y-5">
                 <ContactLine
                   label={t.emailLabel}
                   value={content.email}
@@ -306,12 +343,12 @@ function ContentSection({
 }) {
   return (
     <section
-      className={`grid gap-8 py-14 md:grid-cols-[240px_1fr] md:gap-16 md:py-20 ${
+      className={`grid gap-6 py-8 sm:gap-8 sm:py-10 lg:grid-cols-[220px_1fr] lg:gap-12 lg:py-12 ${
         last ? "" : "border-b border-gray-200"
       }`}
     >
       <div>
-        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#1C1C1E] md:text-5xl">
+        <h2 className="text-[1.55rem] font-semibold tracking-[-0.03em] text-[#1C1C1E] sm:text-[2rem] lg:text-[2.6rem]">
           {title}
         </h2>
       </div>
@@ -321,7 +358,7 @@ function ContentSection({
           value={value}
           isAdmin={isAdmin}
           onChange={onChange}
-          minHeight="min-h-[220px]"
+          minHeight="min-h-[180px] sm:min-h-[200px]"
         />
       </div>
     </section>
@@ -344,13 +381,13 @@ function EditableParagraph({
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full resize-none border-0 bg-transparent p-0 text-xl leading-9 text-gray-700 outline-none md:text-2xl md:leading-10 ${minHeight}`}
+        className={`w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-4 text-[14px] leading-6 text-gray-700 outline-none focus:border-gray-400 sm:text-[15px] sm:leading-7 lg:text-[17px] lg:leading-8 ${minHeight}`}
       />
     );
   }
 
   return (
-    <p className="whitespace-pre-line text-xl leading-9 text-gray-700 md:text-2xl md:leading-10">
+    <p className="whitespace-pre-line text-[14px] leading-6 text-gray-700 sm:text-[15px] sm:leading-7 lg:text-[17px] lg:leading-8">
       {value}
     </p>
   );
@@ -368,8 +405,8 @@ function ContactLine({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="grid gap-3 border-b border-gray-200 pb-5 md:grid-cols-[160px_1fr] md:gap-8">
-      <div className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-500">
+    <div className="grid gap-2 border-b border-gray-200 pb-4 sm:gap-3 lg:grid-cols-[140px_1fr] lg:gap-6">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 sm:text-[12px]">
         {label}
       </div>
 
@@ -378,10 +415,12 @@ function ContactLine({
           <input
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full border-0 bg-transparent p-0 text-lg text-[#1C1C1E] outline-none md:text-xl"
+            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[14px] text-[#1C1C1E] outline-none focus:border-gray-400 sm:text-[15px] lg:text-base"
           />
         ) : (
-          <p className="text-lg text-[#1C1C1E] md:text-xl">{value}</p>
+          <p className="break-all text-[14px] text-[#1C1C1E] sm:text-[15px] lg:text-base">
+            {value}
+          </p>
         )}
       </div>
     </div>
