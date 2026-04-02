@@ -197,68 +197,70 @@ export default function AdminInvoiceDetailPage() {
   const total = invoice?.total ?? subtotal + tax - discount;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
+      <div className="mb-4 flex flex-col gap-2.5 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href="/admindashboard/invoices"
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-[#1C1C1E] shadow-sm hover:bg-gray-50"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-[12px] font-medium text-[#1C1C1E] shadow-sm hover:bg-gray-50 sm:h-11 sm:w-auto sm:text-sm"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={15} />
           Back to Invoices
         </Link>
 
         <button
           type="button"
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 text-[12px] font-medium text-white shadow-sm hover:opacity-90 sm:h-11 sm:w-auto sm:text-sm"
         >
-          <Printer size={16} />
+          <Printer size={15} />
           Print
         </button>
       </div>
 
       {loading ? (
-        <div className="rounded-[28px] border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-sm">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm sm:rounded-[28px] sm:p-8">
           Loading invoice...
         </div>
       ) : error || !invoice ? (
-        <div className="rounded-[28px] border border-gray-200 bg-white p-8 text-sm text-red-600 shadow-sm">
+        <div className="rounded-[24px] border border-gray-200 bg-white p-6 text-sm text-red-600 shadow-sm sm:rounded-[28px] sm:p-8">
           {error || "Invoice not found."}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 px-6 py-7 md:px-8 md:py-8">
-            <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
-              <div className="flex items-start gap-4">
+        <div className="overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm sm:rounded-[28px]">
+          <div className="border-b border-gray-100 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
+            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-3 sm:gap-4">
                 <img
                   src="/tetamo-logo-transparent1.png"
                   alt="Tetamo"
-                  className="h-16 w-16 rounded-2xl border border-gray-200 bg-white object-contain p-2"
+                  className="h-14 w-14 rounded-2xl border border-gray-200 bg-white object-contain p-2 sm:h-16 sm:w-16"
                 />
 
-                <div>
-                  <p className="text-2xl font-bold leading-tight text-[#1C1C1E]">
+                <div className="min-w-0">
+                  <p className="text-lg font-bold leading-tight text-[#1C1C1E] sm:text-2xl">
                     Tetamo Pty Ltd
                   </p>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-[11px] text-gray-500 sm:text-sm">
                     ABN 18 689 780 970
                   </p>
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-2 text-[11px] leading-5 text-gray-500 sm:text-sm">
                     Suite 809 168 Kent Street Sydney NSW 2000
                   </p>
-                  <p className="text-sm text-gray-500">www.tetamo.com</p>
+                  <p className="text-[11px] text-gray-500 sm:text-sm">
+                    www.tetamo.com
+                  </p>
                 </div>
               </div>
 
               <div className="text-left md:text-right">
-                <p className="text-3xl font-bold tracking-tight text-[#1C1C1E]">
+                <p className="text-2xl font-bold tracking-tight text-[#1C1C1E] sm:text-3xl">
                   Invoice
                 </p>
-                <p className="mt-2 text-lg font-medium text-gray-500">
+                <p className="mt-1.5 text-sm font-medium text-gray-500 sm:mt-2 sm:text-lg">
                   {invoice.invoice_number || "-"}
                 </p>
                 <span
-                  className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClasses(
+                  className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:mt-4 sm:px-3 sm:text-xs ${getStatusClasses(
                     invoice.status
                   )}`}
                 >
@@ -268,69 +270,79 @@ export default function AdminInvoiceDetailPage() {
             </div>
           </div>
 
-          <div className="grid gap-8 border-b border-gray-100 px-6 py-7 md:grid-cols-2 md:px-8 md:py-8">
+          <div className="grid gap-4 border-b border-gray-100 px-4 py-5 sm:gap-6 sm:px-6 sm:py-6 md:grid-cols-2 md:px-8 md:py-8">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
                 Bill To
               </p>
-              <p className="mt-4 text-2xl font-semibold text-[#1C1C1E]">
+              <p className="mt-3 text-lg font-semibold text-[#1C1C1E] sm:mt-4 sm:text-2xl">
                 {invoice.customer_name || "Unknown"}
               </p>
-              <p className="mt-1 text-base text-gray-500">
+              <p className="mt-1 text-[12px] text-gray-500 sm:text-base">
                 {invoice.customer_email || "-"}
               </p>
-              <p className="text-base text-gray-500">
+              <p className="text-[12px] text-gray-500 sm:text-base">
                 {invoice.customer_phone || "-"}
               </p>
-              <p className="text-base text-gray-500">
+              <p className="text-[12px] text-gray-500 sm:text-base">
                 {invoice.customer_address || "-"}
               </p>
-              <p className="mt-3 text-base text-gray-500">
+              <p className="mt-2 text-[12px] text-gray-500 sm:mt-3 sm:text-base">
                 {invoice.customer_role || "-"}
                 {invoice.customer_agency ? ` • ${invoice.customer_agency}` : ""}
               </p>
             </div>
 
-            <div className="grid gap-4 text-base">
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-gray-500">Issue Date</span>
-                <span className="font-medium text-[#1C1C1E]">
-                  {formatDate(invoice.created_at)}
-                </span>
-              </div>
+            <div className="grid gap-2.5 sm:gap-4">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Issue Date
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {formatDate(invoice.created_at)}
+                  </p>
+                </div>
 
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-gray-500">Due Date</span>
-                <span className="font-medium text-[#1C1C1E]">
-                  {formatDate(invoice.due_at)}
-                </span>
-              </div>
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Due Date
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {formatDate(invoice.due_at)}
+                  </p>
+                </div>
 
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-gray-500">Paid Date</span>
-                <span className="font-medium text-[#1C1C1E]">
-                  {formatDate(invoice.paid_at)}
-                </span>
-              </div>
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Paid Date
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {formatDate(invoice.paid_at)}
+                  </p>
+                </div>
 
-              <div className="flex items-center justify-between gap-6">
-                <span className="text-gray-500">Listing Code</span>
-                <span className="font-medium text-[#1C1C1E]">
-                  {invoice.listing_code || "-"}
-                </span>
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                    Listing Code
+                  </p>
+                  <p className="mt-1 break-words text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
+                    {invoice.listing_code || "-"}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="border-b border-gray-100 px-6 py-7 md:px-8 md:py-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+          <div className="border-b border-gray-100 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
               Invoice Item
             </p>
 
-            <div className="mt-5 rounded-3xl border border-gray-200">
-              <div className="grid gap-5 border-b border-gray-100 px-6 py-6 md:grid-cols-[1fr_auto]">
+            <div className="mt-4 rounded-3xl border border-gray-200 sm:mt-5">
+              <div className="grid gap-4 border-b border-gray-100 px-4 py-5 sm:px-6 sm:py-6 md:grid-cols-[1fr_auto]">
                 <div>
-                  <p className="text-2xl font-semibold leading-tight text-[#1C1C1E]">
+                  <p className="text-lg font-semibold leading-tight text-[#1C1C1E] sm:text-2xl">
                     {invoice.description ||
                       invoice.property_title ||
                       invoice.plan_code ||
@@ -338,63 +350,86 @@ export default function AdminInvoiceDetailPage() {
                       "-"}
                   </p>
 
-                  <p className="mt-2 text-base text-gray-500">
-                    {invoice.property_title || "-"}
-                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2.5">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Property
+                      </p>
+                      <p className="mt-1 text-[12px] text-gray-600 sm:text-sm">
+                        {invoice.property_title || "-"}
+                      </p>
+                    </div>
 
-                  <p className="text-base text-gray-500">
-                    {invoice.property_city || "-"}
-                    {invoice.property_province
-                      ? `, ${invoice.property_province}`
-                      : ""}
-                  </p>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Location
+                      </p>
+                      <p className="mt-1 text-[12px] text-gray-600 sm:text-sm">
+                        {invoice.property_city || "-"}
+                        {invoice.property_province
+                          ? `, ${invoice.property_province}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Plan Code
+                      </p>
+                      <p className="mt-1 text-[12px] text-gray-600 sm:text-sm">
+                        {invoice.plan_code || "-"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Bill Type
+                      </p>
+                      <p className="mt-1 text-[12px] text-gray-600 sm:text-sm">
+                        {invoice.bill_type || "-"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="text-left md:text-right">
-                  <p className="text-3xl font-semibold text-[#1C1C1E]">
+                  <p className="text-2xl font-semibold text-[#1C1C1E] sm:text-3xl">
                     {formatAmount(total, invoice.currency)}
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-8 px-6 py-6 md:grid-cols-[1fr_300px]">
-                <div>
-                  <p className="text-base text-gray-500">
-                    Plan Code: {invoice.plan_code || "-"}
-                  </p>
-                  <p className="text-base text-gray-500">
-                    Bill Type: {invoice.bill_type || "-"}
-                  </p>
-                </div>
+              <div className="grid gap-4 px-4 py-5 sm:px-6 sm:py-6 md:grid-cols-[1fr_320px] md:gap-8">
+                <div />
 
-                <div className="rounded-3xl bg-gray-50 p-5">
-                  <div className="flex items-center justify-between text-base">
+                <div className="rounded-3xl bg-gray-50 p-4 sm:p-5">
+                  <div className="flex items-center justify-between text-[12px] sm:text-base">
                     <span className="text-gray-500">Subtotal</span>
                     <span className="font-medium text-[#1C1C1E]">
                       {formatAmount(subtotal, invoice.currency)}
                     </span>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between text-base">
+                  <div className="mt-3 flex items-center justify-between text-[12px] sm:mt-4 sm:text-base">
                     <span className="text-gray-500">Tax</span>
                     <span className="font-medium text-[#1C1C1E]">
                       {formatAmount(tax, invoice.currency)}
                     </span>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between text-base">
+                  <div className="mt-3 flex items-center justify-between text-[12px] sm:mt-4 sm:text-base">
                     <span className="text-gray-500">Discount</span>
                     <span className="font-medium text-[#1C1C1E]">
                       {formatAmount(discount, invoice.currency)}
                     </span>
                   </div>
 
-                  <div className="mt-5 border-t border-gray-200 pt-5">
+                  <div className="mt-4 border-t border-gray-200 pt-4 sm:mt-5 sm:pt-5">
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-semibold text-[#1C1C1E]">
+                      <span className="text-sm font-semibold text-[#1C1C1E] sm:text-lg">
                         Total
                       </span>
-                      <span className="text-2xl font-bold text-[#1C1C1E]">
+                      <span className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
                         {formatAmount(total, invoice.currency)}
                       </span>
                     </div>
@@ -404,21 +439,21 @@ export default function AdminInvoiceDetailPage() {
             </div>
           </div>
 
-          <div className="grid gap-8 px-6 py-7 md:grid-cols-2 md:px-8 md:py-8">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+          <div className="grid gap-4 px-4 py-5 sm:gap-6 sm:px-6 sm:py-6 md:grid-cols-2 md:gap-8 md:px-8 md:py-8">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
                 Notes
               </p>
-              <p className="mt-3 whitespace-pre-line text-base leading-7 text-gray-600">
+              <p className="mt-2 whitespace-pre-line text-[12px] leading-6 text-gray-600 sm:mt-3 sm:text-base sm:leading-7">
                 {invoice.notes || "No additional notes."}
               </p>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-xs sm:tracking-[0.16em]">
                 Terms
               </p>
-              <p className="mt-3 text-base leading-7 text-gray-600">
+              <p className="mt-2 text-[12px] leading-6 text-gray-600 sm:mt-3 sm:text-base sm:leading-7">
                 This invoice was generated by the Tetamo billing system. Please
                 keep this document for your records.
               </p>
