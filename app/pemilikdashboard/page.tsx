@@ -736,7 +736,7 @@ export default function OwnerDashboardPage() {
         </div>
 
         <button
-          onClick={() => router.push("/pemilik/iklan")}
+          onClick={() => router.push("/pemilik/pemilik")}
           className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
         >
           {t.createListing}
