@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext,
   useContext,
@@ -37,6 +37,9 @@ type AgentProfileContextType = {
   setAgent: Dispatch<SetStateAction<AgentProfile>>;
   userId: string | null;
   loadingProfile: boolean;
+  hasActiveMembership: boolean;
+  membershipEndsAt: string | null;
+  loadingMembership: boolean;
 };
 
 type ProfileRow = {
@@ -61,6 +64,17 @@ type SocialLink = {
 };
 
 type SectionKey = "overview" | "membership" | "support";
+
+type MembershipPaymentRow = {
+  id: string;
+  status: string | null;
+  paid_at: string | null;
+  created_at: string | null;
+  user_type: string | null;
+  product_type: string | null;
+  flow: string | null;
+  metadata: Record<string, unknown> | null;
+};
 
 const DEFAULT_AGENT: AgentProfile = {
   name: "Tetamo Agent",
@@ -108,28 +122,113 @@ function normalizeSocialUrl(value: string) {
   return `https://${trimmed}`;
 }
 
+function toPositiveNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function addDaysToIso(dateString: string, days: number) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+function resolveMembershipDurationDays(payment: MembershipPaymentRow) {
+  const metadata = payment.metadata || {};
+
+  const packageTermDays = toPositiveNumber(metadata.packageTermDays);
+  if (packageTermDays) return packageTermDays;
+
+  const selectedBillingCycle = String(metadata.selectedBillingCycle || "").toLowerCase();
+  if (selectedBillingCycle === "monthly" || selectedBillingCycle === "yearly") {
+    return 365;
+  }
+
+  return 365;
+}
+
+function resolveMembershipEndDate(payment: MembershipPaymentRow) {
+  const baseDate = payment.paid_at || payment.created_at;
+  if (!baseDate) return null;
+
+  const durationDays = resolveMembershipDurationDays(payment);
+  return addDaysToIso(baseDate, durationDays);
+}
+
+function isMembershipPaymentActive(payment: MembershipPaymentRow) {
+  const status = String(payment.status || "").toLowerCase();
+  if (status !== "paid") return false;
+
+  const endDate = resolveMembershipEndDate(payment);
+  if (!endDate) return false;
+
+  const end = new Date(endDate);
+  if (Number.isNaN(end.getTime())) return false;
+
+  return end.getTime() > Date.now();
+}
+
+function formatMembershipDate(value: string | null) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 export default function AgentDashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const [agent, setAgent] = useState<AgentProfile>(DEFAULT_AGENT);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadingMembership, setLoadingMembership] = useState(true);
+  const [hasActiveMembership, setHasActiveMembership] = useState(false);
+  const [membershipEndsAt, setMembershipEndsAt] = useState<string | null>(null);
+
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     overview: true,
     membership: false,
     support: false,
   });
 
-  const menuItemClass = (href: string) =>
-    [
+  function baseMenuItemClass(href: string) {
+    return [
       "block rounded-2xl px-4 py-3 text-sm transition",
       pathname === href
         ? "bg-white/10 text-white font-semibold"
         : "text-white/85 hover:bg-white/10 hover:text-white",
     ].join(" ");
+  }
+
+  function lockedMenuItemClass() {
+    return [
+      "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm transition",
+      "text-white/45 hover:bg-white/5 hover:text-white/70",
+    ].join(" ");
+  }
 
   function toggleSection(section: SectionKey) {
     setOpenSections((prev) => ({
@@ -141,8 +240,9 @@ export default function AgentDashboardLayout({
   useEffect(() => {
     let ignore = false;
 
-    async function loadAgentProfile() {
+    async function loadAgentProfileAndMembership() {
       setLoadingProfile(true);
+      setLoadingMembership(true);
 
       try {
         const {
@@ -152,31 +252,57 @@ export default function AgentDashboardLayout({
 
         if (authError) {
           console.error("Failed to load auth user:", authError);
-          if (!ignore) setLoadingProfile(false);
+          if (!ignore) {
+            setLoadingProfile(false);
+            setLoadingMembership(false);
+          }
           return;
         }
 
         if (!user) {
           if (!ignore) {
             setAgent(DEFAULT_AGENT);
+            setHasActiveMembership(false);
+            setMembershipEndsAt(null);
             setLoadingProfile(false);
+            setLoadingMembership(false);
           }
           return;
         }
 
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select(
-            "id, full_name, role, phone, agency, address, photo_url, instagram_url, facebook_url, tiktok_url, youtube_url, linkedin_url"
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+        const [profileRes, membershipRes] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select(
+              "id, full_name, role, phone, agency, address, photo_url, instagram_url, facebook_url, tiktok_url, youtube_url, linkedin_url"
+            )
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("payments")
+            .select(
+              "id, status, paid_at, created_at, user_type, product_type, flow, metadata"
+            )
+            .eq("user_id", user.id)
+            .eq("user_type", "agent")
+            .eq("product_type", "membership")
+            .order("created_at", { ascending: false })
+            .limit(20),
+        ]);
 
-        if (profileError) {
-          console.error("Failed to load agent profile:", profileError);
+        if (profileRes.error) {
+          console.error("Failed to load agent profile:", profileRes.error);
         }
 
-        const profile = profileData as ProfileRow | null;
+        if (membershipRes.error) {
+          console.error("Failed to load agent membership:", membershipRes.error);
+        }
+
+        const profile = profileRes.data as ProfileRow | null;
+        const membershipRows = (membershipRes.data || []) as MembershipPaymentRow[];
+
+        const activeMembership =
+          membershipRows.find((payment) => isMembershipPaymentActive(payment)) || null;
 
         if (!ignore) {
           setAgent({
@@ -202,18 +328,29 @@ export default function AgentDashboardLayout({
             youtube: profile?.youtube_url || "",
             linkedin: profile?.linkedin_url || "",
           });
+
+          setHasActiveMembership(Boolean(activeMembership));
+          setMembershipEndsAt(
+            activeMembership ? resolveMembershipEndDate(activeMembership) : null
+          );
+
           setLoadingProfile(false);
+          setLoadingMembership(false);
         }
       } catch (error) {
         console.error("Unexpected agent profile load error:", error);
+
         if (!ignore) {
           setAgent(DEFAULT_AGENT);
+          setHasActiveMembership(false);
+          setMembershipEndsAt(null);
           setLoadingProfile(false);
+          setLoadingMembership(false);
         }
       }
     }
 
-    loadAgentProfile();
+    loadAgentProfileAndMembership();
 
     return () => {
       ignore = true;
@@ -284,9 +421,81 @@ export default function AgentDashboardLayout({
       setAgent,
       userId: agent.userId,
       loadingProfile,
+      hasActiveMembership,
+      membershipEndsAt,
+      loadingMembership,
     }),
-    [agent, loadingProfile]
+    [agent, loadingProfile, hasActiveMembership, membershipEndsAt, loadingMembership]
   );
+
+  function isRestrictedPathWithoutMembership(path: string) {
+    if (hasActiveMembership) return false;
+
+    if (path === "/agentdashboard") return true;
+    if (path.startsWith("/agentdashboard/listing-saya")) return true;
+    if (path.startsWith("/agentdashboard/leads")) return true;
+    if (path.startsWith("/agentdashboard/jadwal-viewing")) return true;
+    if (path.startsWith("/agentdashboard/propertilokasi")) return true;
+    if (path.startsWith("/agentdashboard/propertidetail")) return true;
+    if (path.startsWith("/agentdashboard/deskripsi-foto")) return true;
+    if (path.startsWith("/agentdashboard/komisi")) return true;
+
+    return false;
+  }
+
+  useEffect(() => {
+    if (loadingProfile || loadingMembership) return;
+    if (!agent.userId) return;
+
+    if (isRestrictedPathWithoutMembership(pathname)) {
+      router.replace("/agentdashboard/paket");
+    }
+  }, [
+    pathname,
+    router,
+    loadingProfile,
+    loadingMembership,
+    agent.userId,
+    hasActiveMembership,
+  ]);
+
+  function renderMenuLink(
+    href: string,
+    label: string,
+    options?: { locked?: boolean }
+  ) {
+    const locked = Boolean(options?.locked);
+
+    if (!locked) {
+      return (
+        <Link href={href} className={baseMenuItemClass(href)}>
+          {label}
+        </Link>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => router.push("/agentdashboard/paket")}
+        className={lockedMenuItemClass()}
+      >
+        <span>{label}</span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-white/55">
+          Lock
+        </span>
+      </button>
+    );
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  }
+
+  const isMembershipLocked = !hasActiveMembership;
+  const isLoadingState = loadingProfile || loadingMembership;
 
   return (
     <AgentProfileContext.Provider value={contextValue}>
@@ -354,6 +563,39 @@ export default function AgentDashboardLayout({
                       ))}
                     </div>
                   ) : null}
+
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                    {isLoadingState ? (
+                      <div className="text-xs text-white/60">Checking membership...</div>
+                    ) : hasActiveMembership ? (
+                      <>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+                          Membership Active
+                        </p>
+                        <p className="mt-1 text-sm text-white/90">
+                          Access unlocked
+                        </p>
+                        <p className="mt-1 text-xs text-white/60">
+                          Active until {formatMembershipDate(membershipEndsAt)}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-yellow-300">
+                          Membership Required
+                        </p>
+                        <p className="mt-1 text-sm text-white/90">
+                          Upgrade to unlock agent tools
+                        </p>
+                        <Link
+                          href="/agentdashboard/paket"
+                          className="mt-3 inline-flex rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#17171A] transition hover:opacity-90"
+                        >
+                          View Packages
+                        </Link>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -381,40 +623,25 @@ export default function AgentDashboardLayout({
                       openSections.overview ? "block" : "hidden"
                     } lg:block`}
                   >
-                    <Link
-                      href="/agentdashboard"
-                      className={menuItemClass("/agentdashboard")}
-                    >
-                      Dashboard
-                    </Link>
+                    {renderMenuLink("/agentdashboard", "Dashboard", {
+                      locked: isMembershipLocked,
+                    })}
 
-                    <Link
-                      href="/agentdashboard/listing-saya"
-                      className={menuItemClass("/agentdashboard/listing-saya")}
-                    >
-                      Listing Saya
-                    </Link>
+                    {renderMenuLink("/agentdashboard/listing-saya", "Listing Saya", {
+                      locked: isMembershipLocked,
+                    })}
 
-                    <Link
-                      href="/agentdashboard/leads"
-                      className={menuItemClass("/agentdashboard/leads")}
-                    >
-                      Leads
-                    </Link>
+                    {renderMenuLink("/agentdashboard/leads", "Leads", {
+                      locked: isMembershipLocked,
+                    })}
 
-                    <Link
-                      href="/agentdashboard/jadwal-viewing"
-                      className={menuItemClass("/agentdashboard/jadwal-viewing")}
-                    >
-                      Jadwal Viewing
-                    </Link>
+                    {renderMenuLink("/agentdashboard/jadwal-viewing", "Jadwal Viewing", {
+                      locked: isMembershipLocked,
+                    })}
 
-                    <Link
-                      href="/agentdashboard/propertilokasi"
-                      className={menuItemClass("/agentdashboard/propertilokasi")}
-                    >
-                      Buat Iklan
-                    </Link>
+                    {renderMenuLink("/agentdashboard/propertilokasi", "Buat Iklan", {
+                      locked: isMembershipLocked,
+                    })}
                   </div>
                 </div>
 
@@ -439,40 +666,15 @@ export default function AgentDashboardLayout({
                       openSections.membership ? "block" : "hidden"
                     } lg:block`}
                   >
-                    <Link
-                      href="/agentdashboard/paket"
-                      className={menuItemClass("/agentdashboard/paket")}
-                    >
-                      Paket
-                    </Link>
+                    {renderMenuLink("/agentdashboard/paket", "Paket")}
+                    {renderMenuLink("/agentdashboard/tagihan", "Tagihan")}
+                    {renderMenuLink("/agentdashboard/pembayaran", "Pembayaran")}
 
-                    <Link
-                      href="/agentdashboard/tagihan"
-                      className={menuItemClass("/agentdashboard/tagihan")}
-                    >
-                      Tagihan
-                    </Link>
+                    {renderMenuLink("/agentdashboard/komisi", "Komisi", {
+                      locked: isMembershipLocked,
+                    })}
 
-                    <Link
-                      href="/agentdashboard/pembayaran"
-                      className={menuItemClass("/agentdashboard/pembayaran")}
-                    >
-                      Pembayaran
-                    </Link>
-
-                    <Link
-                      href="/agentdashboard/komisi"
-                      className={menuItemClass("/agentdashboard/komisi")}
-                    >
-                      Komisi
-                    </Link>
-
-                    <Link
-                      href="/agentdashboard/sukses"
-                      className={menuItemClass("/agentdashboard/sukses")}
-                    >
-                      Sukses
-                    </Link>
+                    {renderMenuLink("/agentdashboard/sukses", "Sukses")}
                   </div>
                 </div>
 
@@ -497,12 +699,7 @@ export default function AgentDashboardLayout({
                       openSections.support ? "block" : "hidden"
                     } lg:block`}
                   >
-                    <Link
-                      href="/agentdashboard/pengaturan"
-                      className={menuItemClass("/agentdashboard/pengaturan")}
-                    >
-                      Pengaturan
-                    </Link>
+                    {renderMenuLink("/agentdashboard/pengaturan", "Pengaturan")}
                   </div>
                 </div>
               </nav>
