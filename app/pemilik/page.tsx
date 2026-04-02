@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Store,
@@ -12,7 +12,7 @@ import {
   Sparkles,
   ArrowRight,
 } from "lucide-react";
-import { OWNER_PACKAGES, AGENT_PACKAGES } from "../data/pricelist";
+import { OWNER_PACKAGES } from "../data/pricelist";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 export default function PemilikPage() {
@@ -79,28 +79,6 @@ export default function PemilikPage() {
         "Posted on Social Media (FB / IG / TikTok)",
       "Verification Badge": "Verification Badge",
       "Tetamo Agent Support": "Tetamo Agent Support",
-
-      "50 Listing Aktif": "50 Active Listings",
-      "100 Listing Aktif": "100 Active Listings",
-      "500 Listing Aktif": "500 Active Listings",
-      "Membership aktif selama 1 tahun": "Membership active for 1 year",
-      "Website Profil Agen": "Professional Agent Profile Website",
-      "Integrasi Media Sosial": "Social Media Integration",
-      "Dashboard Leads": "Leads Dashboard",
-      "Jadwal Viewing": "Viewing Schedule",
-      "Paket & Tagihan": "Package & Billing",
-      "Pembayaran / Receipt": "Payment / Receipt",
-      "Analytics / Insights": "Analytics & Insights",
-      "Tracking Komisi": "Commission Tracking",
-      "Akses Boost & Spotlight": "Access to Boost & Spotlight",
-      "1 AI Avatar Video Perkenalan": "1 AI Avatar Introduction Video",
-      "3 Listing Unggulan Gratis (90 hari masing-masing)":
-        "3 Free Featured Listings (90 days each)",
-      "Visibilitas listing lebih tinggi": "Stronger listing visibility",
-      "Penempatan Agen Unggulan": "Featured Agent Placement",
-      "Eksposur premium di platform": "Premium exposure across the platform",
-      "Slot terbatas (7 agen saja)": "Limited slots (7 agents only)",
-      "Tersedia opsi bayar bulanan": "Monthly payment option available",
     };
 
     return map[feature] ?? feature;
@@ -117,12 +95,6 @@ export default function PemilikPage() {
       ? "Pilihan sederhana untuk mulai memasang properti Anda di Tetamo."
       : "A simple option to start listing your property on Tetamo.";
   };
-
-  const agentPackage = useMemo(() => {
-    return AGENT_PACKAGES[0] ?? null;
-  }, []);
-
-  const currentLang = lang === "id" ? "id" : "en";
 
   return (
     <main className="min-h-screen bg-white">
@@ -181,7 +153,7 @@ export default function PemilikPage() {
             </p>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5 lg:gap-6">
+          <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 lg:gap-6">
             {OWNER_PACKAGES.map((pkg) => {
               const checked = selectedPlan === pkg.id;
               const isFeatured = pkg.id === "featured";
@@ -306,67 +278,6 @@ export default function PemilikPage() {
                 </div>
               );
             })}
-
-            {agentPackage ? (
-              <div className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:p-6 lg:p-7">
-                <div className="pointer-events-none absolute -right-12 top-10 h-24 w-24 rounded-full bg-yellow-300/20 blur-3xl" />
-
-                <div className="relative z-10">
-                  <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 sm:text-xs">
-                    {lang === "id" ? "Untuk Agen" : "For Agents"}
-                  </div>
-
-                  <div className="mt-4 flex items-center gap-2">
-                    <Crown className="h-4 w-4 text-yellow-500" />
-                    <h3 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-                      {agentPackage.name}
-                    </h3>
-                  </div>
-
-                  <p className="mt-2 text-xs leading-6 text-gray-600 sm:text-sm">
-                    {lang === "id"
-                      ? "Cocok untuk agen yang ingin profil profesional, leads, dan visibilitas lebih baik."
-                      : "Built for agents who want a professional profile, leads, and stronger visibility."}
-                  </p>
-
-                  <div className="mt-6">
-                    <div className="text-3xl font-bold leading-tight tracking-tight text-[#1C1C1E] sm:text-4xl">
-                      Rp {agentPackage.priceIdr.toLocaleString("id-ID")}
-                    </div>
-                    <div className="mt-1 text-sm text-gray-600 sm:text-base">
-                      {currentLang === "id" ? "/ tahun" : "/ year"}
-                    </div>
-                  </div>
-
-                  <ul className="mt-6 space-y-3 text-gray-700">
-                    {(agentPackage.features ?? []).slice(0, 6).map((feature, idx) => (
-                      <li key={idx} className="flex items-start gap-2.5">
-                        <span className="mt-0.5 text-sm text-green-600">✅</span>
-                        <span className="text-sm leading-6 sm:text-[15px]">
-                          {translateFeature(feature)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    <Link
-                      href={`/signup?role=agent&package=${agentPackage.id}&from=agent-button&next=/agentdashboard/paket`}
-                      className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
-                    >
-                      {lang === "id" ? "Daftar Agen" : "Register as Agent"}
-                    </Link>
-
-                    <Link
-                      href="/agentdashboard/paket"
-                      className="inline-flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50 sm:w-auto"
-                    >
-                      {lang === "id" ? "Lihat Paket Agen" : "View Agent Packages"}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
 
