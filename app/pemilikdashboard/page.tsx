@@ -344,7 +344,6 @@ export default function OwnerDashboardPage() {
             'Tandai listing "{title}" sebagai {action}? Listing akan hilang dari marketplace publik tetapi tetap ada di dashboard pemilik dan admin.',
           toggleFailed: "Gagal mengubah status iklan.",
           updateFailed: "Gagal memperbarui status transaksi.",
-          addonFailed: "Gagal mengaktifkan add-on.",
           active: "Aktif",
           expiring: "Akan Kadaluwarsa",
           paused: "Dijeda",
@@ -395,7 +394,6 @@ export default function OwnerDashboardPage() {
             'Mark listing "{title}" as {action}? The listing will be hidden from the public marketplace but will remain visible in the owner and admin dashboards.',
           toggleFailed: "Failed to change listing status.",
           updateFailed: "Failed to update transaction status.",
-          addonFailed: "Failed to activate add-on.",
           active: "Active",
           expiring: "Expiring Soon",
           paused: "Paused",
@@ -476,7 +474,7 @@ export default function OwnerDashboardPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
-  const [activatingAddonId, setActivatingAddonId] = useState<string | null>(null);
+  const [navigatingAddonId, setNavigatingAddonId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -610,44 +608,22 @@ export default function OwnerDashboardPage() {
     setTogglingId(null);
   }
 
-  async function activateAddon(item: Listing, addon: "boost" | "spotlight") {
+  function goToAddonPayment(item: Listing, addon: "boost" | "spotlight") {
     if (!userId) return;
     if (item.transactionStatus !== "available") return;
+    if (!item.kode || item.kode === "-") return;
 
     const loadingKey = `${item.id}-${addon}`;
-    setActivatingAddonId(loadingKey);
+    setNavigatingAddonId(loadingKey);
 
-    const payload =
-      addon === "boost"
-        ? { boost_active: true }
-        : { spotlight_active: true };
+    const productId =
+      addon === "boost" ? "boost-listing" : "homepage-spotlight";
 
-    const { error } = await supabase
-      .from("properties")
-      .update(payload)
-      .eq("id", item.id)
-      .eq("user_id", userId);
-
-    if (error) {
-      setActivatingAddonId(null);
-      alert(error.message || t.addonFailed);
-      return;
-    }
-
-    setListings((prev) =>
-      prev.map((listing) =>
-        listing.id === item.id
-          ? {
-              ...listing,
-              boostActive: addon === "boost" ? true : listing.boostActive,
-              spotlightActive:
-                addon === "spotlight" ? true : listing.spotlightActive,
-            }
-          : listing
-      )
+    router.push(
+      `/pemilik/iklan/pembayaran?flow=addon&product=${encodeURIComponent(
+        productId
+      )}&kode=${encodeURIComponent(item.kode)}`
     );
-
-    setActivatingAddonId(null);
   }
 
   async function markTransaction(
@@ -736,7 +712,7 @@ export default function OwnerDashboardPage() {
         </div>
 
         <button
-          onClick={() => router.push("/pemilik/pemilik")}
+          onClick={() => router.push("/pemilik")}
           className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
         >
           {t.createListing}
@@ -801,9 +777,9 @@ export default function OwnerDashboardPage() {
                 const isMarking = markingId === item.id;
                 const isClosed = item.transactionStatus !== "available";
                 const hasKode = Boolean(item.kode && item.kode !== "-");
-                const isBoosting = activatingAddonId === `${item.id}-boost`;
+                const isBoosting = navigatingAddonId === `${item.id}-boost`;
                 const isSpotlighting =
-                  activatingAddonId === `${item.id}-spotlight`;
+                  navigatingAddonId === `${item.id}-spotlight`;
 
                 const { featuredActive, boostActive, spotlightActive } =
                   getPromotionFlags(item);
@@ -949,7 +925,7 @@ export default function OwnerDashboardPage() {
 
                         {!boostActive && canBuyAddon ? (
                           <button
-                            onClick={() => activateAddon(item, "boost")}
+                            onClick={() => goToAddonPayment(item, "boost")}
                             disabled={isBoosting}
                             className="shrink-0 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
                           >
@@ -959,7 +935,7 @@ export default function OwnerDashboardPage() {
 
                         {!spotlightActive && canBuyAddon ? (
                           <button
-                            onClick={() => activateAddon(item, "spotlight")}
+                            onClick={() => goToAddonPayment(item, "spotlight")}
                             disabled={isSpotlighting}
                             className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                           >

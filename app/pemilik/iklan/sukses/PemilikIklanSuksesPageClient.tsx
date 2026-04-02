@@ -6,9 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 import {
-  getAnyProductById,
   getOwnerPackageById,
-  getAgentPackageById,
+  getAddOnProductById,
 } from "../../../data/pricelist";
 
 type PaymentStatus =
@@ -106,7 +105,7 @@ function humanizePaymentMethod(value?: string | null) {
   return value;
 }
 
-function resolveFlow(
+function resolveOwnerFlow(
   payment: PaymentRow | null,
   urlFlow: string,
   urlProductId: string
@@ -116,11 +115,12 @@ function resolveFlow(
     payment?.product_id || urlProductId || ""
   ).toLowerCase();
 
-  if (flow === "agent-membership") return "agent-membership";
   if (flow === "renew-listing") return "renew-listing";
+
   if (flow === "homepage-spotlight" || productId === "homepage-spotlight") {
     return "homepage-spotlight";
   }
+
   if (flow === "boost-listing" || productId === "boost-listing") {
     return "boost-listing";
   }
@@ -128,32 +128,28 @@ function resolveFlow(
   return "new-listing";
 }
 
-function resolveUserType(payment: PaymentRow | null, resolvedFlow: string) {
-  const userType = String(payment?.user_type || "").toLowerCase();
+function getOwnerProductName(productId: string, plan: string) {
+  const normalizedProductId = String(productId || "").toLowerCase();
+  const normalizedPlan = String(plan || "").toLowerCase();
 
-  if (userType === "agent") return "agent";
-  if (resolvedFlow === "agent-membership") return "agent";
-  return "owner";
-}
-
-function getProductName(
-  productId: string,
-  plan: string,
-  userType: "owner" | "agent"
-) {
-  if (productId) {
-    const anyProduct = getAnyProductById(productId);
-    if (anyProduct?.name) return anyProduct.name;
+  if (normalizedProductId === "boost-listing") {
+    return getAddOnProductById("boost-listing")?.name || "Boost Listing";
   }
 
-  if (userType === "agent" && plan) {
-    const agentPackage = getAgentPackageById(plan);
-    if (agentPackage?.name) return agentPackage.name;
+  if (normalizedProductId === "homepage-spotlight") {
+    return (
+      getAddOnProductById("homepage-spotlight")?.name || "Homepage Spotlight"
+    );
   }
 
-  if (userType === "owner" && plan) {
-    const ownerPackage = getOwnerPackageById(plan);
-    if (ownerPackage?.name) return ownerPackage.name;
+  if (normalizedProductId) {
+    const ownerProduct = getOwnerPackageById(normalizedProductId);
+    if (ownerProduct?.name) return ownerProduct.name;
+  }
+
+  if (normalizedPlan) {
+    const ownerPlan = getOwnerPackageById(normalizedPlan);
+    if (ownerPlan?.name) return ownerPlan.name;
   }
 
   return "";
@@ -208,78 +204,13 @@ function getStatusUI(status: PaymentStatus, lang: "id" | "en") {
   };
 }
 
-function buildContent(
+function buildOwnerContent(
   status: PaymentStatus,
   resolvedFlow: string,
   kode: string,
   productName: string,
   lang: "id" | "en"
 ) {
-  if (resolvedFlow === "agent-membership") {
-    if (status === "paid") {
-      return {
-        description:
-          lang === "id"
-            ? `Membership agent Anda berhasil diaktifkan${
-                productName ? ` untuk produk ${productName}` : ""
-              }.`
-            : `Your agent membership has been activated${
-                productName ? ` for ${productName}` : ""
-              }.`,
-        points:
-          lang === "id"
-            ? [
-                "Akun agent siap digunakan",
-                "Tagihan membership tersimpan di dashboard agent",
-                "Status pembayaran sudah tercatat",
-              ]
-            : [
-                "Your agent account is ready to use",
-                "Membership billing is saved in the agent dashboard",
-                "The payment status has been recorded",
-              ],
-      };
-    }
-
-    if (status === "pending") {
-      return {
-        description:
-          lang === "id"
-            ? "Pembayaran membership agent Anda masih menunggu konfirmasi. Status akan diperbarui otomatis setelah pembayaran terverifikasi."
-            : "Your agent membership payment is still waiting for confirmation. The status will update automatically after the payment is verified.",
-        points:
-          lang === "id"
-            ? [
-                "Belum ada aktivasi final",
-                "Silakan cek status dari dashboard agent",
-                "Refresh halaman ini beberapa saat lagi bila perlu",
-              ]
-            : [
-                "There is no final activation yet",
-                "Please check the status from the agent dashboard",
-                "Refresh this page again in a moment if needed",
-              ],
-      };
-    }
-
-    return {
-      description:
-        lang === "id"
-          ? "Pembayaran membership agent belum berhasil diselesaikan."
-          : "The agent membership payment has not been completed successfully.",
-      points:
-        lang === "id"
-          ? [
-              "Status pembayaran belum aktif",
-              "Silakan cek tagihan dan lanjutkan pembayaran jika masih tersedia",
-            ]
-          : [
-              "The payment status is not active yet",
-              "Please check billing and continue the payment if it is still available",
-            ],
-    };
-  }
-
   if (resolvedFlow === "renew-listing") {
     if (status === "paid") {
       return {
@@ -294,11 +225,11 @@ function buildContent(
         points:
           lang === "id"
             ? [
-                "Masa aktif listing akan diperpanjang sesuai produk",
+                "Masa aktif listing akan diperpanjang sesuai paket owner yang dipilih",
                 "Riwayat pembayaran tersimpan di tagihan pemilik",
               ]
             : [
-                "The listing active period will be extended based on the selected product",
+                "The listing active period will be extended based on the selected owner package",
                 "Payment history is stored in owner billing",
               ],
       };
@@ -318,11 +249,11 @@ function buildContent(
           lang === "id"
             ? [
                 "Listing belum diperpanjang final",
-                "Silakan cek status pembayaran di tagihan",
+                "Silakan lanjutkan pembayaran atau cek tagihan pemilik",
               ]
             : [
                 "The listing has not been renewed finally yet",
-                "Please check the payment status in billing",
+                "Please continue the payment or check owner billing",
               ],
       };
     }
@@ -359,11 +290,11 @@ function buildContent(
         points:
           lang === "id"
             ? [
-                "Prioritas tampil akan aktif setelah pembayaran terkonfirmasi",
+                "Boost akan aktif setelah pembayaran terkonfirmasi",
                 "Riwayat add-on tersimpan di tagihan pemilik",
               ]
             : [
-                "Priority exposure will activate after payment is confirmed",
+                "Boost will activate after payment is confirmed",
                 "Add-on history is stored in owner billing",
               ],
       };
@@ -383,11 +314,11 @@ function buildContent(
           lang === "id"
             ? [
                 "Boost belum aktif final",
-                "Silakan cek tagihan untuk status terbaru",
+                "Silakan cek tagihan atau lanjutkan pembayaran",
               ]
             : [
                 "The boost is not finally active yet",
-                "Please check billing for the latest status",
+                "Please check billing or continue the payment",
               ],
       };
     }
@@ -448,11 +379,11 @@ function buildContent(
           lang === "id"
             ? [
                 "Spotlight belum aktif final",
-                "Silakan cek tagihan untuk status terbaru",
+                "Silakan cek tagihan atau lanjutkan pembayaran",
               ]
             : [
                 "Spotlight is not finally active yet",
-                "Please check billing for the latest status",
+                "Please check billing or continue the payment",
               ],
       };
     }
@@ -480,22 +411,30 @@ function buildContent(
       description:
         lang === "id"
           ? kode
-            ? `Pembayaran listing ${kode} berhasil diproses. Listing akan mengikuti alur aktivasi TETAMO setelah pembayaran terkonfirmasi.`
-            : "Pembayaran listing berhasil diproses. Listing akan mengikuti alur aktivasi TETAMO setelah pembayaran terkonfirmasi."
+            ? `Pembayaran listing ${kode} berhasil diproses${
+                productName ? ` dengan paket ${productName}` : ""
+              }.`
+            : `Pembayaran listing berhasil diproses${
+                productName ? ` dengan paket ${productName}` : ""
+              }.`
           : kode
-          ? `The payment for listing ${kode} has been processed successfully. The listing will follow the TETAMO activation flow after the payment is confirmed.`
-          : "The listing payment has been processed successfully. The listing will follow the TETAMO activation flow after the payment is confirmed.",
+          ? `The payment for listing ${kode} has been processed successfully${
+              productName ? ` with ${productName}` : ""
+            }.`
+          : `The listing payment has been processed successfully${
+              productName ? ` with ${productName}` : ""
+            }.`,
       points:
         lang === "id"
           ? [
               "Status pembayaran sudah tercatat",
-              "Listing tidak dibuat ulang dari halaman ini",
-              "Riwayat pembayaran dapat dilihat di tagihan pemilik",
+              "Listing akan mengikuti alur aktivasi owner secara otomatis",
+              "Anda bisa melihat riwayat pembayaran di tagihan pemilik",
             ]
           : [
               "The payment status has been recorded",
-              "The listing is not recreated from this page",
-              "Payment history can be viewed in owner billing",
+              "The listing will follow the owner activation flow automatically",
+              "You can see payment history in owner billing",
             ],
     };
   }
@@ -504,19 +443,19 @@ function buildContent(
     return {
       description:
         lang === "id"
-          ? "Pembayaran Anda masih menunggu konfirmasi. Status akan diperbarui otomatis setelah webhook atau konfirmasi gateway masuk."
-          : "Your payment is still waiting for confirmation. The status will update automatically after the webhook or gateway confirmation arrives.",
+          ? "Pembayaran Anda masih menunggu konfirmasi. Status akan diperbarui otomatis setelah konfirmasi gateway masuk."
+          : "Your payment is still waiting for confirmation. The status will update automatically after the gateway confirmation arrives.",
       points:
         lang === "id"
           ? [
-              "Halaman ini hanya menampilkan status pembayaran",
-              "Tidak ada insert listing baru di sini",
-              "Silakan cek tagihan untuk update terbaru",
+              "Halaman ini hanya menampilkan status pembayaran owner",
+              "Tidak ada proses insert listing baru di halaman ini",
+              "Silakan cek tagihan pemilik untuk update terbaru",
             ]
           : [
-              "This page only shows the payment status",
-              "No new listing is inserted here",
-              "Please check billing for the latest update",
+              "This page only shows the owner payment status",
+              "No new listing is inserted from this page",
+              "Please check owner billing for the latest update",
             ],
     };
   }
@@ -524,22 +463,22 @@ function buildContent(
   return {
     description:
       lang === "id"
-        ? "Pembayaran belum berhasil diselesaikan. Silakan cek tagihan untuk melihat status terbaru atau melanjutkan pembayaran."
-        : "The payment has not been completed successfully. Please check billing to see the latest status or continue the payment.",
+        ? "Pembayaran belum berhasil diselesaikan. Silakan cek tagihan pemilik untuk melihat status terbaru atau melanjutkan pembayaran."
+        : "The payment has not been completed successfully. Please check owner billing to see the latest status or continue the payment.",
     points:
       lang === "id"
         ? [
             "Tidak ada data listing yang disimpan ulang dari halaman ini",
-            "Gunakan halaman tagihan untuk status dan tindakan berikutnya",
+            "Gunakan tagihan pemilik untuk status dan tindakan berikutnya",
           ]
         : [
             "No listing data is re-saved from this page",
-            "Use the billing page for status and the next action",
+            "Use owner billing for status and the next action",
           ],
   };
 }
 
-export default function PemilikIklanSuksesPage() {
+export default function PemilikIklanSuksesPageClient() {
   const searchParams = useSearchParams();
   const { lang } = useLanguage();
 
@@ -560,10 +499,9 @@ export default function PemilikIklanSuksesPage() {
           whatNow: "Yang Terjadi Sekarang",
           continuePayment: "Lanjutkan Pembayaran",
           viewMarketplace: "Lihat Marketplace",
+          createNewListing: "Buat Iklan Baru",
           toOwnerBilling: "Ke Tagihan Pemilik",
-          toAgentBilling: "Ke Tagihan Agent",
           toOwnerDashboard: "Ke Dashboard Pemilik",
-          toAgentDashboard: "Ke Dashboard Agent",
           editApprovalTitle: "Dikirim untuk Persetujuan",
           editApprovalDescription: (kode: string) =>
             kode && kode !== "-"
@@ -576,9 +514,9 @@ export default function PemilikIklanSuksesPage() {
             "Marketplace akan menampilkan label pending approval",
           ],
           editApprovalFooter:
-            "Halaman ini menampilkan status submit edit listing. Listing akan tetap mengikuti status pending approval sampai ditinjau.",
+            "Halaman ini menampilkan status submit edit listing untuk owner.",
           paymentFooter:
-            "Halaman ini hanya membaca status pembayaran. Tidak ada proses insert listing atau upload foto di sini lagi.",
+            "Halaman ini hanya membaca status pembayaran owner. Tidak ada proses insert listing atau upload foto di sini lagi.",
           loginFirst: "Silakan login terlebih dahulu.",
           loadPaymentError: "Gagal memuat status pembayaran.",
         }
@@ -595,10 +533,9 @@ export default function PemilikIklanSuksesPage() {
           whatNow: "What Happens Now",
           continuePayment: "Continue Payment",
           viewMarketplace: "View Marketplace",
+          createNewListing: "Create New Listing",
           toOwnerBilling: "Go to Owner Billing",
-          toAgentBilling: "Go to Agent Billing",
           toOwnerDashboard: "Go to Owner Dashboard",
-          toAgentDashboard: "Go to Agent Dashboard",
           editApprovalTitle: "Submitted for Approval",
           editApprovalDescription: (kode: string) =>
             kode && kode !== "-"
@@ -611,9 +548,9 @@ export default function PemilikIklanSuksesPage() {
             "The marketplace will show a pending approval label",
           ],
           editApprovalFooter:
-            "This page shows the listing edit submission status. The listing will remain under pending approval until it is reviewed.",
+            "This page shows the owner listing edit submission status.",
           paymentFooter:
-            "This page only reads payment status. No listing insert or photo upload happens here anymore.",
+            "This page only reads owner payment status. No listing insert or photo upload happens here anymore.",
           loginFirst: "Please log in first.",
           loadPaymentError: "Failed to load payment status.",
         };
@@ -687,6 +624,7 @@ export default function PemilikIklanSuksesPage() {
             "id, user_type, flow, product_id, product_type, listing_code, amount, currency, status, gateway, payment_method, checkout_url, gateway_reference, paid_at, expires_at, created_at"
           )
           .eq("user_id", user.id)
+          .eq("user_type", "owner")
           .order("created_at", { ascending: false })
           .limit(10);
 
@@ -744,13 +682,8 @@ export default function PemilikIklanSuksesPage() {
 
   const resolvedFlow = useMemo(() => {
     if (isEditApprovalFlow) return "edit-approval";
-    return resolveFlow(payment, urlFlow, urlProductId);
+    return resolveOwnerFlow(payment, urlFlow, urlProductId);
   }, [isEditApprovalFlow, payment, urlFlow, urlProductId]);
-
-  const resolvedUserType = useMemo(() => {
-    if (isEditApprovalFlow) return "owner" as const;
-    return resolveUserType(payment, resolvedFlow);
-  }, [isEditApprovalFlow, payment, resolvedFlow]);
 
   const resolvedStatus = useMemo(() => {
     if (isEditApprovalFlow) return "pending" as PaymentStatus;
@@ -764,10 +697,9 @@ export default function PemilikIklanSuksesPage() {
 
   const productName = isEditApprovalFlow
     ? ""
-    : getProductName(
+    : getOwnerProductName(
         String(payment?.product_id || urlProductId || ""),
-        urlPlan,
-        resolvedUserType
+        urlPlan
       );
 
   const statusUI = isEditApprovalFlow
@@ -783,37 +715,13 @@ export default function PemilikIklanSuksesPage() {
         description: t.editApprovalDescription(resolvedKode),
         points: t.editApprovalPoints,
       }
-    : buildContent(
+    : buildOwnerContent(
         resolvedStatus,
         resolvedFlow,
         resolvedKode === "-" ? "" : resolvedKode,
         productName,
         lang
       );
-
-  const primaryHref = isEditApprovalFlow
-    ? "/marketplace"
-    : resolvedUserType === "agent"
-    ? "/agentdashboard/tagihan"
-    : "/pemilikdashboard/tagihan";
-
-  const secondaryHref = isEditApprovalFlow
-    ? "/pemilikdashboard"
-    : resolvedUserType === "agent"
-    ? "/agentdashboard"
-    : "/pemilikdashboard";
-
-  const primaryLabel = isEditApprovalFlow
-    ? t.viewMarketplace
-    : resolvedUserType === "agent"
-    ? t.toAgentBilling
-    : t.toOwnerBilling;
-
-  const secondaryLabel = isEditApprovalFlow
-    ? t.toOwnerDashboard
-    : resolvedUserType === "agent"
-    ? t.toAgentDashboard
-    : t.toOwnerDashboard;
 
   const shouldShowContinuePayment =
     !isEditApprovalFlow &&
@@ -825,6 +733,9 @@ export default function PemilikIklanSuksesPage() {
     sessionId &&
     pollCount < 5 &&
     (!payment || resolvedStatus === "pending");
+
+  const showSuccessButtons =
+    isEditApprovalFlow || resolvedStatus === "paid";
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -949,32 +860,57 @@ export default function PemilikIklanSuksesPage() {
           </div>
         ) : null}
 
-        <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:mt-10 sm:flex-row sm:items-center">
-          {shouldShowContinuePayment ? (
-            <a
-              href={payment?.checkout_url || "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
-            >
-              {t.continuePayment}
-            </a>
-          ) : (
+        {showSuccessButtons ? (
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:mt-10 sm:grid-cols-3">
             <Link
-              href={primaryHref}
-              className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
+              href="/properti"
+              className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
             >
-              {primaryLabel}
+              {t.viewMarketplace}
             </Link>
-          )}
 
-          <Link
-            href={secondaryHref}
-            className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold transition hover:bg-gray-50 sm:w-auto"
-          >
-            {secondaryLabel}
-          </Link>
-        </div>
+            <Link
+              href="/pemilik"
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold transition hover:bg-gray-50"
+            >
+              {t.createNewListing}
+            </Link>
+
+            <Link
+              href="/pemilikdashboard"
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold transition hover:bg-gray-50"
+            >
+              {t.toOwnerDashboard}
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:mt-10 sm:flex-row sm:items-center">
+            {shouldShowContinuePayment ? (
+              <a
+                href={payment?.checkout_url || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
+              >
+                {t.continuePayment}
+              </a>
+            ) : (
+              <Link
+                href="/pemilikdashboard/tagihan"
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
+              >
+                {t.toOwnerBilling}
+              </Link>
+            )}
+
+            <Link
+              href="/pemilikdashboard"
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold transition hover:bg-gray-50 sm:w-auto"
+            >
+              {t.toOwnerDashboard}
+            </Link>
+          </div>
+        )}
 
         <div className="mt-8 text-xs leading-5 text-gray-500">
           {isEditApprovalFlow ? t.editApprovalFooter : t.paymentFooter}
