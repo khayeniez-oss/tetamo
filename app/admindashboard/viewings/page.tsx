@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import {
   CalendarDays,
-  Clock,
   CheckCircle,
   XCircle,
   RotateCcw,
@@ -116,6 +115,18 @@ function statusUI(status: ViewingStatus) {
   };
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+
+  return pages;
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -134,24 +145,24 @@ export default function AdminViewingsPage() {
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return viewings;
 
-    const words = searchQuery.toLowerCase().split(" ");
+    const words = searchQuery.toLowerCase().split(" ").filter(Boolean);
 
     return viewings.filter((v) => {
       const searchable = `
-      ${v.propertyTitle}
-      ${v.buyerName}
-      ${v.buyerPhone}
-      ${v.agentName}
-      ${v.ownerName}
-      ${v.city}
-      ${v.listingKode}
+        ${v.propertyTitle}
+        ${v.buyerName}
+        ${v.buyerPhone}
+        ${v.agentName}
+        ${v.ownerName}
+        ${v.city}
+        ${v.listingKode}
       `.toLowerCase();
 
       return words.every((w) => searchable.includes(w));
     });
   }, [searchQuery, viewings]);
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
 
   const paginated = filtered.slice(
     (page - 1) * ITEMS_PER_PAGE,
@@ -163,27 +174,30 @@ export default function AdminViewingsPage() {
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filtered.length);
 
-  return (
-    <div>
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(page, totalPages),
+    [page, totalPages]
+  );
 
+  return (
+    <div className="space-y-4 sm:space-y-5">
       {/* Header */}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1C1C1E]">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Viewing Schedule
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
           Monitor all scheduled property viewings.
         </p>
       </div>
 
       {/* Search */}
 
-      <div className="mt-6 relative">
-
+      <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600"
-          size={18}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+          size={16}
         />
 
         <input
@@ -194,133 +208,178 @@ export default function AdminViewingsPage() {
             setSearchQuery(e.target.value);
             setPage(1);
           }}
-          className="w-full border border-gray-400 rounded-2xl pl-12 pr-4 py-3 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
         />
-
       </div>
 
       {/* Viewings Card */}
 
-      <div className="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
-
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="divide-y divide-gray-100">
+          {paginated.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-500 sm:px-5">
+              No viewing schedules found.
+            </div>
+          ) : (
+            paginated.map((item) => {
+              const ui = statusUI(item.status);
 
-          {paginated.map((item) => {
+              return (
+                <div key={item.id} className="px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-3.5">
+                    {/* TOP */}
 
-            const ui = statusUI(item.status);
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      {/* LEFT */}
 
-            return (
-              <div
-                key={item.id}
-                className="p-6 flex items-center justify-between gap-6"
-              >
+                      <div className="min-w-0 flex-1">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
+                        >
+                          {ui.label}
+                        </span>
 
-                {/* LEFT */}
+                        <p className="mt-2 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
+                          {item.propertyTitle}
+                        </p>
 
-                <div className="min-w-0">
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Buyer
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.buyerName}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              {item.buyerPhone}
+                            </p>
+                          </div>
 
-                  <span
-                    className={`inline-flex text-xs px-3 py-1 rounded-full border ${ui.badge}`}
-                  >
-                    {ui.label}
-                  </span>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Listing
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.listingKode}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              {item.city}
+                            </p>
+                          </div>
 
-                  <p className="mt-2 font-medium text-[#1C1C1E]">
-                    {item.propertyTitle}
-                  </p>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Agent
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.agentName}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              Owner: {item.ownerName}
+                            </p>
+                          </div>
 
-                  <p className="text-sm text-gray-500">
-                    Buyer: {item.buyerName} • {item.buyerPhone}
-                  </p>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Schedule
+                            </p>
+                            <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                              {item.date}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-500 sm:text-xs">
+                              {item.time}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
 
-                  <p className="text-xs text-gray-500 mt-1">
-                    Agent: {item.agentName} • Owner: {item.ownerName}
-                  </p>
+                      {/* ACTION */}
 
-                  <p className="text-xs text-gray-400">
-                    {item.city} • {item.date} • {item.time}
-                  </p>
+                      <div className="grid grid-cols-2 gap-2 xl:w-[170px] xl:shrink-0">
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-50"
+                          title="Reschedule date"
+                        >
+                          <CalendarDays size={15} />
+                        </button>
 
-                  <p className="text-xs text-gray-400">
-                    Listing: {item.listingKode}
-                  </p>
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition hover:bg-gray-50"
+                          title="Reset schedule"
+                        >
+                          <RotateCcw size={15} />
+                        </button>
 
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 transition hover:bg-green-100"
+                          title="Mark done"
+                        >
+                          <CheckCircle size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100"
+                          title="Cancel"
+                        >
+                          <XCircle size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                {/* ACTION */}
-
-                <div className="flex items-center gap-2">
-
-                  <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
-                    <CalendarDays size={16}/>
-                  </button>
-
-                  <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
-                    <RotateCcw size={16}/>
-                  </button>
-
-                  <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
-                    <CheckCircle size={16}/>
-                  </button>
-
-                  <button className="px-3 py-2 border rounded-lg hover:bg-gray-50">
-                    <XCircle size={16}/>
-                  </button>
-
-                </div>
-
-              </div>
-            );
-          })}
-
+              );
+            })
+          )}
         </div>
-
       </div>
 
       {/* Pagination */}
 
-      <div className="flex items-center justify-between mt-6">
-
-        <p className="text-sm text-gray-900">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
           Menampilkan {startItem}–{endItem} dari {filtered.length} jadwal
         </p>
 
-        <div className="flex items-center gap-2">
-
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white"
+            disabled={page === 1}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Sebelumnya
           </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          {visiblePages.map((p) => (
             <button
               key={p}
               onClick={() => setPage(p)}
-              className={`px-3 py-2 border rounded-lg text-sm ${
+              className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
                 page === p
-                  ? "bg-black text-white border-black"
-                  : "border-gray-400"
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-gray-700"
               }`}
+              type="button"
             >
               {p}
             </button>
           ))}
 
           <button
-            onClick={() =>
-              setPage((p) => Math.min(totalPages, p + 1))
-            }
-            className="px-3 py-2 border rounded-lg bg-[#1C1C1E] text-white"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-50 sm:h-10 sm:px-4 sm:text-sm"
+            type="button"
           >
             Berikutnya
           </button>
-
         </div>
-
       </div>
-
     </div>
   );
 }
