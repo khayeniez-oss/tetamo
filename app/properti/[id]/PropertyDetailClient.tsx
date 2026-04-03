@@ -1631,557 +1631,561 @@ Is this property still available?`;
     .map(([key]) => nearbyLabels[key] ?? key);
 
   return (
-    <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <div className="flex items-start justify-between gap-4">
-          <Link
-            href="/properti"
-            className="text-sm underline text-[#1C1C1E] hover:opacity-80"
-          >
-            {lang === "id" ? "Kembali ke Marketplace" : "Back to Marketplace"}
-          </Link>
+  <main className="min-h-screen bg-white text-gray-900">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <div className="flex items-start justify-between gap-4">
+        <Link
+          href="/properti"
+          className="text-sm underline text-[#1C1C1E] hover:opacity-80"
+        >
+          {lang === "id" ? "Kembali ke Marketplace" : "Back to Marketplace"}
+        </Link>
 
-          <div className="flex items-center gap-2">
-            {prevId ? (
-              <Link
-                href={`/properti/${prevId}`}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
-              >
-                ← Prev
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
-              >
-                ← Prev
-              </button>
-            )}
+        <div className="flex items-center gap-2">
+          {prevId ? (
+            <Link
+              href={`/properti/${prevId}`}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
+            >
+              ← Prev
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
+            >
+              ← Prev
+            </button>
+          )}
 
-            {nextId ? (
-              <Link
-                href={`/properti/${nextId}`}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
-              >
-                Next →
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
-              >
-                Next →
-              </button>
-            )}
-          </div>
+          {nextId ? (
+            <Link
+              href={`/properti/${nextId}`}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
+            >
+              Next →
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
+            >
+              Next →
+            </button>
+          )}
         </div>
+      </div>
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.12fr_0.88fr]">
-          <div className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-            <div className="relative overflow-hidden rounded-[24px]">
-              <img
-                src={property.images[idx]}
-                alt={property.title}
-                className="h-[440px] w-full object-cover sm:h-[470px] lg:h-[640px]"
-              />
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.12fr_0.88fr]">
+        <div className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+          <div className="relative overflow-hidden rounded-[24px]">
+            <img
+              src={property.images[idx]}
+              alt={property.title}
+              className="h-[520px] w-full object-cover sm:h-[580px] lg:h-[640px]"
+            />
 
-              <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
-                TETAMO
-              </div>
-
-              <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
-                <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  {property.jenisListing === "dijual"
-                    ? lang === "id"
-                      ? "Dijual"
-                      : "For Sale"
-                    : lang === "id"
-                    ? "Disewa"
-                    : "For Rent"}
-                </span>
-
-                {property.jenisListing === "disewa" && property.rentalType ? (
-                  <span
-                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs ${rentalTypeBadgeClass(
-                      property.rentalType
-                    )}`}
-                  >
-                    {getRentalTypeLabel(property.rentalType, lang)}
-                  </span>
-                ) : null}
-
-                {propertyTypeLabel ? (
-                  <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                    {propertyTypeLabel}
-                  </span>
-                ) : null}
-              </div>
-
-              <button
-                type="button"
-                onClick={prevImg}
-                className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:left-4"
-                aria-label="Previous image"
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={nextImg}
-                className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:right-4"
-                aria-label="Next image"
-              >
-                ›
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
-              {displayPrice}
+            <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
+              TETAMO
             </div>
 
-            <div className="mt-1 text-sm text-gray-500 sm:text-[15px]">
-              ≈ {secondaryPrice}
-            </div>
+            <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
+              <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                {property.jenisListing === "dijual"
+                  ? lang === "id"
+                    ? "Dijual"
+                    : "For Sale"
+                  : lang === "id"
+                  ? "Disewa"
+                  : "For Rent"}
+              </span>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              {property.spotlight && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  <Gem className="h-3.5 w-3.5" />
-                  Spotlight
+              {property.jenisListing === "disewa" && property.rentalType ? (
+                <span
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs ${rentalTypeBadgeClass(
+                    property.rentalType
+                  )}`}
+                >
+                  {getRentalTypeLabel(property.rentalType, lang)}
                 </span>
-              )}
-
-              {property.featured && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  <Crown className="h-3.5 w-3.5" />
-                  Featured
-                </span>
-              )}
-
-              {property.boosted && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  <Zap className="h-3.5 w-3.5" />
-                  Boost
-                </span>
-              )}
-
-              {property.verifiedListing && (
-                <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                  Verified Listing
-                </span>
-              )}
-            </div>
-
-            <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:text-2xl">
-              {property.title}
-            </h1>
-
-            <div className="mt-2 text-sm text-gray-600 sm:text-[15px]">
-              {property.area}, {property.province}
-            </div>
-
-            <div className="mt-5 border-t border-gray-200 pt-5">
-              <div className="flex items-start gap-4">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 sm:h-24 sm:w-24">
-                  <img
-                    src={property.photo}
-                    alt={property.agentName}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      if (e.currentTarget.src !== FALLBACK_POSTER_PHOTO) {
-                        e.currentTarget.src = FALLBACK_POSTER_PHOTO;
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wide text-gray-500">
-                    {property.postedByType === "owner"
-                      ? "Owner"
-                      : property.postedByType === "developer"
-                      ? "Developer"
-                      : "Agent"}
-                  </div>
-
-                  <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
-                    {property.agentName}
-                  </div>
-
-                  <div className="mt-1 text-sm text-gray-600">
-                    {property.agency}
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
-                    <span>
-                      Code:{" "}
-                      <span className="font-medium text-gray-700">
-                        {property.kodeListing}
-                      </span>
-                    </span>
-
-                    <span>
-                      Posted:{" "}
-                      <span className="font-medium text-gray-700">
-                        {property.postedDate}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {socialLinks.length > 0 ? (
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {socialLinks.map((item) => (
-                    <SocialCircle
-                      key={item.key}
-                      href={item.href}
-                      label={item.label}
-                      icon={item.icon}
-                    />
-                  ))}
-                </div>
               ) : null}
 
-              <button
-                type="button"
-                onClick={openJadwalWithTracking}
-                className="mt-5 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Schedule Viewing
-              </button>
+              {propertyTypeLabel ? (
+                <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                  {propertyTypeLabel}
+                </span>
+              ) : null}
             </div>
+
+            <button
+              type="button"
+              onClick={prevImg}
+              className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:left-4"
+              aria-label="Previous image"
+            >
+              ‹
+            </button>
+
+            <button
+              type="button"
+              onClick={nextImg}
+              className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:right-4"
+              aria-label="Next image"
+            >
+              ›
+            </button>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={toggleSave}
-            className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
-              saved
-                ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
-            }`}
-          >
-            <Bookmark className="h-3.5 w-3.5" />
-            <span>Save ({displaySaveCount})</span>
-          </button>
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
+            {displayPrice}
+          </div>
 
-          <button
-            type="button"
-            onClick={toggleLike}
-            className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
-              liked
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
-            }`}
-          >
-            <Heart className="h-3.5 w-3.5" />
-            <span>Like ({displayLikeCount})</span>
-          </button>
+          <div className="mt-1 text-sm text-gray-500 sm:text-[15px]">
+            ≈ {secondaryPrice}
+          </div>
 
-          <div className="min-h-[62px] rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[10px] font-bold text-[#1C1C1E] sm:text-[12px]">
-                  Property Rating
-                </div>
-                <div className="mt-1 text-[9px] text-gray-500">
-                  {displayRatingCount} ratings
-                </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {property.spotlight && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                <Gem className="h-3.5 w-3.5" />
+                Spotlight
+              </span>
+            )}
+
+            {property.featured && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                <Crown className="h-3.5 w-3.5" />
+                Featured
+              </span>
+            )}
+
+            {property.boosted && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
+                <Zap className="h-3.5 w-3.5" />
+                Boost
+              </span>
+            )}
+
+            {property.verifiedListing && (
+              <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                Verified Listing
+              </span>
+            )}
+          </div>
+
+          <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:text-2xl">
+            {property.title}
+          </h1>
+
+          <div className="mt-2 text-sm text-gray-600 sm:text-[15px]">
+            {property.area}, {property.province}
+          </div>
+
+          <div className="mt-5 border-t border-gray-200 pt-5">
+            <div className="flex items-start gap-4">
+              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 sm:h-24 sm:w-24">
+                <img
+                  src={property.photo}
+                  alt={property.agentName}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    if (e.currentTarget.src !== FALLBACK_POSTER_PHOTO) {
+                      e.currentTarget.src = FALLBACK_POSTER_PHOTO;
+                    }
+                  }}
+                />
               </div>
 
-              <div className="text-right">
-                <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
-                  {displayRatingAverage.toFixed(1)}
+              <div className="min-w-0 flex-1">
+                <div className="text-xs uppercase tracking-wide text-gray-500">
+                  {property.postedByType === "owner"
+                    ? "Owner"
+                    : property.postedByType === "developer"
+                    ? "Developer"
+                    : "Agent"}
+                </div>
+
+                <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
+                  {property.agentName}
+                </div>
+
+                <div className="mt-1 text-sm text-gray-600">
+                  {property.agency}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
+                  <span>
+                    Code:{" "}
+                    <span className="font-medium text-gray-700">
+                      {property.kodeListing}
+                    </span>
+                  </span>
+
+                  <span>
+                    Posted:{" "}
+                    <span className="font-medium text-gray-700">
+                      {property.postedDate}
+                    </span>
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-2 flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleRate(value)}
-                  className={`rounded-full border p-[3px] transition ${
-                    userRating >= value
-                      ? "border-amber-200 bg-amber-50 text-amber-500"
-                      : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
-                  }`}
-                  aria-label={`Rate ${value}`}
-                  title={`Rate ${value}`}
-                >
-                  <Star
-                    className="h-2 w-2"
-                    fill={userRating >= value ? "currentColor" : "transparent"}
+            {socialLinks.length > 0 ? (
+              <div className="mt-5 flex flex-wrap gap-3">
+                {socialLinks.map((item) => (
+                  <SocialCircle
+                    key={item.key}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
                   />
-                </button>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={openJadwalWithTracking}
+              className="mt-5 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              Schedule Viewing
+            </button>
           </div>
         </div>
+      </div>
 
-        <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-lg font-bold text-[#1C1C1E]">
-            Property Details
-          </h2>
+      <div className="mt-6 grid grid-cols-3 gap-3">
+        <button
+          type="button"
+          onClick={toggleSave}
+          className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
+            saved
+              ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+              : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+          }`}
+        >
+          <Bookmark className="h-3.5 w-3.5" />
+          <span>Save ({displaySaveCount})</span>
+        </button>
 
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            {primaryDetailChips.map((item) => {
+        <button
+          type="button"
+          onClick={toggleLike}
+          className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
+            liked
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+          }`}
+        >
+          <Heart className="h-3.5 w-3.5" />
+          <span>Like ({displayLikeCount})</span>
+        </button>
+
+        <div className="min-h-[62px] rounded-2xl border border-gray-200 bg-white px-2 py-2.5 shadow-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold text-[#1C1C1E] sm:text-[12px]">
+                Property Rating
+              </div>
+              <div className="mt-1 text-[9px] text-gray-500">
+                {displayRatingCount} ratings
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
+                {displayRatingAverage.toFixed(1)}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => handleRate(value)}
+                className={`rounded-full border p-[3px] transition ${
+                  userRating >= value
+                    ? "border-amber-200 bg-amber-50 text-amber-500"
+                    : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
+                }`}
+                aria-label={`Rate ${value}`}
+                title={`Rate ${value}`}
+              >
+                <Star
+                  className="h-2 w-2"
+                  fill={userRating >= value ? "currentColor" : "transparent"}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-lg font-bold text-[#1C1C1E]">
+          Property Details
+        </h2>
+
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          {primaryDetailChips.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.key}
+                className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+              >
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Icon className="h-3.5 w-3.5" />
+                    <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
+                      {item.label}
+                    </div>
+                  </div>
+
+                  <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
+                    {item.value}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {secondaryDetailChips.length > 0 ? (
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {secondaryDetailChips.map((item) => {
               const Icon = item.icon;
               return (
                 <div
                   key={item.key}
-                  className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                  className="rounded-2xl border border-gray-200 bg-white p-3"
                 >
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Icon className="h-3.5 w-3.5" />
-                      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
-                        {item.label}
-                      </div>
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Icon className="h-3.5 w-3.5" />
+                    <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
+                      {item.label}
                     </div>
+                  </div>
 
-                    <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
-                      {item.value}
-                    </div>
+                  <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
+                    {item.value}
                   </div>
                 </div>
               );
             })}
           </div>
-
-          {secondaryDetailChips.length > 0 ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {secondaryDetailChips.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div
-                    key={item.key}
-                    className="rounded-2xl border border-gray-200 bg-white p-3"
-                  >
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Icon className="h-3.5 w-3.5" />
-                      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
-                        {item.label}
-                      </div>
-                    </div>
-
-                    <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
-                      {item.value}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.02fr_0.98fr]">
-  <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-    <h2 className="text-lg font-bold text-[#1C1C1E]">
-      {lang === "id" ? "Deskripsi" : "Description"}
-    </h2>
-
-    <div className="mt-4 space-y-4 text-sm leading-7 text-gray-700">
-      <p>
-        {lang === "en" && property.descriptionEn
-          ? property.descriptionEn
-          : property.description}
-      </p>
-    </div>
-  </div>
-
-  <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-    <h2 className="text-lg font-bold text-[#1C1C1E]">
-      {lang === "id" ? "Video" : "Video"}
-    </h2>
-
-    {property.videoUrl ? (
-      <div className="mt-4 w-full rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="overflow-hidden rounded-[22px] bg-black">
-          <video
-            src={property.videoUrl}
-            controls
-            playsInline
-            className="h-[280px] w-full object-cover sm:h-[420px] lg:h-[560px]"
-          />
-        </div>
+        ) : null}
       </div>
-    ) : (
-      <p className="mt-4 text-sm text-gray-500">
-        {lang === "id"
-          ? "Belum ada video untuk properti ini."
-          : "No video available for this property yet."}
-      </p>
-    )}
-  </div>
-</div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Fasilitas" : "Facilities"}
-            </h2>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.22fr)_360px] xl:grid-cols-[minmax(0,1.28fr)_380px]">
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-lg font-bold text-[#1C1C1E]">
+            {lang === "id" ? "Deskripsi" : "Description"}
+          </h2>
 
-            {activeFacilities.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {activeFacilities.map((item) => (
-                  <span
-                    key={item}
-                    className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-[#1C1C1E]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-500">
-                {lang === "id"
-                  ? "Belum ada data fasilitas."
-                  : "No facilities data yet."}
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Terdekat" : "Nearby"}
-            </h2>
-
-            {activeNearby.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {activeNearby.map((item) => (
-                  <span
-                    key={item}
-                    className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-[#1C1C1E]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-500">
-                {lang === "id"
-                  ? "Belum ada data lokasi terdekat."
-                  : "No nearby data yet."}
-              </p>
-            )}
+          <div className="mt-4 space-y-4 text-sm leading-7 text-gray-700">
+            <p>
+              {lang === "en" && property.descriptionEn
+                ? property.descriptionEn
+                : property.description}
+            </p>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={handleWhatsAppClick}
-            className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            WhatsApp
-          </button>
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-lg font-bold text-[#1C1C1E]">
+            {lang === "id" ? "Video" : "Video"}
+          </h2>
 
-          <button
-            type="button"
-            onClick={openJadwalWithTracking}
-            className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
-          >
-            Schedule Viewing
-          </button>
-        </div>
-
-        <div className="mt-6">
-          <MortgageCalculator
-            price={property.price}
-            jenisListing={property.jenisListing}
-          />
-        </div>
-
-        {jadwalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <button
-              type="button"
-              onClick={closeJadwal}
-              className="absolute inset-0 bg-black/50"
-              aria-label="Close Jadwal popup"
-            />
-
-            <div className="relative z-10 w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-[#1C1C1E]">
-                  {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
-                </h3>
-
-                <button
-                  type="button"
-                  onClick={closeJadwal}
-                  className="rounded-full px-3 py-1 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-100"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Pilih Tanggal" : "Select Date"}
-                  </label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2"
+          <div className="mt-4 mx-auto w-full max-w-[320px] sm:max-w-[360px] lg:max-w-[360px] xl:max-w-[380px]">
+            {property.videoUrl ? (
+              <div className="rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+                <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-black">
+                  <video
+                    src={property.videoUrl}
+                    controls
+                    playsInline
+                    className="h-full w-full object-cover"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Pilih Jam" : "Select Time"}
-                  </label>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {["10:00", "11:00", "13:00", "15:00", "17:00"].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setSelectedTime(t)}
-                        className={[
-                          "rounded-full border px-4 py-2 text-sm",
-                          selectedTime === t
-                            ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                            : "border-gray-200 bg-white text-[#1C1C1E]",
-                        ].join(" ")}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleViewingRequest}
-                  disabled={!selectedDate || !selectedTime}
-                  className={[
-                    "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                    selectedDate && selectedTime
-                      ? "bg-[#B8860B] text-white hover:opacity-90"
-                      : "cursor-not-allowed bg-gray-200 text-gray-500",
-                  ].join(" ")}
-                >
-                  {lang === "id"
-                    ? "Kirim Permintaan Viewing"
-                    : "Send Viewing Request"}
-                </button>
               </div>
+            ) : (
+              <div className="rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+                <div className="flex aspect-[9/16] items-center justify-center rounded-[22px] bg-gray-100 px-4 text-center text-sm text-gray-500">
+                  {lang === "id"
+                    ? "Belum ada video untuk properti ini."
+                    : "No video available for this property yet."}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-lg font-bold text-[#1C1C1E]">
+            {lang === "id" ? "Fasilitas" : "Facilities"}
+          </h2>
+
+          {activeFacilities.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {activeFacilities.map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-[#1C1C1E]"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">
+              {lang === "id"
+                ? "Belum ada data fasilitas."
+                : "No facilities data yet."}
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-lg font-bold text-[#1C1C1E]">
+            {lang === "id" ? "Terdekat" : "Nearby"}
+          </h2>
+
+          {activeNearby.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {activeNearby.map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-[#1C1C1E]"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">
+              {lang === "id"
+                ? "Belum ada data lokasi terdekat."
+                : "No nearby data yet."}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={handleWhatsAppClick}
+          className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          WhatsApp
+        </button>
+
+        <button
+          type="button"
+          onClick={openJadwalWithTracking}
+          className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
+        >
+          Schedule Viewing
+        </button>
+      </div>
+
+      <div className="mt-6">
+        <MortgageCalculator
+          price={property.price}
+          jenisListing={property.jenisListing}
+        />
+      </div>
+
+      {jadwalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button
+            type="button"
+            onClick={closeJadwal}
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close Jadwal popup"
+          />
+
+          <div className="relative z-10 w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-bold text-[#1C1C1E]">
+                {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
+              </h3>
+
+              <button
+                type="button"
+                onClick={closeJadwal}
+                className="rounded-full px-3 py-1 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Pilih Tanggal" : "Select Date"}
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Pilih Jam" : "Select Time"}
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["10:00", "11:00", "13:00", "15:00", "17:00"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setSelectedTime(t)}
+                      className={[
+                        "rounded-full border px-4 py-2 text-sm",
+                        selectedTime === t
+                          ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                          : "border-gray-200 bg-white text-[#1C1C1E]",
+                      ].join(" ")}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleViewingRequest}
+                disabled={!selectedDate || !selectedTime}
+                className={[
+                  "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                  selectedDate && selectedTime
+                    ? "bg-[#B8860B] text-white hover:opacity-90"
+                    : "cursor-not-allowed bg-gray-200 text-gray-500",
+                ].join(" ")}
+              >
+                {lang === "id"
+                  ? "Kirim Permintaan Viewing"
+                  : "Send Viewing Request"}
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    </main>
-  );
+        </div>
+      )}
+    </div>
+  </main>
+);
 }
