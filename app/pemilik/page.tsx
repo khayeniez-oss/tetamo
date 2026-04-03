@@ -161,8 +161,17 @@ export default function PemilikPage() {
               return (
                 <div
                   key={pkg.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedPlan(pkg.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedPlan(pkg.id);
+                    }
+                  }}
                   className={[
-                    "relative overflow-hidden rounded-3xl border bg-white p-5 shadow-sm transition-all duration-300 sm:p-6 lg:p-7",
+                    "relative overflow-hidden rounded-3xl border bg-white p-5 shadow-sm transition-all duration-300 sm:p-6 lg:p-7 cursor-pointer",
                     isFeatured
                       ? "border-blue-200 bg-gradient-to-br from-white via-blue-50/80 to-white shadow-[0_24px_70px_-30px_rgba(59,130,246,0.45)]"
                       : "border-gray-200",
@@ -172,6 +181,7 @@ export default function PemilikPage() {
                         : "ring-2 ring-[#1C1C1E]/80"
                       : "hover:-translate-y-1 hover:shadow-md",
                   ].join(" ")}
+                  aria-label={pkg.name}
                 >
                   {isFeatured ? (
                     <>
@@ -184,13 +194,6 @@ export default function PemilikPage() {
                       </div>
                     </>
                   ) : null}
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPlan(pkg.id)}
-                    className="absolute inset-0 z-0"
-                    aria-label={pkg.name}
-                  />
 
                   <div className="relative z-10">
                     <div className="flex items-start justify-between gap-4">
@@ -212,7 +215,12 @@ export default function PemilikPage() {
                         </p>
                       </div>
 
-                      <div
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPlan(pkg.id);
+                        }}
                         className={[
                           "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 sm:h-6 sm:w-6",
                           checked
@@ -221,11 +229,12 @@ export default function PemilikPage() {
                               : "border-[#1C1C1E] bg-[#1C1C1E]"
                             : "border-gray-400 bg-white",
                         ].join(" ")}
+                        aria-label={`Select ${pkg.name}`}
                       >
                         {checked ? (
                           <span className="h-2 w-2 rounded-full bg-white" />
                         ) : null}
-                      </div>
+                      </button>
                     </div>
 
                     <div className="mt-6">
