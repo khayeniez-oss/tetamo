@@ -474,11 +474,11 @@ export default function Navbar() {
                     setCurrencyOpen(false);
                     setAccountOpen(false);
                   }}
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
                 >
-                  <Globe className="h-4 w-4" />
+                  <Globe className="h-3.5 w-3.5" />
                   <span>{lang.toUpperCase()}</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3.5 w-3.5" />
                 </button>
 
                 {langOpen && (
@@ -524,11 +524,11 @@ export default function Navbar() {
                     setLangOpen(false);
                     setAccountOpen(false);
                   }}
-                  className="inline-flex h-12 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 text-[15px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-14 lg:px-5"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
                 >
-                  <BadgeDollarSign className="h-4 w-4" />
+                  <BadgeDollarSign className="h-3.5 w-3.5" />
                   <span>{currency}</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3.5 w-3.5" />
                 </button>
 
                 {currencyOpen && (
