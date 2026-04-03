@@ -262,7 +262,7 @@ export default function PemilikPage() {
 
                     <div className="mt-6">
                       <Link
-                        href={`/signup?role=owner&plan=${pkg.id}`}
+                        href={`/pemilik/iklan?plan=${pkg.id}`}
                         className={[
                           "inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition sm:w-auto",
                           isFeatured
