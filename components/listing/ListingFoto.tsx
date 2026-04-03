@@ -505,7 +505,7 @@ export default function ListingFoto({
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           onClick={onBack}
           className="text-sm text-gray-700 hover:text-[#1C1C1E]"
@@ -522,180 +522,188 @@ export default function ListingFoto({
         </p>
 
         <div className="mt-6 rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-8">
-          <div className="p-4 sm:p-5 md:p-6">
-            <div className="flex items-center justify-between gap-2">
-              <label
-                htmlFor={photoInputId}
-                className={[
-                  "inline-flex flex-1 items-center justify-center rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white",
-                  uploadingPhotos
-                    ? "cursor-not-allowed opacity-60"
-                    : "cursor-pointer",
-                ].join(" ")}
-                onClick={(e) => {
-                  if (uploadingPhotos) {
-                    e.preventDefault();
-                    return;
-                  }
-
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }}
-              >
-                {uploadingPhotos ? t.uploading : t.addPhotos}
-              </label>
-
-              <button
-                onClick={clearAllPhotos}
-                className="inline-flex flex-1 items-center justify-center rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold"
-                type="button"
-                disabled={uploadingPhotos || photos.length === 0}
-              >
-                {t.removeAll}
-              </button>
-
-              <input
-                id={photoInputId}
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
-                multiple
-                className="absolute left-[-9999px] top-auto h-px w-px opacity-0"
-                onChange={(e) => onAddPhotos(e.target.files)}
-              />
-            </div>
-
-            <div className="mt-4 text-xs leading-5 text-gray-500">
-              {t.uploadPhotoHint}
-            </div>
-
-            <div className="mt-4 relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
-              {photos.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
-                  {t.noPhotosYet}
-                </div>
-              ) : (
-                <>
-                  <img
-                    src={photos[coverIndex]}
-                    className="h-full w-full object-cover"
-                    alt="Property"
-                  />
-                  <div className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-[11px] text-white sm:text-xs">
-                    TETAMO
-                  </div>
-                </>
-              )}
-            </div>
-
-            {photos.length > 0 ? (
-              <p className="mt-3 text-xs leading-5 text-gray-500">{t.coverNote}</p>
-            ) : null}
-
-            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
-              {photos.map((src, idx) => (
-                <div key={idx} className="relative">
-                  <button
-                    onClick={() => setCoverIndex(idx)}
+          <div className="p-4 sm:p-5 md:p-6 lg:p-7">
+            <div className="flex flex-col gap-8 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start xl:grid-cols-[minmax(0,1fr)_380px]">
+              <section className="min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor={photoInputId}
                     className={[
-                      "aspect-square w-full overflow-hidden rounded-2xl border",
-                      coverIndex === idx
-                        ? "border-[#1C1C1E]"
-                        : "border-gray-200",
+                      "inline-flex flex-1 items-center justify-center rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white",
+                      uploadingPhotos
+                        ? "cursor-not-allowed opacity-60"
+                        : "cursor-pointer",
                     ].join(" ")}
-                    type="button"
+                    onClick={(e) => {
+                      if (uploadingPhotos) {
+                        e.preventDefault();
+                        return;
+                      }
+
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
+                      }
+                    }}
                   >
-                    <img
-                      src={src}
-                      className="h-full w-full object-cover"
-                      alt={`Property ${idx + 1}`}
-                    />
-                  </button>
+                    {uploadingPhotos ? t.uploading : t.addPhotos}
+                  </label>
 
                   <button
-                    onClick={() => removePhoto(idx)}
-                    className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs"
-                    type="button"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-8 border-t border-gray-100 pt-8">
-              <div className="mb-3 text-sm font-semibold sm:text-base">
-                {t.videoOptional}
-              </div>
-
-              <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
-                {video ? (
-                  <video
-                    src={video}
-                    controls
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
-                    {t.noVideoYet}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 flex items-center gap-2">
-                <label
-                  htmlFor={videoInputId}
-                  className={[
-                    "inline-flex flex-1 cursor-pointer items-center justify-center rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-center text-sm font-semibold",
-                    uploadingVideo ? "cursor-not-allowed opacity-60" : "",
-                  ].join(" ")}
-                  onClick={(e) => {
-                    if (uploadingVideo) {
-                      e.preventDefault();
-                      return;
-                    }
-
-                    if (videoInputRef.current) {
-                      videoInputRef.current.value = "";
-                    }
-                  }}
-                >
-                  {uploadingVideo ? t.uploading : t.uploadVideo}
-                </label>
-
-                {video ? (
-                  <button
-                    onClick={clearVideo}
+                    onClick={clearAllPhotos}
                     className="inline-flex flex-1 items-center justify-center rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold"
                     type="button"
+                    disabled={uploadingPhotos || photos.length === 0}
                   >
-                    {t.removeVideo}
+                    {t.removeAll}
                   </button>
+
+                  <input
+                    id={photoInputId}
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                    multiple
+                    className="absolute left-[-9999px] top-auto h-px w-px opacity-0"
+                    onChange={(e) => onAddPhotos(e.target.files)}
+                  />
+                </div>
+
+                <div className="mt-4 text-xs leading-5 text-gray-500">
+                  {t.uploadPhotoHint}
+                </div>
+
+                <div className="mt-4 relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
+                  {photos.length === 0 ? (
+                    <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
+                      {t.noPhotosYet}
+                    </div>
+                  ) : (
+                    <>
+                      <img
+                        src={photos[coverIndex]}
+                        className="h-full w-full object-cover"
+                        alt="Property"
+                      />
+                      <div className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-[11px] text-white sm:text-xs">
+                        TETAMO
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {photos.length > 0 ? (
+                  <p className="mt-3 text-xs leading-5 text-gray-500">
+                    {t.coverNote}
+                  </p>
                 ) : null}
-              </div>
 
-              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <p className="font-semibold">{t.videoGuideTitle}</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  <li>{t.videoGuideMp4}</li>
-                  <li>{t.videoGuideResolution}</li>
-                  <li>{t.videoGuideCompressed}</li>
-                  <li>{t.videoGuideRawPhone}</li>
-                </ul>
-              </div>
+                <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
+                  {photos.map((src, idx) => (
+                    <div key={idx} className="relative">
+                      <button
+                        onClick={() => setCoverIndex(idx)}
+                        className={[
+                          "aspect-square w-full overflow-hidden rounded-2xl border",
+                          coverIndex === idx
+                            ? "border-[#1C1C1E]"
+                            : "border-gray-200",
+                        ].join(" ")}
+                        type="button"
+                      >
+                        <img
+                          src={src}
+                          className="h-full w-full object-cover"
+                          alt={`Property ${idx + 1}`}
+                        />
+                      </button>
 
-              <input
-                id={videoInputId}
-                ref={videoInputRef}
-                type="file"
-                accept="video/*,.mp4,.mov,.webm"
-                className="absolute left-[-9999px] top-auto h-px w-px opacity-0"
-                onChange={(e) => onAddVideo(e.target.files)}
-              />
+                      <button
+                        onClick={() => removePhoto(idx)}
+                        className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs"
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="min-w-0">
+                <div className="mb-3 text-sm font-semibold sm:text-base">
+                  {t.videoOptional}
+                </div>
+
+                <div className="mx-auto w-full max-w-[320px] lg:max-w-[340px] xl:max-w-[380px]">
+                  <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
+                    {video ? (
+                      <video
+                        src={video}
+                        controls
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
+                        {t.noVideoYet}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2">
+                    <label
+                      htmlFor={videoInputId}
+                      className={[
+                        "inline-flex flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-center text-sm font-semibold",
+                        uploadingVideo ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                      ].join(" ")}
+                      onClick={(e) => {
+                        if (uploadingVideo) {
+                          e.preventDefault();
+                          return;
+                        }
+
+                        if (videoInputRef.current) {
+                          videoInputRef.current.value = "";
+                        }
+                      }}
+                    >
+                      {uploadingVideo ? t.uploading : t.uploadVideo}
+                    </label>
+
+                    {video ? (
+                      <button
+                        onClick={clearVideo}
+                        className="inline-flex flex-1 items-center justify-center rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold"
+                        type="button"
+                      >
+                        {t.removeVideo}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <p className="font-semibold">{t.videoGuideTitle}</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      <li>{t.videoGuideMp4}</li>
+                      <li>{t.videoGuideResolution}</li>
+                      <li>{t.videoGuideCompressed}</li>
+                      <li>{t.videoGuideRawPhone}</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <input
+                  id={videoInputId}
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*,.mp4,.mov,.webm"
+                  className="absolute left-[-9999px] top-auto h-px w-px opacity-0"
+                  onChange={(e) => onAddVideo(e.target.files)}
+                />
+              </section>
             </div>
 
-            <div className="mt-8 sm:mt-10">
+            <div className="mt-8 border-t border-gray-100 pt-8 sm:mt-10 sm:pt-10">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <label className="font-semibold">{t.propertyTitle} *</label>
                 <span className="shrink-0 text-gray-500">
