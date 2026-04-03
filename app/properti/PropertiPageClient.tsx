@@ -49,6 +49,7 @@ type Property = {
   propertyType: string;
   kode?: string;
   postedDate?: string;
+  sortDateRaw?: string | null;
 
   title: string;
   priceValue: number;
@@ -183,6 +184,22 @@ function calculateRanking(p: Property) {
   if (p.verifiedListing) score += 10;
 
   return score;
+}
+
+function getSortTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function sortByNewestWithinTier(a: Property, b: Property) {
+  const dateDiff = getSortTimestamp(b.sortDateRaw) - getSortTimestamp(a.sortDateRaw);
+  if (dateDiff !== 0) return dateDiff;
+
+  const rankingDiff = calculateRanking(b) - calculateRanking(a);
+  if (rankingDiff !== 0) return rankingDiff;
+
+  return String(b.id).localeCompare(String(a.id));
 }
 
 function formatIdr(value: number | null | undefined) {
@@ -1219,6 +1236,7 @@ export default function PropertiPageClient() {
         const resolvedName = row.contact_name || "Tetamo User";
         const resolvedAgency = row.contact_agency || "";
         const resolvedWhatsapp = normalizeWhatsapp(row.contact_phone);
+        const liveDate = row.posted_date || row.created_at || null;
 
         return {
           verifiedListing: isVerified,
@@ -1241,7 +1259,8 @@ export default function PropertiPageClient() {
           rentalType: normalizeRentalType(row.rental_type),
           propertyType: row.property_type || "",
           kode: row.kode ?? undefined,
-          postedDate: formatPostedDate(row.posted_date || row.created_at),
+          postedDate: formatPostedDate(liveDate),
+          sortDateRaw: liveDate,
 
           title: row.title ?? "-",
           priceValue: Number(row.price ?? 0),
@@ -1608,26 +1627,21 @@ export default function PropertiPageClient() {
 
     const spotlight = list
       .filter((p) => p.spotlight)
-      .sort((a, b) => calculateRanking(b) - calculateRanking(a));
+      .sort(sortByNewestWithinTier);
 
     const featured = list
       .filter((p) => !p.spotlight && p.featured)
-      .sort((a, b) => calculateRanking(b) - calculateRanking(a));
+      .sort(sortByNewestWithinTier);
 
     const boosted = list
       .filter((p) => !p.spotlight && !p.featured && p.boosted)
-      .sort((a, b) => calculateRanking(b) - calculateRanking(a));
+      .sort(sortByNewestWithinTier);
 
     const normal = list
       .filter((p) => !p.spotlight && !p.featured && !p.boosted)
-      .sort((a, b) => calculateRanking(b) - calculateRanking(a));
+      .sort(sortByNewestWithinTier);
 
-    return [
-      ...rotateListingsByReceiver(spotlight),
-      ...rotateListingsByReceiver(featured),
-      ...rotateListingsByReceiver(boosted),
-      ...rotateListingsByReceiver(normal),
-    ];
+    return [...spotlight, ...featured, ...boosted, ...normal];
   }, [all, jenisListing]);
 
   const pageSize = 12;
