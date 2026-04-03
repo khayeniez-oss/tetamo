@@ -19,12 +19,17 @@ import {
   Building2,
   Shield,
   BadgeDollarSign,
+  Bell,
+  Bookmark,
 } from "lucide-react";
 
 type ProfileData = {
   full_name: string | null;
   role: string | null;
 };
+
+const SAVED_HREF = "/saved";
+const NOTIFICATIONS_HREF = "/notifications";
 
 function getDashboardHref(role: string | null) {
   if (role === "owner") return "/pemilikdashboard";
@@ -53,6 +58,89 @@ function getInitials(fullName: string | null, email: string | null) {
   }
 
   return source.slice(0, 2).toUpperCase();
+}
+
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+
+  return (
+    <span className="absolute -right-1 -top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#1C1C1E] px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-md">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function DesktopIconButton({
+  label,
+  count,
+  onClick,
+  children,
+  variant = "default",
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+  children: React.ReactNode;
+  variant?: "saved" | "notification" | "default";
+}) {
+  const tone =
+    variant === "saved"
+      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+      : variant === "notification"
+      ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+      : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`relative inline-flex h-8 w-8 items-center justify-center rounded-xl border transition lg:h-9 lg:w-9 ${tone}`}
+    >
+      {children}
+      <CountBadge count={count} />
+    </button>
+  );
+}
+
+function MobileShortcutButton({
+  href,
+  label,
+  count,
+  icon: Icon,
+  onClick,
+  variant = "default",
+}: {
+  href: string;
+  label: string;
+  count: number;
+  icon: any;
+  onClick: (href: string) => void;
+  variant?: "saved" | "notification" | "default";
+}) {
+  const tone =
+    variant === "saved"
+      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+      : variant === "notification"
+      ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+      : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50";
+
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(href)}
+      className={`relative inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-center text-sm font-semibold transition ${tone}`}
+    >
+      <Icon className="h-3 w-3" />
+      <span>{label}</span>
+      {count > 0 ? (
+        <span className="inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#1C1C1E] px-1 py-0.5 text-[8px] font-bold leading-none text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
+    </button>
+  );
 }
 
 export default function Navbar() {
@@ -84,6 +172,8 @@ export default function Navbar() {
     signUp: isID ? "Daftar" : "Sign Up",
     menu: isID ? "Menu" : "Menu",
     quickAccess: isID ? "Akses Cepat" : "Quick Access",
+    saved: isID ? "Tersimpan" : "Saved",
+    notifications: isID ? "Notifikasi" : "Notifications",
   };
 
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
@@ -91,6 +181,9 @@ export default function Navbar() {
 
   const [sessionLoading, setSessionLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+
+  const [savedCount, setSavedCount] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
 
   const [langOpen, setLangOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -140,6 +233,39 @@ export default function Navbar() {
     }
   }
 
+  async function loadNavbarCounts(userId: string) {
+    try {
+      const [savedRes, notificationsRes] = await Promise.all([
+        supabase
+          .from("saved_properties")
+          .select("property_id", { count: "exact", head: true })
+          .eq("user_id", userId),
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("is_read", false),
+      ]);
+
+      setSavedCount(savedRes.count ?? 0);
+      setNotificationCount(notificationsRes.count ?? 0);
+    } catch {
+      setSavedCount(0);
+      setNotificationCount(0);
+    }
+  }
+
+  function goToProtectedRoute(href: string) {
+    closeAllMenus();
+
+    if (!authUserEmail) {
+      router.push(`/login?next=${encodeURIComponent(href)}`);
+      return;
+    }
+
+    router.push(href);
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -158,6 +284,8 @@ export default function Navbar() {
         if (!user) {
           setAuthUserEmail(null);
           setProfile(null);
+          setSavedCount(0);
+          setNotificationCount(0);
           setSessionLoading(false);
           setProfileLoading(false);
           return;
@@ -167,10 +295,13 @@ export default function Navbar() {
         setSessionLoading(false);
 
         loadProfileByUserId(user.id, user.email ?? null);
+        loadNavbarCounts(user.id);
       } catch {
         if (!mounted) return;
         setAuthUserEmail(null);
         setProfile(null);
+        setSavedCount(0);
+        setNotificationCount(0);
         setSessionLoading(false);
         setProfileLoading(false);
       }
@@ -188,6 +319,8 @@ export default function Navbar() {
       if (!user) {
         setAuthUserEmail(null);
         setProfile(null);
+        setSavedCount(0);
+        setNotificationCount(0);
         setSessionLoading(false);
         setProfileLoading(false);
         return;
@@ -197,6 +330,7 @@ export default function Navbar() {
       setSessionLoading(false);
 
       loadProfileByUserId(user.id, user.email ?? null);
+      loadNavbarCounts(user.id);
     });
 
     return () => {
@@ -258,6 +392,8 @@ export default function Navbar() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    setSavedCount(0);
+    setNotificationCount(0);
     setAccountOpen(false);
     setMobileMenuOpen(false);
     router.push("/");
@@ -429,6 +565,24 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
+
+              <DesktopIconButton
+                label={t.saved}
+                count={savedCount}
+                onClick={() => goToProtectedRoute(SAVED_HREF)}
+                variant="saved"
+              >
+                <Bookmark className="h-3 w-3" />
+              </DesktopIconButton>
+
+              <DesktopIconButton
+                label={t.notifications}
+                count={notificationCount}
+                onClick={() => goToProtectedRoute(NOTIFICATIONS_HREF)}
+                variant="notification"
+              >
+                <Bell className="h-3 w-3" />
+              </DesktopIconButton>
 
               <div ref={accountRef} className="relative">
                 <button
@@ -729,6 +883,25 @@ export default function Navbar() {
                                 {authUserEmail}
                               </p>
                             </div>
+                          </div>
+
+                          <div className="mb-2 grid grid-cols-2 gap-2">
+                            <MobileShortcutButton
+                              href={SAVED_HREF}
+                              label={t.saved}
+                              count={savedCount}
+                              icon={Bookmark}
+                              onClick={goToProtectedRoute}
+                              variant="saved"
+                            />
+                            <MobileShortcutButton
+                              href={NOTIFICATIONS_HREF}
+                              label={t.notifications}
+                              count={notificationCount}
+                              icon={Bell}
+                              onClick={goToProtectedRoute}
+                              variant="notification"
+                            />
                           </div>
 
                           {!profileLoading ? (
