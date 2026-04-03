@@ -1284,7 +1284,7 @@ export default function PropertiPageClient() {
     async function loadEngagement() {
       const propertyIds = all.map((item) => item.id);
 
-      if (!authUserId || propertyIds.length === 0) {
+      if (propertyIds.length === 0) {
         if (!ignore) {
           setSavedMap({});
           setLikedMap({});
@@ -1294,65 +1294,92 @@ export default function PropertiPageClient() {
         return;
       }
 
-      const [savedRes, likesRes, userRatingsRes, allRatingsRes] =
-        await Promise.all([
-          supabase
-            .from("saved_properties")
-            .select("property_id")
-            .eq("user_id", authUserId)
-            .in("property_id", propertyIds),
-          supabase
-            .from("property_likes")
-            .select("property_id")
-            .eq("user_id", authUserId)
-            .in("property_id", propertyIds),
-          supabase
-            .from("property_ratings")
-            .select("property_id, rating")
-            .eq("user_id", authUserId)
-            .in("property_id", propertyIds),
-          supabase
-            .from("property_ratings")
-            .select("property_id, rating")
-            .in("property_id", propertyIds),
-        ]);
-
-      if (ignore) return;
-
       const nextSavedMap: Record<string, boolean> = {};
       const nextLikedMap: Record<string, boolean> = {};
       const nextUserRatingsMap: Record<string, number> = {};
       const nextRatingSummaryMap: Record<string, RatingSummary> = {};
 
-      ((savedRes.data ?? []) as SavedRow[]).forEach((row) => {
-        nextSavedMap[row.property_id] = true;
-      });
+      const { data: allRatingsData, error: allRatingsError } = await supabase
+        .from("property_ratings")
+        .select("property_id, rating")
+        .in("property_id", propertyIds);
 
-      ((likesRes.data ?? []) as LikeRow[]).forEach((row) => {
-        nextLikedMap[row.property_id] = true;
-      });
+      if (ignore) return;
 
-      ((userRatingsRes.data ?? []) as RatingRow[]).forEach((row) => {
-        nextUserRatingsMap[row.property_id] = row.rating;
-      });
+      if (allRatingsError) {
+        console.error("Failed to load public property ratings:", allRatingsError);
+      } else {
+        const grouped: Record<string, number[]> = {};
 
-      const allRatings = (allRatingsRes.data ?? []) as RatingRow[];
-      const grouped: Record<string, number[]> = {};
+        ((allRatingsData ?? []) as RatingRow[]).forEach((row) => {
+          if (!grouped[row.property_id]) grouped[row.property_id] = [];
+          grouped[row.property_id].push(row.rating);
+        });
 
-      allRatings.forEach((row) => {
-        if (!grouped[row.property_id]) grouped[row.property_id] = [];
-        grouped[row.property_id].push(row.rating);
-      });
+        Object.entries(grouped).forEach(([propertyId, ratings]) => {
+          const count = ratings.length;
+          const avg =
+            count > 0
+              ? ratings.reduce((sum, value) => sum + value, 0) / count
+              : 0;
 
-      Object.entries(grouped).forEach(([propertyId, ratings]) => {
-        const count = ratings.length;
-        const avg =
-          count > 0
-            ? ratings.reduce((sum, value) => sum + value, 0) / count
-            : 0;
+          nextRatingSummaryMap[propertyId] = { avg, count };
+        });
+      }
 
-        nextRatingSummaryMap[propertyId] = { avg, count };
-      });
+      if (!authUserId) {
+        if (!ignore) {
+          setSavedMap({});
+          setLikedMap({});
+          setUserRatingsMap({});
+          setRatingSummaryMap(nextRatingSummaryMap);
+        }
+        return;
+      }
+
+      const [savedRes, likesRes, userRatingsRes] = await Promise.all([
+        supabase
+          .from("saved_properties")
+          .select("property_id")
+          .eq("user_id", authUserId)
+          .in("property_id", propertyIds),
+        supabase
+          .from("property_likes")
+          .select("property_id")
+          .eq("user_id", authUserId)
+          .in("property_id", propertyIds),
+        supabase
+          .from("property_ratings")
+          .select("property_id, rating")
+          .eq("user_id", authUserId)
+          .in("property_id", propertyIds),
+      ]);
+
+      if (ignore) return;
+
+      if (savedRes.error) {
+        console.error("Failed to load saved properties:", savedRes.error);
+      } else {
+        ((savedRes.data ?? []) as SavedRow[]).forEach((row) => {
+          nextSavedMap[row.property_id] = true;
+        });
+      }
+
+      if (likesRes.error) {
+        console.error("Failed to load property likes:", likesRes.error);
+      } else {
+        ((likesRes.data ?? []) as LikeRow[]).forEach((row) => {
+          nextLikedMap[row.property_id] = true;
+        });
+      }
+
+      if (userRatingsRes.error) {
+        console.error("Failed to load user property ratings:", userRatingsRes.error);
+      } else {
+        ((userRatingsRes.data ?? []) as RatingRow[]).forEach((row) => {
+          nextUserRatingsMap[row.property_id] = row.rating;
+        });
+      }
 
       setSavedMap(nextSavedMap);
       setLikedMap(nextLikedMap);

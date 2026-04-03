@@ -1984,43 +1984,46 @@ Is this property still available?`;
           ) : null}
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Deskripsi" : "Description"}
-            </h2>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.02fr_0.98fr]">
+  <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <h2 className="text-lg font-bold text-[#1C1C1E]">
+      {lang === "id" ? "Deskripsi" : "Description"}
+    </h2>
 
-            <div className="mt-4 space-y-4 text-sm leading-7 text-gray-700">
-              <p>
-                {lang === "en" && property.descriptionEn
-                  ? property.descriptionEn
-                  : property.description}
-              </p>
-            </div>
-          </div>
+    <div className="mt-4 space-y-4 text-sm leading-7 text-gray-700">
+      <p>
+        {lang === "en" && property.descriptionEn
+          ? property.descriptionEn
+          : property.description}
+      </p>
+    </div>
+  </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Video" : "Video"}
-            </h2>
+  <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <h2 className="text-lg font-bold text-[#1C1C1E]">
+      {lang === "id" ? "Video" : "Video"}
+    </h2>
 
-            {property.videoUrl ? (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200">
-                <video
-                  src={property.videoUrl}
-                  controls
-                  className="h-full w-full"
-                />
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-gray-500">
-                {lang === "id"
-                  ? "Belum ada video untuk properti ini."
-                  : "No video available for this property yet."}
-              </p>
-            )}
-          </div>
+    {property.videoUrl ? (
+      <div className="mt-4 w-full rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="overflow-hidden rounded-[22px] bg-black">
+          <video
+            src={property.videoUrl}
+            controls
+            playsInline
+            className="h-[280px] w-full object-cover sm:h-[420px] lg:h-[560px]"
+          />
         </div>
+      </div>
+    ) : (
+      <p className="mt-4 text-sm text-gray-500">
+        {lang === "id"
+          ? "Belum ada video untuk properti ini."
+          : "No video available for this property yet."}
+      </p>
+    )}
+  </div>
+</div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">

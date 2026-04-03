@@ -152,7 +152,10 @@ function resolveMembershipDurationDays(payment: MembershipPaymentRow) {
   const packageTermDays = toPositiveNumber(metadata.packageTermDays);
   if (packageTermDays) return packageTermDays;
 
-  const selectedBillingCycle = String(metadata.selectedBillingCycle || "").toLowerCase();
+  const selectedBillingCycle = String(
+    metadata.selectedBillingCycle || ""
+  ).toLowerCase();
+
   if (selectedBillingCycle === "monthly" || selectedBillingCycle === "yearly") {
     return 365;
   }
@@ -221,13 +224,6 @@ export default function AgentDashboardLayout({
       pathname === href
         ? "bg-white/10 text-white font-semibold"
         : "text-white/85 hover:bg-white/10 hover:text-white",
-    ].join(" ");
-  }
-
-  function lockedMenuItemClass() {
-    return [
-      "flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm transition",
-      "text-white/45 hover:bg-white/5 hover:text-white/70",
     ].join(" ");
   }
 
@@ -413,33 +409,17 @@ export default function AgentDashboardLayout({
     [agent, loadingProfile, hasActiveMembership, membershipEndsAt, loadingMembership]
   );
 
-  function isRestrictedPathWithoutMembership(path: string) {
-    if (hasActiveMembership) return false;
-
-    if (path === "/agentdashboard") return true;
-    if (path.startsWith("/agentdashboard/listing-saya")) return true;
-    if (path.startsWith("/agentdashboard/leads")) return true;
-    if (path.startsWith("/agentdashboard/jadwal-viewing")) return true;
-    if (path.startsWith("/agentdashboard/propertilokasi")) return true;
-    if (path.startsWith("/agentdashboard/propertidetail")) return true;
-    if (path.startsWith("/agentdashboard/deskripsi-foto")) return true;
-    if (path.startsWith("/agentdashboard/komisi")) return true;
-
-    return false;
-  }
+  const isLoadingState = !hasCheckedAuth || loadingProfile || loadingMembership;
 
   useEffect(() => {
     if (!hasCheckedAuth || loadingProfile || loadingMembership) return;
 
     if (!agent.userId) {
       router.replace(
-        `/login?role=agent&next=${encodeURIComponent(pathname || "/agentdashboard/paket")}`
+        `/login?role=agent&next=${encodeURIComponent(
+          pathname || "/agentdashboard"
+        )}`
       );
-      return;
-    }
-
-    if (isRestrictedPathWithoutMembership(pathname)) {
-      router.replace("/agentdashboard/paket");
     }
   }, [
     pathname,
@@ -448,40 +428,15 @@ export default function AgentDashboardLayout({
     loadingProfile,
     loadingMembership,
     agent.userId,
-    hasActiveMembership,
   ]);
 
-  function renderMenuLink(
-    href: string,
-    label: string,
-    options?: { locked?: boolean }
-  ) {
-    const locked = Boolean(options?.locked);
-
-    if (!locked) {
-      return (
-        <Link href={href} className={baseMenuItemClass(href)}>
-          {label}
-        </Link>
-      );
-    }
-
+  function renderMenuLink(href: string, label: string) {
     return (
-      <button
-        type="button"
-        onClick={() => router.push("/agentdashboard/paket")}
-        className={lockedMenuItemClass()}
-      >
-        <span>{label}</span>
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-white/55">
-          Lock
-        </span>
-      </button>
+      <Link href={href} className={baseMenuItemClass(href)}>
+        {label}
+      </Link>
     );
   }
-
-  const isMembershipLocked = !hasActiveMembership;
-  const isLoadingState = !hasCheckedAuth || loadingProfile || loadingMembership;
 
   return (
     <AgentProfileContext.Provider value={contextValue}>
@@ -568,10 +523,10 @@ export default function AgentDashboardLayout({
                     ) : (
                       <>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-yellow-300">
-                          Membership Required
+                          Membership Inactive
                         </p>
                         <p className="mt-1 text-sm text-white/90">
-                          Upgrade to unlock agent tools
+                          Access is temporarily open for migration
                         </p>
                         <Link
                           href="/agentdashboard/paket"
@@ -609,21 +564,11 @@ export default function AgentDashboardLayout({
                       openSections.overview ? "block" : "hidden"
                     } lg:block`}
                   >
-                    {renderMenuLink("/agentdashboard", "Dashboard", {
-                      locked: isMembershipLocked,
-                    })}
-                    {renderMenuLink("/agentdashboard/listing-saya", "Listing Saya", {
-                      locked: isMembershipLocked,
-                    })}
-                    {renderMenuLink("/agentdashboard/leads", "Leads", {
-                      locked: isMembershipLocked,
-                    })}
-                    {renderMenuLink("/agentdashboard/jadwal-viewing", "Jadwal Viewing", {
-                      locked: isMembershipLocked,
-                    })}
-                    {renderMenuLink("/agentdashboard/propertilokasi", "Buat Iklan", {
-                      locked: isMembershipLocked,
-                    })}
+                    {renderMenuLink("/agentdashboard", "Dashboard")}
+                    {renderMenuLink("/agentdashboard/listing-saya", "Listing Saya")}
+                    {renderMenuLink("/agentdashboard/leads", "Leads")}
+                    {renderMenuLink("/agentdashboard/jadwal-viewing", "Jadwal Viewing")}
+                    {renderMenuLink("/agentdashboard/propertilokasi", "Buat Iklan")}
                   </div>
                 </div>
 
@@ -651,9 +596,7 @@ export default function AgentDashboardLayout({
                     {renderMenuLink("/agentdashboard/paket", "Paket")}
                     {renderMenuLink("/agentdashboard/tagihan", "Tagihan")}
                     {renderMenuLink("/agentdashboard/pembayaran", "Pembayaran")}
-                    {renderMenuLink("/agentdashboard/komisi", "Komisi", {
-                      locked: isMembershipLocked,
-                    })}
+                    {renderMenuLink("/agentdashboard/komisi", "Komisi")}
                     {renderMenuLink("/agentdashboard/sukses", "Sukses")}
                   </div>
                 </div>
@@ -696,9 +639,7 @@ export default function AgentDashboardLayout({
               </nav>
             </aside>
 
-            <main className="min-w-0 flex-1">
-              {children}
-            </main>
+            <main className="min-w-0 flex-1">{children}</main>
           </div>
         </div>
       </AgentListingDraftProvider>
