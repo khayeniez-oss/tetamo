@@ -13,6 +13,8 @@ import {
   Eye,
   Pencil,
   Plus,
+  Bookmark,
+  Heart,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAgentProfile } from "./layout";
@@ -611,7 +613,27 @@ export default function AgentDashboardPage() {
             </p>
           </div>
 
-          <div className="flex w-full flex-col items-start sm:w-auto lg:items-end">
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto lg:items-end">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto lg:justify-end">
+              <button
+                type="button"
+                onClick={() => router.push("/agentdashboard/saved")}
+                className="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-[12px] font-semibold text-amber-700 transition hover:bg-amber-100 sm:text-sm"
+              >
+                <Bookmark className="h-4 w-4" />
+                {lang === "id" ? "Tersimpan" : "Saved"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/agentdashboard/liked")}
+                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-[12px] font-semibold text-rose-700 transition hover:bg-rose-100 sm:text-sm"
+              >
+                <Heart className="h-4 w-4" />
+                {lang === "id" ? "Disukai" : "Liked"}
+              </button>
+            </div>
+
             <button
               onClick={handleCreateListing}
               disabled={checkingMembership}
@@ -628,7 +650,7 @@ export default function AgentDashboardPage() {
             </button>
 
             {!checkingMembership && (
-              <p className="mt-2 text-[12px] text-gray-500 lg:text-right sm:text-[13px]">
+              <p className="mt-1 text-[12px] text-gray-500 lg:text-right sm:text-[13px]">
                 {hasActiveMembership
                   ? lang === "id"
                     ? `Membership aktif${activeMembershipLabel ? `: ${activeMembershipLabel}` : ""}`
