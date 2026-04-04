@@ -234,7 +234,7 @@ export default function ListingForm(props: Props) {
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
                     {lang === "id" ? "Jenis Sewa" : "Rental Type"}
                   </label>
-                  <div className="relative mt-2">
+                  <div className="mt-2">
                     <TetamoSelect
                       value={draft?.rentalType ?? ""}
                       placeholder={lang === "id" ? "Pilih" : "Select"}
@@ -261,7 +261,7 @@ export default function ListingForm(props: Props) {
                 <div />
               )}
 
-              <div className={isTanah ? "" : "md:col-span-2"}>
+              <div>
                 <label className="block text-sm font-semibold text-[#1C1C1E]">
                   {lang === "id" ? "Harga (Rp)" : "Price (Rp)"}{" "}
                   <span className="text-gray-400">
@@ -282,6 +282,34 @@ export default function ListingForm(props: Props) {
                     }))
                   }
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Primary / Secondary" : "Primary / Secondary"}
+                </label>
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={draft?.primarySecondary ?? ""}
+                    placeholder={lang === "id" ? "Pilih" : "Select"}
+                    options={[
+                      {
+                        value: "primary",
+                        label: lang === "id" ? "Primary" : "Primary",
+                      },
+                      {
+                        value: "secondary",
+                        label: lang === "id" ? "Secondary" : "Secondary",
+                      },
+                    ]}
+                    onChange={(value) =>
+                      setDraft((p: any) => ({
+                        ...(p || {}),
+                        primarySecondary: value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
 
               <div>
@@ -345,7 +373,11 @@ export default function ListingForm(props: Props) {
                           { value: "3", label: "3" },
                           { value: "4", label: "4" },
                           { value: "5", label: "5" },
-                          { value: "6+", label: "6+" },
+                          { value: "6", label: "6" },
+                          { value: "7", label: "7" },
+                          { value: "8", label: "8" },
+                          { value: "9", label: "9" },
+                          { value: "10", label: "10" },
                         ]}
                         onChange={(value) =>
                           setDraft((p: any) => ({ ...(p || {}), bed: value }))
@@ -368,7 +400,12 @@ export default function ListingForm(props: Props) {
                           { value: "2", label: "2" },
                           { value: "3", label: "3" },
                           { value: "4", label: "4" },
-                          { value: "5+", label: "5+" },
+                          { value: "5", label: "5" },
+                          { value: "6", label: "6" },
+                          { value: "7", label: "7" },
+                          { value: "8", label: "8" },
+                          { value: "9", label: "9" },
+                          { value: "10", label: "10" },
                         ]}
                         onChange={(value) =>
                           setDraft((p: any) => ({ ...(p || {}), bath: value }))
@@ -440,22 +477,31 @@ export default function ListingForm(props: Props) {
 
                   <div>
                     <label className="block text-sm font-semibold text-[#1C1C1E]">
-                      {lang === "id"
-                        ? "Parkir Mobil/Motor"
-                        : "Car/Bike Parking"}
+                      {lang === "id" ? "Parking" : "Parking"}
                     </label>
-                    <input
-                      className={inputBase}
-                      inputMode="numeric"
-                      placeholder={lang === "id" ? "Contoh: 1" : "Example: 1"}
-                      value={draft?.garage ?? ""}
-                      onChange={(e) =>
-                        setDraft((p: any) => ({
-                          ...(p || {}),
-                          garage: e.target.value.replace(/[^\d]/g, ""),
-                        }))
-                      }
-                    />
+                    <div className="mt-2">
+                      <TetamoSelect
+                        value={draft?.garage ?? ""}
+                        placeholder={lang === "id" ? "Pilih" : "Select"}
+                        options={[
+                          {
+                            value: "ada",
+                            label: lang === "id" ? "Ada" : "Have",
+                          },
+                          {
+                            value: "tidak_ada",
+                            label:
+                              lang === "id" ? "Tidak Ada" : "Don't Have",
+                          },
+                        ]}
+                        onChange={(value) =>
+                          setDraft((p: any) => ({
+                            ...(p || {}),
+                            garage: value,
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -662,6 +708,10 @@ export default function ListingForm(props: Props) {
                           label: lang === "id" ? "Bandara" : "Airport",
                         },
                         {
+                          key: "near_port",
+                          label: lang === "id" ? "Pelabuhan" : "Port",
+                        },
+                        {
                           key: "near_market",
                           label: lang === "id" ? "Pasar" : "Market",
                         },
@@ -672,6 +722,15 @@ export default function ListingForm(props: Props) {
                         {
                           key: "near_beach",
                           label: lang === "id" ? "Pantai" : "Beach",
+                        },
+                        {
+                          key: "near_university",
+                          label: lang === "id" ? "Universitas" : "University",
+                        },
+                        {
+                          key: "near_supermarket",
+                          label:
+                            lang === "id" ? "Supermarket" : "Supermarket",
                         },
                       ].map((item) => {
                         const checked = Boolean((draft as any)?.nearby?.[item.key]);
