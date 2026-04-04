@@ -443,11 +443,11 @@ export default function AgentPembayaranPageClient() {
     if (currentLang === "id") return feature;
 
     const map: Record<string, string> = {
-      "50 Listing Aktif": "50 Active Listings",
+      "30 Listing Aktif": "30 Active Listings",
       "100 Listing Aktif": "100 Active Listings",
       "500 Listing Aktif": "500 Active Listings",
       "Membership aktif selama 1 tahun": "Membership active for 1 year",
-      "Website Profil Agen": "Professional Agent Profile Website",
+      "Website Profil Agen": "Agent Profile Website",
       "Integrasi Media Sosial": "Social Media Integration",
       "Dashboard Leads": "Leads Dashboard",
       "Jadwal Viewing": "Viewing Schedule",
@@ -459,10 +459,13 @@ export default function AgentPembayaranPageClient() {
       "1 AI Avatar Video Perkenalan": "1 AI Avatar Introduction Video",
       "3 Listing Unggulan Gratis (90 hari masing-masing)":
         "3 Free Featured Listings (90 days each)",
-      "Visibilitas listing lebih tinggi": "Stronger listing visibility",
-      "Penempatan Agen Unggulan": "Featured Agent Placement",
-      "Eksposur premium di platform": "Premium exposure across the platform",
-      "Slot terbatas (7 agen saja)": "Limited slots (7 agents only)",
+      "Prioritas visibilitas listing": "Listing visibility priority",
+      "Eligible untuk penempatan Agen Unggulan":
+        "Eligible for Featured Agent placement",
+      "Kesempatan eksposur premium di platform":
+        "Opportunity for premium platform exposure",
+      "Slot Agen Unggulan terbatas (7 agen)":
+        "Limited Featured Agent slots (7 agents)",
       "Tersedia opsi bayar bulanan": "Monthly payment option available",
       "Auto renew aktif secara default": "Auto renew enabled by default",
       "Durasi boost 14 hari": "Boost duration 14 days",
