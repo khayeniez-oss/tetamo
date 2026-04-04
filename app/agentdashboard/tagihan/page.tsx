@@ -79,6 +79,11 @@ type HistoryDisplayStatus =
 
 type HistoryCategory = "membership" | "addon" | "other";
 
+type RenewTarget = {
+  kind: "membership" | "addon" | "none";
+  href: string;
+};
+
 type HistoryItem = {
   id: string;
   billingId: string;
@@ -89,6 +94,7 @@ type HistoryItem = {
   packageName: string;
   billingType: string;
   category: HistoryCategory;
+  productId: string;
 
   listingCode: string;
   invoiceNumber: string;
@@ -360,6 +366,57 @@ function inferBillingType(
   return "-";
 }
 
+function inferProductId(payment?: PaymentRow, billing?: BillingRow) {
+  const text = joinTexts([
+    billing?.plan_code,
+    billing?.bill_type,
+    billing?.description,
+    payment?.product_name,
+    payment?.payment_title,
+    payment?.payment_description,
+    payment?.billing_note,
+  ]);
+
+  if (text.includes("agent pro")) return "agent-pro";
+  if (text.includes("gold")) return "gold";
+  if (text.includes("silver")) return "silver";
+  if (text.includes("homepage spotlight")) return "homepage-spotlight";
+  if (text.includes("spotlight")) return "homepage-spotlight";
+  if (text.includes("boost")) return "boost-listing";
+
+  return "";
+}
+
+function buildRenewTarget(item: HistoryItem): RenewTarget {
+  if (item.category === "membership" && item.productId) {
+    return {
+      kind: "membership",
+      href: `/agentdashboard/paket?renew=1&package=${encodeURIComponent(
+        item.productId
+      )}`,
+    };
+  }
+
+  if (
+    item.category === "addon" &&
+    item.productId &&
+    item.listingCode !== "-" &&
+    item.listingCode
+  ) {
+    return {
+      kind: "addon",
+      href: `/agentdashboard/pembayaran?flow=addon&product=${encodeURIComponent(
+        item.productId
+      )}&kode=${encodeURIComponent(item.listingCode)}`,
+    };
+  }
+
+  return {
+    kind: "none",
+    href: "",
+  };
+}
+
 export default function AgentTagihanPage() {
   const { lang } = useLanguage();
 
@@ -514,8 +571,11 @@ export default function AgentTagihanPage() {
           packageName: inferPackageName(latestPayment, billing),
           billingType: inferBillingType(latestPayment, billing, lang),
           category: inferCategory(latestPayment, billing),
+          productId: inferProductId(latestPayment, billing),
 
-          listingCode: cleanText(billing.listing_code),
+          listingCode: cleanText(
+            latestPayment?.listing_code || billing.listing_code
+          ),
           invoiceNumber: cleanText(billing.invoice_number),
           receiptNumber: cleanText(latestPayment?.receipt_number),
           planCode: cleanText(billing.plan_code),
@@ -564,6 +624,7 @@ export default function AgentTagihanPage() {
             packageName: inferPackageName(payment, undefined),
             billingType: inferBillingType(payment, undefined, lang),
             category: inferCategory(payment, undefined),
+            productId: inferProductId(payment, undefined),
 
             listingCode: cleanText(payment.listing_code),
             invoiceNumber: "-",
@@ -722,6 +783,9 @@ export default function AgentTagihanPage() {
                     item.status
                   );
 
+                const renewTarget = buildRenewTarget(item);
+                const canRenew = renewTarget.kind !== "none";
+
                 return (
                   <div
                     key={item.id}
@@ -826,7 +890,7 @@ export default function AgentTagihanPage() {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[190px] lg:flex-col lg:items-end">
+                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[210px] lg:flex-col lg:items-end">
                       {item.invoiceNumber !== "-" ? (
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 sm:text-xs">
                           Invoice Ready
@@ -839,6 +903,21 @@ export default function AgentTagihanPage() {
                           className="inline-flex rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-medium text-green-700 transition hover:bg-green-100 sm:px-4 sm:text-sm"
                         >
                           {lang === "id" ? "Lihat Receipt" : "View Receipt"}
+                        </Link>
+                      ) : null}
+
+                      {canRenew ? (
+                        <Link
+                          href={renewTarget.href}
+                          className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-100 sm:px-4 sm:text-sm"
+                        >
+                          {renewTarget.kind === "addon"
+                            ? lang === "id"
+                              ? "Perpanjang Add-On"
+                              : "Renew Add-On"
+                            : lang === "id"
+                            ? "Perpanjang Membership"
+                            : "Renew Membership"}
                         </Link>
                       ) : null}
 
