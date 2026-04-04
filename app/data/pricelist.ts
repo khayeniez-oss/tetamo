@@ -197,7 +197,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     billingIntervalDays: 365,
     cancelStopsFutureRenewalOnly: true,
 
-    maxListings: 50,
+    maxListings: 30,
     maxFeaturedListings: 0,
 
     hasProfileWebsite: true,
@@ -223,7 +223,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
       "Membership aktif selama 1 tahun dan diperpanjang otomatis secara tahunan kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif saat ini.",
 
     features: [
-      "50 Listing Aktif",
+      "30 Listing Aktif",
       "Membership aktif selama 1 tahun",
       "Website Profil Agen",
       "Integrasi Media Sosial",
@@ -275,7 +275,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
 
     paymentTitle: "Gold Membership - Yearly",
     paymentDescription:
-      "Paket tahunan untuk agen aktif yang ingin branding lebih kuat, visibilitas lebih tinggi, dan fitur marketing tambahan di TETAMO.",
+      "Paket tahunan untuk agen aktif yang ingin branding lebih kuat, prioritas visibilitas listing, dan fitur marketing tambahan di TETAMO.",
     renewalLabel: "Perpanjang Gold Membership",
     billingNote:
       "Membership aktif selama 1 tahun dan diperpanjang otomatis secara tahunan kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif saat ini.",
@@ -294,7 +294,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
       "Akses Boost & Spotlight",
       "1 AI Avatar Video Perkenalan",
       "3 Listing Unggulan Gratis (90 hari masing-masing)",
-      "Visibilitas listing lebih tinggi",
+      "Prioritas visibilitas listing",
       "Auto renew aktif secara default",
     ],
   },
@@ -341,7 +341,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
 
     paymentTitle: "Agent Pro Membership",
     paymentDescription:
-      "Paket tahunan premium untuk agen serius dan agensi yang ingin skala lebih besar, eksposur premium, dan opsi bayar bulanan dengan komitmen 12 bulan.",
+      "Paket tahunan premium untuk agen serius dan agensi yang ingin skala lebih besar, prioritas placement premium, dan opsi bayar bulanan dengan komitmen 12 bulan.",
     renewalLabel: "Perpanjang Agent Pro Membership",
     billingNote:
       "Membership aktif selama 1 tahun. Tersedia pembayaran tahunan penuh atau pembayaran bulanan dengan komitmen 12 bulan. Auto renew aktif secara default kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif / komitmen saat ini.",
@@ -360,9 +360,9 @@ export const AGENT_PACKAGES: AgentPackage[] = [
       "Akses Boost & Spotlight",
       "1 AI Avatar Video Perkenalan",
       "3 Listing Unggulan Gratis (90 hari masing-masing)",
-      "Penempatan Agen Unggulan",
-      "Eksposur premium di platform",
-      "Slot terbatas (7 agen saja)",
+      "Eligible untuk penempatan Agen Unggulan",
+      "Kesempatan eksposur premium di platform",
+      "Slot Agen Unggulan terbatas (7 agen)",
       "Tersedia opsi bayar bulanan",
       "Auto renew aktif secara default",
     ],
