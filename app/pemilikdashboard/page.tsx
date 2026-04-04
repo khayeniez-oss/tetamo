@@ -21,6 +21,8 @@ import {
   HandCoins,
   Wallet,
   ShieldAlert,
+  Bookmark,
+  Heart,
 } from "lucide-react";
 
 type ListingStatus = "AKTIF" | "AKAN_KADALUWARSA" | "KADALUWARSA";
@@ -308,6 +310,8 @@ export default function OwnerDashboardPage() {
           pageSubtitle:
             "Kelola iklan, perpanjangan, leads, dan status transaksi Anda.",
           createListing: "+ Buat Iklan Baru",
+          saved: "Tersimpan",
+          liked: "Disukai",
           loadError: "Gagal memuat dashboard:",
           totalListings: "Total Iklan",
           activeListings: "Iklan Aktif",
@@ -358,6 +362,8 @@ export default function OwnerDashboardPage() {
           pageSubtitle:
             "Manage your listings, renewals, leads, and transaction statuses.",
           createListing: "+ Create New Listing",
+          saved: "Saved",
+          liked: "Liked",
           loadError: "Failed to load dashboard:",
           totalListings: "Total Listings",
           activeListings: "Active Listings",
@@ -709,6 +715,26 @@ export default function OwnerDashboardPage() {
             {t.pageTitle}
           </h1>
           <p className="mt-1 text-sm text-gray-500">{t.pageSubtitle}</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.push("/pemilikdashboard/saved")}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+          >
+            <Bookmark className="h-4 w-4" />
+            {t.saved}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/pemilikdashboard/liked")}
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+          >
+            <Heart className="h-4 w-4" />
+            {t.liked}
+          </button>
         </div>
 
         <button
