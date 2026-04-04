@@ -13,6 +13,10 @@ type PaymentStatus =
   | "failed"
   | "expired"
   | "refunded"
+  | "paid"
+  | "completed"
+  | "settled"
+  | "active"
   | null;
 
 type BillingStatus =
@@ -29,6 +33,12 @@ type PaymentRow = {
   user_id: string | null;
   billing_record_id: string | null;
   listing_code: string | null;
+
+  product_id?: string | null;
+  product_type?: string | null;
+  flow?: string | null;
+  metadata?: Record<string, unknown> | null;
+
   product_name: string | null;
   payment_title: string | null;
   payment_description: string | null;
@@ -119,6 +129,14 @@ function cleanText(value: string | null | undefined) {
   return v || "-";
 }
 
+function getMetaString(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function formatAmount(
   amount: number | null,
   amountIdr: number | null,
@@ -164,7 +182,16 @@ function normalizeHistoryStatus(
   const p = String(paymentStatus || "").toLowerCase();
   const b = String(billingStatus || "").toLowerCase();
 
-  if (p === "succeeded") return "paid";
+  if (
+    p === "succeeded" ||
+    p === "paid" ||
+    p === "completed" ||
+    p === "settled" ||
+    p === "active"
+  ) {
+    return "paid";
+  }
+
   if (p === "initiated") return "initiated";
   if (p === "pending") return "pending";
   if (p === "failed") return "failed";
@@ -257,7 +284,61 @@ function joinTexts(values: Array<string | null | undefined>) {
     .toLowerCase();
 }
 
+function inferProductId(payment?: PaymentRow, billing?: BillingRow) {
+  const directProductId = String(payment?.product_id || "").trim().toLowerCase();
+  if (directProductId) return directProductId;
+
+  const metadataProductId = getMetaString(payment?.metadata, "productId").toLowerCase();
+  if (metadataProductId) return metadataProductId;
+
+  const metadataPackageId = getMetaString(payment?.metadata, "packageId").toLowerCase();
+  if (metadataPackageId) return metadataPackageId;
+
+  const text = joinTexts([
+    billing?.plan_code,
+    billing?.bill_type,
+    billing?.description,
+    payment?.product_name,
+    payment?.payment_title,
+    payment?.payment_description,
+    payment?.billing_note,
+  ]);
+
+  if (text.includes("agent pro")) return "agent-pro";
+  if (text.includes("gold")) return "gold";
+  if (text.includes("silver")) return "silver";
+  if (text.includes("homepage spotlight")) return "homepage-spotlight";
+  if (text.includes("spotlight")) return "homepage-spotlight";
+  if (text.includes("boost")) return "boost-listing";
+
+  return "";
+}
+
 function inferCategory(payment?: PaymentRow, billing?: BillingRow): HistoryCategory {
+  const productType = String(payment?.product_type || "").trim().toLowerCase();
+  const flow = String(payment?.flow || "").trim().toLowerCase();
+  const productId = inferProductId(payment, billing);
+
+  if (
+    productType === "membership" ||
+    flow === "agent-membership" ||
+    productId === "silver" ||
+    productId === "gold" ||
+    productId === "agent-pro"
+  ) {
+    return "membership";
+  }
+
+  if (
+    productType === "addon" ||
+    flow === "boost-listing" ||
+    flow === "homepage-spotlight" ||
+    productId === "boost-listing" ||
+    productId === "homepage-spotlight"
+  ) {
+    return "addon";
+  }
+
   const text = joinTexts([
     payment?.product_name,
     payment?.payment_title,
@@ -281,8 +362,7 @@ function inferCategory(payment?: PaymentRow, billing?: BillingRow): HistoryCateg
     text.includes("silver") ||
     text.includes("gold") ||
     text.includes("agent pro") ||
-    text.includes("membership") ||
-    text.includes("agen properti tetamo")
+    text.includes("membership")
   ) {
     return "membership";
   }
@@ -291,6 +371,17 @@ function inferCategory(payment?: PaymentRow, billing?: BillingRow): HistoryCateg
 }
 
 function inferPackageName(payment?: PaymentRow, billing?: BillingRow) {
+  const productId = inferProductId(payment, billing);
+
+  if (productId === "silver") return "Silver";
+  if (productId === "gold") return "Gold";
+  if (productId === "agent-pro") return "Agent Pro";
+  if (productId === "boost-listing") return "Boost Listing";
+  if (productId === "homepage-spotlight") return "Homepage Spotlight";
+
+  const metadataPackageName = getMetaString(payment?.metadata, "packageName");
+  if (metadataPackageName) return metadataPackageName;
+
   const text = joinTexts([
     billing?.plan_code,
     payment?.product_name,
@@ -308,12 +399,6 @@ function inferPackageName(payment?: PaymentRow, billing?: BillingRow) {
   if (text.includes("spotlight")) return "Homepage Spotlight";
   if (text.includes("boost")) return "Boost Listing";
 
-  if (text.includes("membership")) {
-    if (cleanText(billing?.plan_code) !== "-") return cleanText(billing?.plan_code);
-    if (cleanText(payment?.product_name) !== "-") return cleanText(payment?.product_name);
-    return cleanText(payment?.payment_title);
-  }
-
   return cleanText(
     billing?.plan_code ||
       payment?.product_name ||
@@ -330,6 +415,30 @@ function inferBillingType(
   lang: string = "id"
 ) {
   const currentLang = lang === "id" ? "id" : "en";
+
+  const selectedBillingCycle = getMetaString(payment?.metadata, "selectedBillingCycle").toLowerCase();
+
+  if (selectedBillingCycle === "monthly") {
+    return currentLang === "id" ? "Bulanan" : "Monthly";
+  }
+
+  if (selectedBillingCycle === "yearly") {
+    return currentLang === "id" ? "Tahunan" : "Yearly";
+  }
+
+  const productType = String(payment?.product_type || "").trim().toLowerCase();
+  const flow = String(payment?.flow || "").trim().toLowerCase();
+  const productId = inferProductId(payment, billing);
+
+  if (
+    productType === "addon" ||
+    flow === "boost-listing" ||
+    flow === "homepage-spotlight" ||
+    productId === "boost-listing" ||
+    productId === "homepage-spotlight"
+  ) {
+    return "Add-On";
+  }
 
   const text = joinTexts([
     billing?.plan_code,
@@ -364,27 +473,6 @@ function inferBillingType(
   }
 
   return "-";
-}
-
-function inferProductId(payment?: PaymentRow, billing?: BillingRow) {
-  const text = joinTexts([
-    billing?.plan_code,
-    billing?.bill_type,
-    billing?.description,
-    payment?.product_name,
-    payment?.payment_title,
-    payment?.payment_description,
-    payment?.billing_note,
-  ]);
-
-  if (text.includes("agent pro")) return "agent-pro";
-  if (text.includes("gold")) return "gold";
-  if (text.includes("silver")) return "silver";
-  if (text.includes("homepage spotlight")) return "homepage-spotlight";
-  if (text.includes("spotlight")) return "homepage-spotlight";
-  if (text.includes("boost")) return "boost-listing";
-
-  return "";
 }
 
 function buildRenewTarget(item: HistoryItem): RenewTarget {
@@ -449,55 +537,13 @@ export default function AgentTagihanPage() {
       const [paymentsRes, billingsRes] = await Promise.all([
         supabase
           .from("payments")
-          .select(
-            `
-              id,
-              user_id,
-              billing_record_id,
-              listing_code,
-              product_name,
-              payment_title,
-              payment_description,
-              billing_note,
-              payment_method,
-              method,
-              gateway,
-              provider,
-              amount,
-              amount_idr,
-              currency,
-              status,
-              receipt_number,
-              checkout_url,
-              created_at,
-              paid_at,
-              expires_at
-            `
-          )
+          .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
 
         supabase
           .from("billing_records")
-          .select(
-            `
-              id,
-              user_id,
-              invoice_number,
-              listing_code,
-              property_title,
-              description,
-              plan_code,
-              bill_type,
-              total,
-              amount,
-              currency,
-              created_at,
-              due_at,
-              paid_at,
-              status
-            `
-          )
+          .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
       ]);
@@ -548,12 +594,21 @@ export default function AgentTagihanPage() {
           billing.status
         );
 
+        const packageName = inferPackageName(latestPayment, billing);
+        const billingType = inferBillingType(latestPayment, billing, lang);
+        const category = inferCategory(latestPayment, billing);
+        const productId = inferProductId(latestPayment, billing);
+
         const methodText = cleanText(
           latestPayment?.payment_method ||
             latestPayment?.method ||
             latestPayment?.gateway ||
             latestPayment?.provider
         );
+
+        const rawTitle = latestPayment
+          ? buildTitleFromPayment(latestPayment)
+          : buildTitleFromBilling(billing);
 
         return {
           id: billing.id,
@@ -564,14 +619,15 @@ export default function AgentTagihanPage() {
             billing.created_at ||
             new Date().toISOString(),
 
-          title: latestPayment
-            ? buildTitleFromPayment(latestPayment)
-            : buildTitleFromBilling(billing),
+          title:
+            rawTitle === "Tetamo Payment" && packageName !== "-"
+              ? packageName
+              : rawTitle,
 
-          packageName: inferPackageName(latestPayment, billing),
-          billingType: inferBillingType(latestPayment, billing, lang),
-          category: inferCategory(latestPayment, billing),
-          productId: inferProductId(latestPayment, billing),
+          packageName,
+          billingType,
+          category,
+          productId,
 
           listingCode: cleanText(
             latestPayment?.listing_code || billing.listing_code
@@ -607,6 +663,11 @@ export default function AgentTagihanPage() {
             !payment.billing_record_id || !billingMap.has(payment.billing_record_id)
         )
         .map((payment) => {
+          const packageName = inferPackageName(payment, undefined);
+          const billingType = inferBillingType(payment, undefined, lang);
+          const category = inferCategory(payment, undefined);
+          const productId = inferProductId(payment, undefined);
+
           const methodText = cleanText(
             payment.payment_method ||
               payment.method ||
@@ -614,17 +675,23 @@ export default function AgentTagihanPage() {
               payment.provider
           );
 
+          const rawTitle = buildTitleFromPayment(payment);
+
           return {
             id: payment.id,
             billingId: "",
             paymentId: payment.id,
             sortDate: payment.created_at || new Date().toISOString(),
 
-            title: buildTitleFromPayment(payment),
-            packageName: inferPackageName(payment, undefined),
-            billingType: inferBillingType(payment, undefined, lang),
-            category: inferCategory(payment, undefined),
-            productId: inferProductId(payment, undefined),
+            title:
+              rawTitle === "Tetamo Payment" && packageName !== "-"
+                ? packageName
+                : rawTitle,
+
+            packageName,
+            billingType,
+            category,
+            productId,
 
             listingCode: cleanText(payment.listing_code),
             invoiceNumber: "-",
@@ -656,8 +723,10 @@ export default function AgentTagihanPage() {
         return new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
       });
 
-      setItems(merged);
-      setLoading(false);
+      if (!ignore) {
+        setItems(merged);
+        setLoading(false);
+      }
     }
 
     loadBillingHistory();
@@ -684,6 +753,7 @@ export default function AgentTagihanPage() {
         ${item.receiptNumber}
         ${item.method}
         ${item.status}
+        ${item.productId}
       `.toLowerCase();
 
       return words.every((word) => searchable.includes(word));
@@ -890,7 +960,7 @@ export default function AgentTagihanPage() {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[210px] lg:flex-col lg:items-end">
+                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[220px] lg:flex-col lg:items-end">
                       {item.invoiceNumber !== "-" ? (
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 sm:text-xs">
                           Invoice Ready
@@ -911,13 +981,13 @@ export default function AgentTagihanPage() {
                           href={renewTarget.href}
                           className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-100 sm:px-4 sm:text-sm"
                         >
-                          {renewTarget.kind === "addon"
+                          {renewTarget.kind === "membership"
                             ? lang === "id"
-                              ? "Perpanjang Add-On"
-                              : "Renew Add-On"
+                              ? "Perpanjang Membership"
+                              : "Renew Membership"
                             : lang === "id"
-                            ? "Perpanjang Membership"
-                            : "Renew Membership"}
+                            ? "Perpanjang Add-On"
+                            : "Renew Add-On"}
                         </Link>
                       ) : null}
 
