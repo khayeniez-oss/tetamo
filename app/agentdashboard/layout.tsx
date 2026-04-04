@@ -595,7 +595,6 @@ export default function AgentDashboardLayout({
                   >
                     {renderMenuLink("/agentdashboard/paket", "Paket")}
                     {renderMenuLink("/agentdashboard/tagihan", "Tagihan")}
-                    {renderMenuLink("/agentdashboard/pembayaran", "Pembayaran")}
                     {renderMenuLink("/agentdashboard/komisi", "Komisi")}
                     {renderMenuLink("/agentdashboard/sukses", "Sukses")}
                   </div>
