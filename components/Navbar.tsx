@@ -20,7 +20,6 @@ import {
   Shield,
   BadgeDollarSign,
   Bell,
-  Bookmark,
 } from "lucide-react";
 
 type ProfileData = {
@@ -28,7 +27,6 @@ type ProfileData = {
   role: string | null;
 };
 
-const SAVED_HREF = "/saved";
 const NOTIFICATIONS_HREF = "/notifications";
 
 function getDashboardHref(role: string | null) {
@@ -64,78 +62,56 @@ function CountBadge({ count }: { count: number }) {
   if (count <= 0) return null;
 
   return (
-    <span className="absolute -right-1 -top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#1C1C1E] px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-md">
+    <span className="absolute -right-1 -top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#B8860B] px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-md">
       {count > 99 ? "99+" : count}
     </span>
   );
 }
 
-function DesktopIconButton({
+function DesktopNotificationButton({
   label,
   count,
   onClick,
-  children,
-  variant = "default",
 }: {
   label: string;
   count: number;
   onClick: () => void;
-  children: React.ReactNode;
-  variant?: "saved" | "notification" | "default";
 }) {
-  const tone =
-    variant === "saved"
-      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-      : variant === "notification"
-      ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-      : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50";
-
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`relative inline-flex h-8 w-8 items-center justify-center rounded-xl border transition lg:h-9 lg:w-9 ${tone}`}
+      className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#1C1C1E] bg-[#1C1C1E] text-white transition hover:opacity-90 lg:h-9 lg:w-9"
     >
-      {children}
+      <Bell className="h-3 w-3" />
       <CountBadge count={count} />
     </button>
   );
 }
 
-function MobileShortcutButton({
+function MobileNotificationButton({
   href,
   label,
   count,
-  icon: Icon,
   onClick,
-  variant = "default",
 }: {
   href: string;
   label: string;
   count: number;
-  icon: any;
   onClick: (href: string) => void;
-  variant?: "saved" | "notification" | "default";
 }) {
-  const tone =
-    variant === "saved"
-      ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-      : variant === "notification"
-      ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-      : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50";
-
   return (
     <button
       type="button"
       onClick={() => onClick(href)}
-      className={`relative inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-center text-sm font-semibold transition ${tone}`}
+      className="relative inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-[#1C1C1E] bg-[#1C1C1E] px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
     >
-      <Icon className="h-3 w-3" />
+      <Bell className="h-3.5 w-3.5" />
       <span>{label}</span>
       {count > 0 ? (
-        <span className="inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#1C1C1E] px-1 py-0.5 text-[8px] font-bold leading-none text-white">
+        <span className="inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#B8860B] px-1 py-0.5 text-[8px] font-bold leading-none text-white">
           {count > 99 ? "99+" : count}
         </span>
       ) : null}
@@ -172,7 +148,6 @@ export default function Navbar() {
     signUp: isID ? "Daftar" : "Sign Up",
     menu: isID ? "Menu" : "Menu",
     quickAccess: isID ? "Akses Cepat" : "Quick Access",
-    saved: isID ? "Tersimpan" : "Saved",
     notifications: isID ? "Notifikasi" : "Notifications",
   };
 
@@ -182,7 +157,6 @@ export default function Navbar() {
   const [sessionLoading, setSessionLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
 
-  const [savedCount, setSavedCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
 
   const [langOpen, setLangOpen] = useState(false);
@@ -235,22 +209,14 @@ export default function Navbar() {
 
   async function loadNavbarCounts(userId: string) {
     try {
-      const [savedRes, notificationsRes] = await Promise.all([
-        supabase
-          .from("saved_properties")
-          .select("property_id", { count: "exact", head: true })
-          .eq("user_id", userId),
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq("is_read", false),
-      ]);
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_read", false);
 
-      setSavedCount(savedRes.count ?? 0);
-      setNotificationCount(notificationsRes.count ?? 0);
+      setNotificationCount(count ?? 0);
     } catch {
-      setSavedCount(0);
       setNotificationCount(0);
     }
   }
@@ -284,7 +250,6 @@ export default function Navbar() {
         if (!user) {
           setAuthUserEmail(null);
           setProfile(null);
-          setSavedCount(0);
           setNotificationCount(0);
           setSessionLoading(false);
           setProfileLoading(false);
@@ -300,7 +265,6 @@ export default function Navbar() {
         if (!mounted) return;
         setAuthUserEmail(null);
         setProfile(null);
-        setSavedCount(0);
         setNotificationCount(0);
         setSessionLoading(false);
         setProfileLoading(false);
@@ -319,7 +283,6 @@ export default function Navbar() {
       if (!user) {
         setAuthUserEmail(null);
         setProfile(null);
-        setSavedCount(0);
         setNotificationCount(0);
         setSessionLoading(false);
         setProfileLoading(false);
@@ -392,7 +355,6 @@ export default function Navbar() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    setSavedCount(0);
     setNotificationCount(0);
     setAccountOpen(false);
     setMobileMenuOpen(false);
@@ -566,23 +528,11 @@ export default function Navbar() {
                 )}
               </div>
 
-              <DesktopIconButton
-                label={t.saved}
-                count={savedCount}
-                onClick={() => goToProtectedRoute(SAVED_HREF)}
-                variant="saved"
-              >
-                <Bookmark className="h-3 w-3" />
-              </DesktopIconButton>
-
-              <DesktopIconButton
+              <DesktopNotificationButton
                 label={t.notifications}
                 count={notificationCount}
                 onClick={() => goToProtectedRoute(NOTIFICATIONS_HREF)}
-                variant="notification"
-              >
-                <Bell className="h-3 w-3" />
-              </DesktopIconButton>
+              />
 
               <div ref={accountRef} className="relative">
                 <button
@@ -885,22 +835,12 @@ export default function Navbar() {
                             </div>
                           </div>
 
-                          <div className="mb-2 grid grid-cols-2 gap-2">
-                            <MobileShortcutButton
-                              href={SAVED_HREF}
-                              label={t.saved}
-                              count={savedCount}
-                              icon={Bookmark}
-                              onClick={goToProtectedRoute}
-                              variant="saved"
-                            />
-                            <MobileShortcutButton
+                          <div className="mb-2 grid grid-cols-1 gap-2">
+                            <MobileNotificationButton
                               href={NOTIFICATIONS_HREF}
                               label={t.notifications}
                               count={notificationCount}
-                              icon={Bell}
                               onClick={goToProtectedRoute}
-                              variant="notification"
                             />
                           </div>
 
