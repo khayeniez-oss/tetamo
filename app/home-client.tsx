@@ -3,12 +3,79 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Crown } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
-/* ===========================
-   TYPES (CMS-ready)
-=========================== */
+/* =========================
+   MANUAL HOMEPAGE PICKS
+   Change these codes later
+========================= */
+
+const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM013", "RRM0-RW2"];
+
+/* =========================
+   TYPES
+========================= */
+
+type PropertyImageRow = {
+  image_url: string;
+  sort_order: number | null;
+  is_cover: boolean | null;
+};
+
+type HomepagePropertyRow = {
+  id: string;
+  kode: string | null;
+  posted_date: string | null;
+  created_at: string | null;
+  title: string | null;
+  price: number | null;
+  province: string | null;
+  city: string | null;
+  area: string | null;
+  building_size: number | null;
+  land_size: number | null;
+  bedrooms: number | null;
+  furnishing: string | null;
+  garage: number | string | null;
+  listing_type: string | null;
+  rental_type: string | null;
+  property_type: string | null;
+  source: string | null;
+  status: string | null;
+  verification_status: string | null;
+  verified_ok: boolean | null;
+  plan_id: string | null;
+  is_paused: boolean | null;
+  listing_expires_at: string | null;
+  featured_expires_at: string | null;
+  boost_active: boolean | null;
+  boost_expires_at: string | null;
+  spotlight_active: boolean | null;
+  spotlight_expires_at: string | null;
+  transaction_status: string | null;
+  contact_user_id: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_role: string | null;
+  contact_agency: string | null;
+  property_images: PropertyImageRow[] | null;
+};
+
+type HomepageProfileRow = {
+  id: string;
+  full_name: string | null;
+  photo_url: string | null;
+  address: string | null;
+  agency: string | null;
+  phone: string | null;
+  role: string | null;
+  instagram_url?: string | null;
+  facebook_url?: string | null;
+  tiktok_url?: string | null;
+  linkedin_url?: string | null;
+};
 
 type FeaturedProperty = {
   id: string;
@@ -19,32 +86,12 @@ type FeaturedProperty = {
   bed: string;
   furnishing: string;
   garage: string;
-  agentName: string;
+  posterName: string;
+  postedByType: "owner" | "agent" | "developer";
   whatsapp: string;
   kode?: string;
   postedDate?: string;
-  ownerApproved: boolean;
-  agentVerified: boolean;
-};
-
-type FeaturedAgent = {
-  id: string;
-  name: string;
-  photo: string;
-  location: string;
-  agency: string;
-  experience: string;
-  whatsapp: string;
-  branding?: string;
-  agentVerified: boolean;
-  isFeaturedAgent?: boolean;
-  featuredUntil?: string;
-  socials?: {
-    instagram?: string;
-    facebook?: string;
-    tiktok?: string;
-    linkedin?: string;
-  };
+  verifiedListing: boolean;
 };
 
 type FeaturedOwnerProperty = {
@@ -62,6 +109,61 @@ type FeaturedOwnerProperty = {
   postedDate?: string;
   ownerApproved: boolean;
 };
+
+type FeaturedAgent = {
+  id: string;
+  name: string;
+  photo: string;
+  location: string;
+  agency: string;
+  experience: string;
+  whatsapp: string;
+  agentVerified: boolean;
+  socials?: {
+    instagram?: string;
+    facebook?: string;
+    tiktok?: string;
+    linkedin?: string;
+  };
+};
+
+/* =========================
+   HELPERS
+========================= */
+
+function formatIdr(value: number | null | undefined) {
+  if (typeof value !== "number") return "Rp 0";
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatPostedDate(value?: string | null) {
+  if (!value) return "-";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+
+  return new Intl.NumberFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(d);
+}
+
+function mapFurnishing(value?: string | null) {
+  if (!value) return "-";
+
+  const v = value.toLowerCase();
+
+  if (v === "full") return "Full Furnish";
+  if (v === "semi") return "Semi Furnish";
+  if (v === "unfurnished") return "Unfurnished";
+
+  return value;
+}
 
 function translateBed(value: string, lang: string) {
   const count = value.match(/\d+/)?.[0] || value;
@@ -112,14 +214,252 @@ function normalizeWhatsapp(phone?: string | null) {
   return digits;
 }
 
-function isAgentLikeRole(value: unknown) {
-  const role = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_");
-
-  return role.includes("agent") || role.includes("agen");
+function normalizePropertyCode(value?: string | null) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .trim();
 }
+
+function isFutureDate(value?: string | null) {
+  if (!value) return false;
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return false;
+
+  return d.getTime() > Date.now();
+}
+
+function isPromotionActive(flag?: boolean | null, expiresAt?: string | null) {
+  return Boolean(flag) && (!expiresAt || isFutureDate(expiresAt));
+}
+
+function normalizeTransactionStatus(value?: string | null) {
+  const v = (value || "").trim().toLowerCase();
+  if (v === "sold") return "sold";
+  if (v === "rented") return "rented";
+  return "available";
+}
+
+function normalizePostedByType(
+  role?: string | null,
+  source?: string | null
+): "owner" | "agent" | "developer" {
+  const value = (role || source || "owner").toLowerCase();
+
+  if (value === "agent") return "agent";
+  if (value === "developer") return "developer";
+  return "owner";
+}
+
+function isListingPublic(
+  row: Pick<
+    HomepagePropertyRow,
+    "status" | "is_paused" | "listing_expires_at" | "transaction_status"
+  >
+) {
+  if (row.status === "rejected") return false;
+  if (row.is_paused) return false;
+
+  if (normalizeTransactionStatus(row.transaction_status) !== "available") {
+    return false;
+  }
+
+  if (row.listing_expires_at && !isFutureDate(row.listing_expires_at)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isVerifiedListing(row: HomepagePropertyRow) {
+  return row.verification_status === "verified" || Boolean(row.verified_ok);
+}
+
+function hasFeaturedPlacement(row: HomepagePropertyRow) {
+  const spotlight = isPromotionActive(
+    row.spotlight_active,
+    row.spotlight_expires_at
+  );
+
+  const featured =
+    row.plan_id === "featured" &&
+    (!row.featured_expires_at || isFutureDate(row.featured_expires_at));
+
+  const boosted = isPromotionActive(row.boost_active, row.boost_expires_at);
+
+  return spotlight || featured || boosted;
+}
+
+function getPromotionRank(row: HomepagePropertyRow) {
+  const spotlight = isPromotionActive(
+    row.spotlight_active,
+    row.spotlight_expires_at
+  );
+
+  const featured =
+    row.plan_id === "featured" &&
+    (!row.featured_expires_at || isFutureDate(row.featured_expires_at));
+
+  const boosted = isPromotionActive(row.boost_active, row.boost_expires_at);
+
+  if (spotlight) return 3;
+  if (featured) return 2;
+  if (boosted) return 1;
+  return 0;
+}
+
+function sortRowsByFeaturedNewest(
+  a: HomepagePropertyRow,
+  b: HomepagePropertyRow
+) {
+  const promoDiff = getPromotionRank(b) - getPromotionRank(a);
+  if (promoDiff !== 0) return promoDiff;
+
+  const timeA = new Date(a.posted_date || a.created_at || 0).getTime();
+  const timeB = new Date(b.posted_date || b.created_at || 0).getTime();
+
+  return timeB - timeA;
+}
+
+function sortPropertyImages(images?: PropertyImageRow[] | null) {
+  return [...(images ?? [])].sort((a, b) => {
+    const coverA = a.is_cover ? 1 : 0;
+    const coverB = b.is_cover ? 1 : 0;
+
+    if (coverA !== coverB) return coverB - coverA;
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  });
+}
+
+function buildPropertyImages(images?: PropertyImageRow[] | null) {
+  const sorted = sortPropertyImages(images);
+  if (sorted.length > 0) return sorted.map((item) => item.image_url);
+  return ["/placeholder-property.jpg"];
+}
+
+function getGarageLabel(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return "0 Garasi";
+
+  if (typeof value === "number") return `${value} Garasi`;
+
+  const raw = String(value).trim().toLowerCase();
+  const num = raw.match(/\d+/)?.[0];
+
+  if (num) return `${num} Garasi`;
+  if (raw === "ada") return "1 Garasi";
+  if (raw === "tidak_ada" || raw === "tidak ada") return "0 Garasi";
+
+  return String(value);
+}
+
+function getMainSize(row: HomepagePropertyRow) {
+  const value = row.building_size ?? row.land_size ?? 0;
+  return `${value} m²`;
+}
+
+/* =========================
+   DATA
+========================= */
+
+async function fetchHomepageProperties() {
+  const { data, error } = await supabase
+    .from("properties")
+    .select(`
+      id,
+      kode,
+      posted_date,
+      created_at,
+      title,
+      price,
+      province,
+      city,
+      area,
+      building_size,
+      land_size,
+      bedrooms,
+      furnishing,
+      garage,
+      listing_type,
+      rental_type,
+      property_type,
+      source,
+      status,
+      verification_status,
+      verified_ok,
+      plan_id,
+      is_paused,
+      listing_expires_at,
+      featured_expires_at,
+      boost_active,
+      boost_expires_at,
+      spotlight_active,
+      spotlight_expires_at,
+      transaction_status,
+      contact_user_id,
+      contact_name,
+      contact_phone,
+      contact_role,
+      contact_agency,
+      property_images (
+        image_url,
+        sort_order,
+        is_cover
+      )
+    `)
+    .neq("status", "rejected")
+    .order("created_at", { ascending: false })
+    .limit(60);
+
+  if (error) throw error;
+  return (data ?? []) as HomepagePropertyRow[];
+}
+
+async function fetchHomepageProfilesByIds(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+
+  if (uniqueIds.length === 0) {
+    return new Map<string, HomepageProfileRow>();
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        full_name,
+        photo_url,
+        address,
+        agency,
+        phone,
+        role,
+        instagram_url,
+        facebook_url,
+        tiktok_url,
+        linkedin_url
+      `)
+      .in("id", uniqueIds);
+
+    if (error) {
+      console.error("Failed to load homepage profile fallback:", error);
+      return new Map<string, HomepageProfileRow>();
+    }
+
+    return new Map(
+      ((data ?? []) as HomepageProfileRow[]).map((profile) => [
+        profile.id,
+        profile,
+      ])
+    );
+  } catch (error) {
+    console.error("Failed to load homepage profile fallback:", error);
+    return new Map<string, HomepageProfileRow>();
+  }
+}
+
+/* =========================
+   SMALL UI
+========================= */
 
 function InfoCard({
   title,
@@ -144,6 +484,281 @@ function InfoCard({
   );
 }
 
+function SectionEmpty({ text }: { text: string }) {
+  return (
+    <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+      {text}
+    </div>
+  );
+}
+
+function SocialBtn({
+  href,
+  label,
+  children,
+}: {
+  href?: string;
+  label: string;
+  children: ReactNode;
+}) {
+  if (!href) return null;
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={label}
+      title={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white transition hover:bg-gray-50"
+    >
+      {children}
+    </a>
+  );
+}
+
+/* =========================
+   ICONS
+========================= */
+
+function IconInstagram() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
+      <path
+        d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M12 16a4 4 0 100-8 4 4 0 000 8Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M17.5 6.5h.01"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconFacebook() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
+      <path
+        d="M14 8h2V5h-2c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.4l.6-3H13V9c0-.6.4-1 1-1Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function IconLinkedIn() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
+      <path d="M6.5 9.5H4V20h2.5V9.5Z" fill="currentColor" />
+      <path
+        d="M5.25 8.2a1.45 1.45 0 110-2.9 1.45 1.45 0 010 2.9Z"
+        fill="currentColor"
+      />
+      <path
+        d="M20 14.1V20h-2.5v-5.4c0-1.3-.5-2.2-1.7-2.2-1 0-1.6.7-1.9 1.3-.1.3-.1.7-.1 1.1V20H11.3V9.5h2.4v1.4c.3-.6 1.2-1.5 2.8-1.5 1.9 0 3.5 1.2 3.5 3.7Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function IconTikTok() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
+      <path
+        d="M12.75 2h2.25a4.5 4.5 0 004.5 4.5v2.25a6.75 6.75 0 01-4.5-1.6v6.35a5.25 5.25 0 11-5.25-5.25c.27 0 .54.02.8.07v2.3a3 3 0 102.2 2.88V2z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/* =========================
+   CARDS
+========================= */
+
+function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
+  const [imgIndex, setImgIndex] = useState(0);
+  const { lang } = useLanguage();
+
+  const next = () =>
+    setImgIndex((prev) =>
+      prev === property.images.length - 1 ? 0 : prev + 1
+    );
+
+  const prev = () =>
+    setImgIndex((prev) =>
+      prev === 0 ? property.images.length - 1 : prev - 1
+    );
+
+  const whatsappHref = property.whatsapp
+    ? `https://wa.me/${property.whatsapp}?text=${encodeURIComponent(
+        lang === "id"
+          ? `Halo, saya melihat properti ini di TETAMO dan tertarik.
+
+Kode: ${property.kode || "-"}
+Lokasi: ${property.province}
+Harga: ${property.price}
+
+Apakah properti ini masih tersedia?`
+          : `Hello, I saw this property on TETAMO and I am interested.
+
+Code: ${property.kode || "-"}
+Location: ${property.province}
+Price: ${property.price}
+
+Is this property still available?`
+      )}`
+    : "#";
+
+  function getVerifiedBadgeText() {
+    if (property.postedByType === "owner") {
+      return lang === "id" ? "Pemilik Terverifikasi" : "Verified Owner";
+    }
+
+    if (property.postedByType === "developer") {
+      return lang === "id" ? "Developer Terverifikasi" : "Verified Developer";
+    }
+
+    return lang === "id" ? "Agen Terverifikasi" : "Verified Agent";
+  }
+
+  function getPosterLabel() {
+    if (property.postedByType === "owner") {
+      return lang === "id" ? "Pemilik" : "Owner";
+    }
+
+    if (property.postedByType === "developer") {
+      return lang === "id" ? "Developer" : "Developer";
+    }
+
+    return lang === "id" ? "Agen" : "Agent";
+  }
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+      <div className="relative">
+        <div className="absolute left-3 top-3 z-10">
+          {property.verifiedListing ? (
+            <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+              {getVerifiedBadgeText()}
+            </div>
+          ) : (
+            <div className="rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-800 sm:text-xs">
+              {lang === "id" ? "Pending" : "Pending"}
+            </div>
+          )}
+        </div>
+
+        <img
+          src={property.images[imgIndex]}
+          alt="Property"
+          className="h-[410px] w-full object-cover sm:h-[360px] lg:h-[420px]"
+        />
+
+        <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+          TETAMO
+        </div>
+
+        <button
+          onClick={prev}
+          type="button"
+          className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
+          aria-label="Previous image"
+        >
+          ‹
+        </button>
+
+        <button
+          onClick={next}
+          type="button"
+          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
+          aria-label="Next image"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="p-4 sm:p-5">
+        <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
+          {property.price}
+        </h3>
+
+        <p className="mt-1 text-sm text-gray-600">{property.province}</p>
+
+        <p className="mt-2 text-sm leading-6 text-gray-600">
+          {property.size} • {translateBed(property.bed, lang)} •{" "}
+          {translateFurnishing(property.furnishing, lang)} •{" "}
+          {translateGarage(property.garage, lang)}
+        </p>
+
+        <div className="mt-3">
+          <p className="text-sm text-gray-600">
+            {getPosterLabel()}:{" "}
+            <span className="font-semibold text-gray-800">
+              {property.posterName}
+            </span>
+          </p>
+
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+            {property.kode && (
+              <span>
+                {lang === "id" ? "Kode:" : "Code:"}{" "}
+                <span className="font-medium text-gray-700">
+                  {property.kode}
+                </span>
+              </span>
+            )}
+
+            {property.postedDate && (
+              <span>
+                {lang === "id" ? "Tayang:" : "Posted:"}{" "}
+                <span className="font-medium text-gray-700">
+                  {property.postedDate}
+                </span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <a
+            href={whatsappHref}
+            onClick={(e) => {
+              if (!property.whatsapp) e.preventDefault();
+            }}
+            target="_blank"
+            rel="noreferrer"
+            className={`flex min-h-[48px] items-center justify-center rounded-2xl px-3 py-3 text-center text-[13px] font-semibold text-white transition sm:text-sm ${
+              property.whatsapp
+                ? "bg-[#1C1C1E] hover:opacity-90"
+                : "cursor-not-allowed bg-gray-300"
+            }`}
+          >
+            WhatsApp
+          </a>
+
+          <Link
+            href={`/properti/${property.id}`}
+            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
+          >
+            {lang === "id" ? "Lihat Detail" : "View Detail"}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeaturedOwnerPropertyCard({
   property,
 }: {
@@ -161,6 +776,10 @@ function FeaturedOwnerPropertyCard({
     setImgIndex((prev) =>
       prev === 0 ? property.images.length - 1 : prev - 1
     );
+
+  const whatsappHref = property.ownerWhatsapp
+    ? `https://wa.me/${property.ownerWhatsapp}`
+    : "#";
 
   return (
     <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
@@ -250,331 +869,19 @@ function FeaturedOwnerPropertyCard({
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <a
-            href={`https://wa.me/${property.ownerWhatsapp}`}
+            href={whatsappHref}
+            onClick={(e) => {
+              if (!property.ownerWhatsapp) e.preventDefault();
+            }}
             target="_blank"
             rel="noreferrer"
-            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-3 py-3 text-center text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
+            className={`flex min-h-[48px] items-center justify-center rounded-2xl px-3 py-3 text-center text-[13px] font-semibold text-white transition sm:text-sm ${
+              property.ownerWhatsapp
+                ? "bg-[#1C1C1E] hover:opacity-90"
+                : "cursor-not-allowed bg-gray-300"
+            }`}
           >
             {lang === "id" ? "WhatsApp Pemilik" : "WhatsApp Owner"}
-          </a>
-
-          <button
-            type="button"
-            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
-          >
-            {lang === "id" ? "Lihat Detail" : "View Detail"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FeaturedOwnersSection() {
-  const { lang } = useLanguage();
-
-  const owners: FeaturedOwnerProperty[] = [
-    {
-      id: "p1",
-      ownerName: "Bapak Hendra",
-      ownerWhatsapp: "6281234567890",
-      images: [
-        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80",
-        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=80",
-      ],
-      price: "Rp 2.200.000.000",
-      province: "DKI Jakarta",
-      size: "190 m²",
-      bed: "3 Bed",
-      furnishing: "Full Furnish",
-      garage: "2 Garasi",
-      kode: "TMO-0001",
-      postedDate: "12 Feb 2026",
-      ownerApproved: true,
-    },
-    {
-      id: "p2",
-      ownerName: "Ibu Sari",
-      ownerWhatsapp: "6281234567890",
-      images: [
-        "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1600&q=80",
-        "https://images.unsplash.com/photo-1572120360610-d971b9d7767c?auto=format&fit=crop&w=1600&q=80",
-      ],
-      price: "Rp 1.650.000.000",
-      province: "Jawa Barat",
-      size: "170 m²",
-      bed: "4 Bed",
-      furnishing: "Semi Furnish",
-      garage: "1 Garasi",
-      kode: "TMO-0001",
-      postedDate: "12 Feb 2026",
-      ownerApproved: true,
-    },
-    {
-      id: "p3",
-      ownerName: "Pak Wayan",
-      ownerWhatsapp: "6281234567890",
-      images: [
-        "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1600&q=80",
-        "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1600&q=80",
-      ],
-      price: "Rp 3.100.000.000",
-      province: "Bali",
-      size: "240 m²",
-      bed: "5 Bed",
-      furnishing: "Unfurnished",
-      garage: "2 Garasi",
-      kode: "TMO-0001",
-      postedDate: "12 Feb 2026",
-      ownerApproved: true,
-    },
-  ];
-
-  return (
-    <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-      <div className="mx-auto max-w-7xl">
-        <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
-          {lang === "id"
-            ? "Properti Pemilik Unggulan"
-            : "Featured Owner Properties"}
-        </h2>
-
-        <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
-          {lang === "id"
-            ? "Properti langsung dari pemilik. Transparan, jelas, dan terverifikasi."
-            : "Verified properties directly from owners."}
-        </p>
-
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-          {owners.map((p) => (
-            <FeaturedOwnerPropertyCard key={p.id} property={p} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ===========================
-   ICONS
-=========================== */
-
-function IconInstagram() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
-      <path
-        d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M12 16a4 4 0 100-8 4 4 0 000 8Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M17.5 6.5h.01"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function IconFacebook() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
-      <path
-        d="M14 8h2V5h-2c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.4l.6-3H13V9c0-.6.4-1 1-1Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function IconLinkedIn() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
-      <path d="M6.5 9.5H4V20h2.5V9.5Z" fill="currentColor" />
-      <path
-        d="M5.25 8.2a1.45 1.45 0 110-2.9 1.45 1.45 0 010 2.9Z"
-        fill="currentColor"
-      />
-      <path
-        d="M20 14.1V20h-2.5v-5.4c0-1.3-.5-2.2-1.7-2.2-1 0-1.6.7-1.9 1.3-.1.3-.1.7-.1 1.1V20H11.3V9.5h2.4v1.4c.3-.6 1.2-1.5 2.8-1.5 1.9 0 3.5 1.2 3.5 3.7Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function IconTikTok() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#1C1C1E]" fill="none">
-      <path
-        d="M12.75 2h2.25a4.5 4.5 0 004.5 4.5v2.25a6.75 6.75 0 01-4.5-1.6v6.35a5.25 5.25 0 11-5.25-5.25c.27 0 .54.02.8.07v2.3a3 3 0 102.2 2.88V2z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function SocialBtn({
-  href,
-  label,
-  children,
-}: {
-  href?: string;
-  label: string;
-  children: ReactNode;
-}) {
-  if (!href) return null;
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={label}
-      title={label}
-      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white transition hover:bg-gray-50"
-    >
-      {children}
-    </a>
-  );
-}
-
-/* ===========================
-   FEATURED PROPERTY CARD
-=========================== */
-
-function FeaturedPropertyCard({ property }: { property: FeaturedProperty }) {
-  const [imgIndex, setImgIndex] = useState(0);
-  const { lang } = useLanguage();
-
-  const next = () =>
-    setImgIndex((prev) =>
-      prev === property.images.length - 1 ? 0 : prev + 1
-    );
-
-  const prev = () =>
-    setImgIndex((prev) =>
-      prev === 0 ? property.images.length - 1 : prev - 1
-    );
-
-  return (
-    <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-      <div className="relative">
-        <div className="absolute left-3 top-3 z-10">
-          {property.agentVerified ? (
-            <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-              {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
-            </div>
-          ) : (
-            <div className="rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-800 sm:text-xs">
-              {lang === "id" ? "Agen Pending" : "Pending Agent"}
-            </div>
-          )}
-        </div>
-
-        <img
-          src={property.images[imgIndex]}
-          alt="Property"
-          className="h-[320px] w-full object-cover sm:h-[360px] lg:h-[420px]"
-        />
-
-        <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-          TETAMO
-        </div>
-
-        <button
-          onClick={prev}
-          type="button"
-          className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-          aria-label="Previous image"
-        >
-          ‹
-        </button>
-
-        <button
-          onClick={next}
-          type="button"
-          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-          aria-label="Next image"
-        >
-          ›
-        </button>
-      </div>
-
-      <div className="p-4 sm:p-5">
-        <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
-          {property.price}
-        </h3>
-
-        <p className="mt-1 text-sm text-gray-600">{property.province}</p>
-
-        <p className="mt-2 text-sm leading-6 text-gray-600">
-          {property.size} • {translateBed(property.bed, lang)} •{" "}
-          {translateFurnishing(property.furnishing, lang)} •{" "}
-          {translateGarage(property.garage, lang)}
-        </p>
-
-        <div className="mt-3">
-          <p className="text-sm text-gray-600">
-            {lang === "id" ? "Agen:" : "Agent:"}{" "}
-            <span className="font-semibold text-gray-800">
-              {property.agentName}
-            </span>
-          </p>
-
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-            {property.kode && (
-              <span>
-                {lang === "id" ? "Kode:" : "Code:"}{" "}
-                <span className="font-medium text-gray-700">
-                  {property.kode}
-                </span>
-              </span>
-            )}
-
-            {property.postedDate && (
-              <span>
-                {lang === "id" ? "Tayang:" : "Posted:"}{" "}
-                <span className="font-medium text-gray-700">
-                  {property.postedDate}
-                </span>
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <a
-            href={`https://wa.me/${property.whatsapp}?text=${encodeURIComponent(
-              lang === "id"
-                ? `Halo, saya melihat properti ini di TETAMO dan tertarik.
-
-Properti: ${property.id}
-Kode: ${property.kode}
-Lokasi: ${property.province}
-Harga: ${property.price}
-
-Apakah properti ini masih tersedia?`
-                : `Hello, I saw this property on TETAMO and I'm interested.
-
-Property: ${property.id}
-Code: ${property.kode}
-Location: ${property.province}
-Price: ${property.price}
-
-Is this property still available?`
-            )}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-3 py-3 text-center text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
-          >
-            WhatsApp
           </a>
 
           <Link
@@ -589,72 +896,85 @@ Is this property still available?`
   );
 }
 
-/* ===========================
+/* =========================
    SECTIONS
-=========================== */
+========================= */
 
 function FeaturedPropertiesSection() {
   const { lang } = useLanguage();
+  const [properties, setProperties] = useState<FeaturedProperty[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const featured: FeaturedProperty[] = [
-    {
-      id: "p1",
-      images: [
-        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80",
-        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1600&q=80",
-      ],
-      price: "Rp 2.500.000.000",
-      province: "DKI Jakarta",
-      size: "200 m²",
-      bed: "3 Bed",
-      furnishing: "Full Furnish",
-      garage: "2 Garasi",
-      agentName: "Gunawan",
-      whatsapp: "6281234567890",
-      kode: "TMO-0001",
-      postedDate: "12 Feb 2026",
-      ownerApproved: true,
-      agentVerified: true,
-    },
-    {
-      id: "p2",
-      images: [
-        "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1600&q=80",
-        "https://images.unsplash.com/photo-1572120360610-d971b9d7767c?auto=format&fit=crop&w=1600&q=80",
-      ],
-      price: "Rp 1.850.000.000",
-      province: "Jawa Barat",
-      size: "180 m²",
-      bed: "4 Bed",
-      furnishing: "Semi Furnish",
-      garage: "1 Garasi",
-      agentName: "Maria",
-      whatsapp: "6281234567890",
-      kode: "TMO-0001",
-      postedDate: "12 Feb 2026",
-      ownerApproved: true,
-      agentVerified: true,
-    },
-    {
-      id: "p3",
-      images: [
-        "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1600&q=80",
-        "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1600&q=80",
-      ],
-      price: "Rp 3.400.000.000",
-      province: "Banten",
-      size: "250 m²",
-      bed: "5 Bed",
-      furnishing: "Unfurnished",
-      garage: "2 Garasi",
-      agentName: "Andi",
-      whatsapp: "6281234567890",
-      kode: "TMO-0001",
-      postedDate: "12 Feb 2026",
-      ownerApproved: true,
-      agentVerified: true,
-    },
-  ];
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadFeaturedProperties() {
+      try {
+        setLoading(true);
+
+        const rows = await fetchHomepageProperties();
+
+        const publicVerifiedRows = rows
+          .filter((row) => isListingPublic(row))
+          .filter((row) => isVerifiedListing(row));
+
+        const featuredRows = FEATURED_PROPERTY_CODES.map((kode) =>
+          publicVerifiedRows.find(
+            (row) =>
+              normalizePropertyCode(row.kode) === normalizePropertyCode(kode)
+          )
+        ).filter((row): row is HomepagePropertyRow => Boolean(row));
+
+        const profileIds = Array.from(
+          new Set(
+            featuredRows
+              .map((row) => row.contact_user_id)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+
+        const profilesMap = await fetchHomepageProfilesByIds(profileIds);
+
+        const mapped = featuredRows.map((row) => {
+          const profile = row.contact_user_id
+            ? profilesMap.get(row.contact_user_id)
+            : null;
+
+          return {
+            id: row.id,
+            images: buildPropertyImages(row.property_images),
+            price: formatIdr(row.price ?? 0),
+            province: row.province ?? row.city ?? row.area ?? "-",
+            size: getMainSize(row),
+            bed: `${row.bedrooms ?? 0} Bed`,
+            furnishing: mapFurnishing(row.furnishing),
+            garage: getGarageLabel(row.garage),
+            posterName: row.contact_name || profile?.full_name || "Tetamo User",
+            postedByType: normalizePostedByType(row.contact_role, row.source),
+            whatsapp: normalizeWhatsapp(
+              row.contact_phone || profile?.phone || ""
+            ),
+            kode: row.kode ?? undefined,
+            postedDate: formatPostedDate(row.posted_date || row.created_at),
+            verifiedListing: isVerifiedListing(row),
+          };
+        });
+
+        if (!ignore) setProperties(mapped);
+      } catch (error) {
+        console.error("Failed to load featured properties:", error);
+        if (!ignore) setProperties([]);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadFeaturedProperties();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return (
     <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
@@ -663,11 +983,29 @@ function FeaturedPropertiesSection() {
           {lang === "id" ? "Properti Unggulan" : "Featured Properties"}
         </h2>
 
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-          {featured.map((p) => (
-            <FeaturedPropertyCard key={p.id} property={p} />
-          ))}
-        </div>
+        {loading ? (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Memuat properti unggulan..."
+                : "Loading featured properties..."
+            }
+          />
+        ) : properties.length === 0 ? (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Belum ada properti unggulan."
+                : "No featured properties yet."
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+            {properties.map((p) => (
+              <FeaturedPropertiesCard key={p.id} property={p} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -675,135 +1013,96 @@ function FeaturedPropertiesSection() {
 
 function FeaturedAgentsSection() {
   const { lang } = useLanguage();
-
-  const defaultAgents: FeaturedAgent[] = [
-    {
-      id: "p1",
-      name: "Gunawan",
-      photo: "https://randomuser.me/api/portraits/men/32.jpg",
-      location: "Jakarta",
-      agency: "Century 21",
-      branding: "Century 21 Jakarta",
-      experience: "8 tahun pengalaman",
-      whatsapp: "6281234567890",
-      agentVerified: true,
-      isFeaturedAgent: true,
-      socials: {
-        instagram: "https://instagram.com",
-        facebook: "https://facebook.com",
-        tiktok: "https://tiktok.com",
-        linkedin: "https://linkedin.com",
-      },
-    },
-    {
-      id: "p2",
-      name: "Maria",
-      photo: "https://randomuser.me/api/portraits/women/44.jpg",
-      location: "BSD",
-      agency: "Ray White",
-      branding: "Ray White BSD",
-      experience: "5 tahun pengalaman",
-      whatsapp: "6281234567890",
-      agentVerified: true,
-      isFeaturedAgent: true,
-      socials: {
-        instagram: "https://instagram.com",
-        tiktok: "https://tiktok.com",
-      },
-    },
-    {
-      id: "p3",
-      name: "Andi",
-      photo: "https://randomuser.me/api/portraits/men/76.jpg",
-      location: "Surabaya",
-      agency: "Independent",
-      branding: "Independent Agent",
-      experience: "10 tahun pengalaman",
-      whatsapp: "6281234567890",
-      agentVerified: true,
-      isFeaturedAgent: true,
-      socials: {
-        instagram: "https://instagram.com",
-        facebook: "https://facebook.com",
-      },
-    },
-  ];
-
-  const [agents, setAgents] = useState<FeaturedAgent[]>(defaultAgents);
+  const [agents, setAgents] = useState<FeaturedAgent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let ignore = false;
 
     async function loadFeaturedAgents() {
       try {
-        const nowIso = new Date().toISOString();
+        setLoading(true);
 
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(`
-            id,
-            full_name,
-            photo_url,
-            city,
-            address,
-            agency,
-            phone,
-            role,
-            instagram_url,
-            facebook_url,
-            tiktok_url,
-            linkedin_url,
-            is_featured_agent,
-            featured_agent_at,
-            featured_agent_until
-          `)
-          .eq("is_featured_agent", true)
-          .gt("featured_agent_until", nowIso)
-          .order("featured_agent_at", { ascending: false })
-          .limit(3);
+        const rows = await fetchHomepageProperties();
 
-        if (error) throw error;
+        const agentRows = rows
+          .filter((row) => isListingPublic(row))
+          .filter((row) => isVerifiedListing(row))
+          .filter((row) => hasFeaturedPlacement(row))
+          .filter(
+            (row) =>
+              normalizePostedByType(row.contact_role, row.source) === "agent"
+          )
+          .sort(sortRowsByFeaturedNewest);
 
-        const mapped = ((data ?? []) as Record<string, any>[])
-          .filter((profile) => isAgentLikeRole(profile?.role))
-          .map((profile) => ({
-            id: String(profile?.id || ""),
-            name:
-              String(profile?.full_name || "").trim() || "Tetamo Agent",
+        const uniqueRows = new Map<string, HomepagePropertyRow>();
+
+        for (const row of agentRows) {
+          const key =
+            row.contact_user_id ||
+            row.contact_name ||
+            row.contact_phone ||
+            row.id;
+
+          if (!uniqueRows.has(key)) {
+            uniqueRows.set(key, row);
+          }
+        }
+
+        const limitedRows = Array.from(uniqueRows.values()).slice(0, 3);
+
+        const profileIds = Array.from(
+          new Set(
+            limitedRows
+              .map((row) => row.contact_user_id)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+
+        const profilesMap = await fetchHomepageProfilesByIds(profileIds);
+
+        const mapped = limitedRows.map((row) => {
+          const profile = row.contact_user_id
+            ? profilesMap.get(row.contact_user_id)
+            : null;
+
+          return {
+            id: row.contact_user_id || row.id,
+            name: row.contact_name || profile?.full_name || "Tetamo Agent",
             photo:
-              String(profile?.photo_url || "").trim() ||
+              profile?.photo_url ||
               "https://randomuser.me/api/portraits/men/32.jpg",
             location:
-              String(profile?.city || "").trim() ||
-              String(profile?.address || "").trim() ||
+              profile?.address ||
+              row.province ||
+              row.city ||
+              row.area ||
               "Indonesia",
             agency:
-              String(profile?.agency || "").trim() || "Tetamo Agent Network",
-            branding:
-              String(profile?.agency || "").trim() || "Tetamo Agent Network",
+              row.contact_agency || profile?.agency || "Tetamo Agent Network",
             experience:
-              lang === "id" ? "Agen Unggulan Tetamo" : "Tetamo Featured Agent",
-            whatsapp: normalizeWhatsapp(profile?.phone || ""),
+              lang === "id"
+                ? "Agen Unggulan Tetamo"
+                : "Tetamo Featured Agent",
+            whatsapp: normalizeWhatsapp(
+              row.contact_phone || profile?.phone || ""
+            ),
             agentVerified: true,
-            isFeaturedAgent: true,
-            featuredUntil:
-              typeof profile?.featured_agent_until === "string"
-                ? profile.featured_agent_until
-                : undefined,
             socials: {
-              instagram: String(profile?.instagram_url || "").trim() || "",
-              facebook: String(profile?.facebook_url || "").trim() || "",
-              tiktok: String(profile?.tiktok_url || "").trim() || "",
-              linkedin: String(profile?.linkedin_url || "").trim() || "",
+              instagram: profile?.instagram_url || "",
+              facebook: profile?.facebook_url || "",
+              tiktok: profile?.tiktok_url || "",
+              linkedin: profile?.linkedin_url || "",
             },
-          }))
-          .filter((agent) => agent.whatsapp);
+          };
+        });
 
-        if (!ignore && mapped.length > 0) {
-          setAgents(mapped);
-        }
+        if (!ignore) setAgents(mapped);
       } catch (error) {
         console.error("Failed to load featured agents:", error);
+        if (!ignore) setAgents([]);
+      } finally {
+        if (!ignore) setLoading(false);
       }
     }
 
@@ -827,86 +1126,236 @@ function FeaturedAgentsSection() {
             : "Modern agent profiles connected to social media, making it easy for serious buyers to find and contact you directly."}
         </p>
 
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
-            >
-              <div className="absolute left-3 top-3 flex flex-col gap-2">
-                {agent.agentVerified && (
-                  <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                    {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
+        {loading ? (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Memuat agen unggulan..."
+                : "Loading featured agents..."
+            }
+          />
+        ) : agents.length === 0 ? (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Belum ada agen unggulan."
+                : "No featured agents yet."
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+            {agents.map((agent) => {
+              const whatsappHref = agent.whatsapp
+                ? `https://wa.me/${agent.whatsapp}`
+                : "#";
+
+              return (
+                <div
+                  key={agent.id}
+                  className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
+                >
+                  <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2">
+                    {agent.agentVerified && (
+                      <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                        {lang === "id"
+                          ? "Agen Terverifikasi"
+                          : "Verified Agent"}
+                      </div>
+                    )}
+
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                      <Crown className="h-3.5 w-3.5" />
+                      {lang === "id" ? "Agen Unggulan" : "Featured Agent"}
+                    </div>
                   </div>
-                )}
 
-                {agent.isFeaturedAgent && (
-                  <div className="rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                    {lang === "id" ? "Agen Unggulan" : "Featured Agent"}
-                  </div>
-                )}
-              </div>
+                  <div className="mt-10 flex items-start gap-4 sm:mt-12">
+                    <img
+                      src={agent.photo}
+                      alt={agent.name}
+                      className="h-24 w-24 shrink-0 rounded-2xl object-cover sm:h-28 sm:w-28"
+                    />
 
-              <div className="mt-8 flex items-start gap-4 sm:mt-10">
-                <img
-                  src={agent.photo}
-                  alt={agent.name}
-                  className="h-20 w-20 shrink-0 rounded-2xl object-cover sm:h-24 sm:w-24"
-                />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                        {agent.name}
+                      </h3>
 
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
-                    {agent.name}
-                  </h3>
+                      <div className="mt-1 text-sm text-gray-600">
+                        {agent.agency}
+                      </div>
 
-                  <div className="mt-1 text-sm text-gray-600">
-                    {agent.agency}
-                  </div>
+                      <div className="mt-1 text-sm text-gray-500">
+                        {agent.location}
+                      </div>
 
-                  <div className="mt-1 text-sm text-gray-500">
-                    {agent.location}
+                      <p className="mt-2 text-sm text-gray-500">
+                        {agent.experience}
+                      </p>
+                    </div>
                   </div>
 
-                  <p className="mt-2 text-sm text-gray-500">
-                    {agent.experience}
-                  </p>
+                  <div className="mt-5 flex flex-wrap justify-center gap-3">
+                    <SocialBtn href={agent.socials?.instagram} label="Instagram">
+                      <IconInstagram />
+                    </SocialBtn>
+                    <SocialBtn href={agent.socials?.facebook} label="Facebook">
+                      <IconFacebook />
+                    </SocialBtn>
+                    <SocialBtn href={agent.socials?.tiktok} label="TikTok">
+                      <IconTikTok />
+                    </SocialBtn>
+                    <SocialBtn href={agent.socials?.linkedin} label="LinkedIn">
+                      <IconLinkedIn />
+                    </SocialBtn>
+                  </div>
+
+                  <a
+                    href={whatsappHref}
+                    onClick={(e) => {
+                      if (!agent.whatsapp) e.preventDefault();
+                    }}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`mt-5 inline-block w-full rounded-2xl px-4 py-3 text-center text-sm font-semibold text-white transition ${
+                      agent.whatsapp
+                        ? "bg-[#1C1C1E] hover:opacity-90"
+                        : "cursor-not-allowed bg-gray-300"
+                    }`}
+                  >
+                    WhatsApp
+                  </a>
                 </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap justify-center gap-3">
-                <SocialBtn href={agent.socials?.instagram} label="Instagram">
-                  <IconInstagram />
-                </SocialBtn>
-                <SocialBtn href={agent.socials?.facebook} label="Facebook">
-                  <IconFacebook />
-                </SocialBtn>
-                <SocialBtn href={agent.socials?.tiktok} label="TikTok">
-                  <IconTikTok />
-                </SocialBtn>
-                <SocialBtn href={agent.socials?.linkedin} label="LinkedIn">
-                  <IconLinkedIn />
-                </SocialBtn>
-              </div>
-
-              <a
-                href={`https://wa.me/${agent.whatsapp}`}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-5 inline-block w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                WhatsApp
-              </a>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-/* ===========================
-   HOME PAGE
-=========================== */
+function FeaturedOwnersSection() {
+  const { lang } = useLanguage();
+  const [owners, setOwners] = useState<FeaturedOwnerProperty[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadFeaturedOwners() {
+      try {
+        setLoading(true);
+
+        const rows = await fetchHomepageProperties();
+
+        const ownerRows = rows
+          .filter((row) => isListingPublic(row))
+          .filter((row) => isVerifiedListing(row))
+          .filter((row) => hasFeaturedPlacement(row))
+          .filter(
+            (row) =>
+              normalizePostedByType(row.contact_role, row.source) === "owner"
+          )
+          .sort(sortRowsByFeaturedNewest)
+          .slice(0, 3);
+
+        const profileIds = Array.from(
+          new Set(
+            ownerRows
+              .map((row) => row.contact_user_id)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+
+        const profilesMap = await fetchHomepageProfilesByIds(profileIds);
+
+        const mapped = ownerRows.map((row) => {
+          const profile = row.contact_user_id
+            ? profilesMap.get(row.contact_user_id)
+            : null;
+
+          return {
+            id: row.id,
+            ownerName: row.contact_name || profile?.full_name || "Tetamo Owner",
+            ownerWhatsapp: normalizeWhatsapp(
+              row.contact_phone || profile?.phone || ""
+            ),
+            images: buildPropertyImages(row.property_images),
+            price: formatIdr(row.price ?? 0),
+            province: row.province ?? row.city ?? row.area ?? "-",
+            size: getMainSize(row),
+            bed: `${row.bedrooms ?? 0} Bed`,
+            furnishing: mapFurnishing(row.furnishing),
+            garage: getGarageLabel(row.garage),
+            kode: row.kode ?? undefined,
+            postedDate: formatPostedDate(row.posted_date || row.created_at),
+            ownerApproved: true,
+          };
+        });
+
+        if (!ignore) setOwners(mapped);
+      } catch (error) {
+        console.error("Failed to load featured owner properties:", error);
+        if (!ignore) setOwners([]);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadFeaturedOwners();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  return (
+    <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+      <div className="mx-auto max-w-7xl">
+        <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
+          {lang === "id"
+            ? "Properti Pemilik Unggulan"
+            : "Featured Owner Properties"}
+        </h2>
+
+        <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
+          {lang === "id"
+            ? "Properti langsung dari pemilik. Transparan, jelas, dan terverifikasi."
+            : "Verified properties directly from owners."}
+        </p>
+
+        {loading ? (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Memuat properti pemilik..."
+                : "Loading owner properties..."
+            }
+          />
+        ) : owners.length === 0 ? (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Belum ada properti pemilik unggulan."
+                : "No featured owner properties yet."
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+            {owners.map((p) => (
+              <FeaturedOwnerPropertyCard key={p.id} property={p} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* =========================
+   PAGE
+========================= */
 
 export default function HomeClient() {
   const router = useRouter();
@@ -925,8 +1374,8 @@ export default function HomeClient() {
         <div className="mx-auto max-w-5xl">
           <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[35px] md:text-5xl lg:text-[42px]">
             {lang === "id"
-              ? "Pasang Iklan dan Temukan Properti anda di TeTaMo"
-              : "Advertise and Find Your Property at TeTaMo"}
+              ? "Pasang Iklan dan Temukan Properti anda di TeTamo"
+              : "Advertise and Find Your Property at TeTamo"}
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
