@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { supabase } from "@/lib/supabase";
 
 /* ===========================
    TYPES (CMS-ready)
@@ -36,6 +37,8 @@ type FeaturedAgent = {
   whatsapp: string;
   branding?: string;
   agentVerified: boolean;
+  isFeaturedAgent?: boolean;
+  featuredUntil?: string;
   socials?: {
     instagram?: string;
     facebook?: string;
@@ -96,6 +99,26 @@ function translateFurnishing(value: string, lang: string) {
   }
 
   return value;
+}
+
+function normalizeWhatsapp(phone?: string | null) {
+  if (!phone) return "";
+  const digits = phone.replace(/[^\d]/g, "");
+
+  if (digits.startsWith("62")) return digits;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  if (digits.startsWith("8")) return `62${digits}`;
+
+  return digits;
+}
+
+function isAgentLikeRole(value: unknown) {
+  const role = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+  return role.includes("agent") || role.includes("agen");
 }
 
 function InfoCard({
@@ -664,6 +687,7 @@ function FeaturedAgentsSection() {
       experience: "8 tahun pengalaman",
       whatsapp: "6281234567890",
       agentVerified: true,
+      isFeaturedAgent: true,
       socials: {
         instagram: "https://instagram.com",
         facebook: "https://facebook.com",
@@ -681,6 +705,7 @@ function FeaturedAgentsSection() {
       experience: "5 tahun pengalaman",
       whatsapp: "6281234567890",
       agentVerified: true,
+      isFeaturedAgent: true,
       socials: {
         instagram: "https://instagram.com",
         tiktok: "https://tiktok.com",
@@ -696,6 +721,7 @@ function FeaturedAgentsSection() {
       experience: "10 tahun pengalaman",
       whatsapp: "6281234567890",
       agentVerified: true,
+      isFeaturedAgent: true,
       socials: {
         instagram: "https://instagram.com",
         facebook: "https://facebook.com",
@@ -706,36 +732,87 @@ function FeaturedAgentsSection() {
   const [agents, setAgents] = useState<FeaturedAgent[]>(defaultAgents);
 
   useEffect(() => {
-    const saved = localStorage.getItem("tetamo_agent_profile");
-    if (!saved) return;
+    let ignore = false;
 
-    try {
-      const parsed = JSON.parse(saved);
+    async function loadFeaturedAgents() {
+      try {
+        const nowIso = new Date().toISOString();
 
-      const loggedInAgent: FeaturedAgent = {
-        id: "logged-agent",
-        name: parsed?.name || "Agent Tetamo",
-        photo:
-          parsed?.photo || "https://randomuser.me/api/portraits/men/32.jpg",
-        location: parsed?.address || "Indonesia",
-        agency: parsed?.agency || "Tetamo Agent Network",
-        branding: parsed?.agency || "Tetamo Agent Network",
-        experience: "Agent Tetamo",
-        whatsapp: parsed?.number || "",
-        agentVerified: true,
-        socials: {
-          instagram: parsed?.instagram || "",
-          facebook: parsed?.facebook || "",
-          tiktok: parsed?.tiktok || "",
-          linkedin: parsed?.linkedin || "",
-        },
-      };
+        const { data, error } = await supabase
+          .from("profiles")
+          .select(`
+            id,
+            full_name,
+            photo_url,
+            city,
+            address,
+            agency,
+            phone,
+            role,
+            instagram_url,
+            facebook_url,
+            tiktok_url,
+            linkedin_url,
+            is_featured_agent,
+            featured_agent_at,
+            featured_agent_until
+          `)
+          .eq("is_featured_agent", true)
+          .gt("featured_agent_until", nowIso)
+          .order("featured_agent_at", { ascending: false })
+          .limit(3);
 
-      setAgents([loggedInAgent, ...defaultAgents.slice(1)]);
-    } catch {
-      // ignore invalid localStorage
+        if (error) throw error;
+
+        const mapped = ((data ?? []) as Record<string, any>[])
+          .filter((profile) => isAgentLikeRole(profile?.role))
+          .map((profile) => ({
+            id: String(profile?.id || ""),
+            name:
+              String(profile?.full_name || "").trim() || "Tetamo Agent",
+            photo:
+              String(profile?.photo_url || "").trim() ||
+              "https://randomuser.me/api/portraits/men/32.jpg",
+            location:
+              String(profile?.city || "").trim() ||
+              String(profile?.address || "").trim() ||
+              "Indonesia",
+            agency:
+              String(profile?.agency || "").trim() || "Tetamo Agent Network",
+            branding:
+              String(profile?.agency || "").trim() || "Tetamo Agent Network",
+            experience:
+              lang === "id" ? "Agen Unggulan Tetamo" : "Tetamo Featured Agent",
+            whatsapp: normalizeWhatsapp(profile?.phone || ""),
+            agentVerified: true,
+            isFeaturedAgent: true,
+            featuredUntil:
+              typeof profile?.featured_agent_until === "string"
+                ? profile.featured_agent_until
+                : undefined,
+            socials: {
+              instagram: String(profile?.instagram_url || "").trim() || "",
+              facebook: String(profile?.facebook_url || "").trim() || "",
+              tiktok: String(profile?.tiktok_url || "").trim() || "",
+              linkedin: String(profile?.linkedin_url || "").trim() || "",
+            },
+          }))
+          .filter((agent) => agent.whatsapp);
+
+        if (!ignore && mapped.length > 0) {
+          setAgents(mapped);
+        }
+      } catch (error) {
+        console.error("Failed to load featured agents:", error);
+      }
     }
-  }, []);
+
+    loadFeaturedAgents();
+
+    return () => {
+      ignore = true;
+    };
+  }, [lang]);
 
   return (
     <section className="bg-white px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
@@ -756,11 +833,19 @@ function FeaturedAgentsSection() {
               key={agent.id}
               className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
             >
-              {agent.agentVerified && (
-                <div className="absolute left-3 top-3 rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                  {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
-                </div>
-              )}
+              <div className="absolute left-3 top-3 flex flex-col gap-2">
+                {agent.agentVerified && (
+                  <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                    {lang === "id" ? "Agen Terverifikasi" : "Verified Agent"}
+                  </div>
+                )}
+
+                {agent.isFeaturedAgent && (
+                  <div className="rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                    {lang === "id" ? "Agen Unggulan" : "Featured Agent"}
+                  </div>
+                )}
+              </div>
 
               <div className="mt-8 flex items-start gap-4 sm:mt-10">
                 <img
@@ -888,20 +973,20 @@ export default function HomeClient() {
             </Link>
 
             <Link
-  href="/signup?role=owner&next=/pemilik"
-  className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
->
-  {lang === "id"
-    ? "Iklankan Sebagai Pemilik"
-    : "Advertise as Owner"}
-</Link>
+              href="/signup?role=owner&next=/pemilik"
+              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+            >
+              {lang === "id"
+                ? "Iklankan Sebagai Pemilik"
+                : "Advertise as Owner"}
+            </Link>
 
             <Link
-  href="/signup?role=agent&next=/agentdashboard/paket"
-  className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
->
-  {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
-</Link>
+              href="/signup?role=agent&next=/agentdashboard/paket"
+              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+            >
+              {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
+            </Link>
           </div>
         </div>
       </section>
@@ -957,17 +1042,11 @@ export default function HomeClient() {
                 </h4>
 
                 <div className="flex flex-col gap-3 text-sm font-medium text-gray-700 sm:flex-row sm:flex-wrap md:justify-end md:gap-x-8 md:gap-y-3">
-                  <Link
-                    href="/about-us"
-                    className="transition hover:text-black"
-                  >
+                  <Link href="/about-us" className="transition hover:text-black">
                     {lang === "id" ? "Tentang Kami" : "About Us"}
                   </Link>
 
-                  <Link
-                    href="/faq"
-                    className="transition hover:text-black"
-                  >
+                  <Link href="/faq" className="transition hover:text-black">
                     FAQ
                   </Link>
 
@@ -980,10 +1059,7 @@ export default function HomeClient() {
                       : "Subscription Policy"}
                   </Link>
 
-                  <Link
-                    href="/terms"
-                    className="transition hover:text-black"
-                  >
+                  <Link href="/terms" className="transition hover:text-black">
                     {lang === "id"
                       ? "Syarat & Ketentuan"
                       : "Terms and Conditions"}
