@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, UserCheck, UserX, Shield } from "lucide-react";
+import { Search, UserCheck, UserX, Shield, Crown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 /* =========================
@@ -20,6 +20,9 @@ type Agent = {
   listings: number;
   leads: number;
   status: AgentStatus;
+  featuredAt: string | null;
+  featuredUntil: string | null;
+  isFeaturedActive: boolean;
   raw: Record<string, any>;
 };
 
@@ -37,6 +40,26 @@ function normalizeRole(value: unknown) {
 function isAgentLikeRole(value: unknown) {
   const role = normalizeRole(value);
   return role.includes("agent") || role.includes("agen");
+}
+
+function isFutureDate(value?: string | null) {
+  if (!value) return false;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getTime() > Date.now();
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(d);
 }
 
 function deriveAgentStatus(profile: Record<string, any>): AgentStatus {
@@ -228,6 +251,16 @@ export default function AdminAgentsPage() {
               String(profile?.address || "").trim() ||
               "-";
 
+            const featuredAt =
+              typeof profile?.featured_agent_at === "string"
+                ? profile.featured_agent_at
+                : null;
+
+            const featuredUntil =
+              typeof profile?.featured_agent_until === "string"
+                ? profile.featured_agent_until
+                : null;
+
             return {
               id,
               name:
@@ -244,6 +277,9 @@ export default function AdminAgentsPage() {
               listings: listingCountMap.get(id) || 0,
               leads: leadCountMap.get(id) || 0,
               status: deriveAgentStatus(profile),
+              featuredAt,
+              featuredUntil,
+              isFeaturedActive: isFutureDate(featuredUntil),
               raw: profile,
             };
           })
@@ -303,7 +339,10 @@ export default function AdminAgentsPage() {
     setPage(1);
   }, [searchQuery, agents.length]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredAgents.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAgents.length / ITEMS_PER_PAGE)
+  );
 
   useEffect(() => {
     if (page > totalPages) {
@@ -350,6 +389,53 @@ export default function AdminAgentsPage() {
     } catch (error: any) {
       console.error("Failed to update agent status:", error);
       alert(error?.message || "Failed to update agent status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function featureAgent(id: string) {
+    const now = new Date();
+    const featuredAt = now.toISOString();
+    const featuredUntil = new Date(
+      now.getTime() + 15 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    setUpdatingId(id);
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          is_featured_agent: true,
+          featured_agent_at: featuredAt,
+          featured_agent_until: featuredUntil,
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setAgents((prev) =>
+        prev.map((agent) =>
+          agent.id === id
+            ? {
+                ...agent,
+                featuredAt,
+                featuredUntil,
+                isFeaturedActive: true,
+                raw: {
+                  ...agent.raw,
+                  is_featured_agent: true,
+                  featured_agent_at: featuredAt,
+                  featured_agent_until: featuredUntil,
+                },
+              }
+            : agent
+        )
+      );
+    } catch (error: any) {
+      console.error("Failed to feature agent:", error);
+      alert(error?.message || "Failed to feature agent.");
     } finally {
       setUpdatingId(null);
     }
@@ -412,7 +498,8 @@ export default function AdminAgentsPage() {
               Agent Overview
             </h2>
             <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
-              Review agent account status, activity, and marketplace participation.
+              Review agent account status, activity, and marketplace
+              participation.
             </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2.5">
@@ -436,32 +523,34 @@ export default function AdminAgentsPage() {
             </div>
 
             <div className="mt-3 space-y-2.5">
-              {(["ACTIVE", "PENDING", "SUSPENDED"] as AgentStatus[]).map((status) => {
-                const ui = statusUI(status);
-                const count =
-                  status === "ACTIVE"
-                    ? stats.active
-                    : status === "PENDING"
-                    ? stats.pending
-                    : stats.suspended;
+              {(["ACTIVE", "PENDING", "SUSPENDED"] as AgentStatus[]).map(
+                (status) => {
+                  const ui = statusUI(status);
+                  const count =
+                    status === "ACTIVE"
+                      ? stats.active
+                      : status === "PENDING"
+                      ? stats.pending
+                      : stats.suspended;
 
-                return (
-                  <div
-                    key={status}
-                    className="flex items-center justify-between rounded-2xl border border-gray-200 px-3 py-2.5"
-                  >
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
+                  return (
+                    <div
+                      key={status}
+                      className="flex items-center justify-between rounded-2xl border border-gray-200 px-3 py-2.5"
                     >
-                      {ui.label}
-                    </span>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium sm:text-[11px] ${ui.badge}`}
+                      >
+                        {ui.label}
+                      </span>
 
-                    <span className="text-sm font-semibold text-[#1C1C1E]">
-                      {count}
-                    </span>
-                  </div>
-                );
-              })}
+                      <span className="text-sm font-semibold text-[#1C1C1E]">
+                        {count}
+                      </span>
+                    </div>
+                  );
+                }
+              )}
             </div>
           </div>
 
@@ -557,11 +646,23 @@ export default function AdminAgentsPage() {
                             >
                               {ui.label}
                             </span>
+
+                            {agent.isFeaturedActive ? (
+                              <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-700 sm:text-[11px]">
+                                Featured
+                              </span>
+                            ) : null}
                           </div>
 
                           <p className="mt-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm md:text-[15px]">
                             {agent.name}
                           </p>
+
+                          {agent.isFeaturedActive ? (
+                            <p className="mt-1 text-[11px] text-amber-700 sm:text-xs">
+                              Featured until {formatDateTime(agent.featuredUntil)}
+                            </p>
+                          ) : null}
 
                           <div className="mt-3 grid grid-cols-2 gap-2.5">
                             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
@@ -608,7 +709,7 @@ export default function AdminAgentsPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                           <ActionButton
                             onClick={() => updateStatus(agent.id, "ACTIVE")}
                             disabled={isUpdating}
@@ -634,6 +735,19 @@ export default function AdminAgentsPage() {
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-yellow-200 bg-yellow-50 px-3 text-[12px] font-medium text-yellow-700 transition hover:bg-yellow-100 disabled:opacity-50 sm:text-sm"
                           >
                             <Shield size={15} />
+                          </ActionButton>
+
+                          <ActionButton
+                            onClick={() => featureAgent(agent.id)}
+                            disabled={isUpdating}
+                            label={agent.isFeaturedActive ? "Featured" : "Feature"}
+                            className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-[12px] font-medium transition disabled:opacity-50 sm:text-sm ${
+                              agent.isFeaturedActive
+                                ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                            }`}
+                          >
+                            <Crown size={15} />
                           </ActionButton>
                         </div>
                       </div>
