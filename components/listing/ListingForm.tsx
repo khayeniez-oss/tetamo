@@ -290,22 +290,22 @@ export default function ListingForm(props: Props) {
                 </label>
                 <div className="mt-2">
                   <TetamoSelect
-                    value={draft?.primarySecondary ?? ""}
+                    value={draft?.marketType ?? ""}
                     placeholder={lang === "id" ? "Pilih" : "Select"}
                     options={[
                       {
                         value: "primary",
-                        label: lang === "id" ? "Primary" : "Primary",
+                        label: "Primary",
                       },
                       {
                         value: "secondary",
-                        label: lang === "id" ? "Secondary" : "Secondary",
+                        label: "Secondary",
                       },
                     ]}
                     onChange={(value) =>
                       setDraft((p: any) => ({
                         ...(p || {}),
-                        primarySecondary: value,
+                        marketType: value,
                       }))
                     }
                   />

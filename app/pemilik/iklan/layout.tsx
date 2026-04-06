@@ -41,6 +41,7 @@ export type PemilikListingDraft = {
 
   title?: string;
   description?: string;
+  marketType?: string;
 
   verification?: {
     relationship?: string;
@@ -108,6 +109,7 @@ function getEmptyDraft(): PemilikListingDraft {
     note: undefined,
 
     propertyType: undefined,
+    marketType: undefined,
     price: undefined,
     lt: undefined,
     lb: undefined,

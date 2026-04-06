@@ -38,6 +38,7 @@ export type AgentListingDraft = {
 
   title?: string;
   description?: string;
+  marketType?: string;
 
   fasilitas?: Record<string, boolean>;
   nearby?: Record<string, boolean>;
@@ -73,6 +74,7 @@ function getEmptyDraft(): AgentListingDraft {
     note: undefined,
 
     propertyType: undefined,
+    marketType: undefined,
     price: undefined,
     lt: undefined,
     lb: undefined,

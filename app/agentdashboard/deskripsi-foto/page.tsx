@@ -99,6 +99,7 @@ export default function AgentDeskripsiFotoPage() {
         listing_type: cleanText(draft?.listingType),
         rental_type: cleanText(draft?.rentalType),
         property_type: cleanText(draft?.propertyType),
+        market_type: cleanText(draft?.marketType),
 
         title: cleanText(draft?.title),
         description: cleanText(draft?.description),

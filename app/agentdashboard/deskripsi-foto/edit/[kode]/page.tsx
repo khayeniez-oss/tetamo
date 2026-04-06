@@ -129,6 +129,7 @@ export default function AgentEditDeskripsiFotoPage() {
           listingType: property.listing_type ?? "",
           rentalType: property.rental_type ?? "",
           propertyType: property.property_type ?? "",
+          marketType: property.market_type ?? "",
 
           title: property.title ?? "",
           description: property.description ?? "",
@@ -245,6 +246,7 @@ export default function AgentEditDeskripsiFotoPage() {
         listing_type: cleanText(draft?.listingType),
         rental_type: cleanText(draft?.rentalType),
         property_type: cleanText(draft?.propertyType),
+        market_type: cleanText(draft?.marketType),
 
         title: cleanText(draft?.title),
         description: cleanText(draft?.description),

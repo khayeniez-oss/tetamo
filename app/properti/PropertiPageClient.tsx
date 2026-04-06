@@ -2,11 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import {
-  useRouter,
-  useSearchParams,
-  usePathname,
-} from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Gem,
   Crown,
@@ -18,6 +14,7 @@ import {
   Heart,
   Star,
   Search,
+  Share2,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
@@ -138,6 +135,13 @@ type RatingSummary = {
   count: number;
 };
 
+type EngagementSummaryRow = {
+  property_id: string;
+  rating_count: number | string | null;
+  avg_rating: number | string | null;
+  share_count: number | string | null;
+};
+
 const IDR_PER_USD = 16500;
 
 function rotateListingsByReceiver(list: Property[]) {
@@ -193,7 +197,8 @@ function getSortTimestamp(value?: string | null) {
 }
 
 function sortByNewestWithinTier(a: Property, b: Property) {
-  const dateDiff = getSortTimestamp(b.sortDateRaw) - getSortTimestamp(a.sortDateRaw);
+  const dateDiff =
+    getSortTimestamp(b.sortDateRaw) - getSortTimestamp(a.sortDateRaw);
   if (dateDiff !== 0) return dateDiff;
 
   const rankingDiff = calculateRanking(b) - calculateRanking(a);
@@ -408,18 +413,22 @@ function PropertyCard({
   liked,
   userRating,
   ratingSummary,
+  shareCount,
   onToggleSave,
   onToggleLike,
   onRate,
+  onShare,
 }: {
   p: Property;
   saved: boolean;
   liked: boolean;
   userRating: number;
   ratingSummary: RatingSummary;
+  shareCount: number;
   onToggleSave: (propertyId: string) => void;
   onToggleLike: (propertyId: string) => void;
   onRate: (propertyId: string, rating: number) => void;
+  onShare: (property: Property) => void;
 }) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
@@ -661,9 +670,9 @@ Price: ${displayPrice}
 
 Is this property still available?`;
 
-    const whatsappURL = `https://wa.me/${property.receiverWhatsapp}?text=${encodeURIComponent(
-      message
-    )}`;
+    const whatsappURL = `https://wa.me/${
+      property.receiverWhatsapp
+    }?text=${encodeURIComponent(message)}`;
 
     const popup = window.open("about:blank", "_blank");
 
@@ -926,11 +935,11 @@ Is this property still available?`;
           {displayPrice}
         </div>
 
-        <div className="mt-1 text-xs text-gray-500 sm:text-sm">
+        <div className="mt-1 text-sm text-gray-500 sm:text-sm">
           ≈ {secondaryPrice}
         </div>
 
-        <div className="mt-1 text-xs text-gray-500 sm:text-sm">
+        <div className="mt-1 text-sm text-gray-500 sm:text-sm">
           {p.area}, {p.province}
         </div>
 
@@ -940,13 +949,13 @@ Is this property still available?`;
           </h3>
         </Link>
 
-        <div className="mt-3 text-xs leading-6 text-gray-600 sm:text-sm">
+        <div className="mt-3 text-sm leading-6 text-gray-600 sm:text-sm">
           {p.size} •{" "}
           {p.bed.replace("Kamar", lang === "id" ? "Kamar" : "Bed")} •{" "}
           {p.furnished}
         </div>
 
-        <div className="mt-2.5 text-xs leading-6 text-gray-600 sm:text-sm">
+        <div className="mt-2.5 text-sm leading-6 text-gray-600 sm:text-sm">
           {postedByLabel()}:{" "}
           <span className="font-semibold text-[#1C1C1E]">{p.agentName}</span>
           {p.agency ? (
@@ -957,7 +966,7 @@ Is this property still available?`;
           ) : null}
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[11px] tracking-wide text-gray-500">
+        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[12px] tracking-wide text-gray-500 sm:text-sm">
           <span>{p.kode}</span>
           <span>•</span>
           <span>{p.postedDate}</span>
@@ -993,7 +1002,7 @@ Is this property still available?`;
           {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
         </button>
 
-        <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-4 gap-2">
           <button
             type="button"
             onClick={() => onToggleSave(p.id)}
@@ -1005,7 +1014,7 @@ Is this property still available?`;
           >
             <div className="flex items-center justify-center gap-1">
               <Bookmark className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-semibold sm:text-xs">
+              <span className="text-[10px] font-semibold sm:text-xs">
                 {lang === "id" ? "Simpan" : "Save"}
               </span>
             </div>
@@ -1022,7 +1031,7 @@ Is this property still available?`;
           >
             <div className="flex items-center justify-center gap-1">
               <Heart className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-semibold sm:text-xs">
+              <span className="text-[10px] font-semibold sm:text-xs">
                 {lang === "id" ? "Suka" : "Like"}
               </span>
             </div>
@@ -1036,6 +1045,20 @@ Is this property still available?`;
               {lang === "id" ? "Rating" : "Rating"} ({ratingSummary.count})
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => onShare(p)}
+            className="rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center transition hover:bg-gray-50"
+          >
+            <div className="text-sm font-bold text-[#1C1C1E]">
+              {shareCount}
+            </div>
+            <div className="flex items-center justify-center gap-1 text-[10px] text-gray-500 sm:text-[11px]">
+              <Share2 className="h-3.5 w-3.5" />
+              <span>{lang === "id" ? "Bagikan" : "Share"}</span>
+            </div>
+          </button>
         </div>
 
         <div className="mt-2 flex items-center justify-center gap-1">
@@ -1083,6 +1106,9 @@ export default function PropertiPageClient() {
   const [ratingSummaryMap, setRatingSummaryMap] = useState<
     Record<string, RatingSummary>
   >({});
+  const [shareCountMap, setShareCountMap] = useState<Record<string, number>>(
+    {}
+  );
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
 
   useEffect(() => {
@@ -1309,6 +1335,7 @@ export default function PropertiPageClient() {
           setLikedMap({});
           setUserRatingsMap({});
           setRatingSummaryMap({});
+          setShareCountMap({});
         }
         return;
       }
@@ -1317,32 +1344,27 @@ export default function PropertiPageClient() {
       const nextLikedMap: Record<string, boolean> = {};
       const nextUserRatingsMap: Record<string, number> = {};
       const nextRatingSummaryMap: Record<string, RatingSummary> = {};
+      const nextShareCountMap: Record<string, number> = {};
 
-      const { data: allRatingsData, error: allRatingsError } = await supabase
-        .from("property_ratings")
-        .select("property_id, rating")
+      const { data: summaryData, error: summaryError } = await supabase
+        .from("property_engagement_summary")
+        .select("property_id, rating_count, avg_rating, share_count")
         .in("property_id", propertyIds);
 
       if (ignore) return;
 
-      if (allRatingsError) {
-        console.error("Failed to load public property ratings:", allRatingsError);
+      if (summaryError) {
+        console.error(
+          "Failed to load property engagement summary:",
+          summaryError
+        );
       } else {
-        const grouped: Record<string, number[]> = {};
-
-        ((allRatingsData ?? []) as RatingRow[]).forEach((row) => {
-          if (!grouped[row.property_id]) grouped[row.property_id] = [];
-          grouped[row.property_id].push(row.rating);
-        });
-
-        Object.entries(grouped).forEach(([propertyId, ratings]) => {
-          const count = ratings.length;
-          const avg =
-            count > 0
-              ? ratings.reduce((sum, value) => sum + value, 0) / count
-              : 0;
-
-          nextRatingSummaryMap[propertyId] = { avg, count };
+        ((summaryData ?? []) as EngagementSummaryRow[]).forEach((row) => {
+          nextRatingSummaryMap[row.property_id] = {
+            avg: Number(row.avg_rating ?? 0),
+            count: Number(row.rating_count ?? 0),
+          };
+          nextShareCountMap[row.property_id] = Number(row.share_count ?? 0);
         });
       }
 
@@ -1352,6 +1374,7 @@ export default function PropertiPageClient() {
           setLikedMap({});
           setUserRatingsMap({});
           setRatingSummaryMap(nextRatingSummaryMap);
+          setShareCountMap(nextShareCountMap);
         }
         return;
       }
@@ -1393,7 +1416,10 @@ export default function PropertiPageClient() {
       }
 
       if (userRatingsRes.error) {
-        console.error("Failed to load user property ratings:", userRatingsRes.error);
+        console.error(
+          "Failed to load user property ratings:",
+          userRatingsRes.error
+        );
       } else {
         ((userRatingsRes.data ?? []) as RatingRow[]).forEach((row) => {
           nextUserRatingsMap[row.property_id] = row.rating;
@@ -1404,6 +1430,7 @@ export default function PropertiPageClient() {
       setLikedMap(nextLikedMap);
       setUserRatingsMap(nextUserRatingsMap);
       setRatingSummaryMap(nextRatingSummaryMap);
+      setShareCountMap(nextShareCountMap);
     }
 
     loadEngagement();
@@ -1602,6 +1629,107 @@ export default function PropertiPageClient() {
     }
   }
 
+  async function handleShare(property: Property) {
+    const shareUrl = `${window.location.origin}/properti/${property.id}`;
+    const shareText =
+      lang === "id"
+        ? `Lihat properti ini di TETAMO:\n\n${property.title}\n${property.area}, ${property.province}`
+        : `Check out this property on TETAMO:\n\n${property.title}\n${property.area}, ${property.province}`;
+
+    let shareMethod = "copy_link";
+
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({
+          title: property.title,
+          text: shareText,
+          url: shareUrl,
+        });
+        shareMethod = "native_share";
+      } else if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard?.writeText
+      ) {
+        await navigator.clipboard.writeText(shareUrl);
+        shareMethod = "copy_link";
+        alert(
+          lang === "id"
+            ? "Link properti berhasil disalin."
+            : "Property link copied successfully."
+        );
+      } else {
+        window.prompt(
+          lang === "id"
+            ? "Salin link properti ini:"
+            : "Copy this property link:",
+          shareUrl
+        );
+        shareMethod = "manual_copy";
+      }
+    } catch (error: any) {
+      if (error?.name === "AbortError") return;
+
+      try {
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.clipboard?.writeText
+        ) {
+          await navigator.clipboard.writeText(shareUrl);
+          shareMethod = "copy_link";
+          alert(
+            lang === "id"
+              ? "Link properti berhasil disalin."
+              : "Property link copied successfully."
+          );
+        } else {
+          window.prompt(
+            lang === "id"
+              ? "Salin link properti ini:"
+              : "Copy this property link:",
+            shareUrl
+          );
+          shareMethod = "manual_copy";
+        }
+      } catch (fallbackError) {
+        console.error("Failed to share property:", fallbackError);
+        alert(
+          lang === "id"
+            ? "Gagal membagikan properti."
+            : "Failed to share property."
+        );
+        return;
+      }
+    }
+
+    let userId = authUserId;
+
+    if (!userId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      userId = user?.id ?? null;
+    }
+
+    if (!userId) return;
+
+    const { error } = await supabase.from("property_shares").insert({
+      property_id: property.id,
+      user_id: userId,
+      share_method: shareMethod,
+    });
+
+    if (error) {
+      console.error("Failed to save property share:", error);
+      return;
+    }
+
+    setShareCountMap((prev) => ({
+      ...prev,
+      [property.id]: (prev[property.id] ?? 0) + 1,
+    }));
+  }
+
   function handleMarketplaceSearchSubmit(
     e: React.FormEvent<HTMLFormElement>
   ) {
@@ -1763,9 +1891,11 @@ export default function PropertiPageClient() {
                 liked={Boolean(likedMap[p.id])}
                 userRating={userRatingsMap[p.id] ?? 0}
                 ratingSummary={ratingSummaryMap[p.id] ?? { avg: 0, count: 0 }}
+                shareCount={shareCountMap[p.id] ?? 0}
                 onToggleSave={handleToggleSave}
                 onToggleLike={handleToggleLike}
                 onRate={handleRate}
+                onShare={handleShare}
               />
             ))}
           </div>
