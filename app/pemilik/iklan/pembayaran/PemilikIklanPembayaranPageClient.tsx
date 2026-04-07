@@ -328,20 +328,36 @@ export default function PemilikIklanPembayaranPageClient() {
     router.push(`/pemilik/iklan/verifikasi?plan=${selectedPlan}`);
   }
 
+  async function ensureAuthenticated() {
+    const currentPath =
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}`
+        : "/pemilik/iklan/pembayaran";
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      alert("Please log in first.");
+      router.push(`/login?next=${encodeURIComponent(currentPath)}`);
+      return null;
+    }
+
+    return user;
+  }
+
   async function onPay() {
     if (!isReadyToPay || submitting) return;
 
     setSubmitting(true);
 
     try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      const user = await ensureAuthenticated();
 
-      if (authError || !user) {
-        alert("Please log in first.");
-        router.push("/login");
+      if (!user?.id) {
+        alert("Auth session missing. Please log in again.");
         return;
       }
 
@@ -388,10 +404,10 @@ export default function PemilikIklanPembayaranPageClient() {
           action: isRenew
             ? "renew"
             : isAddon
-            ? productId === "homepage-spotlight"
-              ? "spotlight"
-              : "boost"
-            : "create",
+              ? productId === "homepage-spotlight"
+                ? "spotlight"
+                : "boost"
+              : "create",
           selectedPlan,
           existingPropertyId: existingProperty?.id || null,
           existingPropertyCode: existingProperty?.kode || null,
@@ -417,18 +433,31 @@ export default function PemilikIklanPembayaranPageClient() {
       });
 
       const data = await res.json();
+      console.log("create payment response:", data);
 
       if (!res.ok || !data?.success) {
         alert(data?.message || "Failed to create payment.");
         return;
       }
 
-      if (data?.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+      const checkoutUrl =
+        data?.checkoutUrl ||
+        data?.checkout_url ||
+        data?.url ||
+        data?.sessionUrl ||
+        data?.session_url ||
+        data?.data?.checkoutUrl ||
+        data?.data?.checkout_url ||
+        data?.data?.url;
+
+      if (checkoutUrl) {
+        window.location.assign(checkoutUrl);
         return;
       }
 
-      alert("Checkout URL tidak ditemukan.");
+      alert(
+        `Checkout URL tidak ditemukan. Response keys: ${Object.keys(data || {}).join(", ")}`
+      );
     } catch (error: any) {
       console.error("onPay error:", error);
       alert(error?.message || "Something went wrong while creating payment.");
