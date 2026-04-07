@@ -60,6 +60,7 @@ type ProfileRow = {
 type PropertyRow = {
   [key: string]: any;
   id: string;
+  slug: string | null;
   kode: string | null;
   posted_date: string | null;
   title: string | null;
@@ -107,6 +108,7 @@ type PropertyRow = {
 
 type PropertyItem = {
   id: string;
+  slug?: string;
   jenisListing: "dijual" | "disewa";
   rentalType: RentalType;
   propertyType: string;
@@ -160,6 +162,11 @@ type DetailChip = {
   label: string;
   value: string;
   icon: any;
+};
+
+type OrderedPropertyRef = {
+  id: string;
+  slug?: string;
 };
 
 const FALLBACK_POSTER_PHOTO =
@@ -291,8 +298,7 @@ function normalizePostedByType(
   source?: string | null
 ): "owner" | "agent" | "developer" {
   const value = (role || source || "owner").toLowerCase();
-
-  if (value === "agent") return "agent";
+    if (value === "agent") return "agent";
   if (value === "developer") return "developer";
   return "owner";
 }
@@ -429,6 +435,10 @@ function SocialCircle({
   );
 }
 
+function getPropertyHref(property: { slug?: string | null; id: string }) {
+  return `/properti/${property.slug || property.id}`;
+}
+
 export default function PropertyDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
@@ -441,7 +451,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   const [idx, setIdx] = useState(0);
 
   const [property, setProperty] = useState<PropertyItem | null>(null);
-  const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  const [orderedProperties, setOrderedProperties] = useState<OrderedPropertyRef[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -521,7 +531,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         supabase
           .from("properties")
           .select(
-            "id, created_at, status, is_paused, listing_expires_at, transaction_status"
+            "id, slug, created_at, status, is_paused, listing_expires_at, transaction_status"
           )
           .neq("status", "rejected")
           .order("created_at", { ascending: false }),
@@ -543,9 +553,10 @@ export default function PropertyDetailClient({ id }: { id: string }) {
       if (!propertyData) {
         if (!ignore) {
           setProperty(null);
-          setOrderedIds(
+          setOrderedProperties(
             ((idRows ?? []) as Array<{
               id: string;
+              slug: string | null;
               status: string | null;
               is_paused: boolean | null;
               listing_expires_at: string | null;
@@ -559,7 +570,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
                   transaction_status: row.transaction_status,
                 })
               )
-              .map((x) => x.id)
+              .map((x) => ({ id: x.id, slug: x.slug ?? undefined }))
           );
           setLoading(false);
         }
@@ -571,9 +582,10 @@ export default function PropertyDetailClient({ id }: { id: string }) {
       if (!isListingPublic(row)) {
         if (!ignore) {
           setProperty(null);
-          setOrderedIds(
+          setOrderedProperties(
             ((idRows ?? []) as Array<{
               id: string;
+              slug: string | null;
               status: string | null;
               is_paused: boolean | null;
               listing_expires_at: string | null;
@@ -587,7 +599,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
                   transaction_status: item.transaction_status,
                 })
               )
-              .map((x) => x.id)
+              .map((x) => ({ id: x.id, slug: x.slug ?? undefined }))
           );
           setLoading(false);
         }
@@ -696,6 +708,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
       const mapped: PropertyItem = {
         id: row.id,
+        slug: row.slug ?? undefined,
         jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
         rentalType: normalizeRentalType(row.rental_type),
         propertyType: row.property_type || "",
@@ -794,9 +807,10 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
       if (!ignore) {
         setProperty(mapped);
-        setOrderedIds(
+        setOrderedProperties(
           ((idRows ?? []) as Array<{
             id: string;
+            slug: string | null;
             status: string | null;
             is_paused: boolean | null;
             listing_expires_at: string | null;
@@ -810,7 +824,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
                 transaction_status: item.transaction_status,
               })
             )
-            .map((x) => x.id)
+            .map((x) => ({ id: x.id, slug: x.slug ?? undefined }))
         );
         setLoading(false);
       }
@@ -927,8 +941,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         console.error("Failed to load property engagement:", error);
       }
     }
-
-    loadEngagement();
+      loadEngagement();
 
     return () => {
       ignore = true;
@@ -936,14 +949,14 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   }, [property, authUserId]);
 
   const propertyIndex = useMemo(
-    () => orderedIds.findIndex((x) => x === id),
-    [orderedIds, id]
+    () => orderedProperties.findIndex((x) => x.id === id),
+    [orderedProperties, id]
   );
 
-  const prevId = propertyIndex > 0 ? orderedIds[propertyIndex - 1] : null;
-  const nextId =
-    propertyIndex >= 0 && propertyIndex < orderedIds.length - 1
-      ? orderedIds[propertyIndex + 1]
+  const prevProperty = propertyIndex > 0 ? orderedProperties[propertyIndex - 1] : null;
+  const nextProperty =
+    propertyIndex >= 0 && propertyIndex < orderedProperties.length - 1
+      ? orderedProperties[propertyIndex + 1]
       : null;
 
   const nextImg = () =>
@@ -1121,7 +1134,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   async function handleShare() {
     if (!property) return;
 
-    const shareUrl = `${window.location.origin}/properti/${property.id}`;
+    const shareUrl = `${window.location.origin}${getPropertyHref(property)}`;
     const shareText =
       lang === "id"
         ? `Lihat properti ini di TETAMO:\n\n${property.title}\n${property.area}, ${property.province}`
@@ -1248,7 +1261,6 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
     openJadwal();
   }
-
   const displayPrice = property
     ? formatPriceByCurrency(property.priceValue, currency)
     : "";
@@ -1482,7 +1494,6 @@ Is this property still available?`;
       message,
       viewing_date: selectedDate,
       viewing_time: selectedTime,
-
       status: "new",
       priority: "normal",
       notes: null,
@@ -1554,8 +1565,7 @@ Is this property still available?`;
         ? `Jadwal viewing berhasil dikirim. ${posterLabel} akan menghubungi Anda untuk konfirmasi.`
         : `Viewing request sent successfully. ${posterLabel} will contact you for confirmation.`
     );
-
-    setJadwalOpen(false);
+     setJadwalOpen(false);
     setSelectedDate("");
     setSelectedTime("");
   }
@@ -1775,9 +1785,9 @@ Is this property still available?`;
           </Link>
 
           <div className="flex items-center gap-2">
-            {prevId ? (
+            {prevProperty ? (
               <Link
-                href={`/properti/${prevId}`}
+                href={getPropertyHref(prevProperty)}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
               >
                 ← Prev
@@ -1792,9 +1802,9 @@ Is this property still available?`;
               </button>
             )}
 
-            {nextId ? (
+            {nextProperty ? (
               <Link
-                href={`/properti/${nextId}`}
+                href={getPropertyHref(nextProperty)}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
               >
                 Next →
@@ -1831,8 +1841,8 @@ Is this property still available?`;
                       ? "Dijual"
                       : "For Sale"
                     : lang === "id"
-                    ? "Disewa"
-                    : "For Rent"}
+                      ? "Disewa"
+                      : "For Rent"}
                 </span>
 
                 {property.jenisListing === "disewa" && property.rentalType ? (
@@ -1844,8 +1854,7 @@ Is this property still available?`;
                     {getRentalTypeLabel(property.rentalType, lang)}
                   </span>
                 ) : null}
-
-                {propertyTypeLabel ? (
+                 {propertyTypeLabel ? (
                   <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                     {propertyTypeLabel}
                   </span>
@@ -1938,8 +1947,8 @@ Is this property still available?`;
                     {property.postedByType === "owner"
                       ? "Owner"
                       : property.postedByType === "developer"
-                      ? "Developer"
-                      : "Agent"}
+                        ? "Developer"
+                        : "Agent"}
                   </div>
 
                   <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
@@ -2084,7 +2093,7 @@ Is this property still available?`;
                       <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
                         {item.label}
                       </div>
-                    </div>
+                     </div>
 
                     <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
                       {item.value}
@@ -2325,4 +2334,4 @@ Is this property still available?`;
       </div>
     </main>
   );
-}
+}                                                             

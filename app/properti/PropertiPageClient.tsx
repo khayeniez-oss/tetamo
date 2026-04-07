@@ -41,6 +41,7 @@ type Property = {
   boosted?: boolean;
 
   id: string;
+  slug?: string;
   jenisListing: "dijual" | "disewa";
   rentalType: RentalType;
   propertyType: string;
@@ -77,6 +78,7 @@ type PropertyImageRow = {
 
 type PropertyRow = {
   id: string;
+  slug: string | null;
   kode: string | null;
   posted_date: string | null;
   title: string | null;
@@ -384,6 +386,10 @@ function formatPropertyType(value?: string | null, lang?: string) {
     .join(" ");
 }
 
+function getPropertyHref(property: { slug?: string; id: string }) {
+  return `/properti/${property.slug || property.id}`;
+}
+
 function FilterChip({
   href,
   active,
@@ -639,7 +645,7 @@ function PropertyCard({
   }
 
   async function handleWhatsAppInquiry(property: Property) {
-    const user = await requireLogin(`/properti/${property.id}`);
+    const user = await requireLogin(getPropertyHref(property));
     if (!user) return;
 
     if (!property.receiverWhatsapp) {
@@ -815,14 +821,14 @@ Is this property still available?`;
   }
 
   async function handleScheduleViewing(property: Property) {
-    const user = await requireLogin(`/properti/${property.id}`);
+    const user = await requireLogin(getPropertyHref(property));
     if (!user) return;
 
     trackMarketplaceClick("property_schedule_viewing_click", property, {
       button: "schedule_viewing",
     });
 
-    router.push(`/properti/${property.id}`);
+    router.push(getPropertyHref(property));
   }
 
   return (
@@ -869,7 +875,7 @@ Is this property still available?`;
           </div>
         </div>
 
-        <Link href={`/properti/${p.id}`} className="block">
+        <Link href={getPropertyHref(p)} className="block">
           <img
             src={p.images[idx]}
             alt={p.title}
@@ -943,7 +949,7 @@ Is this property still available?`;
           {p.area}, {p.province}
         </div>
 
-        <Link href={`/properti/${p.id}`} className="mt-2 block">
+        <Link href={getPropertyHref(p)} className="mt-2 block">
           <h3 className="text-sm font-semibold leading-snug text-[#1C1C1E] hover:underline sm:text-base">
             {p.title}
           </h3>
@@ -982,7 +988,7 @@ Is this property still available?`;
           </button>
 
           <Link
-            href={`/properti/${p.id}`}
+            href={getPropertyHref(p)}
             onClick={() =>
               trackMarketplaceClick("property_view_detail_click", p, {
                 button: "view_detail",
@@ -1148,6 +1154,7 @@ export default function PropertiPageClient() {
         .from("properties")
         .select(`
           id,
+          slug,
           kode,
           posted_date,
           title,
@@ -1281,6 +1288,7 @@ export default function PropertiPageClient() {
           boosted,
 
           id: row.id,
+          slug: row.slug ?? undefined,
           jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
           rentalType: normalizeRentalType(row.rental_type),
           propertyType: row.property_type || "",
@@ -1500,7 +1508,7 @@ export default function PropertiPageClient() {
       console.error("Failed to save property:", error);
       setSavedMap((prev) => ({
         ...prev,
-        [propertyId]: false,
+          [propertyId]: false,
       }));
     }
   }
@@ -1630,7 +1638,7 @@ export default function PropertiPageClient() {
   }
 
   async function handleShare(property: Property) {
-    const shareUrl = `${window.location.origin}/properti/${property.id}`;
+    const shareUrl = `${window.location.origin}${getPropertyHref(property)}`;
     const shareText =
       lang === "id"
         ? `Lihat properti ini di TETAMO:\n\n${property.title}\n${property.area}, ${property.province}`
@@ -1639,7 +1647,10 @@ export default function PropertiPageClient() {
     let shareMethod = "copy_link";
 
     try {
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function"
+      ) {
         await navigator.share({
           title: property.title,
           text: shareText,
@@ -1789,11 +1800,11 @@ export default function PropertiPageClient() {
         ? "Dijual"
         : "For Sale"
       : lang === "id"
-      ? "Disewa"
-      : "For Rent"
+        ? "Disewa"
+        : "For Rent"
     : lang === "id"
-    ? "Semua properti"
-    : "All properties";
+      ? "Semua properti"
+      : "All properties";
 
   return (
     <main className="min-h-screen bg-white text-gray-900">

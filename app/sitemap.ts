@@ -12,6 +12,7 @@ type SEOEntry = {
 
 type SitemapProperty = {
   id?: string | null;
+  slug?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
 };
@@ -52,24 +53,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
       return {
         url: buildAbsoluteUrl(siteUrl, slug),
-        lastModified: row.updated_at
-          ? new Date(row.updated_at)
-          : new Date(),
+        lastModified: row.updated_at ? new Date(row.updated_at) : new Date(),
         changeFrequency: slug === "/" ? "daily" : "weekly",
         priority: slug === "/" ? 1 : 0.8,
       };
     });
 
   const listingUrls: MetadataRoute.Sitemap = properties
-    .filter((property) => property?.id)
-    .map((property) => ({
-      url: `${siteUrl}/properti/${property.id}`,
-      lastModified: new Date(
-        property.updated_at || property.created_at || Date.now()
-      ),
-      changeFrequency: "daily",
-      priority: 0.7,
-    }));
+    .filter((property) => property?.id || property?.slug)
+    .map((property) => {
+      const publicPathPart = String(property.slug || property.id || "").trim();
+
+      return {
+        url: `${siteUrl}/properti/${publicPathPart}`,
+        lastModified: new Date(
+          property.updated_at || property.created_at || Date.now()
+        ),
+        changeFrequency: "daily",
+        priority: 0.7,
+      };
+    });
 
   const deduped = new Map<string, MetadataRoute.Sitemap[number]>();
 

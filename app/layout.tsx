@@ -4,9 +4,31 @@ import Navbar from "../components/Navbar";
 import { LanguageProvider } from "./context/LanguageContext";
 import { CurrencyProvider } from "./context/CurrencyContext";
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+  "https://www.tetamo.com";
+
 export const metadata: Metadata = {
-  title: "Tetamo",
-  description: "Tetamo",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Tetamo | Property Marketplace Indonesia",
+    template: "%s | Tetamo",
+  },
+  description:
+    "Browse properties for sale and rent in Indonesia with Tetamo.",
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    siteName: "Tetamo",
+    type: "website",
+    locale: "en_US",
+    title: "Tetamo | Property Marketplace Indonesia",
+    description:
+      "Browse properties for sale and rent in Indonesia with Tetamo.",
+    url: `${siteUrl}/`,
+  },
 };
 
 export default function RootLayout({

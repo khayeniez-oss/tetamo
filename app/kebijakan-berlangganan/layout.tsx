@@ -1,24 +1,27 @@
 import type { Metadata } from "next";
-import HomeClient from "./home-client";
 import { getSEOBySlug, getSiteUrl } from "@/lib/seo-server";
 
 export const dynamic = "force-dynamic";
 
+// Change this only if your real subscription policy route is different.
+const PAGE_SLUG = "/subscription-policy";
+
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSEOBySlug("/");
+  const seo = await getSEOBySlug(PAGE_SLUG);
   const siteUrl = getSiteUrl();
 
-  const title = seo?.title || "Tetamo | Property Marketplace Indonesia";
+  const title =
+    seo?.title || "Subscription Policy | Tetamo Property Marketplace Indonesia";
   const description =
     seo?.description ||
-    "Browse properties for sale and rent in Indonesia with Tetamo.";
+    "Read Tetamo's Subscription Policy for plans, billing, renewals, listing access, and platform subscription rules.";
 
   const canonical =
     seo?.canonical &&
     seo.canonical !== "self-canonical" &&
     seo.canonical !== "none"
       ? seo.canonical
-      : `${siteUrl}/`;
+      : `${siteUrl}${PAGE_SLUG}`;
 
   return {
     title,
@@ -40,6 +43,10 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function Page() {
-  return <HomeClient />;
+export default function SubscriptionPolicyLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return children;
 }

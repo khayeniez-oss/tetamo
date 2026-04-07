@@ -109,8 +109,8 @@ export async function getPublicPropertiesForSitemap() {
   const { data, error } = await supabase
     .from("properties")
     .select(
-      "id, kode, updated_at, created_at, status, verification_status, transaction_status"
-    )
+  "id, slug, kode, updated_at, created_at, status, verification_status, transaction_status"
+)
     .neq("status", "rejected")
     .or("verification_status.eq.verified,verification_status.is.null")
     .eq("transaction_status", "available")
