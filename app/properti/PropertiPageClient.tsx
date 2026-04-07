@@ -139,6 +139,8 @@ type RatingSummary = {
 
 type EngagementSummaryRow = {
   property_id: string;
+  save_count: number | string | null;
+  like_count: number | string | null;
   rating_count: number | string | null;
   avg_rating: number | string | null;
   share_count: number | string | null;
@@ -417,6 +419,8 @@ function PropertyCard({
   p,
   saved,
   liked,
+  saveCount,
+  likeCount,
   userRating,
   ratingSummary,
   shareCount,
@@ -428,6 +432,8 @@ function PropertyCard({
   p: Property;
   saved: boolean;
   liked: boolean;
+  saveCount: number;
+  likeCount: number;
   userRating: number;
   ratingSummary: RatingSummary;
   shareCount: number;
@@ -839,10 +845,10 @@ Is this property still available?`;
         p.spotlight
           ? "border-[#00CFE8] shadow-[0_0_0_1px_#00CFE8,0_18px_42px_rgba(0,207,232,0.20),0_10px_28px_rgba(0,0,0,0.08)] sm:scale-[1.01] sm:-translate-y-1 sm:hover:-translate-y-2 sm:hover:scale-[1.015]"
           : p.featured
-          ? "border-[#D4A017] shadow-[0_0_0_1px_#D4A017,0_8px_25px_rgba(212,160,23,0.25)]"
-          : p.boosted
-          ? "border-slate-200 shadow-[0_0_0_1px_rgba(226,232,240,1),0_10px_28px_rgba(148,163,184,0.18)]"
-          : "border-gray-200 shadow-sm",
+            ? "border-[#D4A017] shadow-[0_0_0_1px_#D4A017,0_8px_25px_rgba(212,160,23,0.25)]"
+            : p.boosted
+              ? "border-slate-200 shadow-[0_0_0_1px_rgba(226,232,240,1),0_10px_28px_rgba(148,163,184,0.18)]"
+              : "border-gray-200 shadow-sm",
       ].join(" ")}
     >
       <div className="relative">
@@ -914,8 +920,8 @@ Is this property still available?`;
                 ? "Dijual"
                 : "For Sale"
               : lang === "id"
-              ? "Disewa"
-              : "For Rent"}
+                ? "Disewa"
+                : "For Rent"}
           </div>
 
           {p.jenisListing === "disewa" && p.rentalType ? (
@@ -1021,7 +1027,7 @@ Is this property still available?`;
             <div className="flex items-center justify-center gap-1">
               <Bookmark className="h-3.5 w-3.5" />
               <span className="text-[10px] font-semibold sm:text-xs">
-                {lang === "id" ? "Simpan" : "Save"}
+                {lang === "id" ? `Simpan (${saveCount})` : `Save (${saveCount})`}
               </span>
             </div>
           </button>
@@ -1038,7 +1044,7 @@ Is this property still available?`;
             <div className="flex items-center justify-center gap-1">
               <Heart className="h-3.5 w-3.5" />
               <span className="text-[10px] font-semibold sm:text-xs">
-                {lang === "id" ? "Suka" : "Like"}
+                {lang === "id" ? `Suka (${likeCount})` : `Like (${likeCount})`}
               </span>
             </div>
           </button>
@@ -1106,6 +1112,8 @@ export default function PropertiPageClient() {
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
   const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
+  const [saveCountMap, setSaveCountMap] = useState<Record<string, number>>({});
+  const [likeCountMap, setLikeCountMap] = useState<Record<string, number>>({});
   const [userRatingsMap, setUserRatingsMap] = useState<Record<string, number>>(
     {}
   );
@@ -1341,6 +1349,8 @@ export default function PropertiPageClient() {
         if (!ignore) {
           setSavedMap({});
           setLikedMap({});
+          setSaveCountMap({});
+          setLikeCountMap({});
           setUserRatingsMap({});
           setRatingSummaryMap({});
           setShareCountMap({});
@@ -1350,13 +1360,17 @@ export default function PropertiPageClient() {
 
       const nextSavedMap: Record<string, boolean> = {};
       const nextLikedMap: Record<string, boolean> = {};
+      const nextSaveCountMap: Record<string, number> = {};
+      const nextLikeCountMap: Record<string, number> = {};
       const nextUserRatingsMap: Record<string, number> = {};
       const nextRatingSummaryMap: Record<string, RatingSummary> = {};
       const nextShareCountMap: Record<string, number> = {};
 
       const { data: summaryData, error: summaryError } = await supabase
         .from("property_engagement_summary")
-        .select("property_id, rating_count, avg_rating, share_count")
+        .select(
+          "property_id, save_count, like_count, rating_count, avg_rating, share_count"
+        )
         .in("property_id", propertyIds);
 
       if (ignore) return;
@@ -1368,6 +1382,8 @@ export default function PropertiPageClient() {
         );
       } else {
         ((summaryData ?? []) as EngagementSummaryRow[]).forEach((row) => {
+          nextSaveCountMap[row.property_id] = Number(row.save_count ?? 0);
+          nextLikeCountMap[row.property_id] = Number(row.like_count ?? 0);
           nextRatingSummaryMap[row.property_id] = {
             avg: Number(row.avg_rating ?? 0),
             count: Number(row.rating_count ?? 0),
@@ -1380,6 +1396,8 @@ export default function PropertiPageClient() {
         if (!ignore) {
           setSavedMap({});
           setLikedMap({});
+          setSaveCountMap(nextSaveCountMap);
+          setLikeCountMap(nextLikeCountMap);
           setUserRatingsMap({});
           setRatingSummaryMap(nextRatingSummaryMap);
           setShareCountMap(nextShareCountMap);
@@ -1436,6 +1454,8 @@ export default function PropertiPageClient() {
 
       setSavedMap(nextSavedMap);
       setLikedMap(nextLikedMap);
+      setSaveCountMap(nextSaveCountMap);
+      setLikeCountMap(nextLikeCountMap);
       setUserRatingsMap(nextUserRatingsMap);
       setRatingSummaryMap(nextRatingSummaryMap);
       setShareCountMap(nextShareCountMap);
@@ -1481,6 +1501,13 @@ export default function PropertiPageClient() {
       ...prev,
       [propertyId]: !currentlySaved,
     }));
+    setSaveCountMap((prev) => ({
+      ...prev,
+      [propertyId]: Math.max(
+        0,
+        (prev[propertyId] ?? 0) + (currentlySaved ? -1 : 1)
+      ),
+    }));
 
     if (currentlySaved) {
       const { error } = await supabase
@@ -1495,6 +1522,10 @@ export default function PropertiPageClient() {
           ...prev,
           [propertyId]: true,
         }));
+        setSaveCountMap((prev) => ({
+          ...prev,
+          [propertyId]: (prev[propertyId] ?? 0) + 1,
+        }));
       }
       return;
     }
@@ -1508,7 +1539,11 @@ export default function PropertiPageClient() {
       console.error("Failed to save property:", error);
       setSavedMap((prev) => ({
         ...prev,
-          [propertyId]: false,
+        [propertyId]: false,
+      }));
+      setSaveCountMap((prev) => ({
+        ...prev,
+        [propertyId]: Math.max(0, (prev[propertyId] ?? 0) - 1),
       }));
     }
   }
@@ -1522,6 +1557,13 @@ export default function PropertiPageClient() {
     setLikedMap((prev) => ({
       ...prev,
       [propertyId]: !currentlyLiked,
+    }));
+    setLikeCountMap((prev) => ({
+      ...prev,
+      [propertyId]: Math.max(
+        0,
+        (prev[propertyId] ?? 0) + (currentlyLiked ? -1 : 1)
+      ),
     }));
 
     if (currentlyLiked) {
@@ -1537,6 +1579,10 @@ export default function PropertiPageClient() {
           ...prev,
           [propertyId]: true,
         }));
+        setLikeCountMap((prev) => ({
+          ...prev,
+          [propertyId]: (prev[propertyId] ?? 0) + 1,
+        }));
       }
       return;
     }
@@ -1551,6 +1597,10 @@ export default function PropertiPageClient() {
       setLikedMap((prev) => ({
         ...prev,
         [propertyId]: false,
+      }));
+      setLikeCountMap((prev) => ({
+        ...prev,
+        [propertyId]: Math.max(0, (prev[propertyId] ?? 0) - 1),
       }));
     }
   }
@@ -1900,6 +1950,8 @@ export default function PropertiPageClient() {
                 p={p}
                 saved={Boolean(savedMap[p.id])}
                 liked={Boolean(likedMap[p.id])}
+                saveCount={saveCountMap[p.id] ?? 0}
+                likeCount={likeCountMap[p.id] ?? 0}
                 userRating={userRatingsMap[p.id] ?? 0}
                 ratingSummary={ratingSummaryMap[p.id] ?? { avg: 0, count: 0 }}
                 shareCount={shareCountMap[p.id] ?? 0}

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { usePemilikDraftListing } from "../layout";
 import {
-  OWNER_PACKAGES,
   getOwnerPackageById,
   getAnyProductById,
 } from "../../../data/pricelist";
@@ -14,8 +13,8 @@ import type {
   TetamoPaymentFlow,
   TetamoProductType,
 } from "@/types/payment";
-
 import type { PemilikPlanType } from "../layout";
+
 type PlanId = PemilikPlanType;
 type GatewayType = "stripe" | "xendit";
 
@@ -100,6 +99,35 @@ function finalKodeForDisplay(
   return existingKode || draftKode || urlKode || "-";
 }
 
+function getUserIdFromStoredSession(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    for (const key of Object.keys(window.localStorage)) {
+      if (!key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+
+      const userId =
+        parsed?.user?.id ||
+        parsed?.currentSession?.user?.id ||
+        parsed?.session?.user?.id ||
+        null;
+
+      if (typeof userId === "string" && userId.trim()) {
+        return userId;
+      }
+    }
+  } catch (error) {
+    console.error("getUserIdFromStoredSession error:", error);
+  }
+
+  return null;
+}
+
 export default function PemilikIklanPembayaranPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -123,6 +151,9 @@ export default function PemilikIklanPembayaranPageClient() {
     useState<GatewayType>("stripe");
   const [submitting, setSubmitting] = useState(false);
 
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [existingProperty, setExistingProperty] =
     useState<ExistingProperty | null>(null);
   const [loadingExistingProperty, setLoadingExistingProperty] =
@@ -134,9 +165,55 @@ export default function PemilikIklanPembayaranPageClient() {
   useEffect(() => {
     let ignore = false;
 
+    async function loadAuthUser() {
+      try {
+        setAuthLoading(true);
+
+        const { data, error } = await supabase.auth.getSession();
+
+        if (ignore) return;
+
+        if (error) {
+          console.error("getSession error:", error);
+        }
+
+        const sessionUserId =
+          data.session?.user?.id || getUserIdFromStoredSession();
+
+        setAuthUserId(sessionUserId || null);
+      } catch (error) {
+        if (ignore) return;
+        console.error("loadAuthUser error:", error);
+        setAuthUserId(getUserIdFromStoredSession());
+      } finally {
+        if (!ignore) setAuthLoading(false);
+      }
+    }
+
+    loadAuthUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (ignore) return;
+      setAuthUserId(session?.user?.id ?? getUserIdFromStoredSession());
+      setAuthLoading(false);
+    });
+
+    return () => {
+      ignore = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
     async function loadExistingProperty() {
       if (!needsExistingProperty) {
         setLoadingExistingProperty(false);
+        setExistingProperty(null);
+        setExistingPropertyError("");
         return;
       }
 
@@ -146,21 +223,19 @@ export default function PemilikIklanPembayaranPageClient() {
         return;
       }
 
-      setLoadingExistingProperty(true);
-      setExistingPropertyError("");
+      if (authLoading) return;
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      const userId = authUserId || getUserIdFromStoredSession();
 
-      if (authError || !user) {
-        if (!ignore) {
-          setLoadingExistingProperty(false);
-          setExistingPropertyError("Silakan login ulang.");
-        }
+      if (!userId) {
+        setLoadingExistingProperty(false);
+        setExistingProperty(null);
+        setExistingPropertyError("Silakan login ulang.");
         return;
       }
+
+      setLoadingExistingProperty(true);
+      setExistingPropertyError("");
 
       const { data, error } = await supabase
         .from("properties")
@@ -176,7 +251,7 @@ export default function PemilikIklanPembayaranPageClient() {
             id
           )
         `)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("kode", kode)
         .single();
 
@@ -198,7 +273,7 @@ export default function PemilikIklanPembayaranPageClient() {
     return () => {
       ignore = true;
     };
-  }, [needsExistingProperty, kode]);
+  }, [needsExistingProperty, kode, authLoading, authUserId]);
 
   const selectedPlan: PlanId = useMemo(() => {
     if (isPlanId(planFromUrlRaw)) {
@@ -328,36 +403,17 @@ export default function PemilikIklanPembayaranPageClient() {
     router.push(`/pemilik/iklan/verifikasi?plan=${selectedPlan}`);
   }
 
-  async function ensureAuthenticated() {
-    const currentPath =
-      typeof window !== "undefined"
-        ? `${window.location.pathname}${window.location.search}`
-        : "/pemilik/iklan/pembayaran";
-
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      alert("Please log in first.");
-      router.push(`/login?next=${encodeURIComponent(currentPath)}`);
-      return null;
-    }
-
-    return user;
-  }
-
   async function onPay() {
-    if (!isReadyToPay || submitting) return;
+    if (!isReadyToPay || submitting || authLoading) return;
 
     setSubmitting(true);
 
     try {
-      const user = await ensureAuthenticated();
+      const userId = authUserId || getUserIdFromStoredSession();
 
-      if (!user?.id) {
-        alert("Auth session missing. Please log in again.");
+      if (!userId) {
+        alert("Please log in first.");
+        router.push("/login");
         return;
       }
 
@@ -386,7 +442,7 @@ export default function PemilikIklanPembayaranPageClient() {
 
       const paymentRecord: TetamoPayment = {
         id: crypto.randomUUID(),
-        userId: user.id,
+        userId,
         userType: "owner",
         flow: normalizedFlow,
         productId: selectedProduct.id ?? selectedPlan,
@@ -455,9 +511,7 @@ export default function PemilikIklanPembayaranPageClient() {
         return;
       }
 
-      alert(
-        `Checkout URL tidak ditemukan. Response keys: ${Object.keys(data || {}).join(", ")}`
-      );
+      alert("Checkout URL tidak ditemukan.");
     } catch (error: any) {
       console.error("onPay error:", error);
       alert(error?.message || "Something went wrong while creating payment.");
@@ -519,6 +573,14 @@ export default function PemilikIklanPembayaranPageClient() {
                 </div>
               </div>
             </div>
+
+            {authLoading && (
+              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
+                <div className="text-sm text-gray-600">
+                  Memeriksa sesi login...
+                </div>
+              </div>
+            )}
 
             {loadingExistingProperty && needsExistingProperty && (
               <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
@@ -686,16 +748,20 @@ export default function PemilikIklanPembayaranPageClient() {
 
             <button
               onClick={onPay}
-              disabled={!isReadyToPay || submitting || loadingExistingProperty}
+              disabled={!isReadyToPay || submitting || loadingExistingProperty || authLoading}
               className={[
                 "mt-5 w-full rounded-2xl px-5 py-3 text-sm font-semibold transition",
-                isReadyToPay && !submitting && !loadingExistingProperty
+                isReadyToPay && !submitting && !loadingExistingProperty && !authLoading
                   ? "bg-[#1C1C1E] text-white hover:opacity-90"
                   : "cursor-not-allowed bg-gray-200 text-gray-500",
               ].join(" ")}
               type="button"
             >
-              {submitting ? "Membuat Checkout..." : "Bayar Sekarang"}
+              {submitting
+                ? "Membuat Checkout..."
+                : authLoading
+                  ? "Memeriksa Sesi..."
+                  : "Bayar Sekarang"}
             </button>
 
             <p className="mt-3 text-xs leading-5 text-gray-500">
