@@ -22,6 +22,19 @@ function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+function FacebookIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M13.642 21v-8.201h2.757l.413-3.197h-3.17V7.561c0-.926.257-1.557 1.586-1.557H16.9V3.145C16.61 3.106 15.618 3 14.463 3c-2.412 0-4.064 1.472-4.064 4.176v2.426H7.67v3.197h2.729V21h3.243Z" />
+    </svg>
+  );
+}
+
 function AppleIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg
@@ -73,9 +86,9 @@ export default function LoginPageClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<"google" | "apple" | null>(
-    null
-  );
+  const [socialLoading, setSocialLoading] = useState<
+    "google" | "facebook" | "apple" | null
+  >(null);
 
   const rawNext = searchParams.get("next") || "";
   const roleFromUrl = searchParams.get("role") || "";
@@ -209,16 +222,23 @@ export default function LoginPageClient() {
     await finishLogin(user.id);
   };
 
-  const handleOAuthLogin = async (provider: "google" | "apple") => {
+  const handleOAuthLogin = async (provider: "google" | "facebook" | "apple") => {
     setSocialLoading(provider);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: oauthRedirectTo
+    const oauthOptions: Parameters<typeof supabase.auth.signInWithOAuth>[0]["options"] =
+      oauthRedirectTo
         ? {
             redirectTo: oauthRedirectTo,
           }
-        : undefined,
+        : {};
+
+    if (provider === "facebook") {
+      oauthOptions.scopes = "email";
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: oauthOptions,
     });
 
     if (error) {
@@ -306,6 +326,24 @@ export default function LoginPageClient() {
                 : lang === "id"
                 ? "Lanjutkan dengan Google"
                 : "Continue with Google"}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleOAuthLogin("facebook")}
+            disabled={isBusy}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
+          >
+            <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
+            <span>
+              {socialLoading === "facebook"
+                ? lang === "id"
+                  ? "Menghubungkan ke Facebook..."
+                  : "Connecting to Facebook..."
+                : lang === "id"
+                ? "Lanjutkan dengan Facebook"
+                : "Continue with Facebook"}
             </span>
           </button>
 
