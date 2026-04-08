@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Building2, UserRound, BriefcaseBusiness, ArrowLeft } from "lucide-react";
+import {
+  Building2,
+  UserRound,
+  BriefcaseBusiness,
+  ArrowLeft,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 type AllowedRole = "owner" | "agent" | "developer" | "admin";
-type OAuthProvider = "google" | "apple" | "facebook";
+type OAuthProvider = "google" | "facebook" | "apple";
 
 function normalizeRole(value: string | null): AllowedRole | null {
   const v = String(value || "").toLowerCase();
@@ -102,7 +107,7 @@ function RoleCard({
 }: {
   active?: boolean;
   disabled?: boolean;
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   desc: string;
   badge?: string;
@@ -118,8 +123,8 @@ function RoleCard({
         disabled
           ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-70"
           : active
-          ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
-          : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
+            ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
+            : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
       ].join(" ")}
     >
       {badge ? (
@@ -165,6 +170,9 @@ export default function SignupPageClient() {
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<OAuthProvider | null>(
+    null
+  );
 
   useEffect(() => {
     if (initialRole && initialRole !== selectedRole) {
@@ -192,23 +200,22 @@ export default function SignupPageClient() {
     currentRole === "agent"
       ? `/login?role=agent&next=${encodeURIComponent(agentNextPath)}`
       : currentRole === "owner"
-      ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
-      : currentRole === "admin"
-      ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
-      : "/login";
+        ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
+        : currentRole === "admin"
+          ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
+          : "/login";
 
   const footerLoginHref =
     currentRole && currentRole !== "developer"
       ? loginRedirect
       : next
-      ? `/login?next=${encodeURIComponent(next)}`
-      : "/login";
+        ? `/login?next=${encodeURIComponent(next)}`
+        : "/login";
 
   const getOAuthRedirectTo = (provider: OAuthProvider) => {
-    if (!currentRole) return `${window.location.origin}/auth/callback`;
-
     const params = new URLSearchParams();
-    params.set("role", currentRole);
+
+    if (currentRole) params.set("role", currentRole);
     params.set("provider", provider);
     params.set("flow", "signup");
 
@@ -242,31 +249,33 @@ export default function SignupPageClient() {
     }
 
     setLoading(true);
+    setSocialLoading(provider);
 
     try {
-      const oauthOptions: Parameters<typeof supabase.auth.signInWithOAuth>[0]["options"] = {
+      const options: {
+        redirectTo: string;
+        queryParams?: Record<string, string>;
+      } = {
         redirectTo: getOAuthRedirectTo(provider),
       };
 
       if (provider === "google") {
-        oauthOptions.queryParams = {
-          prompt: "select_account",
-        };
+        options.queryParams = { prompt: "select_account" };
       }
-
-      
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: oauthOptions,
+        options,
       });
 
       if (error) {
         setLoading(false);
+        setSocialLoading(null);
         alert(error.message);
       }
     } catch (err: any) {
       setLoading(false);
+      setSocialLoading(null);
       alert(err?.message || "OAuth signup failed.");
     }
   };
@@ -328,6 +337,7 @@ export default function SignupPageClient() {
     }
 
     setLoading(true);
+    setSocialLoading(null);
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -377,7 +387,9 @@ export default function SignupPageClient() {
         if (data.session) {
           router.push(ownerNextPath);
         } else {
-          router.push(`/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`);
+          router.push(
+            `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
+          );
         }
         return;
       }
@@ -386,7 +398,9 @@ export default function SignupPageClient() {
         if (data.session) {
           router.push(agentNextPath);
         } else {
-          router.push(`/login?role=agent&next=${encodeURIComponent(agentNextPath)}`);
+          router.push(
+            `/login?role=agent&next=${encodeURIComponent(agentNextPath)}`
+          );
         }
         return;
       }
@@ -400,7 +414,9 @@ export default function SignupPageClient() {
               ? "Akun admin berhasil dibuat. Silakan login."
               : "Admin account created successfully. Please log in."
           );
-          router.push(`/login?role=admin&next=${encodeURIComponent(adminNextPath)}`);
+          router.push(
+            `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
+          );
         }
         return;
       }
@@ -411,6 +427,8 @@ export default function SignupPageClient() {
       alert(err?.message || "Signup failed.");
     }
   };
+
+  const isBusy = loading || socialLoading !== null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-10 sm:px-6 sm:py-16">
@@ -521,42 +539,54 @@ export default function SignupPageClient() {
                       <button
                         type="button"
                         onClick={() => handleOAuthSignup("google")}
-                        disabled={loading}
+                        disabled={isBusy}
                         className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                       >
                         <GoogleDarkIcon />
                         <span>
-                          {lang === "id"
-                            ? "Daftar dengan Google"
-                            : "Sign up with Google"}
+                          {socialLoading === "google"
+                            ? lang === "id"
+                              ? "Menghubungkan ke Google..."
+                              : "Connecting to Google..."
+                            : lang === "id"
+                              ? "Daftar dengan Google"
+                              : "Sign up with Google"}
                         </span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleOAuthSignup("facebook")}
-                        disabled={loading}
+                        disabled={isBusy}
                         className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                       >
                         <FacebookDarkIcon />
                         <span>
-                          {lang === "id"
-                            ? "Daftar dengan Facebook"
-                            : "Sign up with Facebook"}
+                          {socialLoading === "facebook"
+                            ? lang === "id"
+                              ? "Menghubungkan ke Facebook..."
+                              : "Connecting to Facebook..."
+                            : lang === "id"
+                              ? "Daftar dengan Facebook"
+                              : "Sign up with Facebook"}
                         </span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleOAuthSignup("apple")}
-                        disabled={loading}
+                        disabled={isBusy}
                         className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                       >
                         <AppleDarkIcon />
                         <span>
-                          {lang === "id"
-                            ? "Daftar dengan Apple"
-                            : "Sign up with Apple"}
+                          {socialLoading === "apple"
+                            ? lang === "id"
+                              ? "Menghubungkan ke Apple..."
+                              : "Connecting to Apple..."
+                            : lang === "id"
+                              ? "Daftar dengan Apple"
+                              : "Sign up with Apple"}
                         </span>
                       </button>
                     </div>
@@ -620,16 +650,16 @@ export default function SignupPageClient() {
                   <button
                     type="button"
                     onClick={handleSignup}
-                    disabled={loading}
+                    disabled={isBusy}
                     className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                   >
-                    {loading
+                    {loading && !socialLoading
                       ? lang === "id"
                         ? "Sedang membuat akun..."
                         : "Creating account..."
                       : lang === "id"
-                      ? "Daftar"
-                      : "Sign up"}
+                        ? "Daftar"
+                        : "Sign up"}
                   </button>
                 </div>
 

@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
+type SocialProvider = "google" | "facebook" | "apple";
+
 function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg
@@ -86,9 +88,9 @@ export default function LoginPageClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<
-    "google" | "facebook" | "apple" | null
-  >(null);
+  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
+    null
+  );
 
   const rawNext = searchParams.get("next") || "";
   const roleFromUrl = searchParams.get("role") || "";
@@ -110,9 +112,9 @@ export default function LoginPageClient() {
     const params = new URLSearchParams();
     if (roleFromUrl) params.set("role", roleFromUrl);
     if (safeNext) params.set("next", safeNext);
+    params.set("flow", "login");
 
-    const query = params.toString();
-    return `${window.location.origin}/login${query ? `?${query}` : ""}`;
+    return `${window.location.origin}/auth/callback?${params.toString()}`;
   }, [roleFromUrl, safeNext]);
 
   const finishLogin = async (userId: string) => {
@@ -139,7 +141,7 @@ export default function LoginPageClient() {
     }
 
     if (profile.role === "owner") {
-      router.push("/pemilikdashboard");
+      router.push(safeNext || "/pemilikdashboard");
       return;
     }
 
@@ -149,7 +151,7 @@ export default function LoginPageClient() {
     }
 
     if (profile.role === "admin") {
-      router.push("/admindashboard");
+      router.push(safeNext || "/admindashboard");
       return;
     }
 
@@ -163,7 +165,7 @@ export default function LoginPageClient() {
       return;
     }
 
-    router.push("/");
+    router.push(safeNext || "/");
   };
 
   useEffect(() => {
@@ -199,6 +201,7 @@ export default function LoginPageClient() {
 
   const handleLogin = async () => {
     setLoading(true);
+    setSocialLoading(null);
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
@@ -222,21 +225,30 @@ export default function LoginPageClient() {
     await finishLogin(user.id);
   };
 
-  const handleOAuthLogin = async (provider: "google" | "facebook" | "apple") => {
+  const handleOAuthLogin = async (provider: SocialProvider) => {
+    setLoading(false);
     setSocialLoading(provider);
-
-    const oauthOptions: Parameters<typeof supabase.auth.signInWithOAuth>[0]["options"] =
-      oauthRedirectTo
-        ? {
-            redirectTo: oauthRedirectTo,
-          }
-        : {};
-
-        
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: oauthOptions,
+      options: oauthRedirectTo
+        ? {
+            redirectTo: oauthRedirectTo,
+            ...(provider === "google"
+              ? {
+                  queryParams: {
+                    prompt: "select_account",
+                  },
+                }
+              : {}),
+          }
+        : provider === "google"
+          ? {
+              queryParams: {
+                prompt: "select_account",
+              },
+            }
+          : undefined,
     });
 
     if (error) {
@@ -263,7 +275,7 @@ export default function LoginPageClient() {
 
         <div className="space-y-4">
           <FormInput
-            label={lang === "id" ? "Email" : "Email"}
+            label="Email"
             type="email"
             placeholder={
               lang === "id" ? "Masukkan email Anda" : "Enter your email"
@@ -295,8 +307,8 @@ export default function LoginPageClient() {
                 ? "Sedang masuk..."
                 : "Logging in..."
               : lang === "id"
-              ? "Masuk"
-              : "Log in"}
+                ? "Masuk"
+                : "Log in"}
           </button>
         </div>
 
@@ -322,8 +334,8 @@ export default function LoginPageClient() {
                   ? "Menghubungkan ke Google..."
                   : "Connecting to Google..."
                 : lang === "id"
-                ? "Lanjutkan dengan Google"
-                : "Continue with Google"}
+                  ? "Lanjutkan dengan Google"
+                  : "Continue with Google"}
             </span>
           </button>
 
@@ -340,8 +352,8 @@ export default function LoginPageClient() {
                   ? "Menghubungkan ke Facebook..."
                   : "Connecting to Facebook..."
                 : lang === "id"
-                ? "Lanjutkan dengan Facebook"
-                : "Continue with Facebook"}
+                  ? "Lanjutkan dengan Facebook"
+                  : "Continue with Facebook"}
             </span>
           </button>
 
@@ -358,8 +370,8 @@ export default function LoginPageClient() {
                   ? "Menghubungkan ke Apple..."
                   : "Connecting to Apple..."
                 : lang === "id"
-                ? "Lanjutkan dengan Apple"
-                : "Continue with Apple"}
+                  ? "Lanjutkan dengan Apple"
+                  : "Continue with Apple"}
             </span>
           </button>
         </div>
