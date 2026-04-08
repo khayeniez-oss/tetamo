@@ -116,7 +116,9 @@ function InfoCard({
         {icon}
       </div>
       <h3 className="text-base font-semibold text-[#1C1C1E]">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-[#6e6e73]">{desc}</p>
+      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#6e6e73]">
+        {desc}
+      </p>
     </div>
   );
 }
@@ -128,8 +130,15 @@ export default function DeveloperLicensePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const contactEmail = process.env.NEXT_PUBLIC_TETAMO_CONTACT_EMAIL || "";
-  const contactWhatsApp = process.env.NEXT_PUBLIC_TETAMO_CONTACT_WHATSAPP || "";
+  const fallbackEmail = "inquiry@tetamo.com";
+  const fallbackWhatsApp = "+6282264778799";
+
+  const contactEmail =
+    process.env.NEXT_PUBLIC_TETAMO_CONTACT_EMAIL?.trim() || fallbackEmail;
+
+  const contactWhatsApp =
+    process.env.NEXT_PUBLIC_TETAMO_CONTACT_WHATSAPP?.trim() ||
+    fallbackWhatsApp;
 
   const whatsappDigits = useMemo(
     () => contactWhatsApp.replace(/[^\d]/g, ""),
@@ -188,8 +197,6 @@ export default function DeveloperLicensePage() {
             "Halaman ini belum mengaktifkan paket self-serve untuk Developer. Semua permintaan Developer akan diproses melalui penawaran khusus License to Use.",
           sendEmail: "Kirim via Email",
           sendWhatsApp: "Kirim via WhatsApp",
-          noContact:
-            "Tambahkan NEXT_PUBLIC_TETAMO_CONTACT_EMAIL atau NEXT_PUBLIC_TETAMO_CONTACT_WHATSAPP agar tombol pengiriman aktif.",
           success:
             "Permintaan Anda sudah siap dikirim. Silakan lanjutkan dari email atau WhatsApp yang terbuka.",
           altContact: "Atau kembali ke halaman daftar",
@@ -245,8 +252,6 @@ export default function DeveloperLicensePage() {
             "This page does not activate a self-serve Developer package. All Developer requests are handled through a custom License to Use quotation flow.",
           sendEmail: "Send by Email",
           sendWhatsApp: "Send by WhatsApp",
-          noContact:
-            "Add NEXT_PUBLIC_TETAMO_CONTACT_EMAIL or NEXT_PUBLIC_TETAMO_CONTACT_WHATSAPP to enable sending buttons.",
           success:
             "Your request is ready to send. Please continue in the email or WhatsApp window that opened.",
           altContact: "Or go back to the signup page",
@@ -374,12 +379,12 @@ ${form.requirements}`.trim();
               <InfoCard
                 icon={<Building2 className="h-5 w-5 text-[#1C1C1E]" />}
                 title={pageText.whoTitle}
-                desc={`${pageText.who1}\n• ${pageText.who2}\n• ${pageText.who3}`}
+                desc={`• ${pageText.who1}\n• ${pageText.who2}\n• ${pageText.who3}`}
               />
               <InfoCard
                 icon={<ShieldCheck className="h-5 w-5 text-[#1C1C1E]" />}
                 title={pageText.scopeTitle}
-                desc={`${pageText.scope1}\n• ${pageText.scope2}\n• ${pageText.scope3}`}
+                desc={`• ${pageText.scope1}\n• ${pageText.scope2}\n• ${pageText.scope3}`}
               />
             </div>
 
@@ -487,7 +492,7 @@ ${form.requirements}`.trim();
                 <button
                   type="button"
                   onClick={handleSendEmail}
-                  disabled={submitting || !contactEmail}
+                  disabled={submitting}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Mail className="h-4 w-4" />
@@ -497,19 +502,13 @@ ${form.requirements}`.trim();
                 <button
                   type="button"
                   onClick={handleSendWhatsApp}
-                  disabled={submitting || !whatsappDigits}
+                  disabled={submitting}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <MessageSquareMore className="h-4 w-4" />
                   {pageText.sendWhatsApp}
                 </button>
               </div>
-
-              {!contactEmail && !whatsappDigits ? (
-                <p className="mt-4 text-sm leading-6 text-[#b42318]">
-                  {pageText.noContact}
-                </p>
-              ) : null}
 
               {submitted ? (
                 <p className="mt-4 text-sm leading-6 text-[#166534]">
