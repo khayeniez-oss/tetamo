@@ -254,9 +254,7 @@ export default function SignupPageClient() {
         };
       }
 
-      if (provider === "facebook") {
-        oauthOptions.scopes = "email";
-      }
+      
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,

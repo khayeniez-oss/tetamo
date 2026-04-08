@@ -232,9 +232,7 @@ export default function LoginPageClient() {
           }
         : {};
 
-    if (provider === "facebook") {
-      oauthOptions.scopes = "email";
-    }
+        
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
