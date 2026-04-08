@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 type AllowedRole = "owner" | "agent" | "developer" | "admin";
-type OAuthProvider = "google" | "apple";
+type OAuthProvider = "google" | "apple" | "facebook";
 
 function normalizeRole(value: string | null): AllowedRole | null {
   const v = String(value || "").toLowerCase();
@@ -32,6 +32,19 @@ function GoogleDarkIcon() {
       <path d="M12.24 22c2.73 0 5.02-.904 6.693-2.394l-3.257-2.553c-.904.608-2.062.967-3.436.967-2.64 0-4.879-1.784-5.678-4.183H3.2v2.633A10.11 10.11 0 0 0 12.24 22Z" />
       <path d="M6.562 13.837A6.08 6.08 0 0 1 6.245 12c0-.638.11-1.257.317-1.837V7.53H3.2A10.11 10.11 0 0 0 2.12 12c0 1.631.39 3.177 1.08 4.47l3.362-2.633Z" />
       <path d="M12.24 5.98c1.484 0 2.815.51 3.862 1.511l2.897-2.897C17.255 2.966 14.965 2 12.24 2A10.11 10.11 0 0 0 3.2 7.53l3.362 2.633C7.36 7.764 9.6 5.98 12.24 5.98Z" />
+    </svg>
+  );
+}
+
+function FacebookDarkIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-5 w-5 text-[#1C1C1E]"
+      fill="currentColor"
+    >
+      <path d="M13.642 21v-8.201h2.757l.413-3.197h-3.17V7.561c0-.926.257-1.557 1.586-1.557H16.9V3.145C16.61 3.106 15.618 3 14.463 3c-2.412 0-4.064 1.472-4.064 4.176v2.426H7.67v3.197h2.729V21h3.243Z" />
     </svg>
   );
 }
@@ -231,18 +244,23 @@ export default function SignupPageClient() {
     setLoading(true);
 
     try {
+      const oauthOptions: Parameters<typeof supabase.auth.signInWithOAuth>[0]["options"] = {
+        redirectTo: getOAuthRedirectTo(provider),
+      };
+
+      if (provider === "google") {
+        oauthOptions.queryParams = {
+          prompt: "select_account",
+        };
+      }
+
+      if (provider === "facebook") {
+        oauthOptions.scopes = "email";
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo: getOAuthRedirectTo(provider),
-          ...(provider === "google"
-            ? {
-                queryParams: {
-                  prompt: "select_account",
-                },
-              }
-            : {}),
-        },
+        options: oauthOptions,
       });
 
       if (error) {
@@ -513,6 +531,20 @@ export default function SignupPageClient() {
                           {lang === "id"
                             ? "Daftar dengan Google"
                             : "Sign up with Google"}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOAuthSignup("facebook")}
+                        disabled={loading}
+                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                      >
+                        <FacebookDarkIcon />
+                        <span>
+                          {lang === "id"
+                            ? "Daftar dengan Facebook"
+                            : "Sign up with Facebook"}
                         </span>
                       </button>
 
