@@ -92,6 +92,8 @@ export default function LoginPageClient() {
     null
   );
 
+  const showFacebook = process.env.NEXT_PUBLIC_ENABLE_FACEBOOK_AUTH === "true";
+
   const rawNext = searchParams.get("next") || "";
   const roleFromUrl = searchParams.get("role") || "";
   const safeNext = rawNext.startsWith("/") ? rawNext : "";
@@ -156,12 +158,7 @@ export default function LoginPageClient() {
     }
 
     if (profile.role === "developer") {
-      redirectingRef.current = false;
-      alert(
-        lang === "id"
-          ? "Dashboard developer belum dibuat."
-          : "Developer dashboard has not been created yet."
-      );
+      router.push("/developer-license");
       return;
     }
 
@@ -339,23 +336,25 @@ export default function LoginPageClient() {
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleOAuthLogin("facebook")}
-            disabled={isBusy}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
-          >
-            <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
-            <span>
-              {socialLoading === "facebook"
-                ? lang === "id"
-                  ? "Menghubungkan ke Facebook..."
-                  : "Connecting to Facebook..."
-                : lang === "id"
-                  ? "Lanjutkan dengan Facebook"
-                  : "Continue with Facebook"}
-            </span>
-          </button>
+          {showFacebook ? (
+            <button
+              type="button"
+              onClick={() => handleOAuthLogin("facebook")}
+              disabled={isBusy}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
+            >
+              <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
+              <span>
+                {socialLoading === "facebook"
+                  ? lang === "id"
+                    ? "Menghubungkan ke Facebook..."
+                    : "Connecting to Facebook..."
+                  : lang === "id"
+                    ? "Lanjutkan dengan Facebook"
+                    : "Continue with Facebook"}
+              </span>
+            </button>
+          ) : null}
 
           <button
             type="button"
