@@ -156,6 +156,8 @@ export default function SignupPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const developerLicensePath = "/developer-license";
+
   const initialRole = normalizeRole(searchParams.get("role"));
   const packageId = searchParams.get("package") || "";
   const planId = searchParams.get("plan") || "";
@@ -180,9 +182,15 @@ export default function SignupPageClient() {
     }
   }, [initialRole, selectedRole]);
 
+  useEffect(() => {
+    if (selectedRole === "developer") {
+      router.replace(developerLicensePath);
+    }
+  }, [selectedRole, router]);
+
   const currentRole = selectedRole;
   const isAdminSignup = currentRole === "admin";
-  const isDeveloperSoon = currentRole === "developer";
+  const isDeveloperRole = currentRole === "developer";
 
   const roleLabel = useMemo(() => {
     if (currentRole === "agent") return lang === "id" ? "Agen" : "Agent";
@@ -239,12 +247,8 @@ export default function SignupPageClient() {
       return;
     }
 
-    if (isDeveloperSoon) {
-      alert(
-        lang === "id"
-          ? "Paket Developer belum siap. Flow developer akan ditambahkan kemudian."
-          : "Developer package is not ready yet. The developer flow will be added later."
-      );
+    if (isDeveloperRole) {
+      router.push(developerLicensePath);
       return;
     }
 
@@ -290,12 +294,8 @@ export default function SignupPageClient() {
       return;
     }
 
-    if (isDeveloperSoon) {
-      alert(
-        lang === "id"
-          ? "Flow developer belum dibuat. Untuk sementara belum bisa daftar sebagai developer."
-          : "The developer flow is not created yet. Developer signup is not available for now."
-      );
+    if (isDeveloperRole) {
+      router.push(developerLicensePath);
       return;
     }
 
@@ -473,15 +473,15 @@ export default function SignupPageClient() {
 
             <RoleCard
               active={false}
-              disabled
-              badge={lang === "id" ? "Segera" : "Soon"}
+              badge={lang === "id" ? "Lisensi Khusus" : "Custom License"}
               icon={<Building2 className="h-5 w-5 text-[#1C1C1E]" />}
               title="Developer"
               desc={
                 lang === "id"
-                  ? "Flow developer dan paket license akan segera tersedia."
-                  : "Developer flow and license package will be available soon."
+                  ? "Untuk developer yang membutuhkan license to use Tetamo dan penawaran harga khusus sesuai kebutuhan proyek."
+                  : "For developers who need a Tetamo license-to-use arrangement and custom pricing based on project requirements."
               }
+              onClick={() => router.push(developerLicensePath)}
             />
 
             <p className="pt-2 text-center text-sm leading-6 text-[#6e6e73]">
@@ -518,162 +518,145 @@ export default function SignupPageClient() {
               ) : null}
             </div>
 
-            {isDeveloperSoon ? (
-              <div className="rounded-2xl border border-[#e5e5e7] bg-[#fafafa] p-5 text-center">
-                <p className="text-base font-semibold text-[#1C1C1E]">
-                  {lang === "id"
-                    ? "Paket Developer segera hadir"
-                    : "Developer package coming soon"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
-                  {lang === "id"
-                    ? "Flow developer belum dibuat. Untuk sementara gunakan Owner atau Agent."
-                    : "The developer flow is not built yet. For now, please use Owner or Agent."}
-                </p>
-              </div>
-            ) : (
+            {!isAdminSignup ? (
               <>
-                {!isAdminSignup ? (
-                  <>
-                    <div className="space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => handleOAuthSignup("google")}
-                        disabled={isBusy}
-                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
-                      >
-                        <GoogleDarkIcon />
-                        <span>
-                          {socialLoading === "google"
-                            ? lang === "id"
-                              ? "Menghubungkan ke Google..."
-                              : "Connecting to Google..."
-                            : lang === "id"
-                              ? "Daftar dengan Google"
-                              : "Sign up with Google"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOAuthSignup("facebook")}
-                        disabled={isBusy}
-                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
-                      >
-                        <FacebookDarkIcon />
-                        <span>
-                          {socialLoading === "facebook"
-                            ? lang === "id"
-                              ? "Menghubungkan ke Facebook..."
-                              : "Connecting to Facebook..."
-                            : lang === "id"
-                              ? "Daftar dengan Facebook"
-                              : "Sign up with Facebook"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOAuthSignup("apple")}
-                        disabled={isBusy}
-                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
-                      >
-                        <AppleDarkIcon />
-                        <span>
-                          {socialLoading === "apple"
-                            ? lang === "id"
-                              ? "Menghubungkan ke Apple..."
-                              : "Connecting to Apple..."
-                            : lang === "id"
-                              ? "Daftar dengan Apple"
-                              : "Sign up with Apple"}
-                        </span>
-                      </button>
-                    </div>
-
-                    <div className="my-6 flex items-center gap-3">
-                      <div className="h-px flex-1 bg-[#e5e5e7]" />
-                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6e6e73]">
-                        {lang === "id" ? "Atau" : "Or"}
-                      </span>
-                      <div className="h-px flex-1 bg-[#e5e5e7]" />
-                    </div>
-                  </>
-                ) : null}
-
-                <div className="space-y-4">
-                  <FormInput
-                    label={lang === "id" ? "Nama Lengkap" : "Full name"}
-                    placeholder={
-                      lang === "id"
-                        ? "Masukkan nama lengkap Anda"
-                        : "Enter your full name"
-                    }
-                    value={fullName}
-                    onChange={setFullName}
-                  />
-
-                  <FormInput
-                    label="Email"
-                    type="email"
-                    placeholder={
-                      lang === "id" ? "Masukkan email Anda" : "Enter your email"
-                    }
-                    value={email}
-                    onChange={setEmail}
-                  />
-
-                  <FormInput
-                    label={lang === "id" ? "Kata Sandi" : "Password"}
-                    type="password"
-                    placeholder={
-                      lang === "id" ? "Buat kata sandi" : "Create a password"
-                    }
-                    value={password}
-                    onChange={setPassword}
-                  />
-
-                  {isAdminSignup ? (
-                    <FormInput
-                      label="Admin Code"
-                      type="password"
-                      placeholder={
-                        lang === "id"
-                          ? "Masukkan admin signup code"
-                          : "Enter admin signup code"
-                      }
-                      value={adminCode}
-                      onChange={setAdminCode}
-                    />
-                  ) : null}
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => handleOAuthSignup("google")}
+                    disabled={isBusy}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                  >
+                    <GoogleDarkIcon />
+                    <span>
+                      {socialLoading === "google"
+                        ? lang === "id"
+                          ? "Menghubungkan ke Google..."
+                          : "Connecting to Google..."
+                        : lang === "id"
+                          ? "Daftar dengan Google"
+                          : "Sign up with Google"}
+                    </span>
+                  </button>
 
                   <button
                     type="button"
-                    onClick={handleSignup}
+                    onClick={() => handleOAuthSignup("facebook")}
                     disabled={isBusy}
-                    className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                   >
-                    {loading && !socialLoading
-                      ? lang === "id"
-                        ? "Sedang membuat akun..."
-                        : "Creating account..."
-                      : lang === "id"
-                        ? "Daftar"
-                        : "Sign up"}
+                    <FacebookDarkIcon />
+                    <span>
+                      {socialLoading === "facebook"
+                        ? lang === "id"
+                          ? "Menghubungkan ke Facebook..."
+                          : "Connecting to Facebook..."
+                        : lang === "id"
+                          ? "Daftar dengan Facebook"
+                          : "Sign up with Facebook"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOAuthSignup("apple")}
+                    disabled={isBusy}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                  >
+                    <AppleDarkIcon />
+                    <span>
+                      {socialLoading === "apple"
+                        ? lang === "id"
+                          ? "Menghubungkan ke Apple..."
+                          : "Connecting to Apple..."
+                        : lang === "id"
+                          ? "Daftar dengan Apple"
+                          : "Sign up with Apple"}
+                    </span>
                   </button>
                 </div>
 
-                <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
-                  {lang === "id" ? "Sudah punya akun?" : "Already have an account?"}{" "}
-                  <Link
-                    href={footerLoginHref}
-                    className="font-semibold text-[#1C1C1E] underline underline-offset-4"
-                  >
-                    {lang === "id" ? "Masuk" : "Log in"}
-                  </Link>
-                </p>
+                <div className="my-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-[#e5e5e7]" />
+                  <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6e6e73]">
+                    {lang === "id" ? "Atau" : "Or"}
+                  </span>
+                  <div className="h-px flex-1 bg-[#e5e5e7]" />
+                </div>
               </>
-            )}
+            ) : null}
+
+            <div className="space-y-4">
+              <FormInput
+                label={lang === "id" ? "Nama Lengkap" : "Full name"}
+                placeholder={
+                  lang === "id"
+                    ? "Masukkan nama lengkap Anda"
+                    : "Enter your full name"
+                }
+                value={fullName}
+                onChange={setFullName}
+              />
+
+              <FormInput
+                label="Email"
+                type="email"
+                placeholder={
+                  lang === "id" ? "Masukkan email Anda" : "Enter your email"
+                }
+                value={email}
+                onChange={setEmail}
+              />
+
+              <FormInput
+                label={lang === "id" ? "Kata Sandi" : "Password"}
+                type="password"
+                placeholder={
+                  lang === "id" ? "Buat kata sandi" : "Create a password"
+                }
+                value={password}
+                onChange={setPassword}
+              />
+
+              {isAdminSignup ? (
+                <FormInput
+                  label="Admin Code"
+                  type="password"
+                  placeholder={
+                    lang === "id"
+                      ? "Masukkan admin signup code"
+                      : "Enter admin signup code"
+                  }
+                  value={adminCode}
+                  onChange={setAdminCode}
+                />
+              ) : null}
+
+              <button
+                type="button"
+                onClick={handleSignup}
+                disabled={isBusy}
+                className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                {loading && !socialLoading
+                  ? lang === "id"
+                    ? "Sedang membuat akun..."
+                    : "Creating account..."
+                  : lang === "id"
+                    ? "Daftar"
+                    : "Sign up"}
+              </button>
+            </div>
+
+            <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
+              {lang === "id" ? "Sudah punya akun?" : "Already have an account?"}{" "}
+              <Link
+                href={footerLoginHref}
+                className="font-semibold text-[#1C1C1E] underline underline-offset-4"
+              >
+                {lang === "id" ? "Masuk" : "Log in"}
+              </Link>
+            </p>
           </>
         )}
       </div>
