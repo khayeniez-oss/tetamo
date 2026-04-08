@@ -157,6 +157,7 @@ export default function SignupPageClient() {
   const searchParams = useSearchParams();
 
   const developerLicensePath = "/developer-license";
+  const showFacebook = process.env.NEXT_PUBLIC_ENABLE_FACEBOOK_AUTH === "true";
 
   const initialRole = normalizeRole(searchParams.get("role"));
   const packageId = searchParams.get("package") || "";
@@ -539,23 +540,25 @@ export default function SignupPageClient() {
                     </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleOAuthSignup("facebook")}
-                    disabled={isBusy}
-                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
-                  >
-                    <FacebookDarkIcon />
-                    <span>
-                      {socialLoading === "facebook"
-                        ? lang === "id"
-                          ? "Menghubungkan ke Facebook..."
-                          : "Connecting to Facebook..."
-                        : lang === "id"
-                          ? "Daftar dengan Facebook"
-                          : "Sign up with Facebook"}
-                    </span>
-                  </button>
+                  {showFacebook ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOAuthSignup("facebook")}
+                      disabled={isBusy}
+                      className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                    >
+                      <FacebookDarkIcon />
+                      <span>
+                        {socialLoading === "facebook"
+                          ? lang === "id"
+                            ? "Menghubungkan ke Facebook..."
+                            : "Connecting to Facebook..."
+                          : lang === "id"
+                            ? "Daftar dengan Facebook"
+                            : "Sign up with Facebook"}
+                      </span>
+                    </button>
+                  ) : null}
 
                   <button
                     type="button"
