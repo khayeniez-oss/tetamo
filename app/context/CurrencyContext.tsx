@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type CurrencyCode = "IDR" | "USD";
+export type CurrencyCode = "IDR" | "USD" | "AUD";
 
 type CurrencyContextType = {
   currency: CurrencyCode;
@@ -27,7 +27,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
 
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "IDR" || stored === "USD") {
+    if (stored === "IDR" || stored === "USD" || stored === "AUD") {
       setCurrencyState(stored);
     }
   }, []);

@@ -23,6 +23,7 @@ import { trackEvent } from "@/lib/trackEvent";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
 
 type RentalType = "monthly" | "yearly" | "";
+type SupportedCurrency = "IDR" | "USD" | "AUD";
 
 type Property = {
   verifiedListing: boolean;
@@ -147,38 +148,7 @@ type EngagementSummaryRow = {
 };
 
 const IDR_PER_USD = 16500;
-
-function rotateListingsByReceiver(list: Property[]) {
-  const grouped: Record<string, Property[]> = {};
-
-  for (const item of list) {
-    const key = item.receiverId || item.id;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(item);
-  }
-
-  const receiverIds = Object.keys(grouped);
-  const rotated: Property[] = [];
-
-  let pointer = 0;
-
-  while (true) {
-    let addedAny = false;
-
-    for (const receiverId of receiverIds) {
-      const bucket = grouped[receiverId];
-      if (pointer < bucket.length) {
-        rotated.push(bucket[pointer]);
-        addedAny = true;
-      }
-    }
-
-    if (!addedAny) break;
-    pointer++;
-  }
-
-  return rotated;
-}
+const IDR_PER_AUD = 12072;
 
 function calculateRanking(p: Property) {
   let score = p.rankingScore ?? 0;
@@ -229,18 +199,31 @@ function formatUsd(value: number | null | undefined) {
   }).format(value / IDR_PER_USD);
 }
 
+function formatAud(value: number | null | undefined) {
+  if (typeof value !== "number") return "A$0";
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 0,
+  }).format(value / IDR_PER_AUD);
+}
+
 function formatPriceByCurrency(
   value: number | null | undefined,
-  currency: "IDR" | "USD"
+  currency: SupportedCurrency
 ) {
-  return currency === "USD" ? formatUsd(value) : formatIdr(value);
+  if (currency === "USD") return formatUsd(value);
+  if (currency === "AUD") return formatAud(value);
+  return formatIdr(value);
 }
 
 function formatSecondaryPrice(
   value: number | null | undefined,
-  currency: "IDR" | "USD"
+  currency: SupportedCurrency
 ) {
-  return currency === "USD" ? formatIdr(value) : formatUsd(value);
+  if (currency === "USD") return formatIdr(value);
+  if (currency === "AUD") return formatIdr(value);
+  return formatUsd(value);
 }
 
 function formatPostedDate(value?: string | null) {
@@ -369,7 +352,8 @@ function formatPropertyType(value?: string | null, lang?: string) {
 
   if (raw === "tanah") return lang === "id" ? "Tanah" : "Land";
   if (raw === "rumah") return lang === "id" ? "Rumah" : "House";
-  if (raw === "villa") return "Villa";
+  if (raw === "villa" || raw === "vila") return "Villa";
+  if (raw === "studio") return "Studio";
   if (raw === "apartemen") return lang === "id" ? "Apartemen" : "Apartment";
   if (raw === "apartment") return lang === "id" ? "Apartemen" : "Apartment";
   if (raw === "ruko") return lang === "id" ? "Ruko" : "Shophouse";
@@ -378,9 +362,12 @@ function formatPropertyType(value?: string | null, lang?: string) {
   if (raw === "kantor") return lang === "id" ? "Kantor" : "Office";
   if (raw === "kost") return lang === "id" ? "Kost" : "Boarding House";
   if (raw === "kos") return lang === "id" ? "Kos" : "Boarding House";
+  if (raw === "guesthouse") return "Guesthouse";
   if (raw === "hotel") return "Hotel";
+  if (raw === "resort") return "Resort";
   if (raw === "pabrik") return lang === "id" ? "Pabrik" : "Factory";
   if (raw === "toko") return lang === "id" ? "Toko" : "Shop";
+  if (raw === "rukos") return lang === "id" ? "Rukos" : "Shop-Boarding House";
 
   return raw
     .split(" ")
@@ -444,13 +431,16 @@ function PropertyCard({
 }) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
+  const currentCurrency: SupportedCurrency =
+    currency === "AUD" ? "AUD" : currency === "USD" ? "USD" : "IDR";
+
   const router = useRouter();
   const [idx, setIdx] = useState(0);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const cardViewTrackedRef = useRef(false);
 
-  const displayPrice = formatPriceByCurrency(p.priceValue, currency);
-  const secondaryPrice = formatSecondaryPrice(p.priceValue, currency);
+  const displayPrice = formatPriceByCurrency(p.priceValue, currentCurrency);
+  const secondaryPrice = formatSecondaryPrice(p.priceValue, currentCurrency);
 
   const next = () =>
     setIdx((prev) => (prev === p.images.length - 1 ? 0 : prev + 1));
@@ -626,7 +616,7 @@ function PropertyCard({
         property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
-        province: property.province,
+        province: p.province,
         ...extraMetadata,
       },
     });
@@ -920,8 +910,8 @@ Is this property still available?`;
                 ? "Dijual"
                 : "For Sale"
               : lang === "id"
-                ? "Disewa"
-                : "For Rent"}
+              ? "Disewa"
+              : "For Rent"}
           </div>
 
           {p.jenisListing === "disewa" && p.rentalType ? (
@@ -1850,19 +1840,19 @@ export default function PropertiPageClient() {
         ? "Dijual"
         : "For Sale"
       : lang === "id"
-        ? "Disewa"
-        : "For Rent"
+      ? "Disewa"
+      : "For Rent"
     : lang === "id"
-      ? "Semua properti"
-      : "All properties";
+    ? "Semua"
+    : "All";
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <div className="rounded-3xl bg-[#F7F7F8] px-5 py-6 sm:px-7 sm:py-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
+        <div className="rounded-[32px] border border-gray-200 bg-white p-5 shadow-sm sm:p-6 lg:p-8">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-2xl">
+              <h1 className="text-2xl font-extrabold text-[#1C1C1E] sm:text-3xl">
                 {lang === "id" ? "Marketplace Properti" : "Property Marketplace"}
               </h1>
 

@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 
 type RentalType = "monthly" | "yearly" | "";
+type SupportedCurrency = "IDR" | "USD" | "AUD";
 
 type PropertyImageRow = {
   image_url: string;
@@ -155,6 +156,21 @@ type PropertyItem = {
   parkingAvailable: boolean;
   electricityValue: string;
   waterValue: string;
+
+  landUnit: string;
+  pricePerSqmValue: number | null;
+  pricePerAreValue: number | null;
+  pricePerHectareValue: number | null;
+  frontageValue: number | null;
+  depthValue: number | null;
+  dimensionText: string;
+  roadAccess: string;
+  ownershipType: string;
+  landType: string;
+  zoningType: string;
+  unitFloorValue: number | null;
+  towerBlock: string;
+  ceilingHeightValue: number | null;
 };
 
 type DetailChip = {
@@ -173,6 +189,7 @@ const FALLBACK_POSTER_PHOTO =
   "https://randomuser.me/api/portraits/men/32.jpg";
 
 const IDR_PER_USD = 16500;
+const IDR_PER_AUD = 12072;
 
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
@@ -192,18 +209,32 @@ function formatUsd(value: number | null | undefined) {
   }).format(value / IDR_PER_USD);
 }
 
-function formatPriceByCurrency(
-  value: number | null | undefined,
-  currency: "IDR" | "USD"
-) {
-  return currency === "USD" ? formatUsd(value) : formatIdr(value);
+function formatAud(value: number | null | undefined) {
+  if (typeof value !== "number") return "A$0";
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 0,
+  }).format(value / IDR_PER_AUD);
 }
 
-function formatSecondaryPrice(
+function formatPriceByCurrency(
   value: number | null | undefined,
-  currency: "IDR" | "USD"
+  currency: SupportedCurrency
 ) {
-  return currency === "USD" ? formatIdr(value) : formatUsd(value);
+  if (currency === "USD") return formatUsd(value);
+  if (currency === "AUD") return formatAud(value);
+  return formatIdr(value);
+}
+
+function formatSecondaryPrices(
+  value: number | null | undefined,
+  currency: SupportedCurrency
+) {
+  const all: SupportedCurrency[] = ["IDR", "USD", "AUD"];
+  return all
+    .filter((item) => item !== currency)
+    .map((item) => formatPriceByCurrency(value, item));
 }
 
 function formatPostedDate(value?: string | null) {
@@ -298,7 +329,7 @@ function normalizePostedByType(
   source?: string | null
 ): "owner" | "agent" | "developer" {
   const value = (role || source || "owner").toLowerCase();
-    if (value === "agent") return "agent";
+  if (value === "agent") return "agent";
   if (value === "developer") return "developer";
   return "owner";
 }
@@ -312,10 +343,7 @@ function normalizeRentalType(value?: string | null): RentalType {
   return "";
 }
 
-function getRentalTypeLabel(
-  rentalType: RentalType,
-  lang: "id" | "en"
-): string {
+function getRentalTypeLabel(rentalType: RentalType, lang: string): string {
   if (rentalType === "monthly") {
     return lang === "id" ? "Bulanan" : "Monthly";
   }
@@ -367,6 +395,7 @@ function formatPropertyType(value?: string | null, lang?: string) {
   if (raw === "tanah") return lang === "id" ? "Tanah" : "Land";
   if (raw === "rumah") return lang === "id" ? "Rumah" : "House";
   if (raw === "villa" || raw === "vila") return "Villa";
+  if (raw === "studio") return "Studio";
   if (raw === "apartemen" || raw === "apartment") {
     return lang === "id" ? "Apartemen" : "Apartment";
   }
@@ -377,9 +406,14 @@ function formatPropertyType(value?: string | null, lang?: string) {
   if (raw === "kost" || raw === "kos") {
     return lang === "id" ? "Kost" : "Boarding House";
   }
+  if (raw === "guesthouse") return lang === "id" ? "Guesthouse" : "Guesthouse";
   if (raw === "hotel") return "Hotel";
+  if (raw === "resort") return "Resort";
   if (raw === "pabrik") return lang === "id" ? "Pabrik" : "Factory";
   if (raw === "toko") return lang === "id" ? "Toko" : "Shop";
+  if (raw === "rukos") {
+    return lang === "id" ? "Rukos" : "Shop-Boarding House";
+  }
 
   return raw
     .split(" ")
@@ -439,9 +473,74 @@ function getPropertyHref(property: { slug?: string | null; id: string }) {
   return `/properti/${property.slug || property.id}`;
 }
 
+function isApartmentType(value?: string | null) {
+  const v = String(value || "").trim().toLowerCase();
+  return v === "apartemen" || v === "apartment" || v === "studio";
+}
+
+function isLandType(value?: string | null) {
+  return String(value || "").trim().toLowerCase() === "tanah";
+}
+
+function isIndustrialType(value?: string | null) {
+  const v = String(value || "").trim().toLowerCase();
+  return v === "gudang" || v === "pabrik";
+}
+
+function usesLandSizeForType(value?: string | null) {
+  return !isApartmentType(value);
+}
+
+function formatLandUnitShort(value?: string | null) {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "are") return "are";
+  if (v === "hectare" || v === "hektare") return "ha";
+  if (v === "acre" || v === "acres") return "acre";
+  return "m²";
+}
+
+function formatLandSize(
+  value: number | null | undefined,
+  landUnit?: string | null
+) {
+  if (typeof value !== "number") return "";
+  return `${formatNumber(value)} ${formatLandUnitShort(landUnit)}`;
+}
+
+function formatDimensionValue(
+  dimensionText?: string | null,
+  frontageValue?: number | null,
+  depthValue?: number | null
+) {
+  const cleanText = toStringOrEmpty(dimensionText);
+  if (cleanText) return cleanText;
+
+  if (frontageValue && depthValue) {
+    return `${formatNumber(frontageValue)} x ${formatNumber(depthValue)} m`;
+  }
+
+  if (frontageValue) return `${formatNumber(frontageValue)} m`;
+  if (depthValue) return `${formatNumber(depthValue)} m`;
+
+  return "";
+}
+
+function formatUnitPrice(
+  value: number | null | undefined,
+  currency: SupportedCurrency,
+  suffix: string
+) {
+  if (typeof value !== "number") return "";
+  return `${formatPriceByCurrency(value, currency)} / ${suffix}`;
+}
+
 export default function PropertyDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
+  const currentCurrency: SupportedCurrency =
+    currency === "AUD" ? "AUD" : currency === "USD" ? "USD" : "IDR";
+
   const router = useRouter();
   const pathname = usePathname();
 
@@ -451,7 +550,9 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   const [idx, setIdx] = useState(0);
 
   const [property, setProperty] = useState<PropertyItem | null>(null);
-  const [orderedProperties, setOrderedProperties] = useState<OrderedPropertyRef[]>([]);
+  const [orderedProperties, setOrderedProperties] = useState<
+    OrderedPropertyRef[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -651,9 +752,7 @@ export default function PropertyDetailClient({ id }: { id: string }) {
           ? profilesMap.get(row.contact_user_id) ?? null
           : null;
 
-        userProfile = row.user_id
-          ? profilesMap.get(row.user_id) ?? null
-          : null;
+        userProfile = row.user_id ? profilesMap.get(row.user_id) ?? null : null;
       }
 
       const posterProfile =
@@ -697,14 +796,27 @@ export default function PropertyDetailClient({ id }: { id: string }) {
       const isVerified =
         row.verification_status === "verified" || Boolean(row.verified_ok);
 
-      const bedroomsValue = toNumberOrNull(row.bedrooms);
-      const bathroomsValue = toNumberOrNull(row.bathrooms ?? row.bathroom);
+      const bedroomsValue = toNumberOrNull(row.bedrooms ?? row.bed);
+      const bathroomsValue = toNumberOrNull(
+        row.bathrooms ?? row.bathroom ?? row.bath
+      );
       const floorsValue = toNumberOrNull(
         row.floors ?? row.floor ?? row.floor_count
       );
       const parkingValue = toNumberOrNull(
-        row.parking ?? row.parking_spaces ?? row.carport
+        row.parking_spaces ??
+          row.parking ??
+          row.garage_count ??
+          row.carport_count
       );
+
+      const rawParking = toStringOrEmpty(row.garage ?? row.parking).toLowerCase();
+      const parkingAvailable =
+        Boolean(row.facilities?.fac_parking) ||
+        rawParking === "ada" ||
+        rawParking === "available" ||
+        rawParking === "yes" ||
+        rawParking === "true";
 
       const mapped: PropertyItem = {
         id: row.id,
@@ -717,9 +829,12 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         priceValue: Number(row.price ?? 0),
         province: row.province ?? "-",
         area: row.city || row.area || "-",
-        furnished: mapFurnishing(row.furnishing, lang),
-        certificate: row.certificate ?? "-",
-        marketType: toStringOrEmpty(row.market_type),
+        furnished: mapFurnishing(
+          row.furnishing ?? row.furnished,
+          lang
+        ),
+        certificate: toStringOrEmpty(row.certificate ?? row.sertifikat) || "-",
+        marketType: toStringOrEmpty(row.market_type ?? row.marketType),
         description: row.description || "-",
         descriptionEn: row.description_en || "",
         agency:
@@ -790,18 +905,47 @@ export default function PropertyDetailClient({ id }: { id: string }) {
           userProfile?.linkedin_url ||
           "",
 
-        buildingSizeValue: toNumberOrNull(row.building_size),
-        landSizeValue: toNumberOrNull(row.land_size),
+        buildingSizeValue: toNumberOrNull(row.building_size ?? row.lb),
+        landSizeValue: toNumberOrNull(row.land_size ?? row.lt),
         bedroomsValue,
         bathroomsValue,
         floorsValue,
         parkingValue,
-        parkingAvailable: Boolean(row.facilities?.fac_parking),
+        parkingAvailable,
         electricityValue: toStringOrEmpty(
           row.electricity ?? row.listrik ?? row.power_capacity
         ),
         waterValue: toStringOrEmpty(
-          row.water_source ?? row.water ?? row.air
+          row.water_source ?? row.water ?? row.air ?? row.jenis_air
+        ),
+
+        landUnit: toStringOrEmpty(row.land_unit ?? row.lt_unit) || "m2",
+        pricePerSqmValue: toNumberOrNull(
+          row.price_per_sqm ?? row.price_per_m2 ?? row.price_per_meter
+        ),
+        pricePerAreValue: toNumberOrNull(row.price_per_are),
+        pricePerHectareValue: toNumberOrNull(
+          row.price_per_hectare ?? row.price_per_hektare
+        ),
+        frontageValue: toNumberOrNull(row.frontage ?? row.width),
+        depthValue: toNumberOrNull(row.depth ?? row.length),
+        dimensionText: toStringOrEmpty(
+          row.dimension_text ?? row.dimension ?? row.land_dimension
+        ),
+        roadAccess: toStringOrEmpty(row.road_access ?? row.akses_jalan),
+        ownershipType: toStringOrEmpty(
+          row.ownership_type ?? row.jenis_kepemilikan ?? row.ownership
+        ),
+        landType: toStringOrEmpty(row.land_type ?? row.jenis_tanah),
+        zoningType: toStringOrEmpty(row.zoning_type ?? row.jenis_zoning ?? row.zoning),
+        unitFloorValue: toNumberOrNull(
+          row.unit_floor ?? row.floor_level ?? row.lantai_unit
+        ),
+        towerBlock: toStringOrEmpty(
+          row.tower_block ?? row.tower ?? row.block ?? row.blok
+        ),
+        ceilingHeightValue: toNumberOrNull(
+          row.ceiling_height ?? row.high_ceiling ?? row.tinggi_plafon
         ),
       };
 
@@ -941,7 +1085,8 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         console.error("Failed to load property engagement:", error);
       }
     }
-      loadEngagement();
+
+    loadEngagement();
 
     return () => {
       ignore = true;
@@ -953,7 +1098,8 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     [orderedProperties, id]
   );
 
-  const prevProperty = propertyIndex > 0 ? orderedProperties[propertyIndex - 1] : null;
+  const prevProperty =
+    propertyIndex > 0 ? orderedProperties[propertyIndex - 1] : null;
   const nextProperty =
     propertyIndex >= 0 && propertyIndex < orderedProperties.length - 1
       ? orderedProperties[propertyIndex + 1]
@@ -1143,7 +1289,10 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     let shareMethod = "copy_link";
 
     try {
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function"
+      ) {
         await navigator.share({
           title: property.title,
           text: shareText,
@@ -1261,12 +1410,14 @@ export default function PropertyDetailClient({ id }: { id: string }) {
 
     openJadwal();
   }
+
   const displayPrice = property
-    ? formatPriceByCurrency(property.priceValue, currency)
+    ? formatPriceByCurrency(property.priceValue, currentCurrency)
     : "";
-  const secondaryPrice = property
-    ? formatSecondaryPrice(property.priceValue, currency)
-    : "";
+
+  const secondaryPrices = property
+    ? formatSecondaryPrices(property.priceValue, currentCurrency)
+    : [];
 
   async function handleWhatsAppClick() {
     if (!property) return;
@@ -1565,7 +1716,7 @@ Is this property still available?`;
         ? `Jadwal viewing berhasil dikirim. ${posterLabel} akan menghubungi Anda untuk konfirmasi.`
         : `Viewing request sent successfully. ${posterLabel} will contact you for confirmation.`
     );
-     setJadwalOpen(false);
+    setJadwalOpen(false);
     setSelectedDate("");
     setSelectedTime("");
   }
@@ -1601,6 +1752,9 @@ Is this property still available?`;
   }
 
   const propertyTypeLabel = formatPropertyType(property.propertyType, lang);
+  const isApartment = isApartmentType(property.propertyType);
+  const isLand = isLandType(property.propertyType);
+  const isIndustrial = isIndustrialType(property.propertyType);
 
   const socialLinks = [
     {
@@ -1635,115 +1789,245 @@ Is this property still available?`;
     },
   ].filter((item) => item.href);
 
-  const primaryDetailChips: DetailChip[] = [
+  const detailChips: DetailChip[] = [
     {
       key: "type",
-      label: "Property Type",
+      label: lang === "id" ? "Tipe Properti" : "Property Type",
       value: propertyTypeLabel || "-",
       icon: Home,
     },
-    {
-      key: "bed",
-      label: "Bedrooms",
-      value: property.bedroomsValue ? formatNumber(property.bedroomsValue) : "-",
-      icon: BedDouble,
-    },
-    {
-      key: "bath",
-      label: "Bathrooms",
-      value: property.bathroomsValue
-        ? formatNumber(property.bathroomsValue)
-        : "-",
-      icon: Bath,
-    },
-    {
-      key: "land",
-      label: "Land Size",
-      value: property.landSizeValue
-        ? `${formatNumber(property.landSizeValue)} m²`
-        : "-",
-      icon: Square,
-    },
-    {
-      key: "building",
-      label: "Building Size",
-      value: property.buildingSizeValue
-        ? `${formatNumber(property.buildingSizeValue)} m²`
-        : "-",
-      icon: Ruler,
-    },
-    {
-      key: "parking",
-      label: "Parking",
-      value: property.parkingValue
-        ? formatNumber(property.parkingValue)
-        : property.parkingAvailable
-        ? "Available"
-        : "-",
-      icon: CarFront,
-    },
-  ];
 
-  const secondaryDetailChips: DetailChip[] = [
-    {
-      key: "floors",
-      label: "Floors",
-      value: property.floorsValue ? formatNumber(property.floorsValue) : "-",
-      icon: Layers3,
-    },
-    {
-      key: "electricity",
-      label: "Electricity",
-      value: property.electricityValue || "-",
-      icon: Zap,
-    },
-    {
-      key: "water",
-      label: "Water",
-      value: property.waterValue || "-",
-      icon: Droplets,
-    },
-    {
-      key: "furnishing",
-      label: "Furnishing",
-      value: property.furnished || "-",
-      icon: Home,
-    },
-    {
-      key: "certificate",
-      label: "Certificate",
-      value:
-        property.jenisListing === "dijual" ? property.certificate || "-" : "-",
-      icon: FileText,
-    },
-    {
-      key: "marketType",
-      label: "Market Type",
-      value:
-        property.jenisListing === "dijual"
-          ? formatMarketType(property.marketType)
-          : "-",
-      icon: Home,
-    },
-    {
-      key: "rentalType",
-      label: "Rental Type",
-      value:
-        property.jenisListing === "disewa" && property.rentalType
-          ? getRentalTypeLabel(property.rentalType, lang)
-          : "-",
-      icon: Clock,
-    },
-  ].filter(
-    (item) =>
-      item.value !== "-" &&
-      !(item.key === "certificate" && property.jenisListing !== "dijual") &&
-      !(item.key === "marketType" && property.jenisListing !== "dijual")
-  );
+    !isLand && property.bedroomsValue
+      ? {
+          key: "bed",
+          label: lang === "id" ? "Kamar Tidur" : "Bedrooms",
+          value: formatNumber(property.bedroomsValue),
+          icon: BedDouble,
+        }
+      : null,
+
+    !isLand && property.bathroomsValue
+      ? {
+          key: "bath",
+          label: lang === "id" ? "Kamar Mandi" : "Bathrooms",
+          value: formatNumber(property.bathroomsValue),
+          icon: Bath,
+        }
+      : null,
+
+    usesLandSizeForType(property.propertyType) && property.landSizeValue
+      ? {
+          key: "land",
+          label: lang === "id" ? "Luas Tanah" : "Land Size",
+          value: formatLandSize(property.landSizeValue, property.landUnit),
+          icon: Square,
+        }
+      : null,
+
+    !isLand && property.buildingSizeValue
+      ? {
+          key: "building",
+          label: lang === "id" ? "Luas Bangunan" : "Building Size",
+          value: `${formatNumber(property.buildingSizeValue)} m²`,
+          icon: Ruler,
+        }
+      : null,
+
+    property.parkingValue || property.parkingAvailable
+      ? {
+          key: "parking",
+          label: lang === "id" ? "Parkir" : "Parking",
+          value: property.parkingValue
+            ? formatNumber(property.parkingValue)
+            : lang === "id"
+            ? "Tersedia"
+            : "Available",
+          icon: CarFront,
+        }
+      : null,
+
+    !isLand && property.floorsValue
+      ? {
+          key: "floors",
+          label: lang === "id" ? "Lantai" : "Floors",
+          value: formatNumber(property.floorsValue),
+          icon: Layers3,
+        }
+      : null,
+
+    isApartment && property.unitFloorValue
+      ? {
+          key: "unitFloor",
+          label: lang === "id" ? "Lantai Unit" : "Unit Floor",
+          value: formatNumber(property.unitFloorValue),
+          icon: Layers3,
+        }
+      : null,
+
+    isApartment && property.towerBlock
+      ? {
+          key: "tower",
+          label: lang === "id" ? "Tower / Blok" : "Tower / Block",
+          value: property.towerBlock,
+          icon: Home,
+        }
+      : null,
+
+    property.electricityValue
+      ? {
+          key: "electricity",
+          label: lang === "id" ? "Listrik" : "Electricity",
+          value: property.electricityValue,
+          icon: Zap,
+        }
+      : null,
+
+    property.waterValue
+      ? {
+          key: "water",
+          label: lang === "id" ? "Air" : "Water",
+          value: property.waterValue,
+          icon: Droplets,
+        }
+      : null,
+
+    !isLand && property.furnished && property.furnished !== "-"
+      ? {
+          key: "furnishing",
+          label: lang === "id" ? "Furnishing" : "Furnishing",
+          value: property.furnished,
+          icon: Home,
+        }
+      : null,
+
+    property.jenisListing === "disewa" && property.rentalType
+      ? {
+          key: "rentalType",
+          label: lang === "id" ? "Jenis Sewa" : "Rental Type",
+          value: getRentalTypeLabel(property.rentalType, lang),
+          icon: Clock,
+        }
+      : null,
+
+    property.pricePerSqmValue
+      ? {
+          key: "pricePerSqm",
+          label: lang === "id" ? "Harga / m²" : "Price / m²",
+          value: formatUnitPrice(property.pricePerSqmValue, currentCurrency, "m²"),
+          icon: Ruler,
+        }
+      : null,
+
+    property.pricePerAreValue
+      ? {
+          key: "pricePerAre",
+          label: lang === "id" ? "Harga / Are" : "Price / Are",
+          value: formatUnitPrice(property.pricePerAreValue, currentCurrency, "are"),
+          icon: Square,
+        }
+      : null,
+
+    property.pricePerHectareValue
+      ? {
+          key: "pricePerHectare",
+          label: lang === "id" ? "Harga / Hektare" : "Price / Hectare",
+          value: formatUnitPrice(
+            property.pricePerHectareValue,
+            currentCurrency,
+            "ha"
+          ),
+          icon: Square,
+        }
+      : null,
+
+    formatDimensionValue(
+      property.dimensionText,
+      property.frontageValue,
+      property.depthValue
+    )
+      ? {
+          key: "dimension",
+          label: lang === "id" ? "Dimensi" : "Dimensions",
+          value: formatDimensionValue(
+            property.dimensionText,
+            property.frontageValue,
+            property.depthValue
+          ),
+          icon: Square,
+        }
+      : null,
+
+    property.roadAccess
+      ? {
+          key: "roadAccess",
+          label: lang === "id" ? "Akses Jalan" : "Road Access",
+          value: property.roadAccess,
+          icon: Home,
+        }
+      : null,
+
+    property.ceilingHeightValue
+      ? {
+          key: "ceilingHeight",
+          label: lang === "id" ? "Tinggi Plafon" : "Ceiling Height",
+          value: `${formatNumber(property.ceilingHeightValue)} m`,
+          icon: Layers3,
+        }
+      : null,
+
+    property.certificate && property.certificate !== "-"
+      ? {
+          key: "certificate",
+          label: lang === "id" ? "Sertifikat" : "Certificate",
+          value: property.certificate,
+          icon: FileText,
+        }
+      : null,
+
+    property.ownershipType
+      ? {
+          key: "ownership",
+          label: lang === "id" ? "Kepemilikan" : "Ownership",
+          value: property.ownershipType,
+          icon: FileText,
+        }
+      : null,
+
+    property.marketType
+      ? {
+          key: "marketType",
+          label: lang === "id" ? "Market Type" : "Market Type",
+          value: formatMarketType(property.marketType),
+          icon: Home,
+        }
+      : null,
+
+    property.landType
+      ? {
+          key: "landType",
+          label: lang === "id" ? "Jenis Tanah" : "Land Type",
+          value: property.landType,
+          icon: Square,
+        }
+      : null,
+
+    property.zoningType
+      ? {
+          key: "zoning",
+          label: lang === "id" ? "Zoning" : "Zoning",
+          value: property.zoningType,
+          icon: FileText,
+        }
+      : null,
+  ].filter((item): item is DetailChip => Boolean(item && item.value && item.value !== "-"));
 
   const facilityLabels: Record<string, string> = {
     fac_ac: "AC",
     fac_pool: lang === "id" ? "Kolam Renang" : "Swimming Pool",
+    fac_private_pool:
+      lang === "id" ? "Kolam Renang Pribadi" : "Private Pool",
+    fac_shared_pool:
+      lang === "id" ? "Kolam Renang Bersama" : "Shared Pool",
     fac_gym: "Gym",
     fac_security: lang === "id" ? "Security 24 Jam" : "24-Hour Security",
     fac_cctv: "CCTV",
@@ -1751,6 +2035,42 @@ Is this property still available?`;
     fac_parking: lang === "id" ? "Parkir" : "Parking",
     fac_garden: lang === "id" ? "Taman" : "Garden",
     fac_wifi: "WiFi",
+    fac_water_heater: "Water Heater",
+    fac_kitchen_set: "Kitchen Set",
+    fac_dining_area: lang === "id" ? "Ruang Makan" : "Dining Area",
+    fac_living_room: lang === "id" ? "Ruang Tamu" : "Living Room",
+    fac_storage: lang === "id" ? "Gudang / Storage" : "Storage Room",
+    fac_balcony: lang === "id" ? "Balkon" : "Balcony",
+    fac_terrace: lang === "id" ? "Teras" : "Terrace",
+    fac_laundry_area: lang === "id" ? "Area Laundry" : "Laundry Area",
+    fac_carport: "Carport",
+    fac_garage: lang === "id" ? "Garasi" : "Garage",
+    fac_maid_room: lang === "id" ? "Kamar ART" : "Maid Room",
+    fac_smart_lock: "Smart Lock",
+    fac_smart_home: "Smart Home",
+    fac_rooftop: "Rooftop",
+    fac_gazebo: "Gazebo",
+    fac_lobby: "Lobby",
+    fac_reception: lang === "id" ? "Resepsionis" : "Reception",
+    fac_access_card: lang === "id" ? "Kartu Akses" : "Access Card",
+    fac_basement_parking:
+      lang === "id" ? "Parkir Basement" : "Basement Parking",
+    fac_function_room: "Function Room",
+    fac_playground:
+      lang === "id" ? "Taman Bermain Anak" : "Kids Playground",
+    fac_loading_dock: "Loading Dock",
+    fac_truck_access: lang === "id" ? "Akses Truk" : "Truck Access",
+    fac_office_room: lang === "id" ? "Ruang Kantor" : "Office Room",
+    fac_staff_room: lang === "id" ? "Ruang Staff" : "Staff Room",
+    fac_generator: "Generator",
+    fac_three_phase:
+      lang === "id" ? "Listrik 3 Phase" : "3-Phase Electricity",
+    fac_high_ceiling: lang === "id" ? "Plafon Tinggi" : "High Ceiling",
+    fac_meeting_room: lang === "id" ? "Ruang Meeting" : "Meeting Room",
+    fac_restaurant: lang === "id" ? "Restoran" : "Restaurant",
+    fac_spa: "Spa",
+    fac_housekeeping:
+      lang === "id" ? "Ruang Housekeeping" : "Housekeeping Room",
   };
 
   const nearbyLabels: Record<string, string> = {
@@ -1760,9 +2080,27 @@ Is this property still available?`;
     near_hospital: lang === "id" ? "Rumah Sakit" : "Hospital",
     near_station: lang === "id" ? "Stasiun" : "Station",
     near_airport: lang === "id" ? "Bandara" : "Airport",
+    near_port: lang === "id" ? "Pelabuhan" : "Port",
     near_market: lang === "id" ? "Pasar" : "Market",
     near_office: lang === "id" ? "Perkantoran" : "Office Area",
     near_beach: lang === "id" ? "Pantai" : "Beach",
+    near_university: lang === "id" ? "Universitas" : "University",
+    near_supermarket: lang === "id" ? "Supermarket" : "Supermarket",
+    near_cafe: "Cafe",
+    near_restaurant: lang === "id" ? "Restoran" : "Restaurant",
+    near_gym: "Gym",
+    near_coworking:
+      lang === "id" ? "Co-working Space" : "Co-working Space",
+    near_beach_club: lang === "id" ? "Beach Club" : "Beach Club",
+    near_traditional_market:
+      lang === "id" ? "Pasar Tradisional" : "Traditional Market",
+    near_international_school:
+      lang === "id" ? "Sekolah Internasional" : "International School",
+    near_clinic: lang === "id" ? "Klinik" : "Clinic",
+    near_pharmacy: lang === "id" ? "Apotek" : "Pharmacy",
+    near_main_road: lang === "id" ? "Jalan Utama" : "Main Road",
+    near_tourist_attraction:
+      lang === "id" ? "Tempat Wisata" : "Tourist Attraction",
   };
 
   const activeFacilities = Object.entries(property.facilities ?? {})
@@ -1841,8 +2179,8 @@ Is this property still available?`;
                       ? "Dijual"
                       : "For Sale"
                     : lang === "id"
-                      ? "Disewa"
-                      : "For Rent"}
+                    ? "Disewa"
+                    : "For Rent"}
                 </span>
 
                 {property.jenisListing === "disewa" && property.rentalType ? (
@@ -1854,7 +2192,8 @@ Is this property still available?`;
                     {getRentalTypeLabel(property.rentalType, lang)}
                   </span>
                 ) : null}
-                 {propertyTypeLabel ? (
+
+                {propertyTypeLabel ? (
                   <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
                     {propertyTypeLabel}
                   </span>
@@ -1886,8 +2225,10 @@ Is this property still available?`;
               {displayPrice}
             </div>
 
-            <div className="mt-1 text-sm text-gray-500 sm:text-[15px]">
-              ≈ {secondaryPrice}
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 sm:text-[15px]">
+              {secondaryPrices.map((item) => (
+                <span key={item}>≈ {item}</span>
+              ))}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1947,8 +2288,8 @@ Is this property still available?`;
                     {property.postedByType === "owner"
                       ? "Owner"
                       : property.postedByType === "developer"
-                        ? "Developer"
-                        : "Agent"}
+                      ? "Developer"
+                      : "Agent"}
                   </div>
 
                   <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
@@ -2076,58 +2417,41 @@ Is this property still available?`;
 
         <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-bold text-[#1C1C1E]">
-            Property Details
+            {lang === "id" ? "Detail Properti" : "Property Details"}
           </h2>
 
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            {primaryDetailChips.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.key}
-                  className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
-                >
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Icon className="h-3.5 w-3.5" />
-                      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
-                        {item.label}
-                      </div>
-                     </div>
-
-                    <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
-                      {item.value}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {secondaryDetailChips.length > 0 ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {secondaryDetailChips.map((item) => {
+          {detailChips.length > 0 ? (
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+              {detailChips.map((item) => {
                 const Icon = item.icon;
                 return (
                   <div
                     key={item.key}
-                    className="rounded-2xl border border-gray-200 bg-white p-3"
+                    className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
                   >
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Icon className="h-3.5 w-3.5" />
-                      <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
-                        {item.label}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
+                          {item.label}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
-                      {item.value}
+                      <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
+                        {item.value}
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          ) : null}
+          ) : (
+            <p className="mt-4 text-sm text-gray-500">
+              {lang === "id"
+                ? "Belum ada detail properti."
+                : "No property details yet."}
+            </p>
+          )}
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.22fr)_360px] xl:grid-cols-[minmax(0,1.28fr)_380px]">
@@ -2150,7 +2474,7 @@ Is this property still available?`;
               {lang === "id" ? "Video" : "Video"}
             </h2>
 
-            <div className="mt-4 mx-auto w-full max-w-[320px] sm:max-w-[360px] lg:max-w-[360px] xl:max-w-[380px]">
+            <div className="mx-auto mt-4 w-full max-w-[320px] sm:max-w-[360px] lg:max-w-[360px] xl:max-w-[380px]">
               {property.videoUrl ? (
                 <div className="rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
                   <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-black">
@@ -2334,4 +2658,4 @@ Is this property still available?`;
       </div>
     </main>
   );
-}                                                             
+}                                                       

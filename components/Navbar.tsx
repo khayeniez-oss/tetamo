@@ -524,6 +524,21 @@ export default function Navbar() {
                     >
                       USD
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrency("AUD");
+                        setCurrencyOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                        currency === "AUD"
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E] hover:bg-gray-50"
+                      }`}
+                    >
+                      AUD
+                    </button>
                   </div>
                 )}
               </div>
@@ -705,6 +720,21 @@ export default function Navbar() {
                     }`}
                   >
                     USD
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrency("AUD");
+                      setCurrencyOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                      currency === "AUD"
+                        ? "bg-[#1C1C1E] text-white"
+                        : "text-[#1C1C1E] hover:bg-gray-50"
+                    }`}
+                  >
+                    AUD
                   </button>
                 </div>
               )}
