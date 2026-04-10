@@ -1357,6 +1357,10 @@ Is this property still available?`
           {property.price}
         </h3>
 
+        <h4 className="mt-2 text-[15px] font-semibold leading-6 text-[#1C1C1E] sm:text-base">
+          {property.title}
+        </h4>
+
         <p className="mt-1 text-sm text-gray-600">{property.province}</p>
 
         <p className="mt-2 text-sm leading-6 text-gray-600">
@@ -1508,6 +1512,10 @@ function FeaturedOwnerPropertyCard({
         <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
           {property.price}
         </h3>
+
+        <h4 className="mt-2 text-[15px] font-semibold leading-6 text-[#1C1C1E] sm:text-base">
+          {property.title}
+        </h4>
 
         <p className="mt-1 text-sm text-gray-600">{property.province}</p>
 
