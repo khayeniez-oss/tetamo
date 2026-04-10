@@ -17,6 +17,7 @@ import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 
 type RentalType = "monthly" | "yearly" | "";
+type SupportedCurrency = "IDR" | "USD" | "AUD";
 
 type LikeRow = {
   property_id: string;
@@ -74,6 +75,7 @@ type LikedProperty = {
 };
 
 const IDR_PER_USD = 16500;
+const IDR_PER_AUD = 12072;
 
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
@@ -93,18 +95,31 @@ function formatUsd(value: number | null | undefined) {
   }).format(value / IDR_PER_USD);
 }
 
+function formatAud(value: number | null | undefined) {
+  if (typeof value !== "number") return "A$0";
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 0,
+  }).format(value / IDR_PER_AUD);
+}
+
 function formatPriceByCurrency(
   value: number | null | undefined,
-  currency: "IDR" | "USD"
+  currency: SupportedCurrency
 ) {
-  return currency === "USD" ? formatUsd(value) : formatIdr(value);
+  if (currency === "USD") return formatUsd(value);
+  if (currency === "AUD") return formatAud(value);
+  return formatIdr(value);
 }
 
 function formatSecondaryPrice(
   value: number | null | undefined,
-  currency: "IDR" | "USD"
+  currency: SupportedCurrency
 ) {
-  return currency === "USD" ? formatIdr(value) : formatUsd(value);
+  if (currency === "USD") return formatIdr(value);
+  if (currency === "AUD") return formatIdr(value);
+  return formatUsd(value);
 }
 
 function formatPostedDate(value?: string | null) {
@@ -229,6 +244,8 @@ export default function AgentLikedPage() {
   const router = useRouter();
   const { lang } = useLanguage();
   const { currency } = useCurrency();
+  const currentCurrency: SupportedCurrency =
+    currency === "AUD" ? "AUD" : currency === "USD" ? "USD" : "IDR";
 
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -493,11 +510,11 @@ export default function AgentLikedPage() {
               {items.map((item) => {
                 const displayPrice = formatPriceByCurrency(
                   item.priceValue,
-                  currency
+                  currentCurrency
                 );
                 const secondaryPrice = formatSecondaryPrice(
                   item.priceValue,
-                  currency
+                  currentCurrency
                 );
 
                 return (
