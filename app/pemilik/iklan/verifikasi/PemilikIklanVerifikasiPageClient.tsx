@@ -220,6 +220,7 @@ export default function PemilikIklanVerifikasiPageClient() {
         property_type: cleanText(draft?.propertyType),
         price: cleanNumber(draft?.price),
         description: cleanText(draft?.description) || "",
+        market_type: cleanText(draft?.marketType),
 
         status: "active",
 
