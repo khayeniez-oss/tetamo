@@ -3,16 +3,21 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crown } from "lucide-react";
+import {
+  Crown,
+  Heart,
+  Bookmark,
+  Share2,
+  Star,
+} from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
 /* =========================
    MANUAL HOMEPAGE PICKS
-   Change these codes later
 ========================= */
 
-const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM013", "RRM0-RW2"];
+const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM0-SM33", "TTM013"];
 
 /* =========================
    TYPES
@@ -79,6 +84,7 @@ type HomepageProfileRow = {
 
 type FeaturedProperty = {
   id: string;
+  title: string;
   images: string[];
   price: string;
   province: string;
@@ -89,6 +95,9 @@ type FeaturedProperty = {
   posterName: string;
   postedByType: "owner" | "agent" | "developer";
   whatsapp: string;
+  receiverId: string;
+  receiverName: string;
+  receiverRole: string;
   kode?: string;
   postedDate?: string;
   verifiedListing: boolean;
@@ -96,8 +105,12 @@ type FeaturedProperty = {
 
 type FeaturedOwnerProperty = {
   id: string;
+  title: string;
   ownerName: string;
   ownerWhatsapp: string;
+  receiverId: string;
+  receiverName: string;
+  receiverRole: string;
   images: string[];
   price: string;
   province: string;
@@ -147,10 +160,10 @@ function formatPostedDate(value?: string | null) {
   if (Number.isNaN(d.getTime())) return value;
 
   return new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-}).format(d);
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(d);
 }
 
 function mapFurnishing(value?: string | null) {
@@ -358,6 +371,29 @@ function getMainSize(row: HomepagePropertyRow) {
   return `${value} m²`;
 }
 
+async function ensureHomepageAuth(
+  router: ReturnType<typeof useRouter>,
+  lang: string
+) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.id) return user.id;
+
+  alert(
+    lang === "id"
+      ? "Silakan login terlebih dahulu."
+      : "Please log in first."
+  );
+
+  const next =
+    typeof window !== "undefined" ? window.location.pathname : "/";
+
+  router.push(`/login?next=${encodeURIComponent(next)}`);
+  return null;
+}
+
 /* =========================
    DATA
 ========================= */
@@ -408,8 +444,7 @@ async function fetchHomepageProperties() {
       )
     `)
     .neq("status", "rejected")
-    .order("created_at", { ascending: false })
-    .limit(60);
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as HomepagePropertyRow[];
@@ -579,6 +614,635 @@ function IconTikTok() {
         fill="currentColor"
       />
     </svg>
+  );
+}
+
+/* =========================
+   ENGAGEMENT + VIEWING
+========================= */
+
+function PropertyEngagementBar({
+  propertyId,
+  propertyTitle,
+  propertyProvince,
+}: {
+  propertyId: string;
+  propertyTitle: string;
+  propertyProvince: string;
+}) {
+  const router = useRouter();
+  const { lang } = useLanguage();
+
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [userRating, setUserRating] = useState(0);
+  const [displayLikeCount, setDisplayLikeCount] = useState(0);
+  const [displaySaveCount, setDisplaySaveCount] = useState(0);
+  const [displayRatingAverage, setDisplayRatingAverage] = useState(0);
+  const [displayRatingCount, setDisplayRatingCount] = useState(0);
+  const [displayShareCount, setDisplayShareCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAuthUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted) return;
+      setAuthUserId(user?.id ?? null);
+    }
+
+    loadAuthUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadEngagement() {
+      setLiked(false);
+      setSaved(false);
+      setUserRating(0);
+      setDisplayLikeCount(0);
+      setDisplaySaveCount(0);
+      setDisplayRatingAverage(0);
+      setDisplayRatingCount(0);
+      setDisplayShareCount(0);
+
+      try {
+        const [summaryRes, savedRes, likedRes, userRatingRes] =
+          await Promise.all([
+            supabase
+              .from("property_engagement_summary")
+              .select(
+                "save_count, like_count, rating_count, avg_rating, share_count"
+              )
+              .eq("property_id", propertyId)
+              .maybeSingle(),
+            authUserId
+              ? supabase
+                  .from("saved_properties")
+                  .select("id")
+                  .eq("user_id", authUserId)
+                  .eq("property_id", propertyId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null } as any),
+            authUserId
+              ? supabase
+                  .from("property_likes")
+                  .select("id")
+                  .eq("user_id", authUserId)
+                  .eq("property_id", propertyId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null } as any),
+            authUserId
+              ? supabase
+                  .from("property_ratings")
+                  .select("rating")
+                  .eq("user_id", authUserId)
+                  .eq("property_id", propertyId)
+                  .maybeSingle()
+              : Promise.resolve({ data: null } as any),
+          ]);
+
+        if (ignore) return;
+
+        if (summaryRes.data) {
+          const summary = summaryRes.data as any;
+          setDisplaySaveCount(Number(summary.save_count || 0));
+          setDisplayLikeCount(Number(summary.like_count || 0));
+          setDisplayRatingCount(Number(summary.rating_count || 0));
+          setDisplayRatingAverage(
+            Number(Number(summary.avg_rating || 0).toFixed(1))
+          );
+          setDisplayShareCount(Number(summary.share_count || 0));
+        }
+
+        setSaved(Boolean(savedRes.data));
+        setLiked(Boolean(likedRes.data));
+        setUserRating(Number((userRatingRes.data as any)?.rating || 0));
+      } catch (error) {
+        console.error("Failed to load homepage property engagement:", error);
+      }
+    }
+
+    loadEngagement();
+
+    return () => {
+      ignore = true;
+    };
+  }, [propertyId, authUserId]);
+
+  async function toggleSave() {
+    const userId = await ensureHomepageAuth(router, lang);
+    if (!userId) return;
+
+    const currentlySaved = saved;
+
+    setSaved(!currentlySaved);
+    setDisplaySaveCount((prev) =>
+      Math.max(0, prev + (currentlySaved ? -1 : 1))
+    );
+
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from("saved_properties")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", propertyId);
+
+      if (error) {
+        console.error("Failed to remove saved property:", error);
+        setSaved(true);
+        setDisplaySaveCount((prev) => prev + 1);
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("saved_properties").insert({
+      user_id: userId,
+      property_id: propertyId,
+    });
+
+    if (error) {
+      console.error("Failed to save property:", error);
+      setSaved(false);
+      setDisplaySaveCount((prev) => Math.max(0, prev - 1));
+    }
+  }
+
+  async function toggleLike() {
+    const userId = await ensureHomepageAuth(router, lang);
+    if (!userId) return;
+
+    const currentlyLiked = liked;
+
+    setLiked(!currentlyLiked);
+    setDisplayLikeCount((prev) =>
+      Math.max(0, prev + (currentlyLiked ? -1 : 1))
+    );
+
+    if (currentlyLiked) {
+      const { error } = await supabase
+        .from("property_likes")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", propertyId);
+
+      if (error) {
+        console.error("Failed to remove property like:", error);
+        setLiked(true);
+        setDisplayLikeCount((prev) => prev + 1);
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("property_likes").insert({
+      user_id: userId,
+      property_id: propertyId,
+    });
+
+    if (error) {
+      console.error("Failed to like property:", error);
+      setLiked(false);
+      setDisplayLikeCount((prev) => Math.max(0, prev - 1));
+    }
+  }
+
+  async function handleRate(nextValue: number) {
+    const userId = await ensureHomepageAuth(router, lang);
+    if (!userId) return;
+
+    const currentRating = userRating;
+    const currentCount = displayRatingCount;
+    const currentAverage = displayRatingAverage;
+    const nextRating = currentRating === nextValue ? 0 : nextValue;
+
+    let nextCount = currentCount;
+    let total = currentAverage * currentCount;
+
+    if (currentRating > 0) {
+      total -= currentRating;
+      nextCount -= 1;
+    }
+
+    if (nextRating > 0) {
+      total += nextRating;
+      nextCount += 1;
+    }
+
+    const nextAverage = nextCount > 0 ? total / nextCount : 0;
+
+    setUserRating(nextRating);
+    setDisplayRatingCount(Math.max(nextCount, 0));
+    setDisplayRatingAverage(Number(nextAverage.toFixed(1)));
+
+    if (nextRating === 0) {
+      const { error } = await supabase
+        .from("property_ratings")
+        .delete()
+        .eq("user_id", userId)
+        .eq("property_id", propertyId);
+
+      if (error) {
+        console.error("Failed to delete property rating:", error);
+        setUserRating(currentRating);
+        setDisplayRatingCount(currentCount);
+        setDisplayRatingAverage(currentAverage);
+      }
+      return;
+    }
+
+    const { error } = await supabase.from("property_ratings").upsert(
+      {
+        user_id: userId,
+        property_id: propertyId,
+        rating: nextRating,
+      },
+      { onConflict: "user_id,property_id" }
+    );
+
+    if (error) {
+      console.error("Failed to rate property:", error);
+      setUserRating(currentRating);
+      setDisplayRatingCount(currentCount);
+      setDisplayRatingAverage(currentAverage);
+    }
+  }
+
+  async function handleShare() {
+    const shareUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/properti/${propertyId}`
+        : `/properti/${propertyId}`;
+
+    const shareText =
+      lang === "id"
+        ? `Lihat properti ini di TETAMO:\n\n${propertyTitle}\n${propertyProvince}`
+        : `Check out this property on TETAMO:\n\n${propertyTitle}\n${propertyProvince}`;
+
+    let shareMethod = "copy_link";
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function"
+      ) {
+        await navigator.share({
+          title: propertyTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        shareMethod = "native_share";
+      } else if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard?.writeText
+      ) {
+        await navigator.clipboard.writeText(shareUrl);
+        shareMethod = "copy_link";
+        alert(
+          lang === "id"
+            ? "Link properti berhasil disalin."
+            : "Property link copied successfully."
+        );
+      } else if (typeof window !== "undefined") {
+        window.prompt(
+          lang === "id"
+            ? "Salin link properti ini:"
+            : "Copy this property link:",
+          shareUrl
+        );
+        shareMethod = "manual_copy";
+      }
+    } catch (error: any) {
+      if (error?.name === "AbortError") return;
+
+      try {
+        if (
+          typeof navigator !== "undefined" &&
+          navigator.clipboard?.writeText
+        ) {
+          await navigator.clipboard.writeText(shareUrl);
+          shareMethod = "copy_link";
+          alert(
+            lang === "id"
+              ? "Link properti berhasil disalin."
+              : "Property link copied successfully."
+          );
+        } else if (typeof window !== "undefined") {
+          window.prompt(
+            lang === "id"
+              ? "Salin link properti ini:"
+              : "Copy this property link:",
+            shareUrl
+          );
+          shareMethod = "manual_copy";
+        }
+      } catch (fallbackError) {
+        console.error("Failed to share property:", fallbackError);
+        return;
+      }
+    }
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) return;
+
+      const { error } = await supabase.from("property_shares").insert({
+        property_id: propertyId,
+        user_id: user.id,
+        share_method: shareMethod,
+      });
+
+      if (!error) {
+        setDisplayShareCount((prev) => prev + 1);
+      }
+    } catch (error) {
+      console.error("Failed to save homepage property share:", error);
+    }
+  }
+
+  return (
+    <>
+      <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={toggleSave}
+          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold shadow-sm transition sm:text-[11px] ${
+            saved
+              ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+              : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+          }`}
+        >
+          <Bookmark className="h-4 w-4" />
+          <span>Save ({displaySaveCount})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleLike}
+          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold shadow-sm transition sm:text-[11px] ${
+            liked
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+          }`}
+        >
+          <Heart className="h-4 w-4" />
+          <span>Like ({displayLikeCount})</span>
+        </button>
+
+        <div className="flex min-h-[60px] flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center shadow-sm">
+          <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
+            {displayRatingAverage.toFixed(1)}
+          </div>
+          <div className="mt-1 text-[10px] text-gray-500 sm:text-[11px]">
+            Rating ({displayRatingCount})
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleShare}
+          className="flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center shadow-sm transition hover:bg-gray-50"
+        >
+          <Share2 className="h-4 w-4 text-[#1C1C1E]" />
+          <span className="text-[10px] font-semibold text-[#1C1C1E] sm:text-[11px]">
+            Share ({displayShareCount})
+          </span>
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-1">
+        {[1, 2, 3, 4, 5].map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => handleRate(value)}
+            className={`rounded-full border p-[4px] transition ${
+              userRating >= value
+                ? "border-amber-200 bg-amber-50 text-amber-500"
+                : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
+            }`}
+            aria-label={`Rate ${value}`}
+            title={`Rate ${value}`}
+          >
+            <Star
+              className="h-3.5 w-3.5"
+              fill={userRating >= value ? "currentColor" : "transparent"}
+            />
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ScheduleViewingButton({
+  propertyId,
+  propertyTitle,
+  propertyCode,
+  receiverId,
+  receiverName,
+  receiverRole,
+}: {
+  propertyId: string;
+  propertyTitle: string;
+  propertyCode?: string;
+  receiverId: string;
+  receiverName: string;
+  receiverRole: string;
+}) {
+  const router = useRouter();
+  const { lang } = useLanguage();
+
+  const [open, setOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleViewingRequest() {
+    const userId = await ensureHomepageAuth(router, lang);
+    if (!userId) return;
+
+    setSubmitting(true);
+
+    try {
+      const { data: senderProfile } = await supabase
+        .from("profiles")
+        .select("full_name, phone, email")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const message =
+        lang === "id"
+          ? `Request viewing untuk ${propertyTitle} pada ${selectedDate} jam ${selectedTime}`
+          : `Viewing request for ${propertyTitle} on ${selectedDate} at ${selectedTime}`;
+
+      const { error } = await supabase.from("leads").insert({
+        property_id: propertyId,
+        sender_user_id: userId,
+        sender_name:
+          senderProfile?.full_name ||
+          (typeof user?.user_metadata?.full_name === "string"
+            ? user.user_metadata.full_name
+            : "Tetamo User"),
+        sender_email: senderProfile?.email || user?.email || null,
+        sender_phone: senderProfile?.phone || null,
+        receiver_user_id: receiverId || null,
+        receiver_name: receiverName || null,
+        receiver_role: receiverRole || "owner",
+        assigned_admin_user_id: null,
+        admin_visible: true,
+        lead_type: "viewing",
+        source: "homepage_viewing_form",
+        message,
+        viewing_date: selectedDate,
+        viewing_time: selectedTime,
+        status: "new",
+        priority: "normal",
+        notes: null,
+      });
+
+      if (error) {
+        console.error("Homepage viewing lead insert error:", error);
+        alert(error.message || "Failed to save viewing request.");
+        return;
+      }
+
+      alert(
+        lang === "id"
+          ? "Permintaan viewing berhasil dikirim."
+          : "Viewing request sent successfully."
+      );
+
+      setOpen(false);
+      setSelectedDate("");
+      setSelectedTime("");
+    } catch (error) {
+      console.error("Failed to create homepage viewing request:", error);
+      alert(
+        lang === "id"
+          ? "Gagal mengirim permintaan viewing."
+          : "Failed to send viewing request."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+      >
+        {lang === "id" ? "Schedule Viewing" : "Schedule Viewing"}
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close Schedule Viewing popup"
+          />
+
+          <div className="relative z-10 w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-[#1C1C1E]">
+                  {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+                  {propertyTitle}
+                  {propertyCode ? ` • ${propertyCode}` : ""}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-full px-3 py-1 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Pilih Tanggal" : "Select Date"}
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id" ? "Pilih Jam" : "Select Time"}
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["10:00", "11:00", "13:00", "15:00", "17:00"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setSelectedTime(t)}
+                      className={[
+                        "rounded-full border px-4 py-2 text-sm",
+                        selectedTime === t
+                          ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                          : "border-gray-200 bg-white text-[#1C1C1E]",
+                      ].join(" ")}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleViewingRequest}
+                disabled={!selectedDate || !selectedTime || submitting}
+                className={[
+                  "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                  selectedDate && selectedTime && !submitting
+                    ? "bg-[#B8860B] text-white hover:opacity-90"
+                    : "cursor-not-allowed bg-gray-200 text-gray-500",
+                ].join(" ")}
+              >
+                {submitting
+                  ? lang === "id"
+                    ? "Mengirim..."
+                    : "Sending..."
+                  : lang === "id"
+                    ? "Kirim Permintaan Viewing"
+                    : "Send Viewing Request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -754,6 +1418,21 @@ Is this property still available?`
             {lang === "id" ? "Lihat Detail" : "View Detail"}
           </Link>
         </div>
+
+        <ScheduleViewingButton
+          propertyId={property.id}
+          propertyTitle={property.title}
+          propertyCode={property.kode}
+          receiverId={property.receiverId}
+          receiverName={property.receiverName}
+          receiverRole={property.receiverRole}
+        />
+
+        <PropertyEngagementBar
+          propertyId={property.id}
+          propertyTitle={property.title}
+          propertyProvince={property.province}
+        />
       </div>
     </div>
   );
@@ -891,6 +1570,21 @@ function FeaturedOwnerPropertyCard({
             {lang === "id" ? "Lihat Detail" : "View Detail"}
           </Link>
         </div>
+
+        <ScheduleViewingButton
+          propertyId={property.id}
+          propertyTitle={property.title}
+          propertyCode={property.kode}
+          receiverId={property.receiverId}
+          receiverName={property.receiverName}
+          receiverRole={property.receiverRole}
+        />
+
+        <PropertyEngagementBar
+          propertyId={property.id}
+          propertyTitle={property.title}
+          propertyProvince={property.province}
+        />
       </div>
     </div>
   );
@@ -942,6 +1636,7 @@ function FeaturedPropertiesSection() {
 
           return {
             id: row.id,
+            title: row.title ?? "-",
             images: buildPropertyImages(row.property_images),
             price: formatIdr(row.price ?? 0),
             province: row.province ?? row.city ?? row.area ?? "-",
@@ -954,6 +1649,10 @@ function FeaturedPropertiesSection() {
             whatsapp: normalizeWhatsapp(
               row.contact_phone || profile?.phone || ""
             ),
+            receiverId: row.contact_user_id || "",
+            receiverName:
+              row.contact_name || profile?.full_name || "Tetamo User",
+            receiverRole: normalizePostedByType(row.contact_role, row.source),
             kode: row.kode ?? undefined,
             postedDate: formatPostedDate(row.posted_date || row.created_at),
             verifiedListing: isVerifiedListing(row),
@@ -1277,10 +1976,15 @@ function FeaturedOwnersSection() {
 
           return {
             id: row.id,
+            title: row.title ?? "-",
             ownerName: row.contact_name || profile?.full_name || "Tetamo Owner",
             ownerWhatsapp: normalizeWhatsapp(
               row.contact_phone || profile?.phone || ""
             ),
+            receiverId: row.contact_user_id || "",
+            receiverName:
+              row.contact_name || profile?.full_name || "Tetamo Owner",
+            receiverRole: "owner",
             images: buildPropertyImages(row.property_images),
             price: formatIdr(row.price ?? 0),
             province: row.province ?? row.city ?? row.area ?? "-",
