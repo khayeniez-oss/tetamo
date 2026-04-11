@@ -12,9 +12,11 @@ TYPES
 
 type PublicBlog = {
   id: string;
-  title: string;
+  title: string | null;
+  title_id: string | null;
   slug: string;
   excerpt: string | null;
+  excerpt_id: string | null;
   category: string | null;
   author_name: string | null;
   cover_image_url: string | null;
@@ -73,8 +75,10 @@ export default function PublicBlogPage() {
         .select(`
           id,
           title,
+          title_id,
           slug,
           excerpt,
+          excerpt_id,
           category,
           author_name,
           cover_image_url,
@@ -117,21 +121,29 @@ export default function PublicBlogPage() {
     const words = q.split(/\s+/).filter(Boolean);
 
     return blogs.filter((blog) => {
+      const activeTitle =
+        lang === "id"
+          ? blog.title_id?.trim() || blog.title?.trim() || ""
+          : blog.title?.trim() || blog.title_id?.trim() || "";
+
+      const activeExcerpt =
+        lang === "id"
+          ? blog.excerpt_id?.trim() || blog.excerpt?.trim() || ""
+          : blog.excerpt?.trim() || blog.excerpt_id?.trim() || "";
+
       const searchable = `
-        ${blog.title}
-        ${blog.excerpt ?? ""}
+        ${activeTitle}
+        ${activeExcerpt}
         ${blog.category ?? ""}
         ${blog.author_name ?? ""}
       `.toLowerCase();
 
       return words.every((word) => searchable.includes(word));
     });
-  }, [blogs, searchQuery]);
+  }, [blogs, searchQuery, lang]);
 
   return (
     <main className="min-h-screen bg-[#FAFAF8]">
-      {/* Hero */}
-
       <section className="border-b border-gray-200 bg-white px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
@@ -151,8 +163,6 @@ export default function PublicBlogPage() {
                 : "Read the latest articles on property, investment, market trends, and practical guidance from Tetamo."}
             </p>
           </div>
-
-          {/* Search */}
 
           <div className="relative mt-8 max-w-2xl">
             <Search
@@ -174,8 +184,6 @@ export default function PublicBlogPage() {
           </div>
         </div>
       </section>
-
-      {/* List */}
 
       <section className="px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <div className="mx-auto max-w-7xl">
@@ -199,61 +207,73 @@ export default function PublicBlogPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {filteredBlogs.map((blog) => (
-                <article
-                  key={blog.id}
-                  className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <Link href={`/blog/${blog.slug}`} className="block">
-                    <div className="relative">
-                      {blog.cover_image_url ? (
-                        <img
-                          src={blog.cover_image_url}
-                          alt={blog.title}
-                          className="h-56 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-56 w-full items-center justify-center bg-[#1C1C1E] text-4xl font-bold text-white">
-                          {getInitials(blog.title)}
-                        </div>
-                      )}
+              {filteredBlogs.map((blog) => {
+                const activeTitle =
+                  lang === "id"
+                    ? blog.title_id?.trim() || blog.title?.trim() || ""
+                    : blog.title?.trim() || blog.title_id?.trim() || "";
 
-                      {blog.category && (
-                        <div className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#1C1C1E] shadow-sm">
-                          {blog.category}
-                        </div>
-                      )}
-                    </div>
+                const activeExcerpt =
+                  lang === "id"
+                    ? blog.excerpt_id?.trim() || blog.excerpt?.trim() || ""
+                    : blog.excerpt?.trim() || blog.excerpt_id?.trim() || "";
 
-                    <div className="p-5 sm:p-6">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                        <span>{blog.author_name || "Tetamo Editorial"}</span>
-                        <span>•</span>
-                        <span>
-                          {formatBlogDate(blog.published_at || blog.created_at)}
-                        </span>
-                        <span>•</span>
-                        <span>{blog.view_count ?? 0} views</span>
+                return (
+                  <article
+                    key={blog.id}
+                    className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <Link href={`/blog/${blog.slug}`} className="block">
+                      <div className="relative">
+                        {blog.cover_image_url ? (
+                          <img
+                            src={blog.cover_image_url}
+                            alt={activeTitle}
+                            className="h-56 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-56 w-full items-center justify-center bg-[#1C1C1E] text-4xl font-bold text-white">
+                            {getInitials(activeTitle)}
+                          </div>
+                        )}
+
+                        {blog.category && (
+                          <div className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#1C1C1E] shadow-sm">
+                            {blog.category}
+                          </div>
+                        )}
                       </div>
 
-                      <h2 className="mt-3 line-clamp-2 text-lg font-bold leading-7 text-[#1C1C1E]">
-                        {blog.title}
-                      </h2>
+                      <div className="p-5 sm:p-6">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                          <span>{blog.author_name || "Tetamo Editorial"}</span>
+                          <span>•</span>
+                          <span>
+                            {formatBlogDate(blog.published_at || blog.created_at)}
+                          </span>
+                          <span>•</span>
+                          <span>{blog.view_count ?? 0} views</span>
+                        </div>
 
-                      <p className="mt-3 line-clamp-3 text-sm leading-7 text-gray-600">
-                        {blog.excerpt ||
-                          (lang === "id"
-                            ? "Klik untuk membaca artikel lengkap."
-                            : "Click to read the full article.")}
-                      </p>
+                        <h2 className="mt-3 line-clamp-2 text-lg font-bold leading-7 text-[#1C1C1E]">
+                          {activeTitle}
+                        </h2>
 
-                      <div className="mt-5 inline-flex items-center text-sm font-semibold text-[#1C1C1E]">
-                        {lang === "id" ? "Baca Selengkapnya" : "Read More"}
+                        <p className="mt-3 line-clamp-3 text-sm leading-7 text-gray-600">
+                          {activeExcerpt ||
+                            (lang === "id"
+                              ? "Klik untuk membaca artikel lengkap."
+                              : "Click to read the full article.")}
+                        </p>
+
+                        <div className="mt-5 inline-flex items-center text-sm font-semibold text-[#1C1C1E]">
+                          {lang === "id" ? "Baca Selengkapnya" : "Read More"}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                </article>
-              ))}
+                    </Link>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
