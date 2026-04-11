@@ -61,18 +61,10 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function cleanText(value: string) {
-  return value
-    .replace(/\u00a0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
 function decodeHtmlEntities(raw: string) {
   let decoded = raw;
 
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 2; i += 1) {
     const textarea = document.createElement("textarea");
     textarea.innerHTML = decoded;
     const next = textarea.value;
@@ -84,200 +76,23 @@ function decodeHtmlEntities(raw: string) {
   return decoded;
 }
 
-function isHeadingLike(text: string) {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-
-  const withoutNumber = trimmed.replace(/^\d+[\).\s-]+/, "").trim();
-  const wordCount = withoutNumber.split(/\s+/).filter(Boolean).length;
-
-  if (/^\d+[\).\s-]+/.test(trimmed) && wordCount <= 12) return true;
-
-  const hasSentenceEnding = /[.!?]$/.test(trimmed);
-  const shortEnough = trimmed.length <= 90;
-  const wordsOkay = wordCount >= 2 && wordCount <= 10;
-
-  if (!hasSentenceEnding && shortEnough && wordsOkay) return true;
-
-  return false;
-}
-
-function normalizePlainTextContent(raw: string, blogTitle?: string | null) {
-  const lines = raw
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trim());
-
-  const blocks: string[] = [];
-  let currentParagraph: string[] = [];
-  let skippedDuplicateTitle = false;
-
-  const flushParagraph = () => {
-    if (!currentParagraph.length) return;
-    blocks.push(`<p>${escapeHtml(currentParagraph.join(" "))}</p>`);
-    currentParagraph = [];
-  };
-
-  for (const line of lines) {
-    if (!line) {
-      flushParagraph();
-      continue;
-    }
-
-    if (
-      !skippedDuplicateTitle &&
-      blogTitle &&
-      cleanText(line) === cleanText(blogTitle)
-    ) {
-      skippedDuplicateTitle = true;
-      continue;
-    }
-
-    if (isHeadingLike(line)) {
-      flushParagraph();
-      const headingText = line.replace(/^\d+[\).\s-]+/, "").trim();
-      blocks.push(`<h2>${escapeHtml(headingText)}</h2>`);
-      continue;
-    }
-
-    currentParagraph.push(line);
-  }
-
-  flushParagraph();
-
-  return blocks.join("");
-}
-
-function sanitizeAndUpgradeHtml(raw: string, blogTitle?: string | null) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(raw, "text/html");
-
-  doc.querySelectorAll("script, style").forEach((node) => node.remove());
-
-  const allowedTags = new Set([
-    "P",
-    "BR",
-    "H1",
-    "H2",
-    "H3",
-    "H4",
-    "UL",
-    "OL",
-    "LI",
-    "BLOCKQUOTE",
-    "STRONG",
-    "B",
-    "EM",
-    "I",
-    "U",
-    "A",
-    "IMG",
-    "DIV",
-    "SPAN",
-  ]);
-
-  const nodes = Array.from(doc.body.querySelectorAll("*"));
-
-  for (const node of nodes) {
-    const tag = node.tagName.toUpperCase();
-
-    if (!allowedTags.has(tag)) {
-      const parent = node.parentNode;
-      while (node.firstChild) {
-        parent?.insertBefore(node.firstChild, node);
-      }
-      parent?.removeChild(node);
-      continue;
-    }
-
-    const attrs = Array.from(node.attributes);
-
-    for (const attr of attrs) {
-      const name = attr.name.toLowerCase();
-      const keepHref = tag === "A" && name === "href";
-      const keepImg = tag === "IMG" && (name === "src" || name === "alt");
-
-      if (!keepHref && !keepImg) {
-        node.removeAttribute(attr.name);
-      }
-    }
-
-    if (tag === "A") {
-      const href = node.getAttribute("href") || "#";
-      node.setAttribute("href", href);
-      node.setAttribute("target", "_blank");
-      node.setAttribute("rel", "noreferrer noopener");
-      node.setAttribute("class", "font-semibold underline underline-offset-4");
-    }
-
-    if (tag === "IMG") {
-      if (!node.getAttribute("alt")) {
-        node.setAttribute("alt", "Blog image");
-      }
-      node.setAttribute("class", "my-8 w-full rounded-3xl object-cover");
-    }
-  }
-
-  doc.body.querySelectorAll("div").forEach((div) => {
-    const replacement = doc.createElement("p");
-    replacement.innerHTML = div.innerHTML;
-    div.replaceWith(replacement);
-  });
-
-  doc.body.querySelectorAll("span").forEach((span) => {
-    const parent = span.parentNode;
-    while (span.firstChild) {
-      parent?.insertBefore(span.firstChild, span);
-    }
-    parent?.removeChild(span);
-  });
-
-  const paragraphs = Array.from(doc.body.querySelectorAll("p"));
-  let removedDuplicateTitle = false;
-
-  for (const p of paragraphs) {
-    const text = (p.textContent || "").replace(/\u00a0/g, " ").trim();
-    const hasImage = !!p.querySelector("img");
-    const hasList = !!p.querySelector("ul, ol, li");
-    const hasLinkOnly = !!p.querySelector("a");
-
-    if (!text && !hasImage) {
-      p.remove();
-      continue;
-    }
-
-    if (
-      !removedDuplicateTitle &&
-      blogTitle &&
-      cleanText(text) === cleanText(blogTitle)
-    ) {
-      removedDuplicateTitle = true;
-      p.remove();
-      continue;
-    }
-
-    if (!hasImage && !hasList && !hasLinkOnly && isHeadingLike(text)) {
-      const h2 = doc.createElement("h2");
-      h2.textContent = text.replace(/^\d+[\).\s-]+/, "").trim();
-      p.replaceWith(h2);
-      continue;
-    }
-  }
-
-  return doc.body.innerHTML.trim();
-}
-
-function normalizeBlogContent(raw?: string | null, blogTitle?: string | null) {
+function normalizeSimpleContent(raw?: string | null) {
   if (!raw || !raw.trim()) return "";
 
   const decoded = decodeHtmlEntities(raw.trim());
   const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(decoded);
 
-  if (!hasHtmlTags) {
-    return normalizePlainTextContent(decoded, blogTitle);
+  if (hasHtmlTags) {
+    return decoded;
   }
 
-  return sanitizeAndUpgradeHtml(decoded, blogTitle);
+  return decoded
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`)
+    .join("");
 }
 
 /* =========================
@@ -346,7 +161,7 @@ export default function PublicBlogDetailPage() {
       const typedBlog = data as BlogDetail;
 
       setBlog(typedBlog);
-      setRenderedContent(normalizeBlogContent(typedBlog.content, typedBlog.title));
+      setRenderedContent(normalizeSimpleContent(typedBlog.content));
       setLoading(false);
 
       if (viewTrackedRef.current) return;
