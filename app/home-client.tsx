@@ -2203,8 +2203,8 @@ export default function HomeClient() {
                 </h4>
 
                 <div className="flex flex-col gap-3 text-sm font-medium text-gray-700 sm:flex-row sm:flex-wrap md:justify-end md:gap-x-8 md:gap-y-3">
-                  <Link
-    href="/admindashboard/blogs"
+  <Link
+    href="/blog"
     className="transition hover:text-black"
   >
     {lang === "id" ? "Blog" : "Blog"}
