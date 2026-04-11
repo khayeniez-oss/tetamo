@@ -64,7 +64,7 @@ function escapeHtml(value: string) {
 function decodeHtmlEntities(raw: string) {
   let decoded = raw;
 
-  for (let i = 0; i < 2; i += 1) {
+  for (let i = 0; i < 3; i += 1) {
     const textarea = document.createElement("textarea");
     textarea.innerHTML = decoded;
     const next = textarea.value;
@@ -76,23 +76,72 @@ function decodeHtmlEntities(raw: string) {
   return decoded;
 }
 
-function normalizeBlogContent(raw?: string | null) {
-  if (!raw || !raw.trim()) return "";
+function cleanText(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
 
-  const decoded = decodeHtmlEntities(raw.trim());
-  const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(decoded);
+function looksLikeHeading(line: string) {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
 
-  if (!hasHtmlTags) {
-    return decoded
-      .split(/\n{2,}/)
-      .map((block) => block.trim())
-      .filter(Boolean)
-      .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`)
-      .join("");
+  const withoutNumber = trimmed.replace(/^\d+[\).\s-]+/, "");
+  const wordCount = withoutNumber.split(/\s+/).filter(Boolean).length;
+  const endsLikeSentence = /[.!?:;]$/.test(trimmed);
+
+  if (/^\d+[\).\s-]+/.test(trimmed) && wordCount <= 14) return true;
+
+  if (!endsLikeSentence && wordCount >= 2 && wordCount <= 10 && trimmed.length <= 90) {
+    return true;
   }
 
+  return false;
+}
+
+function normalizePlainTextContent(raw: string, blogTitle?: string | null) {
+  const lines = raw
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim());
+
+  const result: string[] = [];
+  let paragraph: string[] = [];
+  let skippedDuplicateTitle = false;
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    result.push(`<p>${escapeHtml(paragraph.join(" "))}</p>`);
+    paragraph = [];
+  };
+
+  for (const line of lines) {
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+
+    if (!skippedDuplicateTitle && blogTitle && cleanText(line) === cleanText(blogTitle)) {
+      skippedDuplicateTitle = true;
+      continue;
+    }
+
+    if (looksLikeHeading(line)) {
+      flushParagraph();
+      const headingText = line.replace(/^\d+[\).\s-]+/, "").trim();
+      result.push(`<h2>${escapeHtml(headingText)}</h2>`);
+      continue;
+    }
+
+    paragraph.push(line);
+  }
+
+  flushParagraph();
+
+  return result.join("");
+}
+
+function sanitizeHtmlContent(raw: string) {
   const parser = new DOMParser();
-  const doc = parser.parseFromString(decoded, "text/html");
+  const doc = parser.parseFromString(raw, "text/html");
 
   doc.querySelectorAll("script, style").forEach((node) => node.remove());
 
@@ -111,6 +160,7 @@ function normalizeBlogContent(raw?: string | null) {
     "B",
     "EM",
     "I",
+    "U",
     "A",
     "IMG",
   ]);
@@ -135,8 +185,7 @@ function normalizeBlogContent(raw?: string | null) {
       const name = attr.name.toLowerCase();
 
       const keepHref = tag === "A" && name === "href";
-      const keepImg =
-        tag === "IMG" && (name === "src" || name === "alt");
+      const keepImg = tag === "IMG" && (name === "src" || name === "alt");
 
       if (!keepHref && !keepImg) {
         node.removeAttribute(attr.name);
@@ -148,20 +197,13 @@ function normalizeBlogContent(raw?: string | null) {
       node.setAttribute("href", href);
       node.setAttribute("target", "_blank");
       node.setAttribute("rel", "noreferrer noopener");
-      node.setAttribute(
-        "class",
-        "font-semibold text-[#1C1C1E] underline underline-offset-4"
-      );
     }
 
     if (tag === "IMG") {
-      node.setAttribute(
-        "class",
-        "my-6 w-full rounded-3xl object-cover"
-      );
       if (!node.getAttribute("alt")) {
         node.setAttribute("alt", "Blog image");
       }
+      node.setAttribute("class", "my-8 w-full rounded-3xl object-cover");
     }
   }
 
@@ -175,6 +217,19 @@ function normalizeBlogContent(raw?: string | null) {
   });
 
   return doc.body.innerHTML.trim();
+}
+
+function normalizeBlogContent(raw?: string | null, blogTitle?: string | null) {
+  if (!raw || !raw.trim()) return "";
+
+  const decoded = decodeHtmlEntities(raw.trim());
+  const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(decoded);
+
+  if (!hasHtmlTags) {
+    return normalizePlainTextContent(decoded, blogTitle);
+  }
+
+  return sanitizeHtmlContent(decoded);
 }
 
 /* =========================
@@ -242,7 +297,7 @@ export default function PublicBlogDetailPage() {
 
       const typedBlog = data as BlogDetail;
       setBlog(typedBlog);
-      setRenderedContent(normalizeBlogContent(typedBlog.content));
+      setRenderedContent(normalizeBlogContent(typedBlog.content, typedBlog.title));
       setLoading(false);
 
       if (viewTrackedRef.current) return;
@@ -381,7 +436,17 @@ export default function PublicBlogDetailPage() {
 
             <div className="mt-8 border-t border-gray-100 pt-8">
               <div
-                className="prose prose-sm max-w-none text-gray-700 sm:prose-base prose-headings:text-[#1C1C1E] prose-p:leading-8 prose-li:leading-8 prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4"
+                className="prose prose-base max-w-none text-gray-700
+                  prose-headings:font-bold prose-headings:text-[#1C1C1E]
+                  prose-h1:mt-0 prose-h1:mb-6 prose-h1:text-3xl
+                  prose-h2:mt-10 prose-h2:mb-4 prose-h2:text-2xl
+                  prose-h3:mt-8 prose-h3:mb-3 prose-h3:text-xl
+                  prose-p:my-5 prose-p:leading-9
+                  prose-ul:my-5 prose-ul:pl-6
+                  prose-ol:my-5 prose-ol:pl-6
+                  prose-li:my-2 prose-li:leading-8
+                  prose-blockquote:my-6 prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:italic
+                  prose-img:my-8 prose-img:w-full prose-img:rounded-3xl"
                 dangerouslySetInnerHTML={{
                   __html:
                     renderedContent ||
