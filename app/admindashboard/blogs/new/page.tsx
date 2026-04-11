@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, Save, Send, Upload } from "lucide-react";
+import { ArrowLeft, CalendarDays, Eye, Save, Send, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import TiptapBlogEditor from "@/components/blog/TiptapBlogEditor";
 
@@ -29,6 +29,7 @@ type BlogForm = {
   author_name: string;
   access_type: BlogAccessType;
   cover_image_url: string;
+  publish_at: string;
 };
 
 function slugify(value: string) {
@@ -42,6 +43,30 @@ function slugify(value: string) {
 
 function stripHtml(value: string) {
   return value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function toIsoFromDatetimeLocal(value: string) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
 }
 
 function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -127,6 +152,7 @@ export default function AdminNewBlogPage() {
     author_name: "Tetamo Editorial",
     access_type: "public",
     cover_image_url: "",
+    publish_at: "",
   });
 
   const [slugTouched, setSlugTouched] = useState(false);
@@ -211,6 +237,15 @@ export default function AdminNewBlogPage() {
   const previewExcerpt = previewLang === "id" ? form.excerpt_id : form.excerpt;
   const previewContent = previewLang === "id" ? form.content_id : form.content;
 
+  const publishAtIso = useMemo(() => {
+    return toIsoFromDatetimeLocal(form.publish_at);
+  }, [form.publish_at]);
+
+  const isScheduled = useMemo(() => {
+    if (!publishAtIso) return false;
+    return new Date(publishAtIso).getTime() > Date.now();
+  }, [publishAtIso]);
+
   function updateField<K extends keyof BlogForm>(key: K, value: BlogForm[K]) {
     setForm((prev) => ({
       ...prev,
@@ -236,9 +271,7 @@ export default function AdminNewBlogPage() {
     return data.publicUrl;
   }
 
-  async function handleCoverUpload(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -259,9 +292,7 @@ export default function AdminNewBlogPage() {
     }
   }
 
-  async function handleBodyImageUpload(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleBodyImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -319,6 +350,16 @@ export default function AdminNewBlogPage() {
       return;
     }
 
+    const resolvedPublishedAt =
+      status === "published"
+        ? publishAtIso || new Date().toISOString()
+        : null;
+
+    if (status === "published" && form.publish_at && !publishAtIso) {
+      alert("Publish date is invalid.");
+      return;
+    }
+
     status === "draft" ? setSavingDraft(true) : setPublishing(true);
 
     try {
@@ -332,8 +373,6 @@ export default function AdminNewBlogPage() {
         alert("Please log in first.");
         return;
       }
-
-      const publishedAt = status === "published" ? new Date().toISOString() : null;
 
       const { data, error } = await supabase
         .from("blogs")
@@ -350,7 +389,7 @@ export default function AdminNewBlogPage() {
           cover_image_url: form.cover_image_url || null,
           status,
           access_type: form.access_type,
-          published_at: publishedAt,
+          published_at: resolvedPublishedAt,
           created_by: user.id,
           updated_by: user.id,
         })
@@ -359,11 +398,15 @@ export default function AdminNewBlogPage() {
 
       if (error) throw error;
 
-      alert(
-        status === "published"
-          ? "Blog published successfully."
-          : "Draft saved successfully."
-      );
+      if (status === "published") {
+        alert(
+          isScheduled && resolvedPublishedAt
+            ? `Blog scheduled for ${formatDateTime(resolvedPublishedAt)}.`
+            : "Blog published successfully."
+        );
+      } else {
+        alert("Draft saved successfully.");
+      }
 
       if (data?.id) {
         router.push(`/admindashboard/blogs/${data.id}/edit`);
@@ -459,7 +502,13 @@ export default function AdminNewBlogPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send size={16} />
-              {publishing ? "Publishing..." : "Publish"}
+              {publishing
+                ? isScheduled
+                  ? "Scheduling..."
+                  : "Publishing..."
+                : isScheduled
+                  ? "Schedule"
+                  : "Publish"}
             </button>
           </div>
         </div>
@@ -691,6 +740,45 @@ export default function AdminNewBlogPage() {
                   <option value="public">Public</option>
                   <option value="paid_agent">Paid Agent Only</option>
                 </SelectBase>
+              </div>
+
+              <div>
+                <FieldLabel>Publish Date</FieldLabel>
+                <InputBase
+                  type="datetime-local"
+                  value={form.publish_at}
+                  onChange={(e) => updateField("publish_at", e.target.value)}
+                  className="appearance-none"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Leave blank to publish immediately. Set a future date to schedule this blog.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-[#FAFAF8] p-4 text-sm text-gray-600">
+                <div className="flex items-start gap-3">
+                  <CalendarDays size={18} className="mt-0.5 shrink-0 text-[#1C1C1E]" />
+                  <div>
+                    <p className="font-semibold text-[#1C1C1E]">
+                      {form.publish_at
+                        ? isScheduled
+                          ? "Scheduled publish"
+                          : "Immediate publish"
+                        : "Immediate publish"}
+                    </p>
+                    <p className="mt-1 leading-6">
+                      {form.publish_at
+                        ? publishAtIso
+                          ? isScheduled
+                            ? `This blog will go live on ${formatDateTime(publishAtIso)}.`
+                            : `This blog will publish immediately using ${formatDateTime(
+                                publishAtIso
+                              )}.`
+                          : "The selected publish date is invalid."
+                        : "No publish date selected. This blog will go live as soon as you click Publish."}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
