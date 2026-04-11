@@ -2203,36 +2203,50 @@ export default function HomeClient() {
                 </h4>
 
                 <div className="flex flex-col gap-3 text-sm font-medium text-gray-700 sm:flex-row sm:flex-wrap md:justify-end md:gap-x-8 md:gap-y-3">
-                  <Link href="/about-us" className="transition hover:text-black">
-                    {lang === "id" ? "Tentang Kami" : "About Us"}
-                  </Link>
-
-                  <Link href="/faq" className="transition hover:text-black">
-                    FAQ
-                  </Link>
-
                   <Link
-                    href="/kebijakan-berlangganan"
-                    className="transition hover:text-black"
-                  >
-                    {lang === "id"
-                      ? "Kebijakan Berlangganan"
-                      : "Subscription Policy"}
-                  </Link>
+    href="/admindashboard/blogs"
+    className="transition hover:text-black"
+  >
+    {lang === "id" ? "Blog" : "Blog"}
+  </Link>
 
-                  <Link href="/terms" className="transition hover:text-black">
-                    {lang === "id"
-                      ? "Syarat & Ketentuan"
-                      : "Terms and Conditions"}
-                  </Link>
+  <Link
+    href="/agentdashboard/edukasi"
+    className="transition hover:text-black"
+  >
+    {lang === "id" ? "Edukasi" : "Edu"}
+  </Link>
 
-                  <Link
-                    href="/kebijakan-privasi"
-                    className="transition hover:text-black"
-                  >
-                    {lang === "id" ? "Kebijakan Privasi" : "Privacy Policy"}
-                  </Link>
-                </div>
+  <Link href="/about-us" className="transition hover:text-black">
+    {lang === "id" ? "Tentang Kami" : "About Us"}
+  </Link>
+
+  <Link href="/faq" className="transition hover:text-black">
+    FAQ
+  </Link>
+
+  <Link
+    href="/kebijakan-berlangganan"
+    className="transition hover:text-black"
+  >
+    {lang === "id"
+      ? "Kebijakan Berlangganan"
+      : "Subscription Policy"}
+  </Link>
+
+  <Link href="/terms" className="transition hover:text-black">
+    {lang === "id"
+      ? "Syarat & Ketentuan"
+      : "Terms and Conditions"}
+  </Link>
+
+  <Link
+    href="/kebijakan-privasi"
+    className="transition hover:text-black"
+  >
+    {lang === "id" ? "Kebijakan Privasi" : "Privacy Policy"}
+  </Link>
+</div>
 
                 <div className="mt-6 border-t border-gray-200 pt-4">
                   <p className="text-xs leading-6 text-gray-500 sm:text-sm">
