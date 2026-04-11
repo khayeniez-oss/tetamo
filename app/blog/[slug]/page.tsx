@@ -21,10 +21,13 @@ import { supabase } from "@/lib/supabase";
 
 type BlogDetail = {
   id: string;
-  title: string;
+  title: string | null;
+  title_id: string | null;
   slug: string;
   excerpt: string | null;
+  excerpt_id: string | null;
   content: string | null;
+  content_id: string | null;
   category: string | null;
   author_name: string | null;
   cover_image_url: string | null;
@@ -198,16 +201,45 @@ function buildGuideContent(lines: string[]) {
 function getSectionIcon(heading: string) {
   const text = heading.toLowerCase();
 
-  if (text.includes("goal")) return Target;
-  if (text.includes("location")) return MapPin;
-  if (text.includes("budget") || text.includes("price")) return Wallet;
-  if (text.includes("legal") || text.includes("document")) return FileCheck2;
-  if (text.includes("condition")) return Wrench;
-  if (text.includes("compare")) return BarChart3;
-  if (text.includes("reputation") || text.includes("seller")) return ShieldCheck;
-  if (text.includes("long-term") || text.includes("value")) return TrendingUp;
-  if (text.includes("professionals")) return Users;
-  if (text.includes("final")) return FileSearch;
+  if (text.includes("goal") || text.includes("tujuan")) return Target;
+  if (text.includes("location") || text.includes("lokasi")) return MapPin;
+  if (
+    text.includes("budget") ||
+    text.includes("price") ||
+    text.includes("anggaran") ||
+    text.includes("harga")
+  ) {
+    return Wallet;
+  }
+  if (
+    text.includes("legal") ||
+    text.includes("document") ||
+    text.includes("dokumen")
+  ) {
+    return FileCheck2;
+  }
+  if (text.includes("condition") || text.includes("kondisi")) return Wrench;
+  if (text.includes("compare") || text.includes("banding")) return BarChart3;
+  if (
+    text.includes("reputation") ||
+    text.includes("seller") ||
+    text.includes("reputasi") ||
+    text.includes("penjual")
+  ) {
+    return ShieldCheck;
+  }
+  if (
+    text.includes("long-term") ||
+    text.includes("value") ||
+    text.includes("jangka panjang") ||
+    text.includes("nilai")
+  ) {
+    return TrendingUp;
+  }
+  if (text.includes("professionals") || text.includes("profesional")) {
+    return Users;
+  }
+  if (text.includes("final") || text.includes("akhir")) return FileSearch;
 
   return FileSearch;
 }
@@ -240,7 +272,7 @@ export default function PublicBlogDetailPage() {
       const { data, error } = await supabase
         .from("blogs")
         .select(
-          "id, title, slug, excerpt, content, category, author_name, cover_image_url, view_count, published_at, created_at"
+          "id, title, title_id, slug, excerpt, excerpt_id, content, content_id, category, author_name, cover_image_url, view_count, published_at, created_at"
         )
         .eq("slug", slug)
         .eq("status", "published")
@@ -267,18 +299,33 @@ export default function PublicBlogDetailPage() {
     };
   }, [slug]);
 
+  const activeTitle =
+    lang === "id"
+      ? blog?.title_id?.trim() || blog?.title?.trim() || ""
+      : blog?.title?.trim() || blog?.title_id?.trim() || "";
+
+  const activeExcerpt =
+    lang === "id"
+      ? blog?.excerpt_id?.trim() || blog?.excerpt?.trim() || ""
+      : blog?.excerpt?.trim() || blog?.excerpt_id?.trim() || "";
+
+  const activeContent =
+    lang === "id"
+      ? blog?.content_id?.trim() || blog?.content?.trim() || ""
+      : blog?.content?.trim() || blog?.content_id?.trim() || "";
+
   const guide = useMemo(() => {
-    const lines = contentToLines(blog?.content, blog?.title);
+    const lines = contentToLines(activeContent, activeTitle);
     return buildGuideContent(lines);
-  }, [blog?.content, blog?.title]);
+  }, [activeContent, activeTitle]);
 
   const firstBodyImage = useMemo(() => {
-    return extractFirstBodyImage(blog?.content);
-  }, [blog?.content]);
+    return extractFirstBodyImage(activeContent);
+  }, [activeContent]);
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] px-4 py-8 sm:px-6 lg:px-8">
+      <main className="min-h-screen bg-[#FAFAF8] px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-gray-200 bg-white p-6 text-sm text-gray-500 shadow-sm sm:p-8">
           {lang === "id" ? "Memuat artikel..." : "Loading article..."}
         </div>
@@ -288,7 +335,7 @@ export default function PublicBlogDetailPage() {
 
   if (notFound || !blog) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8] px-4 py-8 sm:px-6 lg:px-8">
+      <main className="min-h-screen bg-[#FAFAF8] px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
           <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
             {lang === "id" ? "Artikel tidak ditemukan" : "Article not found"}
@@ -327,12 +374,12 @@ export default function PublicBlogDetailPage() {
           {blog.cover_image_url ? (
             <img
               src={blog.cover_image_url}
-              alt={blog.title}
+              alt={activeTitle || "Blog cover"}
               className="h-[220px] w-full object-cover sm:h-[300px] lg:h-[380px]"
             />
           ) : (
             <div className="flex h-[220px] w-full items-center justify-center bg-[#1C1C1E] text-4xl font-bold text-white sm:h-[300px]">
-              {getInitials(blog.title)}
+              {getInitials(activeTitle)}
             </div>
           )}
 
@@ -345,12 +392,12 @@ export default function PublicBlogDetailPage() {
               ) : null}
 
               <div className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
-                Guide
+                {lang === "id" ? "Panduan" : "Guide"}
               </div>
             </div>
 
             <h1 className="mt-4 text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
-              {blog.title}
+              {activeTitle}
             </h1>
 
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 sm:text-sm">
@@ -361,9 +408,9 @@ export default function PublicBlogDetailPage() {
               <span>{blog.view_count ?? 0} views</span>
             </div>
 
-            {blog.excerpt ? (
+            {activeExcerpt ? (
               <p className="mt-5 text-sm leading-7 text-gray-600 sm:text-base sm:leading-8">
-                {blog.excerpt}
+                {activeExcerpt}
               </p>
             ) : null}
 
@@ -381,7 +428,7 @@ export default function PublicBlogDetailPage() {
               <div className="mt-6 overflow-hidden rounded-3xl border border-gray-200">
                 <img
                   src={firstBodyImage}
-                  alt={blog.title}
+                  alt={activeTitle || "Blog image"}
                   className="h-[220px] w-full object-cover sm:h-[300px]"
                 />
               </div>
