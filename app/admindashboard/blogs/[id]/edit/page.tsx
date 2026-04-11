@@ -5,21 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Bold,
   Eye,
-  Heading1,
-  Heading2,
-  ImagePlus,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  Quote,
   Save,
   Send,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import TiptapBlogEditor from "@/components/blog/TiptapBlogEditor";
 
 type BlogAccessType = "public" | "paid_agent";
 type BlogStatus = "draft" | "published";
@@ -75,9 +68,7 @@ function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${
-        props.className ?? ""
-      }`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
@@ -86,22 +77,16 @@ function SelectBase(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] ${
-        props.className ?? ""
-      }`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
 
-function TextareaBase(
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
-) {
+function TextareaBase(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${
-        props.className ?? ""
-      }`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
@@ -132,7 +117,6 @@ export default function AdminEditBlogPage() {
         ? params.id[0]
         : "";
 
-  const editorRef = useRef<HTMLDivElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const bodyImageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -153,9 +137,7 @@ export default function AdminEditBlogPage() {
   const [loadingBlog, setLoadingBlog] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [slugTouched, setSlugTouched] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
-
   const [savingDraft, setSavingDraft] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
@@ -229,7 +211,7 @@ export default function AdminEditBlogPage() {
 
       const data = blogRes.data;
 
-      const nextForm: BlogForm = {
+      setForm({
         title: data.title ?? "",
         slug: data.slug ?? "",
         excerpt: data.excerpt ?? "",
@@ -239,14 +221,12 @@ export default function AdminEditBlogPage() {
         access_type: (data.access_type as BlogAccessType) ?? "public",
         cover_image_url: data.cover_image_url ?? "",
         status: (data.status as BlogStatus) ?? "draft",
-      };
+      });
 
-      setForm(nextForm);
       setCreatedAt(data.created_at ?? null);
       setUpdatedAt(data.updated_at ?? null);
       setPublishedAt(data.published_at ?? null);
       setViewCount(Number(data.view_count ?? 0));
-      setSlugTouched(true);
       setLoadingBlog(false);
     }
 
@@ -257,12 +237,6 @@ export default function AdminEditBlogPage() {
     };
   }, [blogId]);
 
-  useEffect(() => {
-    if (!loadingBlog && editorRef.current) {
-      editorRef.current.innerHTML = form.content || "";
-    }
-  }, [loadingBlog]);
-
   const publicUrlPreview = useMemo(() => {
     return form.slug ? `/blog/${form.slug}` : "/blog/[slug]";
   }, [form.slug]);
@@ -272,24 +246,6 @@ export default function AdminEditBlogPage() {
       ...prev,
       [key]: value,
     }));
-  }
-
-  function focusEditor() {
-    editorRef.current?.focus();
-  }
-
-  function syncEditorContent() {
-    const html = editorRef.current?.innerHTML ?? "";
-    setForm((prev) => ({
-      ...prev,
-      content: html,
-    }));
-  }
-
-  function exec(command: string, value?: string) {
-    focusEditor();
-    document.execCommand(command, false, value);
-    syncEditorContent();
   }
 
   async function uploadImageToStorage(file: File, folder: "cover" | "body") {
@@ -342,14 +298,10 @@ export default function AdminEditBlogPage() {
     try {
       setUploadingBodyImage(true);
       const publicUrl = await uploadImageToStorage(file, "body");
-
-      focusEditor();
-      document.execCommand(
-        "insertHTML",
-        false,
-        `<p><img src="${publicUrl}" alt="Blog image" class="my-4 rounded-2xl w-full h-auto" /></p>`
-      );
-      syncEditorContent();
+      setForm((prev) => ({
+        ...prev,
+        content: `${prev.content}<p><img src="${publicUrl}" alt="Blog image" /></p>`,
+      }));
     } catch (error: any) {
       console.error("Failed to upload body image:", error);
       alert(error?.message || "Failed to upload body image.");
@@ -365,7 +317,7 @@ export default function AdminEditBlogPage() {
     const cleanExcerpt = form.excerpt.trim();
     const cleanCategory = form.category.trim();
     const cleanAuthor = form.author_name.trim() || "Tetamo Editorial";
-    const cleanContent = (editorRef.current?.innerHTML || form.content || "").trim();
+    const cleanContent = form.content.trim();
 
     if (!cleanTitle) {
       alert("Title is required.");
@@ -618,135 +570,35 @@ export default function AdminEditBlogPage() {
 
       <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
         <div className="space-y-6">
-          <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 px-5 py-4 sm:px-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => exec("bold")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Bold"
-                >
-                  <Bold size={16} />
-                </button>
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => {
+                updateField("title", e.target.value);
+                updateField("slug", slugify(e.target.value));
+              }}
+              placeholder="Edit Title"
+              className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
+            />
 
-                <button
-                  type="button"
-                  onClick={() => exec("italic")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Italic"
-                >
-                  <Italic size={16} />
-                </button>
+            <div className="mt-4">{articleMeta}</div>
 
-                <button
-                  type="button"
-                  onClick={() => exec("formatBlock", "<h1>")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Heading 1"
-                >
-                  <Heading1 size={16} />
-                </button>
+            <TextareaBase
+              rows={3}
+              value={form.excerpt}
+              onChange={(e) => updateField("excerpt", e.target.value)}
+              placeholder="Write short excerpt / summary..."
+              className="mt-6 resize-none border-gray-200 bg-[#FAFAF8]"
+            />
 
-                <button
-                  type="button"
-                  onClick={() => exec("formatBlock", "<h2>")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Heading 2"
-                >
-                  <Heading2 size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => exec("formatBlock", "<blockquote>")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Quote"
-                >
-                  <Quote size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => exec("insertUnorderedList")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Bullet List"
-                >
-                  <List size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => exec("insertOrderedList")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Numbered List"
-                >
-                  <ListOrdered size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const url = window.prompt("Enter URL");
-                    if (url) exec("createLink", url);
-                  }}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Insert Link"
-                >
-                  <Link2 size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => bodyImageInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                  title="Upload Body Image"
-                >
-                  <ImagePlus size={16} />
-                  {uploadingBodyImage ? "Uploading..." : "Body Image"}
-                </button>
-              </div>
-            </div>
-
-            <div className="p-5 sm:p-6">
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => {
-                  updateField("title", e.target.value);
-                  if (!slugTouched) {
-                    updateField("slug", slugify(e.target.value));
-                  }
-                }}
-                placeholder="Edit Title"
-                className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
+            <div className="mt-6">
+              <TiptapBlogEditor
+                content={form.content}
+                onChange={(html) => updateField("content", html)}
+                placeholder="Start writing your blog here..."
+                onUploadImage={() => bodyImageInputRef.current?.click()}
               />
-
-              <div className="mt-4">{articleMeta}</div>
-
-              <TextareaBase
-                rows={3}
-                value={form.excerpt}
-                onChange={(e) => updateField("excerpt", e.target.value)}
-                placeholder="Write short excerpt / summary..."
-                className="mt-6 resize-none border-gray-200 bg-[#FAFAF8]"
-              />
-
-              <div className="mt-6 rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4">
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={syncEditorContent}
-                  className="min-h-[420px] w-full outline-none"
-                  style={{ whiteSpace: "pre-wrap" }}
-                />
-                {!stripHtml(form.content) && (
-                  <p className="pointer-events-none -mt-[390px] px-1 text-sm text-gray-400">
-                    Start writing your blog here...
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
@@ -789,11 +641,9 @@ export default function AdminEditBlogPage() {
                   )}
 
                   <div
-                    className="prose prose-sm mt-8 max-w-none sm:prose-base"
+                    className="prose prose-sm mt-8 max-w-none text-gray-700 sm:prose-base prose-headings:text-[#1C1C1E] prose-p:leading-8 prose-li:leading-8 prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4"
                     dangerouslySetInnerHTML={{
-                      __html:
-                        form.content ||
-                        "<p style='color:#9ca3af;'>No content yet.</p>",
+                      __html: form.content || "<p style='color:#9ca3af;'>No content yet.</p>",
                     }}
                   />
                 </div>
@@ -812,10 +662,7 @@ export default function AdminEditBlogPage() {
                 <InputBase
                   type="text"
                   value={form.slug}
-                  onChange={(e) => {
-                    setSlugTouched(true);
-                    updateField("slug", slugify(e.target.value));
-                  }}
+                  onChange={(e) => updateField("slug", slugify(e.target.value))}
                   placeholder="blog-slug"
                 />
                 <p className="mt-2 text-xs text-gray-500">
@@ -921,6 +768,7 @@ export default function AdminEditBlogPage() {
                   disabled={uploadingCover}
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
+                  <Upload size={16} />
                   {uploadingCover ? "Uploading..." : "Upload Cover"}
                 </button>
 

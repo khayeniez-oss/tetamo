@@ -3,23 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  Bold,
-  Eye,
-  Heading1,
-  Heading2,
-  ImagePlus,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
-  Quote,
-  Save,
-  Send,
-  Upload,
-} from "lucide-react";
+import { ArrowLeft, Eye, Save, Send, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import TiptapBlogEditor from "@/components/blog/TiptapBlogEditor";
 
 type BlogAccessType = "public" | "paid_agent";
 
@@ -58,9 +44,7 @@ function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${
-        props.className ?? ""
-      }`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
@@ -69,22 +53,16 @@ function SelectBase(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] ${
-        props.className ?? ""
-      }`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
 
-function TextareaBase(
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>
-) {
+function TextareaBase(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${
-        props.className ?? ""
-      }`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
@@ -106,8 +84,6 @@ function FieldLabel({
 
 export default function AdminNewBlogPage() {
   const router = useRouter();
-
-  const editorRef = useRef<HTMLDivElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const bodyImageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -206,24 +182,6 @@ export default function AdminNewBlogPage() {
     }));
   }
 
-  function focusEditor() {
-    editorRef.current?.focus();
-  }
-
-  function syncEditorContent() {
-    const html = editorRef.current?.innerHTML ?? "";
-    setForm((prev) => ({
-      ...prev,
-      content: html,
-    }));
-  }
-
-  function exec(command: string, value?: string) {
-    focusEditor();
-    document.execCommand(command, false, value);
-    syncEditorContent();
-  }
-
   async function uploadImageToStorage(file: File, folder: "cover" | "body") {
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const cleanSlug = form.slug || slugify(form.title) || "blog";
@@ -236,9 +194,7 @@ export default function AdminNewBlogPage() {
         upsert: true,
       });
 
-    if (uploadError) {
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from("blog-images").getPublicUrl(path);
     return data.publicUrl;
@@ -263,9 +219,7 @@ export default function AdminNewBlogPage() {
       alert(error?.message || "Failed to upload cover image.");
     } finally {
       setUploadingCover(false);
-      if (coverInputRef.current) {
-        coverInputRef.current.value = "";
-      }
+      if (coverInputRef.current) coverInputRef.current.value = "";
     }
   }
 
@@ -278,22 +232,16 @@ export default function AdminNewBlogPage() {
     try {
       setUploadingBodyImage(true);
       const publicUrl = await uploadImageToStorage(file, "body");
-
-      focusEditor();
-      document.execCommand(
-        "insertHTML",
-        false,
-        `<p><img src="${publicUrl}" alt="Blog image" class="my-4 rounded-2xl w-full h-auto" /></p>`
-      );
-      syncEditorContent();
+      setForm((prev) => ({
+        ...prev,
+        content: `${prev.content}<p><img src="${publicUrl}" alt="Blog image" /></p>`,
+      }));
     } catch (error: any) {
       console.error("Failed to upload body image:", error);
       alert(error?.message || "Failed to upload body image.");
     } finally {
       setUploadingBodyImage(false);
-      if (bodyImageInputRef.current) {
-        bodyImageInputRef.current.value = "";
-      }
+      if (bodyImageInputRef.current) bodyImageInputRef.current.value = "";
     }
   }
 
@@ -303,7 +251,7 @@ export default function AdminNewBlogPage() {
     const cleanExcerpt = form.excerpt.trim();
     const cleanCategory = form.category.trim();
     const cleanAuthor = form.author_name.trim() || "Tetamo Editorial";
-    const cleanContent = (editorRef.current?.innerHTML || form.content || "").trim();
+    const cleanContent = form.content.trim();
 
     if (!cleanTitle) {
       alert("Title is required.");
@@ -405,8 +353,6 @@ export default function AdminNewBlogPage() {
         className="hidden"
       />
 
-      {/* Top Bar */}
-
       <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
@@ -461,136 +407,34 @@ export default function AdminNewBlogPage() {
         </div>
       </div>
 
-      {/* Layout */}
-
       <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
-        {/* Main Editor */}
-
         <div className="space-y-6">
-          <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 px-5 py-4 sm:px-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => exec("bold")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Bold"
-                >
-                  <Bold size={16} />
-                </button>
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              placeholder="Add Title"
+              className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
+            />
 
-                <button
-                  type="button"
-                  onClick={() => exec("italic")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Italic"
-                >
-                  <Italic size={16} />
-                </button>
+            <div className="mt-4">{articleMeta}</div>
 
-                <button
-                  type="button"
-                  onClick={() => exec("formatBlock", "<h1>")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Heading 1"
-                >
-                  <Heading1 size={16} />
-                </button>
+            <TextareaBase
+              rows={3}
+              value={form.excerpt}
+              onChange={(e) => updateField("excerpt", e.target.value)}
+              placeholder="Write short excerpt / summary..."
+              className="mt-6 resize-none border-gray-200 bg-[#FAFAF8]"
+            />
 
-                <button
-                  type="button"
-                  onClick={() => exec("formatBlock", "<h2>")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Heading 2"
-                >
-                  <Heading2 size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => exec("formatBlock", "<blockquote>")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Quote"
-                >
-                  <Quote size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => exec("insertUnorderedList")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Bullet List"
-                >
-                  <List size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => exec("insertOrderedList")}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Numbered List"
-                >
-                  <ListOrdered size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const url = window.prompt("Enter URL");
-                    if (url) exec("createLink", url);
-                  }}
-                  className="rounded-xl border border-gray-300 p-2 hover:bg-gray-50"
-                  title="Insert Link"
-                >
-                  <Link2 size={16} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => bodyImageInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                  title="Upload Body Image"
-                >
-                  <ImagePlus size={16} />
-                  {uploadingBodyImage ? "Uploading..." : "Body Image"}
-                </button>
-              </div>
-            </div>
-
-            <div className="p-5 sm:p-6">
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => updateField("title", e.target.value)}
-                placeholder="Add Title"
-                className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
+            <div className="mt-6">
+              <TiptapBlogEditor
+                content={form.content}
+                onChange={(html) => updateField("content", html)}
+                placeholder="Start writing your blog here..."
+                onUploadImage={() => bodyImageInputRef.current?.click()}
               />
-
-              <div className="mt-4">{articleMeta}</div>
-
-              <TextareaBase
-                rows={3}
-                value={form.excerpt}
-                onChange={(e) => updateField("excerpt", e.target.value)}
-                placeholder="Write short excerpt / summary..."
-                className="mt-6 resize-none border-gray-200 bg-[#FAFAF8]"
-              />
-
-              <div className="mt-6 rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4">
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={syncEditorContent}
-                  className="min-h-[420px] w-full outline-none"
-                  style={{ whiteSpace: "pre-wrap" }}
-                />
-                {!stripHtml(form.content) && (
-                  <p className="pointer-events-none -mt-[390px] px-1 text-sm text-gray-400">
-                    Start writing your blog here...
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
@@ -633,11 +477,9 @@ export default function AdminNewBlogPage() {
                   )}
 
                   <div
-                    className="prose prose-sm mt-8 max-w-none sm:prose-base"
+                    className="prose prose-sm mt-8 max-w-none text-gray-700 sm:prose-base prose-headings:text-[#1C1C1E] prose-p:leading-8 prose-li:leading-8 prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4"
                     dangerouslySetInnerHTML={{
-                      __html:
-                        form.content ||
-                        "<p style='color:#9ca3af;'>No content yet.</p>",
+                      __html: form.content || "<p style='color:#9ca3af;'>No content yet.</p>",
                     }}
                   />
                 </div>
@@ -645,8 +487,6 @@ export default function AdminNewBlogPage() {
             </div>
           )}
         </div>
-
-        {/* Settings */}
 
         <aside className="space-y-6">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
