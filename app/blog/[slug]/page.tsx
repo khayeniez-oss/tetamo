@@ -53,6 +53,130 @@ function getInitials(title?: string | null) {
     .join("");
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function decodeHtmlEntities(raw: string) {
+  let decoded = raw;
+
+  for (let i = 0; i < 2; i += 1) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = decoded;
+    const next = textarea.value;
+
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
+}
+
+function normalizeBlogContent(raw?: string | null) {
+  if (!raw || !raw.trim()) return "";
+
+  const decoded = decodeHtmlEntities(raw.trim());
+  const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(decoded);
+
+  if (!hasHtmlTags) {
+    return decoded
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean)
+      .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br />")}</p>`)
+      .join("");
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(decoded, "text/html");
+
+  doc.querySelectorAll("script, style").forEach((node) => node.remove());
+
+  const allowedTags = new Set([
+    "P",
+    "BR",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "UL",
+    "OL",
+    "LI",
+    "BLOCKQUOTE",
+    "STRONG",
+    "B",
+    "EM",
+    "I",
+    "A",
+    "IMG",
+  ]);
+
+  const nodes = Array.from(doc.body.querySelectorAll("*"));
+
+  for (const node of nodes) {
+    const tag = node.tagName.toUpperCase();
+
+    if (!allowedTags.has(tag)) {
+      const parent = node.parentNode;
+      while (node.firstChild) {
+        parent?.insertBefore(node.firstChild, node);
+      }
+      parent?.removeChild(node);
+      continue;
+    }
+
+    const attrs = Array.from(node.attributes);
+
+    for (const attr of attrs) {
+      const name = attr.name.toLowerCase();
+
+      const keepHref = tag === "A" && name === "href";
+      const keepImg =
+        tag === "IMG" && (name === "src" || name === "alt");
+
+      if (!keepHref && !keepImg) {
+        node.removeAttribute(attr.name);
+      }
+    }
+
+    if (tag === "A") {
+      const href = node.getAttribute("href") || "#";
+      node.setAttribute("href", href);
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noreferrer noopener");
+      node.setAttribute(
+        "class",
+        "font-semibold text-[#1C1C1E] underline underline-offset-4"
+      );
+    }
+
+    if (tag === "IMG") {
+      node.setAttribute(
+        "class",
+        "my-6 w-full rounded-3xl object-cover"
+      );
+      if (!node.getAttribute("alt")) {
+        node.setAttribute("alt", "Blog image");
+      }
+    }
+  }
+
+  doc.body.querySelectorAll("p").forEach((p) => {
+    const text = (p.textContent || "").trim();
+    const hasImage = p.querySelector("img");
+
+    if (!text && !hasImage) {
+      p.remove();
+    }
+  });
+
+  return doc.body.innerHTML.trim();
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -69,6 +193,7 @@ export default function PublicBlogDetailPage() {
         : "";
 
   const [blog, setBlog] = useState<BlogDetail | null>(null);
+  const [renderedContent, setRenderedContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -117,6 +242,7 @@ export default function PublicBlogDetailPage() {
 
       const typedBlog = data as BlogDetail;
       setBlog(typedBlog);
+      setRenderedContent(normalizeBlogContent(typedBlog.content));
       setLoading(false);
 
       if (viewTrackedRef.current) return;
@@ -254,13 +380,14 @@ export default function PublicBlogDetailPage() {
             )}
 
             <div className="mt-8 border-t border-gray-100 pt-8">
-              <div className="prose prose-sm max-w-none text-gray-700 sm:prose-base">
-                <div className="whitespace-pre-wrap break-words text-sm leading-8 text-gray-700 sm:text-base">
-                  {blog.content || (lang === "id"
-                    ? "Konten artikel belum tersedia."
-                    : "Article content is not available yet.")}
-                </div>
-              </div>
+              <div
+                className="prose prose-sm max-w-none text-gray-700 sm:prose-base prose-headings:text-[#1C1C1E] prose-p:leading-8 prose-li:leading-8 prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    renderedContent ||
+                    "<p style='color:#9ca3af;'>Article content is not available yet.</p>",
+                }}
+              />
             </div>
           </div>
         </article>
