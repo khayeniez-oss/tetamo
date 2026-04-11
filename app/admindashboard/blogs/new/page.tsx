@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import TiptapBlogEditor from "@/components/blog/TiptapBlogEditor";
 
 type BlogAccessType = "public" | "paid_agent";
+type PreviewLang = "en" | "id";
 
 type BlogCategory = {
   id: string;
@@ -18,9 +19,12 @@ type BlogCategory = {
 
 type BlogForm = {
   title: string;
+  title_id: string;
   slug: string;
   excerpt: string;
+  excerpt_id: string;
   content: string;
+  content_id: string;
   category: string;
   author_name: string;
   access_type: BlogAccessType;
@@ -82,6 +86,30 @@ function FieldLabel({
   );
 }
 
+function LangPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+        active
+          ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+          : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function AdminNewBlogPage() {
   const router = useRouter();
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -89,9 +117,12 @@ export default function AdminNewBlogPage() {
 
   const [form, setForm] = useState<BlogForm>({
     title: "",
+    title_id: "",
     slug: "",
     excerpt: "",
+    excerpt_id: "",
     content: "",
+    content_id: "",
     category: "",
     author_name: "Tetamo Editorial",
     access_type: "public",
@@ -103,6 +134,7 @@ export default function AdminNewBlogPage() {
   const [loadingCategories, setLoadingCategories] = useState(true);
 
   const [previewMode, setPreviewMode] = useState(false);
+  const [previewLang, setPreviewLang] = useState<PreviewLang>("en");
   const [savingDraft, setSavingDraft] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -175,6 +207,10 @@ export default function AdminNewBlogPage() {
     return form.slug ? `/blog/${form.slug}` : "/blog/[slug]";
   }, [form.slug]);
 
+  const previewTitle = previewLang === "id" ? form.title_id : form.title;
+  const previewExcerpt = previewLang === "id" ? form.excerpt_id : form.excerpt;
+  const previewContent = previewLang === "id" ? form.content_id : form.content;
+
   function updateField<K extends keyof BlogForm>(key: K, value: BlogForm[K]) {
     setForm((prev) => ({
       ...prev,
@@ -232,9 +268,11 @@ export default function AdminNewBlogPage() {
     try {
       setUploadingBodyImage(true);
       const publicUrl = await uploadImageToStorage(file, "body");
+
       setForm((prev) => ({
         ...prev,
         content: `${prev.content}<p><img src="${publicUrl}" alt="Blog image" /></p>`,
+        content_id: `${prev.content_id}<p><img src="${publicUrl}" alt="Blog image" /></p>`,
       }));
     } catch (error: any) {
       console.error("Failed to upload body image:", error);
@@ -247,14 +285,22 @@ export default function AdminNewBlogPage() {
 
   async function saveBlog(status: "draft" | "published") {
     const cleanTitle = form.title.trim();
+    const cleanTitleId = form.title_id.trim();
     const cleanSlug = slugify(form.slug || form.title);
     const cleanExcerpt = form.excerpt.trim();
+    const cleanExcerptId = form.excerpt_id.trim();
+    const cleanContent = form.content.trim();
+    const cleanContentId = form.content_id.trim();
     const cleanCategory = form.category.trim();
     const cleanAuthor = form.author_name.trim() || "Tetamo Editorial";
-    const cleanContent = form.content.trim();
 
     if (!cleanTitle) {
-      alert("Title is required.");
+      alert("English title is required.");
+      return;
+    }
+
+    if (!cleanTitleId) {
+      alert("Indonesian title is required.");
       return;
     }
 
@@ -264,7 +310,12 @@ export default function AdminNewBlogPage() {
     }
 
     if (!stripHtml(cleanContent)) {
-      alert("Content is required.");
+      alert("English content is required.");
+      return;
+    }
+
+    if (!stripHtml(cleanContentId)) {
+      alert("Indonesian content is required.");
       return;
     }
 
@@ -288,9 +339,12 @@ export default function AdminNewBlogPage() {
         .from("blogs")
         .insert({
           title: cleanTitle,
+          title_id: cleanTitleId,
           slug: cleanSlug,
           excerpt: cleanExcerpt || null,
+          excerpt_id: cleanExcerptId || null,
           content: cleanContent,
+          content_id: cleanContentId,
           category: cleanCategory || null,
           author_name: cleanAuthor,
           cover_image_url: form.cover_image_url || null,
@@ -305,7 +359,11 @@ export default function AdminNewBlogPage() {
 
       if (error) throw error;
 
-      alert(status === "published" ? "Blog published successfully." : "Draft saved successfully.");
+      alert(
+        status === "published"
+          ? "Blog published successfully."
+          : "Draft saved successfully."
+      );
 
       if (data?.id) {
         router.push(`/admindashboard/blogs/${data.id}/edit`);
@@ -369,7 +427,7 @@ export default function AdminNewBlogPage() {
                 New Blog
               </h1>
               <p className="text-xs text-gray-500 sm:text-sm">
-                Create public or paid-agent blog content for Tetamo.
+                Create English and Indonesian blog content for Tetamo.
               </p>
             </div>
           </div>
@@ -410,45 +468,125 @@ export default function AdminNewBlogPage() {
       <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
         <div className="space-y-6">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => updateField("title", e.target.value)}
-              placeholder="Add Title"
-              className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
-            />
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              <LangPill
+                active={previewLang === "en"}
+                onClick={() => setPreviewLang("en")}
+              >
+                English Preview
+              </LangPill>
+              <LangPill
+                active={previewLang === "id"}
+                onClick={() => setPreviewLang("id")}
+              >
+                Indonesian Preview
+              </LangPill>
+            </div>
 
-            <div className="mt-4">{articleMeta}</div>
+            <div className="space-y-6">
+              <div className="rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4 sm:p-5">
+                <h2 className="text-lg font-bold text-[#1C1C1E]">English Version</h2>
 
-            <TextareaBase
-              rows={3}
-              value={form.excerpt}
-              onChange={(e) => updateField("excerpt", e.target.value)}
-              placeholder="Write short excerpt / summary..."
-              className="mt-6 resize-none border-gray-200 bg-[#FAFAF8]"
-            />
+                <div className="mt-4">
+                  <FieldLabel required>English Title</FieldLabel>
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => updateField("title", e.target.value)}
+                    placeholder="Add English title"
+                    className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
+                  />
+                </div>
 
-            <div className="mt-6">
-              <TiptapBlogEditor
-                content={form.content}
-                onChange={(html) => updateField("content", html)}
-                placeholder="Start writing your blog here..."
-                onUploadImage={() => bodyImageInputRef.current?.click()}
-              />
+                <div className="mt-4">{articleMeta}</div>
+
+                <div className="mt-6">
+                  <FieldLabel>English Excerpt</FieldLabel>
+                  <TextareaBase
+                    rows={3}
+                    value={form.excerpt}
+                    onChange={(e) => updateField("excerpt", e.target.value)}
+                    placeholder="Write English short summary..."
+                    className="resize-none border-gray-200 bg-white"
+                  />
+                </div>
+
+                <div className="mt-6">
+                  <FieldLabel required>English Content</FieldLabel>
+                  <TiptapBlogEditor
+                    content={form.content}
+                    onChange={(html) => updateField("content", html)}
+                    placeholder="Start writing your English blog here..."
+                    onUploadImage={() => bodyImageInputRef.current?.click()}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4 sm:p-5">
+                <h2 className="text-lg font-bold text-[#1C1C1E]">
+                  Indonesian Version
+                </h2>
+
+                <div className="mt-4">
+                  <FieldLabel required>Indonesian Title</FieldLabel>
+                  <InputBase
+                    type="text"
+                    value={form.title_id}
+                    onChange={(e) => updateField("title_id", e.target.value)}
+                    placeholder="Tambah judul Bahasa Indonesia"
+                  />
+                </div>
+
+                <div className="mt-6">
+                  <FieldLabel>Indonesian Excerpt</FieldLabel>
+                  <TextareaBase
+                    rows={3}
+                    value={form.excerpt_id}
+                    onChange={(e) => updateField("excerpt_id", e.target.value)}
+                    placeholder="Tulis ringkasan singkat Bahasa Indonesia..."
+                    className="resize-none border-gray-200 bg-white"
+                  />
+                </div>
+
+                <div className="mt-6">
+                  <FieldLabel required>Indonesian Content</FieldLabel>
+                  <TiptapBlogEditor
+                    content={form.content_id}
+                    onChange={(html) => updateField("content_id", html)}
+                    placeholder="Mulai tulis blog Bahasa Indonesia di sini..."
+                    onUploadImage={() => bodyImageInputRef.current?.click()}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
           {previewMode && (
             <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-200 px-5 py-4 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 sm:px-6">
                 <h2 className="text-lg font-bold text-[#1C1C1E]">Preview</h2>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <LangPill
+                    active={previewLang === "en"}
+                    onClick={() => setPreviewLang("en")}
+                  >
+                    EN
+                  </LangPill>
+                  <LangPill
+                    active={previewLang === "id"}
+                    onClick={() => setPreviewLang("id")}
+                  >
+                    ID
+                  </LangPill>
+                </div>
               </div>
 
               <div className="p-5 sm:p-6">
                 {form.cover_image_url ? (
                   <img
                     src={form.cover_image_url}
-                    alt={form.title || "Blog cover"}
+                    alt={previewTitle || "Blog cover"}
                     className="h-[260px] w-full rounded-3xl object-cover sm:h-[360px]"
                   />
                 ) : (
@@ -465,21 +603,23 @@ export default function AdminNewBlogPage() {
                   )}
 
                   <h2 className="text-3xl font-bold leading-tight text-[#1C1C1E]">
-                    {form.title || "Untitled blog"}
+                    {previewTitle || "Untitled blog"}
                   </h2>
 
                   <div className="mt-4">{articleMeta}</div>
 
-                  {form.excerpt && (
+                  {previewExcerpt && (
                     <p className="mt-6 text-base leading-8 text-gray-600">
-                      {form.excerpt}
+                      {previewExcerpt}
                     </p>
                   )}
 
                   <div
                     className="prose prose-sm mt-8 max-w-none text-gray-700 sm:prose-base prose-headings:text-[#1C1C1E] prose-p:leading-8 prose-li:leading-8 prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4"
                     dangerouslySetInnerHTML={{
-                      __html: form.content || "<p style='color:#9ca3af;'>No content yet.</p>",
+                      __html:
+                        previewContent ||
+                        "<p style='color:#9ca3af;'>No content yet.</p>",
                     }}
                   />
                 </div>
