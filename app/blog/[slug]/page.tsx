@@ -61,6 +61,14 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
+function cleanText(value: string) {
+  return value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function decodeHtmlEntities(raw: string) {
   let decoded = raw;
 
@@ -76,23 +84,20 @@ function decodeHtmlEntities(raw: string) {
   return decoded;
 }
 
-function cleanText(value: string) {
-  return value.replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function looksLikeHeading(line: string) {
-  const trimmed = line.trim();
+function isHeadingLike(text: string) {
+  const trimmed = text.trim();
   if (!trimmed) return false;
 
-  const withoutNumber = trimmed.replace(/^\d+[\).\s-]+/, "");
+  const withoutNumber = trimmed.replace(/^\d+[\).\s-]+/, "").trim();
   const wordCount = withoutNumber.split(/\s+/).filter(Boolean).length;
-  const endsLikeSentence = /[.!?:;]$/.test(trimmed);
 
-  if (/^\d+[\).\s-]+/.test(trimmed) && wordCount <= 14) return true;
+  if (/^\d+[\).\s-]+/.test(trimmed) && wordCount <= 12) return true;
 
-  if (!endsLikeSentence && wordCount >= 2 && wordCount <= 10 && trimmed.length <= 90) {
-    return true;
-  }
+  const hasSentenceEnding = /[.!?]$/.test(trimmed);
+  const shortEnough = trimmed.length <= 90;
+  const wordsOkay = wordCount >= 2 && wordCount <= 10;
+
+  if (!hasSentenceEnding && shortEnough && wordsOkay) return true;
 
   return false;
 }
@@ -103,14 +108,14 @@ function normalizePlainTextContent(raw: string, blogTitle?: string | null) {
     .split("\n")
     .map((line) => line.trim());
 
-  const result: string[] = [];
-  let paragraph: string[] = [];
+  const blocks: string[] = [];
+  let currentParagraph: string[] = [];
   let skippedDuplicateTitle = false;
 
   const flushParagraph = () => {
-    if (!paragraph.length) return;
-    result.push(`<p>${escapeHtml(paragraph.join(" "))}</p>`);
-    paragraph = [];
+    if (!currentParagraph.length) return;
+    blocks.push(`<p>${escapeHtml(currentParagraph.join(" "))}</p>`);
+    currentParagraph = [];
   };
 
   for (const line of lines) {
@@ -119,27 +124,31 @@ function normalizePlainTextContent(raw: string, blogTitle?: string | null) {
       continue;
     }
 
-    if (!skippedDuplicateTitle && blogTitle && cleanText(line) === cleanText(blogTitle)) {
+    if (
+      !skippedDuplicateTitle &&
+      blogTitle &&
+      cleanText(line) === cleanText(blogTitle)
+    ) {
       skippedDuplicateTitle = true;
       continue;
     }
 
-    if (looksLikeHeading(line)) {
+    if (isHeadingLike(line)) {
       flushParagraph();
       const headingText = line.replace(/^\d+[\).\s-]+/, "").trim();
-      result.push(`<h2>${escapeHtml(headingText)}</h2>`);
+      blocks.push(`<h2>${escapeHtml(headingText)}</h2>`);
       continue;
     }
 
-    paragraph.push(line);
+    currentParagraph.push(line);
   }
 
   flushParagraph();
 
-  return result.join("");
+  return blocks.join("");
 }
 
-function sanitizeHtmlContent(raw: string) {
+function sanitizeAndUpgradeHtml(raw: string, blogTitle?: string | null) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(raw, "text/html");
 
@@ -163,6 +172,8 @@ function sanitizeHtmlContent(raw: string) {
     "U",
     "A",
     "IMG",
+    "DIV",
+    "SPAN",
   ]);
 
   const nodes = Array.from(doc.body.querySelectorAll("*"));
@@ -183,7 +194,6 @@ function sanitizeHtmlContent(raw: string) {
 
     for (const attr of attrs) {
       const name = attr.name.toLowerCase();
-
       const keepHref = tag === "A" && name === "href";
       const keepImg = tag === "IMG" && (name === "src" || name === "alt");
 
@@ -197,6 +207,7 @@ function sanitizeHtmlContent(raw: string) {
       node.setAttribute("href", href);
       node.setAttribute("target", "_blank");
       node.setAttribute("rel", "noreferrer noopener");
+      node.setAttribute("class", "font-semibold underline underline-offset-4");
     }
 
     if (tag === "IMG") {
@@ -207,14 +218,51 @@ function sanitizeHtmlContent(raw: string) {
     }
   }
 
-  doc.body.querySelectorAll("p").forEach((p) => {
-    const text = (p.textContent || "").trim();
-    const hasImage = p.querySelector("img");
+  doc.body.querySelectorAll("div").forEach((div) => {
+    const replacement = doc.createElement("p");
+    replacement.innerHTML = div.innerHTML;
+    div.replaceWith(replacement);
+  });
+
+  doc.body.querySelectorAll("span").forEach((span) => {
+    const parent = span.parentNode;
+    while (span.firstChild) {
+      parent?.insertBefore(span.firstChild, span);
+    }
+    parent?.removeChild(span);
+  });
+
+  const paragraphs = Array.from(doc.body.querySelectorAll("p"));
+  let removedDuplicateTitle = false;
+
+  for (const p of paragraphs) {
+    const text = (p.textContent || "").replace(/\u00a0/g, " ").trim();
+    const hasImage = !!p.querySelector("img");
+    const hasList = !!p.querySelector("ul, ol, li");
+    const hasLinkOnly = !!p.querySelector("a");
 
     if (!text && !hasImage) {
       p.remove();
+      continue;
     }
-  });
+
+    if (
+      !removedDuplicateTitle &&
+      blogTitle &&
+      cleanText(text) === cleanText(blogTitle)
+    ) {
+      removedDuplicateTitle = true;
+      p.remove();
+      continue;
+    }
+
+    if (!hasImage && !hasList && !hasLinkOnly && isHeadingLike(text)) {
+      const h2 = doc.createElement("h2");
+      h2.textContent = text.replace(/^\d+[\).\s-]+/, "").trim();
+      p.replaceWith(h2);
+      continue;
+    }
+  }
 
   return doc.body.innerHTML.trim();
 }
@@ -229,7 +277,7 @@ function normalizeBlogContent(raw?: string | null, blogTitle?: string | null) {
     return normalizePlainTextContent(decoded, blogTitle);
   }
 
-  return sanitizeHtmlContent(decoded);
+  return sanitizeAndUpgradeHtml(decoded, blogTitle);
 }
 
 /* =========================
@@ -296,6 +344,7 @@ export default function PublicBlogDetailPage() {
       }
 
       const typedBlog = data as BlogDetail;
+
       setBlog(typedBlog);
       setRenderedContent(normalizeBlogContent(typedBlog.content, typedBlog.title));
       setLoading(false);
