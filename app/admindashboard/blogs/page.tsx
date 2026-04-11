@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Search, PenSquare, Eye, EyeOff } from "lucide-react";
+import {
+  CalendarDays,
+  Eye,
+  EyeOff,
+  PenSquare,
+  Search,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 /* =========================
@@ -16,12 +22,15 @@ type AdminBlog = {
   id: string;
   title: string;
   slug: string;
+  excerpt: string | null;
   category: string | null;
   author_name: string | null;
+  cover_image_url: string | null;
   view_count: number | null;
   status: BlogStatus;
   access_type: BlogAccessType;
   published_at: string | null;
+  updated_at: string | null;
   created_at: string | null;
 };
 
@@ -33,13 +42,13 @@ function statusUI(status: BlogStatus) {
   if (status === "published") {
     return {
       label: "Published",
-      badge: "bg-green-50 text-green-700 border-green-200",
+      badge: "border-green-200 bg-green-50 text-green-700",
     };
   }
 
   return {
     label: "Draft",
-    badge: "bg-gray-100 text-gray-700 border-gray-200",
+    badge: "border-gray-200 bg-gray-100 text-gray-700",
   };
 }
 
@@ -47,17 +56,17 @@ function accessUI(accessType: BlogAccessType) {
   if (accessType === "paid_agent") {
     return {
       label: "Paid Agent Only",
-      badge: "bg-amber-50 text-amber-700 border-amber-200",
+      badge: "border-amber-200 bg-amber-50 text-amber-700",
     };
   }
 
   return {
     label: "Public",
-    badge: "bg-blue-50 text-blue-700 border-blue-200",
+    badge: "border-blue-200 bg-blue-50 text-blue-700",
   };
 }
 
-function formatBlogDate(value?: string | null) {
+function formatDate(value?: string | null) {
   if (!value) return "-";
 
   const date = new Date(value);
@@ -68,6 +77,23 @@ function formatBlogDate(value?: string | null) {
     month: "short",
     year: "numeric",
   }).format(date);
+}
+
+function getInitials(title?: string | null) {
+  if (!title) return "TB";
+
+  return title
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function truncateText(value?: string | null, maxLength = 180) {
+  if (!value) return "";
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trim()}...`;
 }
 
 /* =========================
@@ -81,7 +107,7 @@ export default function AdminBlogsPage() {
   const [page, setPage] = useState(1);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const ITEMS_PER_PAGE = 12;
+  const ITEMS_PER_PAGE = 8;
 
   useEffect(() => {
     let ignore = false;
@@ -95,20 +121,25 @@ export default function AdminBlogsPage() {
           id,
           title,
           slug,
+          excerpt,
           category,
           author_name,
+          cover_image_url,
           view_count,
           status,
           access_type,
           published_at,
+          updated_at,
           created_at
         `)
         .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Failed to load blogs:", error);
-        if (!ignore) setBlogs([]);
-        if (!ignore) setLoading(false);
+        if (!ignore) {
+          setBlogs([]);
+          setLoading(false);
+        }
         return;
       }
 
@@ -127,7 +158,6 @@ export default function AdminBlogsPage() {
 
   const filteredBlogs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-
     if (!q) return blogs;
 
     const words = q.split(/\s+/).filter(Boolean);
@@ -136,6 +166,7 @@ export default function AdminBlogsPage() {
       const searchable = `
         ${blog.title}
         ${blog.slug}
+        ${blog.excerpt ?? ""}
         ${blog.category ?? ""}
         ${blog.author_name ?? ""}
         ${blog.status}
@@ -146,7 +177,10 @@ export default function AdminBlogsPage() {
     });
   }, [searchQuery, blogs]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredBlogs.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredBlogs.length / ITEMS_PER_PAGE)
+  );
   const safePage = Math.min(page, totalPages);
 
   const paginatedBlogs = filteredBlogs.slice(
@@ -211,7 +245,7 @@ export default function AdminBlogsPage() {
     <div>
       {/* Header */}
 
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#1C1C1E]">Blog Manager</h1>
           <p className="text-sm text-gray-500">
@@ -221,7 +255,7 @@ export default function AdminBlogsPage() {
 
         <Link
           href="/admindashboard/blogs/new"
-          className="rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+          className="inline-flex items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90"
         >
           + New Blog
         </Link>
@@ -247,17 +281,19 @@ export default function AdminBlogsPage() {
         />
       </div>
 
-      {/* Blog Card */}
+      {/* Content */}
 
-      <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="mt-8">
         {loading ? (
-          <div className="p-6 text-sm text-gray-500">Loading blogs...</div>
+          <div className="rounded-3xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-sm">
+            Loading blogs...
+          </div>
         ) : filteredBlogs.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">
+          <div className="rounded-3xl border border-gray-200 bg-white p-8 text-sm text-gray-500 shadow-sm">
             No blogs found yet.
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="space-y-5">
             {paginatedBlogs.map((blog) => {
               const blogStatusUI = statusUI(blog.status);
               const blogAccessUI = accessUI(blog.access_type);
@@ -265,68 +301,126 @@ export default function AdminBlogsPage() {
               return (
                 <div
                   key={blog.id}
-                  className="flex items-center justify-between gap-6 p-6"
+                  className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                 >
-                  {/* LEFT */}
+                  <div className="flex flex-col lg:flex-row">
+                    {/* Image */}
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs ${blogStatusUI.badge}`}
-                      >
-                        {blogStatusUI.label}
-                      </span>
-
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs ${blogAccessUI.badge}`}
-                      >
-                        {blogAccessUI.label}
-                      </span>
+                    <div className="w-full shrink-0 lg:w-[240px] xl:w-[280px]">
+                      {blog.cover_image_url ? (
+                        <img
+                          src={blog.cover_image_url}
+                          alt={blog.title}
+                          className="h-[220px] w-full object-cover lg:h-full"
+                        />
+                      ) : (
+                        <div className="flex h-[220px] w-full items-center justify-center bg-[#1C1C1E] text-3xl font-bold text-white lg:h-full">
+                          {getInitials(blog.title)}
+                        </div>
+                      )}
                     </div>
 
-                    <p className="mt-2 font-medium text-[#1C1C1E]">
-                      {blog.title}
-                    </p>
+                    {/* Body */}
 
-                    <p className="mt-1 text-sm text-gray-500">
-                      {blog.category || "Uncategorized"} •{" "}
-                      {blog.author_name || "Tetamo Editorial"}
-                    </p>
+                    <div className="flex min-w-0 flex-1 flex-col justify-between p-5 sm:p-6">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${blogStatusUI.badge}`}
+                          >
+                            {blogStatusUI.label}
+                          </span>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      Slug: {blog.slug}
-                    </p>
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${blogAccessUI.badge}`}
+                          >
+                            {blogAccessUI.label}
+                          </span>
+                        </div>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      {blog.status === "published"
-                        ? `Published: ${formatBlogDate(blog.published_at)}`
-                        : `Created: ${formatBlogDate(blog.created_at)}`}{" "}
-                      • {blog.view_count ?? 0} views
-                    </p>
-                  </div>
+                        <h2 className="mt-3 text-xl font-bold leading-8 text-[#1C1C1E]">
+                          {blog.title}
+                        </h2>
 
-                  {/* ACTIONS */}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
+                          <span>{blog.category || "Uncategorized"}</span>
+                          <span>•</span>
+                          <span>{blog.author_name || "Tetamo Editorial"}</span>
+                        </div>
 
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/admindashboard/blogs/${blog.id}/edit`}
-                      className="rounded-lg border px-3 py-2 hover:bg-gray-50"
-                    >
-                      <PenSquare size={16} />
-                    </Link>
+                        <p className="mt-4 text-sm leading-7 text-gray-600">
+                          {truncateText(
+                            blog.excerpt || "No short summary added yet.",
+                            210
+                          )}
+                        </p>
 
-                    <button
-                      type="button"
-                      onClick={() => toggleStatus(blog.id)}
-                      disabled={togglingId === blog.id}
-                      className="rounded-lg border px-3 py-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {blog.status === "published" ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                    </button>
+                        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
+                          <span>
+                            <span className="font-medium text-gray-700">
+                              Slug:
+                            </span>{" "}
+                            {blog.slug}
+                          </span>
+
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarDays size={14} />
+                            {blog.status === "published"
+                              ? `Published: ${formatDate(blog.published_at)}`
+                              : `Updated: ${formatDate(
+                                  blog.updated_at || blog.created_at
+                                )}`}
+                          </span>
+
+                          <span>
+                            <span className="font-medium text-gray-700">
+                              Views:
+                            </span>{" "}
+                            {blog.view_count ?? 0}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+
+                      <div className="mt-6 flex flex-wrap items-center gap-3">
+                        <Link
+                          href={`/admindashboard/blogs/${blog.id}/edit`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                        >
+                          <PenSquare size={16} />
+                          Edit
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(blog.id)}
+                          disabled={togglingId === blog.id}
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {blog.status === "published" ? (
+                            <>
+                              <EyeOff size={16} />
+                              Unpublish
+                            </>
+                          ) : (
+                            <>
+                              <Eye size={16} />
+                              Publish
+                            </>
+                          )}
+                        </button>
+
+                        <Link
+                          href={`/blog/${blog.slug}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                        >
+                          <Eye size={16} />
+                          View Public
+                        </Link>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -337,7 +431,7 @@ export default function AdminBlogsPage() {
 
       {/* Pagination */}
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-gray-900">
           Menampilkan {startItem}–{endItem} dari {filteredBlogs.length} artikel
         </p>
@@ -347,7 +441,7 @@ export default function AdminBlogsPage() {
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={safePage === 1}
-            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Sebelumnya
           </button>
@@ -357,10 +451,10 @@ export default function AdminBlogsPage() {
               key={p}
               type="button"
               onClick={() => setPage(p)}
-              className={`rounded-lg border px-3 py-2 text-sm ${
+              className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
                 safePage === p
                   ? "border-black bg-black text-white"
-                  : "border-gray-400"
+                  : "border-gray-400 bg-white text-[#1C1C1E]"
               }`}
             >
               {p}
@@ -371,7 +465,7 @@ export default function AdminBlogsPage() {
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={safePage === totalPages}
-            className="rounded-lg border bg-[#1C1C1E] px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             Berikutnya
           </button>
