@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  CalendarDays,
   Eye,
   Save,
   Send,
@@ -38,6 +39,7 @@ type BlogForm = {
   access_type: BlogAccessType;
   cover_image_url: string;
   status: BlogStatus;
+  publish_at: string;
 };
 
 function slugify(value: string) {
@@ -66,6 +68,30 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function toDatetimeLocalValue(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function toIsoFromDatetimeLocal(value: string) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString();
 }
 
 function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -161,6 +187,7 @@ export default function AdminEditBlogPage() {
     access_type: "public",
     cover_image_url: "",
     status: "draft",
+    publish_at: "",
   });
 
   const [categories, setCategories] = useState<BlogCategory[]>([]);
@@ -259,6 +286,7 @@ export default function AdminEditBlogPage() {
         access_type: (data.access_type as BlogAccessType) ?? "public",
         cover_image_url: data.cover_image_url ?? "",
         status: (data.status as BlogStatus) ?? "draft",
+        publish_at: toDatetimeLocalValue(data.published_at),
       });
 
       setCreatedAt(data.created_at ?? null);
@@ -282,6 +310,21 @@ export default function AdminEditBlogPage() {
   const previewTitle = previewLang === "id" ? form.title_id : form.title;
   const previewExcerpt = previewLang === "id" ? form.excerpt_id : form.excerpt;
   const previewContent = previewLang === "id" ? form.content_id : form.content;
+
+  const publishAtIso = useMemo(() => {
+    return toIsoFromDatetimeLocal(form.publish_at);
+  }, [form.publish_at]);
+
+  const isScheduled = useMemo(() => {
+    if (!publishAtIso) return false;
+    return new Date(publishAtIso).getTime() > Date.now();
+  }, [publishAtIso]);
+
+  const effectiveStatusLabel = useMemo(() => {
+    if (form.status !== "published") return "Draft";
+    if (publishedAt && new Date(publishedAt).getTime() > Date.now()) return "Scheduled";
+    return "Published";
+  }, [form.status, publishedAt]);
 
   function updateField<K extends keyof BlogForm>(key: K, value: BlogForm[K]) {
     setForm((prev) => ({
@@ -308,9 +351,7 @@ export default function AdminEditBlogPage() {
     return data.publicUrl;
   }
 
-  async function handleCoverUpload(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -331,9 +372,7 @@ export default function AdminEditBlogPage() {
     }
   }
 
-  async function handleBodyImageUpload(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleBodyImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -391,6 +430,11 @@ export default function AdminEditBlogPage() {
       return;
     }
 
+    if (nextStatus === "published" && form.publish_at && !publishAtIso) {
+      alert("Publish date is invalid.");
+      return;
+    }
+
     if (nextStatus === "draft") setSavingDraft(true);
     if (nextStatus === "published" && form.status === "draft") setPublishing(true);
     if (nextStatus === "draft" && form.status === "published") setUnpublishing(true);
@@ -410,7 +454,7 @@ export default function AdminEditBlogPage() {
 
       const nextPublishedAt =
         nextStatus === "published"
-          ? publishedAt || new Date().toISOString()
+          ? publishAtIso || new Date().toISOString()
           : null;
 
       const { data, error } = await supabase
@@ -443,12 +487,20 @@ export default function AdminEditBlogPage() {
         status: nextStatus,
         content: cleanContent,
         content_id: cleanContentId,
+        publish_at: toDatetimeLocalValue(nextPublishedAt),
       }));
       setUpdatedAt(data?.updated_at ?? new Date().toISOString());
       setPublishedAt(data?.published_at ?? nextPublishedAt);
 
       if (nextStatus === "published") {
-        alert("Blog published successfully.");
+        const resolved = data?.published_at ?? nextPublishedAt;
+        const future = resolved ? new Date(resolved).getTime() > Date.now() : false;
+
+        alert(
+          future
+            ? `Blog scheduled for ${formatDateTime(resolved)}.`
+            : "Blog published successfully."
+        );
       } else if (form.status === "published") {
         alert("Blog moved back to draft.");
       } else {
@@ -607,13 +659,19 @@ export default function AdminEditBlogPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send size={16} />
-              {form.status === "published"
-                ? publishing
-                  ? "Updating..."
-                  : "Update Published"
-                : publishing
-                  ? "Publishing..."
-                  : "Publish"}
+              {publishing
+                ? isScheduled
+                  ? "Scheduling..."
+                  : form.status === "published"
+                    ? "Updating..."
+                    : "Publishing..."
+                : isScheduled
+                  ? form.status === "published"
+                    ? "Update Schedule"
+                    : "Schedule"
+                  : form.status === "published"
+                    ? "Update Published"
+                    : "Publish"}
             </button>
 
             <button
@@ -857,32 +915,66 @@ export default function AdminEditBlogPage() {
                 </SelectBase>
               </div>
 
+              <div>
+                <FieldLabel>Publish Date</FieldLabel>
+                <InputBase
+                  type="datetime-local"
+                  value={form.publish_at}
+                  onChange={(e) => updateField("publish_at", e.target.value)}
+                  className="appearance-none"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Leave blank to publish immediately. Set a future date to schedule this blog.
+                </p>
+              </div>
+
               <div className="rounded-2xl border border-gray-200 bg-[#FAFAF8] p-4 text-sm text-gray-600">
-                <div className="flex items-center justify-between gap-3">
-                  <span>Status</span>
-                  <span className="font-semibold text-[#1C1C1E]">
-                    {form.status === "published" ? "Published" : "Draft"}
-                  </span>
-                </div>
+                <div className="flex items-start gap-3">
+                  <CalendarDays size={18} className="mt-0.5 shrink-0 text-[#1C1C1E]" />
+                  <div className="w-full">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Status</span>
+                      <span className="font-semibold text-[#1C1C1E]">
+                        {effectiveStatusLabel}
+                      </span>
+                    </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span>Created</span>
-                  <span className="text-right">{formatDateTime(createdAt)}</span>
-                </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span>Created</span>
+                      <span className="text-right">{formatDateTime(createdAt)}</span>
+                    </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span>Updated</span>
-                  <span className="text-right">{formatDateTime(updatedAt)}</span>
-                </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span>Updated</span>
+                      <span className="text-right">{formatDateTime(updatedAt)}</span>
+                    </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span>Published</span>
-                  <span className="text-right">{formatDateTime(publishedAt)}</span>
-                </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span>Publish At</span>
+                      <span className="text-right">
+                        {publishAtIso ? formatDateTime(publishAtIso) : "-"}
+                      </span>
+                    </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span>Views</span>
-                  <span className="font-semibold text-[#1C1C1E]">{viewCount}</span>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span>Views</span>
+                      <span className="font-semibold text-[#1C1C1E]">{viewCount}</span>
+                    </div>
+
+                    <p className="mt-4 leading-6">
+                      {form.status !== "published"
+                        ? "This blog is still a draft and will not appear publicly."
+                        : publishAtIso
+                          ? isScheduled
+                            ? `This blog is scheduled to go live on ${formatDateTime(
+                                publishAtIso
+                              )}.`
+                            : `This blog is live with publish time ${formatDateTime(
+                                publishAtIso
+                              )}.`
+                          : "This blog is live immediately."}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

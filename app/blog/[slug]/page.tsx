@@ -106,6 +106,15 @@ function isHeadingLike(value: string) {
   return true;
 }
 
+function isLiveNow(publishedAt?: string | null) {
+  if (!publishedAt) return true;
+
+  const publishTime = new Date(publishedAt).getTime();
+  if (Number.isNaN(publishTime)) return false;
+
+  return publishTime <= Date.now();
+}
+
 function contentToLines(raw?: string | null, blogTitle?: string | null) {
   if (!raw || !raw.trim()) return [];
 
@@ -281,7 +290,7 @@ export default function PublicBlogDetailPage() {
 
       if (ignore) return;
 
-      if (error || !data) {
+      if (error || !data || !isLiveNow(data.published_at)) {
         console.error("Failed to load blog:", error);
         setNotFound(true);
         setLoading(false);
