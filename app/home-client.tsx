@@ -17,7 +17,7 @@ import { supabase } from "@/lib/supabase";
    MANUAL HOMEPAGE PICKS
 ========================= */
 
-const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM0-SM33", "TTM013"];
+const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM0 -RTLO", "TTM013"];
 
 /* =========================
    TYPES
