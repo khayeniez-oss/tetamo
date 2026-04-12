@@ -53,6 +53,15 @@ function getInitials(title?: string | null) {
     .join("");
 }
 
+function isLiveNow(publishedAt?: string | null) {
+  if (!publishedAt) return true;
+
+  const publishTime = new Date(publishedAt).getTime();
+  if (Number.isNaN(publishTime)) return false;
+
+  return publishTime <= Date.now();
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -93,6 +102,7 @@ export default function PublicBlogPage() {
 
       if (error) {
         console.error("Failed to load public blogs:", error);
+
         if (!ignore) {
           setBlogs([]);
           setLoading(false);
@@ -100,8 +110,12 @@ export default function PublicBlogPage() {
         return;
       }
 
+      const liveBlogs = ((data ?? []) as PublicBlog[]).filter((blog) =>
+        isLiveNow(blog.published_at)
+      );
+
       if (!ignore) {
-        setBlogs((data ?? []) as PublicBlog[]);
+        setBlogs(liveBlogs);
         setLoading(false);
       }
     }
