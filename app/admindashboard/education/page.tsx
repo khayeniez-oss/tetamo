@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
-  CalendarDays,
   Eye,
   Lock,
   Mic,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
+import { TetamoSelect } from "@/components/ui/TetamoSelect";
 
 type EducationAccessType = "public" | "paid_agent";
 type EducationStatus = "draft" | "published";
@@ -39,9 +39,7 @@ type EducationVideo = {
   sort_order: number | null;
   created_at: string | null;
   updated_at: string | null;
-  education_categories?: {
-    name: string;
-  } | null;
+  education_categories: { name: string } | null;
 };
 
 type StatusFilter = "all" | "draft" | "published" | "scheduled";
@@ -99,9 +97,13 @@ function isFutureDate(value?: string | null) {
   return time > Date.now();
 }
 
-function getEffectiveStatus(video: EducationVideo): "draft" | "published" | "scheduled" {
+function getEffectiveStatus(
+  video: Pick<EducationVideo, "status" | "published_at">
+): "draft" | "published" | "scheduled" {
   if (video.status === "draft") return "draft";
-  if (video.status === "published" && isFutureDate(video.published_at)) return "scheduled";
+  if (video.status === "published" && isFutureDate(video.published_at)) {
+    return "scheduled";
+  }
   return "published";
 }
 
@@ -120,12 +122,39 @@ function getTypeIcon(type: EducationContentType) {
   }
 }
 
+function normalizeEducationVideo(row: any): EducationVideo {
+  const category = Array.isArray(row?.education_categories)
+    ? row.education_categories[0] ?? null
+    : row?.education_categories ?? null;
+
+  return {
+    id: row?.id ?? "",
+    title: row?.title ?? "",
+    title_id: row?.title_id ?? "",
+    slug: row?.slug ?? "",
+    description: row?.description ?? "",
+    description_id: row?.description_id ?? "",
+    content_type: (row?.content_type ?? "tutorial") as EducationContentType,
+    speaker_name: row?.speaker_name ?? "",
+    thumbnail_url: row?.thumbnail_url ?? "",
+    duration_seconds: Number(row?.duration_seconds ?? 0),
+    access_type: (row?.access_type ?? "public") as EducationAccessType,
+    status: (row?.status ?? "draft") as EducationStatus,
+    published_at: row?.published_at ?? null,
+    is_featured: Boolean(row?.is_featured),
+    sort_order: Number(row?.sort_order ?? 0),
+    created_at: row?.created_at ?? null,
+    updated_at: row?.updated_at ?? null,
+    education_categories: category?.name ? { name: category.name } : null,
+  };
+}
+
 export default function AdminEducationPage() {
   const { lang } = useLanguage();
 
   const ui = useMemo(
     () => ({
-      title: lang === "id" ? "Education Manager" : "Education Manager",
+      title: "Education Manager",
       subtitle:
         lang === "id"
           ? "Kelola video tutorial, training, podcast, dan webinar."
@@ -168,11 +197,41 @@ export default function AdminEducationPage() {
       updatedAt: lang === "id" ? "Updated" : "Updated",
       featured: lang === "id" ? "Featured" : "Featured",
       notSet: lang === "id" ? "Belum diatur" : "Not set",
-      articlesFound: (count: number) =>
+      videosFound: (count: number) =>
         lang === "id" ? `${count} video ditemukan` : `${count} videos found`,
       loading: lang === "id" ? "Memuat video..." : "Loading videos...",
     }),
     [lang]
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "all", label: ui.allStatus },
+      { value: "draft", label: ui.draft },
+      { value: "published", label: ui.published },
+      { value: "scheduled", label: ui.scheduled },
+    ],
+    [ui]
+  );
+
+  const accessOptions = useMemo(
+    () => [
+      { value: "all", label: ui.allAccess },
+      { value: "public", label: ui.public },
+      { value: "paid_agent", label: ui.paidAgent },
+    ],
+    [ui]
+  );
+
+  const typeOptions = useMemo(
+    () => [
+      { value: "all", label: ui.allTypes },
+      { value: "tutorial", label: ui.tutorial },
+      { value: "training", label: ui.training },
+      { value: "podcast", label: ui.podcast },
+      { value: "webinar", label: ui.webinar },
+    ],
+    [ui]
   );
 
   const [videos, setVideos] = useState<EducationVideo[]>([]);
@@ -223,8 +282,12 @@ export default function AdminEducationPage() {
         return;
       }
 
+      const normalizedVideos = Array.isArray(data)
+        ? data.map((row) => normalizeEducationVideo(row))
+        : [];
+
       if (!ignore) {
-        setVideos((data ?? []) as EducationVideo[]);
+        setVideos(normalizedVideos);
         setLoading(false);
       }
     }
@@ -284,9 +347,15 @@ export default function AdminEducationPage() {
   }, [videos, searchQuery, statusFilter, accessFilter, typeFilter, lang]);
 
   const stats = useMemo(() => {
-    const live = videos.filter((video) => getEffectiveStatus(video) === "published").length;
-    const scheduled = videos.filter((video) => getEffectiveStatus(video) === "scheduled").length;
-    const drafts = videos.filter((video) => getEffectiveStatus(video) === "draft").length;
+    const live = videos.filter(
+      (video) => getEffectiveStatus(video) === "published"
+    ).length;
+    const scheduled = videos.filter(
+      (video) => getEffectiveStatus(video) === "scheduled"
+    ).length;
+    const drafts = videos.filter(
+      (video) => getEffectiveStatus(video) === "draft"
+    ).length;
 
     return {
       total: videos.length,
@@ -338,22 +407,30 @@ export default function AdminEducationPage() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">{ui.totalVideos}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">{stats.total}</p>
+            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+              {stats.total}
+            </p>
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">{ui.liveNow}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">{stats.live}</p>
+            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+              {stats.live}
+            </p>
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">{ui.scheduledCount}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">{stats.scheduled}</p>
+            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+              {stats.scheduled}
+            </p>
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">{ui.drafts}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">{stats.drafts}</p>
+            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+              {stats.drafts}
+            </p>
           </div>
         </div>
 
@@ -373,42 +450,34 @@ export default function AdminEducationPage() {
               />
             </div>
 
-            <select
+            <TetamoSelect
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="all">{ui.allStatus}</option>
-              <option value="draft">{ui.draft}</option>
-              <option value="published">{ui.published}</option>
-              <option value="scheduled">{ui.scheduled}</option>
-            </select>
+              onChange={(value: string) =>
+                setStatusFilter(value as StatusFilter)
+              }
+              placeholder={ui.allStatus}
+              options={statusOptions}
+            />
 
-            <select
+            <TetamoSelect
               value={accessFilter}
-              onChange={(e) => setAccessFilter(e.target.value as AccessFilter)}
-              className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="all">{ui.allAccess}</option>
-              <option value="public">{ui.public}</option>
-              <option value="paid_agent">{ui.paidAgent}</option>
-            </select>
+              onChange={(value: string) =>
+                setAccessFilter(value as AccessFilter)
+              }
+              placeholder={ui.allAccess}
+              options={accessOptions}
+            />
 
-            <select
+            <TetamoSelect
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-              className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
-            >
-              <option value="all">{ui.allTypes}</option>
-              <option value="tutorial">{ui.tutorial}</option>
-              <option value="training">{ui.training}</option>
-              <option value="podcast">{ui.podcast}</option>
-              <option value="webinar">{ui.webinar}</option>
-            </select>
+              onChange={(value: string) => setTypeFilter(value as TypeFilter)}
+              placeholder={ui.allTypes}
+              options={typeOptions}
+            />
           </div>
 
           <div className="mt-4 text-sm text-gray-500">
-            {ui.articlesFound(filteredVideos.length)}
+            {ui.videosFound(filteredVideos.length)}
           </div>
         </div>
 
@@ -433,8 +502,12 @@ export default function AdminEducationPage() {
 
               const activeDescription =
                 lang === "id"
-                  ? video.description_id?.trim() || video.description?.trim() || ""
-                  : video.description?.trim() || video.description_id?.trim() || "";
+                  ? video.description_id?.trim() ||
+                    video.description?.trim() ||
+                    ""
+                  : video.description?.trim() ||
+                    video.description_id?.trim() ||
+                    "";
 
               return (
                 <article
@@ -490,7 +563,9 @@ export default function AdminEducationPage() {
                               : "bg-blue-100 text-blue-700"
                           }`}
                         >
-                          {video.access_type === "paid_agent" ? <Lock size={12} /> : null}
+                          {video.access_type === "paid_agent" ? (
+                            <Lock size={12} />
+                          ) : null}
                           {getAccessLabel(video.access_type)}
                         </span>
                       </div>
@@ -505,27 +580,37 @@ export default function AdminEducationPage() {
 
                       <div className="mt-5 grid grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-2">
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">{ui.category}:</span>{" "}
+                          <span className="font-semibold text-[#1C1C1E]">
+                            {ui.category}:
+                          </span>{" "}
                           {video.education_categories?.name || ui.notSet}
                         </div>
 
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">{ui.speaker}:</span>{" "}
+                          <span className="font-semibold text-[#1C1C1E]">
+                            {ui.speaker}:
+                          </span>{" "}
                           {video.speaker_name || ui.notSet}
                         </div>
 
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">{ui.duration}:</span>{" "}
+                          <span className="font-semibold text-[#1C1C1E]">
+                            {ui.duration}:
+                          </span>{" "}
                           {formatDuration(video.duration_seconds)}
                         </div>
 
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">{ui.publishAt}:</span>{" "}
+                          <span className="font-semibold text-[#1C1C1E]">
+                            {ui.publishAt}:
+                          </span>{" "}
                           {formatDateTime(video.published_at)}
                         </div>
 
                         <div className="sm:col-span-2">
-                          <span className="font-semibold text-[#1C1C1E]">{ui.updatedAt}:</span>{" "}
+                          <span className="font-semibold text-[#1C1C1E]">
+                            {ui.updatedAt}:
+                          </span>{" "}
                           {formatDateTime(video.updated_at)}
                         </div>
                       </div>
