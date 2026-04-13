@@ -257,6 +257,7 @@ export default function AdminDashboardLayout({
         title: "Content",
         items: [
           { href: "/admindashboard/blogs", label: "Blogs" },
+          { href: "/admindashboard/education", label: "Education" },
           {
             href: "/admindashboard/notifications",
             label: "Notifications",
