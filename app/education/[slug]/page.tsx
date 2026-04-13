@@ -43,7 +43,7 @@ type EducationVideo = {
 
 type ViewerState = {
   isLoggedIn: boolean;
-  hasPaidAgentAccess: boolean;
+  hasEducationAccess: boolean;
 };
 
 function formatDate(value?: string | null) {
@@ -176,12 +176,49 @@ function normalizeEducationVideo(row: any): EducationVideo {
   };
 }
 
-/**
- * Replace this with your real paid-agent membership query.
- */
-async function resolvePaidAgentAccess(userId: string): Promise<boolean> {
-  void userId;
-  return false;
+async function resolveEducationAccess(userId: string): Promise<boolean> {
+  const nowIso = new Date().toISOString();
+
+  try {
+    const [membershipRes, educationPassRes] = await Promise.all([
+      supabase
+        .from("agent_memberships")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gt("expires_at", nowIso)
+        .limit(1),
+      supabase
+        .from("education_access_passes")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gt("expires_at", nowIso)
+        .limit(1),
+    ]);
+
+    if (membershipRes.error) {
+      console.error("Failed to check agent membership access:", membershipRes.error);
+    }
+
+    if (educationPassRes.error) {
+      console.error(
+        "Failed to check education access pass:",
+        educationPassRes.error
+      );
+    }
+
+    const hasMembership =
+      Array.isArray(membershipRes.data) && membershipRes.data.length > 0;
+
+    const hasEducationPass =
+      Array.isArray(educationPassRes.data) && educationPassRes.data.length > 0;
+
+    return hasMembership || hasEducationPass;
+  } catch (error) {
+    console.error("Failed to resolve education access:", error);
+    return false;
+  }
 }
 
 export default function PublicEducationDetailPage() {
@@ -205,7 +242,7 @@ export default function PublicEducationDetailPage() {
           : "This video is unavailable or not yet published.",
       loading: lang === "id" ? "Memuat video..." : "Loading video...",
       free: lang === "id" ? "Free" : "Free",
-      paidAgent: lang === "id" ? "Paid Agent" : "Paid Agent",
+      premiumAccess: lang === "id" ? "Premium Access" : "Premium Access",
       featured: lang === "id" ? "Featured" : "Featured",
       tutorial: lang === "id" ? "Tutorial" : "Tutorial",
       training: lang === "id" ? "Training" : "Training",
@@ -221,16 +258,16 @@ export default function PublicEducationDetailPage() {
       watchVideo: lang === "id" ? "Tonton Video" : "Watch Video",
       lockedTitle:
         lang === "id"
-          ? "Video ini khusus untuk Paid Agent Member"
-          : "This video is for Paid Agent Members only",
+          ? "Video ini memerlukan Premium Access"
+          : "This video requires Premium Access",
       lockedDescLoggedOut:
         lang === "id"
-          ? "Silakan login terlebih dahulu lalu aktifkan membership agent untuk membuka video training ini."
-          : "Please log in first, then activate agent membership to unlock this training video.",
-      lockedDescNoMembership:
+          ? "Silakan login terlebih dahulu. Video premium bisa dibuka oleh agent member aktif atau pemilik Education Pass aktif."
+          : "Please log in first. Premium videos can be opened by active agent members or active Education Pass holders.",
+      lockedDescNoAccess:
         lang === "id"
-          ? "Akun Anda belum memiliki membership agent aktif. Upgrade membership untuk menonton video ini."
-          : "Your account does not have an active agent membership yet. Upgrade your membership to watch this video.",
+          ? "Akun Anda belum memiliki akses premium aktif. Akses diberikan untuk agent member aktif atau pemilik Education Pass yang masih berlaku."
+          : "Your account does not have active premium access yet. Access is available to active agent members or valid Education Pass holders.",
       lockedLabel: lang === "id" ? "Terkunci" : "Locked",
       accessGranted: lang === "id" ? "Akses aktif" : "Access granted",
       signedUrlFailed:
@@ -242,6 +279,10 @@ export default function PublicEducationDetailPage() {
       notSet: lang === "id" ? "Belum diatur" : "Not set",
       education: lang === "id" ? "Education" : "Education",
       liveNow: lang === "id" ? "Live" : "Live",
+      premiumHelper:
+        lang === "id"
+          ? "Untuk agent member aktif atau pemilik Education Pass"
+          : "For active agent members or Education Pass holders",
     }),
     [lang]
   );
@@ -249,7 +290,7 @@ export default function PublicEducationDetailPage() {
   const [video, setVideo] = useState<EducationVideo | null>(null);
   const [viewer, setViewer] = useState<ViewerState>({
     isLoggedIn: false,
-    hasPaidAgentAccess: false,
+    hasEducationAccess: false,
   });
   const [videoPlaybackUrl, setVideoPlaybackUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -274,17 +315,17 @@ export default function PublicEducationDetailPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      let paidAgentAccess = false;
+      let hasEducationAccess = false;
 
       if (user?.id) {
-        paidAgentAccess = await resolvePaidAgentAccess(user.id);
+        hasEducationAccess = await resolveEducationAccess(user.id);
       }
 
       if (ignore) return;
 
       setViewer({
         isLoggedIn: Boolean(user?.id),
-        hasPaidAgentAccess: paidAgentAccess,
+        hasEducationAccess,
       });
 
       const { data, error } = await supabase
@@ -326,7 +367,7 @@ export default function PublicEducationDetailPage() {
 
       const canWatch =
         loadedVideo.access_type === "public" ||
-        (loadedVideo.access_type === "paid_agent" && paidAgentAccess);
+        (loadedVideo.access_type === "paid_agent" && hasEducationAccess);
 
       if (
         canWatch &&
@@ -391,8 +432,8 @@ export default function PublicEducationDetailPage() {
   const canWatch = useMemo(() => {
     if (!video) return false;
     if (video.access_type === "public") return true;
-    return viewer.hasPaidAgentAccess;
-  }, [video, viewer.hasPaidAgentAccess]);
+    return viewer.hasEducationAccess;
+  }, [video, viewer.hasEducationAccess]);
 
   const isLocked = Boolean(video) && !canWatch;
 
@@ -485,7 +526,7 @@ export default function PublicEducationDetailPage() {
                   }`}
                 >
                   {video.access_type === "paid_agent" ? <Lock size={12} /> : null}
-                  {video.access_type === "paid_agent" ? ui.paidAgent : ui.free}
+                  {video.access_type === "paid_agent" ? ui.premiumAccess : ui.free}
                 </div>
 
                 {video.is_featured ? (
@@ -528,13 +569,13 @@ export default function PublicEducationDetailPage() {
 
                       <p className="mt-3 max-w-xl text-sm leading-7 text-white/80 sm:text-base">
                         {viewer.isLoggedIn
-                          ? ui.lockedDescNoMembership
+                          ? ui.lockedDescNoAccess
                           : ui.lockedDescLoggedOut}
                       </p>
 
                       <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#1C1C1E]">
                         <ShieldCheck size={16} />
-                        {ui.paidAgent}
+                        {ui.premiumAccess}
                       </div>
                     </div>
                   ) : videoLoading ? (
@@ -635,7 +676,9 @@ export default function PublicEducationDetailPage() {
                 <div className="flex items-start justify-between gap-4">
                   <span className="font-semibold text-[#1C1C1E]">{ui.access}</span>
                   <span className="text-right">
-                    {video.access_type === "paid_agent" ? ui.paidAgent : ui.free}
+                    {video.access_type === "paid_agent"
+                      ? ui.premiumAccess
+                      : ui.free}
                   </span>
                 </div>
               </div>
@@ -654,10 +697,10 @@ export default function PublicEducationDetailPage() {
                   <p className="mt-2 text-sm leading-7 text-gray-600">
                     {canWatch
                       ? video.access_type === "paid_agent"
-                        ? ui.paidAgent
+                        ? ui.premiumHelper
                         : ui.free
                       : viewer.isLoggedIn
-                        ? ui.lockedDescNoMembership
+                        ? ui.lockedDescNoAccess
                         : ui.lockedDescLoggedOut}
                   </p>
                 </div>
