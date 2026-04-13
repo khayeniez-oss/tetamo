@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
+import { TetamoSelect } from "@/components/ui/TetamoSelect";
 
 type EducationAccessType = "public" | "paid_agent";
 type EducationContentType = "tutorial" | "training" | "podcast" | "webinar";
@@ -136,15 +137,6 @@ function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
-    />
-  );
-}
-
-function SelectBase(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] ${props.className ?? ""}`}
     />
   );
 }
@@ -281,6 +273,7 @@ export default function AdminEditEducationPage() {
       delete: lang === "id" ? "Hapus" : "Delete",
       deleting: lang === "id" ? "Menghapus..." : "Deleting...",
       viewPublic: lang === "id" ? "Lihat Public" : "View Public",
+      uploading: lang === "id" ? "Uploading..." : "Uploading...",
       englishVersion: lang === "id" ? "Versi English" : "English Version",
       indonesianVersion: lang === "id" ? "Versi Indonesia" : "Indonesian Version",
       englishTitle: lang === "id" ? "Judul English" : "English Title",
@@ -342,11 +335,11 @@ export default function AdminEditEducationPage() {
         lang === "id"
           ? "Semua orang bisa menonton."
           : "Everyone can watch.",
-      paidAgentAccess: lang === "id" ? "Paid Agent" : "Paid Agent",
-      paidAgentAccessDesc:
+      premiumAccess: lang === "id" ? "Premium Access" : "Premium Access",
+      premiumAccessDesc:
         lang === "id"
-          ? "Hanya agent member aktif yang bisa menonton."
-          : "Only active paid agents can watch.",
+          ? "Untuk agent member aktif atau pemilik Education Pass aktif."
+          : "For active agent members or valid Education Pass holders.",
       tutorial: lang === "id" ? "Tutorial" : "Tutorial",
       training: lang === "id" ? "Training" : "Training",
       podcast: lang === "id" ? "Podcast" : "Podcast",
@@ -576,6 +569,38 @@ export default function AdminEditEducationPage() {
     };
   }, [educationId]);
 
+  const categoryOptions = useMemo(
+    () => [
+      {
+        value: "",
+        label: loadingCategories ? ui.loadingCategories : ui.selectCategory,
+      },
+      ...categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    ],
+    [categories, loadingCategories, ui.loadingCategories, ui.selectCategory]
+  );
+
+  const contentTypeOptions = useMemo(
+    () => [
+      { value: "tutorial", label: ui.tutorial },
+      { value: "training", label: ui.training },
+      { value: "podcast", label: ui.podcast },
+      { value: "webinar", label: ui.webinar },
+    ],
+    [ui]
+  );
+
+  const videoSourceOptions = useMemo(
+    () => [
+      { value: "supabase", label: ui.uploadToSupabase },
+      { value: "external", label: ui.externalUrl },
+    ],
+    [ui]
+  );
+
   const publicUrlPreview = useMemo(() => {
     return form.slug ? `/education/${form.slug}` : "/education/[slug]";
   }, [form.slug]);
@@ -754,7 +779,7 @@ export default function AdminEditEducationPage() {
       return;
     }
 
-    if (nextStatus === "draft") setSavingDraft(true);
+    if (nextStatus === "draft" && form.status === "draft") setSavingDraft(true);
     if (nextStatus === "published" && form.status === "draft") setPublishing(true);
     if (nextStatus === "draft" && form.status === "published") setUnpublishing(true);
     if (nextStatus === "published" && form.status === "published") setPublishing(true);
@@ -789,7 +814,8 @@ export default function AdminEditEducationPage() {
           speaker_name: cleanSpeaker || null,
           thumbnail_url: form.thumbnail_url || null,
           video_provider: form.video_provider,
-          video_url: form.video_provider === "external" ? cleanExternalVideoUrl : null,
+          video_url:
+            form.video_provider === "external" ? cleanExternalVideoUrl : null,
           video_storage_path:
             form.video_provider === "supabase" ? form.video_storage_path : null,
           duration_seconds: cleanDuration,
@@ -932,7 +958,9 @@ export default function AdminEditEducationPage() {
               {previewMode ? ui.hidePreview : ui.preview}
             </button>
 
-            {form.status === "published" && publishedAt && new Date(publishedAt).getTime() <= Date.now() ? (
+            {form.status === "published" &&
+            publishedAt &&
+            new Date(publishedAt).getTime() <= Date.now() ? (
               <Link
                 href={publicUrlPreview}
                 target="_blank"
@@ -1000,13 +1028,13 @@ export default function AdminEditEducationPage() {
                 active={previewLang === "en"}
                 onClick={() => setPreviewLang("en")}
               >
-                {lang === "id" ? "Preview English" : "English Preview"}
+                {ui.englishPreview}
               </LangPill>
               <LangPill
                 active={previewLang === "id"}
                 onClick={() => setPreviewLang("id")}
               >
-                {lang === "id" ? "Preview Indonesia" : "Indonesian Preview"}
+                {ui.indonesianPreview}
               </LangPill>
             </div>
 
@@ -1081,12 +1109,12 @@ export default function AdminEditEducationPage() {
                 {form.thumbnail_url ? (
                   <img
                     src={form.thumbnail_url}
-                    alt={previewLang === "id" ? form.title_id || ui.untitled : form.title || ui.untitled}
+                    alt={previewTitle || ui.untitled}
                     className="h-[260px] w-full rounded-3xl object-cover sm:h-[360px]"
                   />
                 ) : (
                   <div className="flex h-[220px] items-center justify-center rounded-3xl bg-[#1C1C1E] text-4xl font-bold text-white">
-                    {getInitials(previewLang === "id" ? form.title_id : form.title)}
+                    {getInitials(previewTitle)}
                   </div>
                 )}
 
@@ -1104,7 +1132,9 @@ export default function AdminEditEducationPage() {
                     }`}
                   >
                     {form.access_type === "paid_agent" ? <Lock size={12} /> : null}
-                    {form.access_type === "paid_agent" ? ui.paidAgentAccess : ui.publicAccess}
+                    {form.access_type === "paid_agent"
+                      ? ui.premiumAccess
+                      : ui.publicAccess}
                   </div>
 
                   {form.is_featured ? (
@@ -1115,7 +1145,7 @@ export default function AdminEditEducationPage() {
                 </div>
 
                 <h2 className="mt-4 text-3xl font-bold leading-tight text-[#1C1C1E]">
-                  {(previewLang === "id" ? form.title_id : form.title) || ui.untitled}
+                  {previewTitle || ui.untitled}
                 </h2>
 
                 <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-2">
@@ -1141,8 +1171,7 @@ export default function AdminEditEducationPage() {
                 </div>
 
                 <p className="mt-6 text-base leading-8 text-gray-600">
-                  {(previewLang === "id" ? form.description_id : form.description) ||
-                    ui.noDescription}
+                  {previewDescription || ui.noDescription}
                 </p>
               </div>
             </div>
@@ -1179,35 +1208,24 @@ export default function AdminEditEducationPage() {
 
               <div>
                 <FieldLabel>{ui.category}</FieldLabel>
-                <SelectBase
+                <TetamoSelect
                   value={form.category_id}
-                  onChange={(e) => updateField("category_id", e.target.value)}
-                  disabled={loadingCategories}
-                >
-                  <option value="">
-                    {loadingCategories ? ui.loadingCategories : ui.selectCategory}
-                  </option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </SelectBase>
+                  onChange={(value: string) => updateField("category_id", value)}
+                  placeholder={loadingCategories ? ui.loadingCategories : ui.selectCategory}
+                  options={categoryOptions}
+                />
               </div>
 
               <div>
                 <FieldLabel>{ui.contentType}</FieldLabel>
-                <SelectBase
+                <TetamoSelect
                   value={form.content_type}
-                  onChange={(e) =>
-                    updateField("content_type", e.target.value as EducationContentType)
+                  onChange={(value: string) =>
+                    updateField("content_type", value as EducationContentType)
                   }
-                >
-                  <option value="tutorial">{ui.tutorial}</option>
-                  <option value="training">{ui.training}</option>
-                  <option value="podcast">{ui.podcast}</option>
-                  <option value="webinar">{ui.webinar}</option>
-                </SelectBase>
+                  placeholder={ui.contentType}
+                  options={contentTypeOptions}
+                />
               </div>
 
               <div>
@@ -1223,8 +1241,8 @@ export default function AdminEditEducationPage() {
                   <ToggleCard
                     active={form.access_type === "paid_agent"}
                     onClick={() => updateField("access_type", "paid_agent")}
-                    title={ui.paidAgentAccess}
-                    subtitle={ui.paidAgentAccessDesc}
+                    title={ui.premiumAccess}
+                    subtitle={ui.premiumAccessDesc}
                     icon={<Lock size={16} />}
                   />
                 </div>
@@ -1348,7 +1366,7 @@ export default function AdminEditEducationPage() {
                     className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <ImageIcon size={16} />
-                    {uploadingThumbnail ? ui.publishing : ui.uploadThumbnail}
+                    {uploadingThumbnail ? ui.uploading : ui.uploadThumbnail}
                   </button>
 
                   {form.thumbnail_url ? (
@@ -1365,15 +1383,14 @@ export default function AdminEditEducationPage() {
 
               <div>
                 <FieldLabel>{ui.videoSource}</FieldLabel>
-                <SelectBase
+                <TetamoSelect
                   value={form.video_provider}
-                  onChange={(e) =>
-                    updateField("video_provider", e.target.value as VideoProvider)
+                  onChange={(value: string) =>
+                    updateField("video_provider", value as VideoProvider)
                   }
-                >
-                  <option value="supabase">{ui.uploadToSupabase}</option>
-                  <option value="external">{ui.externalUrl}</option>
-                </SelectBase>
+                  placeholder={ui.videoSource}
+                  options={videoSourceOptions}
+                />
               </div>
 
               {form.video_provider === "supabase" ? (
@@ -1398,7 +1415,7 @@ export default function AdminEditEducationPage() {
                     >
                       <Upload size={16} />
                       {uploadingVideo
-                        ? ui.publishing
+                        ? ui.uploading
                         : form.video_storage_path
                           ? ui.replaceVideo
                           : ui.uploadVideo}
