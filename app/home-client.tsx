@@ -2211,11 +2211,11 @@ export default function HomeClient() {
   </Link>
 
   <Link
-    href="/agentdashboard/edukasi"
-    className="transition hover:text-black"
-  >
-    {lang === "id" ? "Edukasi" : "Edu"}
-  </Link>
+  href="/education"
+  className="transition hover:text-black"
+>
+  {lang === "id" ? "Edukasi" : "Education"}
+</Link>
 
   <Link href="/about-us" className="transition hover:text-black">
     {lang === "id" ? "Tentang Kami" : "About Us"}
