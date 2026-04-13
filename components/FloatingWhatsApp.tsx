@@ -1,7 +1,7 @@
 "use client";
 
 export default function FloatingWhatsApp() {
-  const phone = "6282264778799";
+  const phone = "6282313556606";
   const text = encodeURIComponent(
     "Hello TETAMO, I’m interested in a property on your website."
   );

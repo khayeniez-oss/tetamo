@@ -6,6 +6,7 @@ import {
   getOwnerPackageById,
   getAgentPackageById,
   getAddOnProductById,
+  getEducationProductById,
 } from "@/app/data/pricelist";
 import type {
   TetamoGateway,
@@ -84,7 +85,15 @@ function normalizeUserType(value: unknown): TetamoUserType {
 function normalizeProductType(value: unknown): TetamoProductType {
   const v = String(value || "").toLowerCase();
 
-  if (v === "membership" || v === "addon") return v;
+  if (
+    v === "listing" ||
+    v === "membership" ||
+    v === "addon" ||
+    v === "education"
+  ) {
+    return v;
+  }
+
   return "listing";
 }
 
@@ -99,12 +108,14 @@ function normalizeFlow(
     v === "renew-listing" ||
     v === "boost-listing" ||
     v === "homepage-spotlight" ||
-    v === "agent-membership"
+    v === "agent-membership" ||
+    v === "education-access"
   ) {
     return v;
   }
 
   if (fallbackFromProductType === "membership") return "agent-membership";
+  if (fallbackFromProductType === "education") return "education-access";
   return "new-listing";
 }
 
@@ -162,6 +173,10 @@ function resolveProductConfig(
     return getAddOnProductById(normalizedProductId);
   }
 
+  if (productType === "education") {
+    return getEducationProductById(normalizedProductId);
+  }
+
   return getAnyProductById(normalizedProductId);
 }
 
@@ -178,6 +193,10 @@ function buildProductName(
     }
 
     return `${packageName} - Yearly Billing`;
+  }
+
+  if (payment.productType === "education") {
+    return productConfig?.name || "Education Pass";
   }
 
   if (payment.productType === "addon") {
@@ -227,6 +246,17 @@ function buildPaymentText(
     };
   }
 
+  if (payment.productType === "education") {
+    return {
+      productName: productConfig?.name || fallbackName,
+      paymentTitle: productConfig?.paymentTitle || fallbackName,
+      paymentDescription:
+        productConfig?.paymentDescription || `Payment for ${fallbackName}.`,
+      billingNote:
+        productConfig?.billingNote || `Billing note for ${fallbackName}.`,
+    };
+  }
+
   if (payment.productType === "addon") {
     return {
       productName: productConfig?.name || fallbackName,
@@ -249,6 +279,16 @@ function buildPaymentText(
 }
 
 function buildDefaultSuccessUrl(origin: string, payment: TetamoPayment): string {
+  if (payment.flow === "education-access" || payment.productType === "education") {
+    const url = new URL("/education", origin);
+    url.searchParams.set("payment", "success");
+    url.searchParams.set("payment_id", payment.id);
+    url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+    url.searchParams.set("flow", payment.flow);
+    url.searchParams.set("product", payment.productId);
+    return url.toString();
+  }
+
   if (payment.userType === "agent") {
     const url = new URL("/agentdashboard/tagihan", origin);
     url.searchParams.set("payment", "success");
@@ -278,6 +318,15 @@ function buildDefaultSuccessUrl(origin: string, payment: TetamoPayment): string 
 }
 
 function buildDefaultCancelUrl(origin: string, payment: TetamoPayment): string {
+  if (payment.flow === "education-access" || payment.productType === "education") {
+    const url = new URL("/education", origin);
+    url.searchParams.set("payment", "cancelled");
+    url.searchParams.set("payment_id", payment.id);
+    url.searchParams.set("flow", payment.flow);
+    url.searchParams.set("product", payment.productId);
+    return url.toString();
+  }
+
   if (payment.userType === "agent") {
     const url = new URL("/agentdashboard/tagihan", origin);
     url.searchParams.set("payment", "cancelled");
@@ -329,10 +378,7 @@ function resolveAuthoritativeAmount(
 ) {
   const normalizedProductId = String(productId || "").toLowerCase();
 
-  if (
-    productType === "membership" &&
-    userType === "agent"
-  ) {
+  if (productType === "membership" && userType === "agent") {
     const agentPackage: any = getAgentPackageById(normalizedProductId);
 
     if (agentPackage) {
@@ -350,6 +396,18 @@ function resolveAuthoritativeAmount(
       ) {
         return agentPackage.priceIdr;
       }
+    }
+  }
+
+  if (productType === "education") {
+    const educationProduct = getEducationProductById(normalizedProductId);
+
+    if (
+      educationProduct &&
+      typeof educationProduct.priceIdr === "number" &&
+      educationProduct.priceIdr > 0
+    ) {
+      return educationProduct.priceIdr;
     }
   }
 
@@ -455,30 +513,21 @@ export async function POST(req: Request) {
 
     if (!paymentRequest.userId) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "userId is required.",
-        },
+        { success: false, message: "userId is required." },
         { status: 400 }
       );
     }
 
     if (!paymentRequest.productId) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "productId is required.",
-        },
+        { success: false, message: "productId is required." },
         { status: 400 }
       );
     }
 
     if (!paymentRequest.amount || paymentRequest.amount <= 0) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "amount must be greater than 0.",
-        },
+        { success: false, message: "amount must be greater than 0." },
         { status: 400 }
       );
     }

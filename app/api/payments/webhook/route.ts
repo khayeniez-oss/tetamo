@@ -40,6 +40,10 @@ type PaymentMetadata = {
   draftSnapshot?: string | null;
   productDurationDays?: number | string | null;
   featuredDurationDays?: number | string | null;
+  selectedBillingCycle?: string | null;
+  billingCycle?: string | null;
+  packageTermDays?: number | string | null;
+  packageName?: string | null;
 };
 
 type PaymentDbRow = {
@@ -216,7 +220,10 @@ async function findPropertyForActivation(
     if (data) return data as PropertyLookupRow;
   }
 
-  const finalListingCode = String(listingCode || metadata.existingPropertyCode || "").trim();
+  const finalListingCode = String(
+    listingCode || metadata.existingPropertyCode || ""
+  ).trim();
+
   if (finalListingCode) {
     const { data, error } = await admin
       .from("properties")
@@ -559,6 +566,111 @@ async function activateAddon(payment: PaymentDbRow, metadata: PaymentMetadata) {
   };
 }
 
+async function activateAgentMembership(
+  payment: PaymentDbRow,
+  metadata: PaymentMetadata
+) {
+  if (!admin) {
+    throw new Error("Supabase admin client is not configured.");
+  }
+
+  const durationDays = toPositiveNumber(
+    metadata.packageTermDays ?? metadata.productDurationDays,
+    365
+  );
+
+  const billingCycle =
+    String(metadata.selectedBillingCycle || metadata.billingCycle || "yearly").toLowerCase() ===
+    "monthly"
+      ? "monthly"
+      : "yearly";
+
+  const startsAt = new Date().toISOString();
+  const expiresAt = extendExpiryIso(null, durationDays);
+
+  const membershipPayload = {
+    user_id: payment.user_id,
+    payment_id: payment.id,
+    package_id: String(payment.product_id || ""),
+    package_name:
+      String(metadata.packageName || "").trim() ||
+      String(payment.product_id || ""),
+    billing_cycle: billingCycle,
+    status: "active",
+    auto_renew: true,
+    starts_at: startsAt,
+    expires_at: expiresAt,
+    metadata: {
+      flow: payment.flow,
+      productType: payment.product_type,
+      listingCode: payment.listing_code || null,
+      ...metadata,
+    },
+  };
+
+  const { data, error } = await admin
+    .from("agent_memberships")
+    .upsert(membershipPayload, { onConflict: "payment_id" })
+    .select("id, expires_at")
+    .single();
+
+  if (error) throw error;
+
+  return {
+    membershipId: data?.id ?? null,
+    membershipExpiresAt: data?.expires_at ?? expiresAt,
+    activatedPropertyId: null,
+    activatedListingCode: payment.listing_code || "",
+    activationType: "agent-membership",
+  };
+}
+
+async function activateEducationAccess(
+  payment: PaymentDbRow,
+  metadata: PaymentMetadata
+) {
+  if (!admin) {
+    throw new Error("Supabase admin client is not configured.");
+  }
+
+  const durationDays = toPositiveNumber(metadata.productDurationDays, 90);
+  const startsAt = new Date().toISOString();
+  const expiresAt = extendExpiryIso(null, durationDays);
+
+  const accessPayload = {
+    user_id: payment.user_id,
+    user_type: String(payment.user_type || "owner").toLowerCase() === "agent"
+      ? "agent"
+      : "owner",
+    payment_id: payment.id,
+    product_id: String(payment.product_id || "education-pass"),
+    status: "active",
+    starts_at: startsAt,
+    expires_at: expiresAt,
+    metadata: {
+      flow: payment.flow,
+      productType: payment.product_type,
+      ...metadata,
+    },
+  };
+
+  const { data, error } = await admin
+    .from("education_access_passes")
+    .upsert(accessPayload, { onConflict: "payment_id" })
+    .select("id, expires_at")
+    .single();
+
+  if (error) throw error;
+
+  return {
+    educationAccessId: data?.id ?? null,
+    educationAccessExpiresAt: data?.expires_at ?? expiresAt,
+    activatedPropertyId: null,
+    activatedListingCode: payment.listing_code || "",
+    activationType: "education-access",
+  };
+}
+
 async function activateAfterPayment(payment: PaymentDbRow) {
   const metadata = parseMetadata(payment.metadata);
   const flow = String(payment.flow || "").toLowerCase();
@@ -576,12 +688,11 @@ async function activateAfterPayment(payment: PaymentDbRow) {
   }
 
   if (flow === "agent-membership") {
-    return {
-      activatedPropertyId: null,
-      activatedListingCode: payment.listing_code || "",
-      activationType: "agent-membership",
-      skippedBecauseNoMembershipSchema: true,
-    };
+    return activateAgentMembership(payment, metadata);
+  }
+
+  if (flow === "education-access") {
+    return activateEducationAccess(payment, metadata);
   }
 
   return {

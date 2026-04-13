@@ -10,28 +10,23 @@ export type OwnerPackage = {
   renewable: boolean;
   autoRenewDefault: boolean;
 
-  // Featured logic
   isFeatured: boolean;
   featuredDurationDays?: number;
   downgradeToBasicAfterFeatured?: boolean;
 
-  // Visual / positioning
   badge?: string;
 
-  // Functional flags
   hasSocialMediaBoost: boolean;
   hasVerificationBadge: boolean;
   hasAgentSupport: boolean;
   hasDirectWhatsapp: boolean;
   hasScheduling: boolean;
 
-  // Payment / summary content
   paymentTitle: string;
   paymentDescription: string;
   renewalLabel: string;
   billingNote: string;
 
-  // Display list
   features: string[];
 };
 
@@ -128,22 +123,15 @@ export type AgentPackage = {
   audience: "agent";
   productType: "membership";
 
-  // Main / default billing cycle shown on package card
   billingCycle: "monthly" | "yearly";
-
-  // Supported billing options for this package
   availableBillingCycles: Array<"monthly" | "yearly">;
 
-  // Main price (for the main/default billing cycle)
   priceIdr: number;
-
-  // Package stays active for this duration
   durationDays: number;
 
   renewable: boolean;
   autoRenewDefault: boolean;
 
-  // Billing / subscription logic
   packageTermDays: number;
   billingIntervalDays: number;
   cancelStopsFutureRenewalOnly: boolean;
@@ -451,7 +439,62 @@ export const ADD_ON_PRODUCTS: AddOnProduct[] = [
   },
 ];
 
-export type TetamoProduct = OwnerPackage | AgentPackage | AddOnProduct;
+export type EducationProduct = {
+  id: string;
+  name: string;
+  audience: "all";
+  productType: "education";
+
+  priceIdr: number;
+  durationDays: number;
+  renewable: boolean;
+  autoRenewDefault: boolean;
+
+  badge?: string;
+
+  paymentTitle: string;
+  paymentDescription: string;
+  renewalLabel: string;
+  billingNote: string;
+
+  features: string[];
+};
+
+export const EDUCATION_PRODUCTS: EducationProduct[] = [
+  {
+    id: "education-pass",
+    name: "Education Pass",
+    audience: "all",
+    productType: "education",
+
+    priceIdr: 100000,
+    durationDays: 90,
+    renewable: false,
+    autoRenewDefault: false,
+
+    badge: "90 DAYS",
+
+    paymentTitle: "Education Pass - 90 Days",
+    paymentDescription:
+      "Akses premium untuk video edukasi TETAMO selama 90 hari bagi owner atau non-member agent.",
+    renewalLabel: "Perpanjang Education Pass",
+    billingNote:
+      "Education Pass aktif selama 90 hari sejak pembayaran berhasil. Paket ini tidak auto renew.",
+
+    features: [
+      "Akses premium video edukasi TETAMO",
+      "Aktif selama 90 hari",
+      "Berlaku untuk owner dan non-member agent",
+      "Tidak auto renew",
+    ],
+  },
+];
+
+export type TetamoProduct =
+  | OwnerPackage
+  | AgentPackage
+  | AddOnProduct
+  | EducationProduct;
 
 export function getOwnerPackageById(id: string) {
   return OWNER_PACKAGES.find((item) => item.id === id) ?? null;
@@ -465,11 +508,16 @@ export function getAddOnProductById(id: string) {
   return ADD_ON_PRODUCTS.find((item) => item.id === id) ?? null;
 }
 
+export function getEducationProductById(id: string) {
+  return EDUCATION_PRODUCTS.find((item) => item.id === id) ?? null;
+}
+
 export function getAnyProductById(id: string): TetamoProduct | null {
   return (
     getOwnerPackageById(id) ||
     getAgentPackageById(id) ||
     getAddOnProductById(id) ||
+    getEducationProductById(id) ||
     null
   );
 }

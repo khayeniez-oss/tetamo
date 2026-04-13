@@ -11,7 +11,8 @@ export type TetamoPaymentFlow =
   | "renew-listing"
   | "boost-listing"
   | "homepage-spotlight"
-  | "agent-membership";
+  | "agent-membership"
+  | "education-access";
 
 export type TetamoGateway = "stripe" | "xendit";
 
@@ -24,7 +25,11 @@ export type TetamoPaymentMethod =
 
 export type TetamoUserType = "owner" | "agent";
 
-export type TetamoProductType = "listing" | "membership" | "addon";
+export type TetamoProductType =
+  | "listing"
+  | "membership"
+  | "addon"
+  | "education";
 
 export type TetamoPayment = {
   id: string;
@@ -48,14 +53,18 @@ export type TetamoPayment = {
   // renewal behavior
   autoRenew: boolean;
 
-  // Tetamo internal status
+  // internal status
   status: TetamoPaymentStatus;
 
-  // what user chooses vs what system uses
+  // payment selection
   paymentMethod: TetamoPaymentMethod;
   gateway: TetamoGateway;
 
-  // gateway references
+  // canonical gateway fields
+  gatewayReference?: string;
+  checkoutUrl?: string;
+
+  // backward compatibility aliases
   gatewayReferenceId?: string;
   gatewayCheckoutUrl?: string;
 
@@ -65,6 +74,6 @@ export type TetamoPayment = {
   paidAt?: string;
   expiresAt?: string;
 
-  // optional metadata for future use
+  // optional metadata
   metadata?: Record<string, string | number | boolean | null>;
 };
