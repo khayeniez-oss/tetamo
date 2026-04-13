@@ -37,10 +37,12 @@ function normalizePaymentFlow(
   value: string,
   isRenew: boolean,
   isAddon: boolean,
+  isEducation: boolean,
   productId: string
 ): TetamoPaymentFlow {
   const v = value.toLowerCase();
 
+  if (isEducation) return "education-access";
   if (isRenew) return "renew-listing";
 
   if (isAddon) {
@@ -53,7 +55,8 @@ function normalizePaymentFlow(
     v === "renew-listing" ||
     v === "boost-listing" ||
     v === "homepage-spotlight" ||
-    v === "agent-membership"
+    v === "agent-membership" ||
+    v === "education-access"
   ) {
     return v;
   }
@@ -66,6 +69,7 @@ function normalizeProductType(value?: string | null): TetamoProductType {
 
   if (v === "membership") return "membership";
   if (v === "addon") return "addon";
+  if (v === "education") return "education";
   return "listing";
 }
 
@@ -137,11 +141,14 @@ export default function PemilikIklanPembayaranPageClient() {
   const flow = String(searchParams.get("flow") || "new-listing");
   const productId = String(searchParams.get("product") || "").toLowerCase();
 
-  const isRenew = action === "renew";
+  const isEducation =
+    flow === "education-access" || productId === "education-pass";
+  const isRenew = !isEducation && action === "renew";
   const isAddon =
-    flow === "addon" ||
-    productId === "boost-listing" ||
-    productId === "homepage-spotlight";
+    !isEducation &&
+    (flow === "addon" ||
+      productId === "boost-listing" ||
+      productId === "homepage-spotlight");
 
   const needsExistingProperty = isRenew || isAddon;
 
@@ -294,6 +301,8 @@ export default function PemilikIklanPembayaranPageClient() {
   }, [planFromUrlRaw, draft?.plan, existingProperty?.plan_id]);
 
   useEffect(() => {
+    if (isEducation) return;
+
     setDraft((prev) => ({
       ...(prev ?? {}),
       mode: "create",
@@ -308,25 +317,36 @@ export default function PemilikIklanPembayaranPageClient() {
         currency: "IDR",
       },
     }));
-  }, [selectedPlan, kode, selectedGateway, setDraft]);
+  }, [isEducation, selectedPlan, kode, selectedGateway, setDraft]);
+
+  const effectiveProductId = useMemo(() => {
+    if (productId) return productId;
+    if (isEducation) return "education-pass";
+    return "";
+  }, [productId, isEducation]);
 
   const selectedProduct = useMemo(() => {
-    if (productId) {
-      return getAnyProductById(productId);
+    if (effectiveProductId) {
+      return getAnyProductById(effectiveProductId);
     }
+
     return getOwnerPackageById(selectedPlan);
-  }, [productId, selectedPlan]);
+  }, [effectiveProductId, selectedPlan]);
 
   const fotoCount = useMemo(() => {
+    if (isEducation) return 0;
+
     if (needsExistingProperty) {
       return existingProperty?.property_images?.length ?? 0;
     }
 
     const imgs = draft?.photos;
     return Array.isArray(imgs) ? imgs.length : 0;
-  }, [draft?.photos, needsExistingProperty, existingProperty]);
+  }, [isEducation, draft?.photos, needsExistingProperty, existingProperty]);
 
   const listingTypeLabel = useMemo(() => {
+    if (isEducation) return "-";
+
     if (needsExistingProperty) {
       const lt = String(existingProperty?.listing_type || "").toLowerCase();
       if (lt === "dijual") return "Dijual";
@@ -340,9 +360,11 @@ export default function PemilikIklanPembayaranPageClient() {
     if (lt === "disewa") return "Disewa";
     if (lt === "lelang") return "Lelang";
     return "-";
-  }, [draft?.listingType, needsExistingProperty, existingProperty]);
+  }, [isEducation, draft?.listingType, needsExistingProperty, existingProperty]);
 
   const lokasiLabel = useMemo(() => {
+    if (isEducation) return "-";
+
     if (needsExistingProperty) {
       const prov = String(existingProperty?.province || "").trim();
       const city = String(existingProperty?.city || "").trim();
@@ -356,9 +378,11 @@ export default function PemilikIklanPembayaranPageClient() {
     if (!prov && !city) return "-";
     if (prov && city) return `${prov} • ${city}`;
     return prov || city;
-  }, [draft?.province, draft?.city, needsExistingProperty, existingProperty]);
+  }, [isEducation, draft?.province, draft?.city, needsExistingProperty, existingProperty]);
 
   const judulLabel = useMemo(() => {
+    if (isEducation) return "-";
+
     if (needsExistingProperty) {
       const t = String(existingProperty?.title || "").trim();
       return t || "-";
@@ -366,9 +390,15 @@ export default function PemilikIklanPembayaranPageClient() {
 
     const t = String(draft?.title || "").trim();
     return t || "-";
-  }, [draft?.title, needsExistingProperty, existingProperty]);
+  }, [isEducation, draft?.title, needsExistingProperty, existingProperty]);
 
   const isReadyToPay = useMemo(() => {
+    if (!selectedProduct) return false;
+
+    if (isEducation) {
+      return true;
+    }
+
     if (needsExistingProperty) {
       return Boolean(existingProperty?.id) && !loadingExistingProperty;
     }
@@ -382,6 +412,8 @@ export default function PemilikIklanPembayaranPageClient() {
 
     return ltOk && provOk && titleOk && descOk && photosOk && verifiedOk;
   }, [
+    selectedProduct,
+    isEducation,
     draft?.listingType,
     draft?.province,
     draft?.title,
@@ -395,6 +427,11 @@ export default function PemilikIklanPembayaranPageClient() {
   const total = selectedProduct?.priceIdr ?? 0;
 
   function onBack() {
+    if (isEducation) {
+      router.push("/education");
+      return;
+    }
+
     if (needsExistingProperty) {
       router.push("/pemilikdashboard");
       return;
@@ -431,14 +468,17 @@ export default function PemilikIklanPembayaranPageClient() {
         flow,
         isRenew,
         isAddon,
-        productId
+        isEducation,
+        effectiveProductId
       );
 
       const normalizedProductType = normalizeProductType(
         selectedProduct?.productType
       );
 
-      const finalKode = existingProperty?.kode || draft?.kode || kode || "";
+      const finalKode = isEducation
+        ? ""
+        : existingProperty?.kode || draft?.kode || kode || "";
 
       const paymentRecord: TetamoPayment = {
         id: crypto.randomUUID(),
@@ -450,33 +490,46 @@ export default function PemilikIklanPembayaranPageClient() {
         listingCode: finalKode,
         amount: total,
         currency: "IDR",
-        autoRenew: true,
+        autoRenew: Boolean(selectedProduct?.autoRenewDefault ?? true),
         status: "pending",
         paymentMethod: "card",
         gateway: selectedGateway,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         metadata: {
-          action: isRenew
-            ? "renew"
-            : isAddon
-              ? productId === "homepage-spotlight"
-                ? "spotlight"
-                : "boost"
-              : "create",
-          selectedPlan,
-          existingPropertyId: existingProperty?.id || null,
-          existingPropertyCode: existingProperty?.kode || null,
-          existingPropertyTitle: existingProperty?.title || null,
-          listingType: needsExistingProperty
-            ? String(existingProperty?.listing_type || "") || null
-            : String(draft?.listingType || "") || null,
-          draftSnapshot: needsExistingProperty ? null : buildDraftSnapshot(draft),
+          action: isEducation
+            ? "education-access"
+            : isRenew
+              ? "renew"
+              : isAddon
+                ? effectiveProductId === "homepage-spotlight"
+                  ? "spotlight"
+                  : "boost"
+                : "create",
+          selectedPlan: isEducation ? null : selectedPlan,
+          existingPropertyId:
+            isEducation ? null : existingProperty?.id || null,
+          existingPropertyCode:
+            isEducation ? null : existingProperty?.kode || null,
+          existingPropertyTitle:
+            isEducation ? null : existingProperty?.title || null,
+          listingType: isEducation
+            ? null
+            : needsExistingProperty
+              ? String(existingProperty?.listing_type || "") || null
+              : String(draft?.listingType || "") || null,
+          draftSnapshot:
+            needsExistingProperty || isEducation
+              ? null
+              : buildDraftSnapshot(draft),
           productDurationDays: selectedProduct?.durationDays ?? null,
           featuredDurationDays:
-            "featuredDurationDays" in (selectedProduct as any)
+            !isEducation && "featuredDurationDays" in (selectedProduct as any)
               ? Number((selectedProduct as any).featuredDurationDays || 0)
               : null,
+          paymentTitle: selectedProduct?.paymentTitle ?? null,
+          paymentDescription: selectedProduct?.paymentDescription ?? null,
+          billingNote: selectedProduct?.billingNote ?? null,
         },
       };
 
@@ -535,82 +588,124 @@ export default function PemilikIklanPembayaranPageClient() {
           Step 5 • Pembayaran
         </h1>
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          Pilih paket iklan dan lanjutkan pembayaran.
+          {isEducation
+            ? "Tinjau Education Pass lalu lanjutkan pembayaran."
+            : "Pilih paket iklan dan lanjutkan pembayaran."}
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
           <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-              {isAddon ? "Ringkasan Add-On" : "Ringkasan Iklan"}
+              {isEducation
+                ? "Ringkasan Education Pass"
+                : isAddon
+                  ? "Ringkasan Add-On"
+                  : "Ringkasan Iklan"}
             </h2>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <div className="text-xs text-gray-500">Tipe Listing</div>
-                <div className="mt-1 text-sm font-semibold sm:text-base">
-                  {listingTypeLabel}
+            {isEducation ? (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">Produk</div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    {selectedProduct?.name ?? "Education Pass"}
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <div className="text-xs text-gray-500">Lokasi</div>
-                <div className="mt-1 text-sm font-semibold sm:text-base">
-                  {lokasiLabel}
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">Akses</div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    Premium Education
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <div className="text-xs text-gray-500">Judul</div>
-                <div className="mt-1 text-sm font-semibold sm:text-base">
-                  {judulLabel}
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">Durasi</div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    {selectedProduct?.durationDays
+                      ? `${selectedProduct.durationDays} hari`
+                      : "-"}
+                  </div>
                 </div>
-              </div>
 
-              <div className="rounded-2xl border border-gray-200 p-4">
-                <div className="text-xs text-gray-500">Foto</div>
-                <div className="mt-1 text-sm font-semibold sm:text-base">
-                  {fotoCount} foto
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">Pembeli</div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    Pemilik
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-200 p-4">
+                    <div className="text-xs text-gray-500">Tipe Listing</div>
+                    <div className="mt-1 text-sm font-semibold sm:text-base">
+                      {listingTypeLabel}
+                    </div>
+                  </div>
 
-            {authLoading && (
-              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
-                <div className="text-sm text-gray-600">
-                  Memeriksa sesi login...
-                </div>
-              </div>
-            )}
+                  <div className="rounded-2xl border border-gray-200 p-4">
+                    <div className="text-xs text-gray-500">Lokasi</div>
+                    <div className="mt-1 text-sm font-semibold sm:text-base">
+                      {lokasiLabel}
+                    </div>
+                  </div>
 
-            {loadingExistingProperty && needsExistingProperty && (
-              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
-                <div className="text-sm text-gray-600">
-                  Memuat data listing...
-                </div>
-              </div>
-            )}
+                  <div className="rounded-2xl border border-gray-200 p-4">
+                    <div className="text-xs text-gray-500">Judul</div>
+                    <div className="mt-1 text-sm font-semibold sm:text-base">
+                      {judulLabel}
+                    </div>
+                  </div>
 
-            {existingPropertyError && needsExistingProperty && (
-              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:mt-5">
-                <div className="text-sm font-semibold text-red-700 sm:text-base">
-                  Gagal memuat listing
+                  <div className="rounded-2xl border border-gray-200 p-4">
+                    <div className="text-xs text-gray-500">Foto</div>
+                    <div className="mt-1 text-sm font-semibold sm:text-base">
+                      {fotoCount} foto
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-sm text-red-600">
-                  {existingPropertyError}
-                </div>
-              </div>
-            )}
 
-            {!isReadyToPay && !needsExistingProperty && (
-              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
-                <div className="text-sm font-semibold sm:text-base">
-                  Belum bisa bayar
-                </div>
-                <div className="mt-1 text-sm leading-6 text-gray-600">
-                  Pastikan: tipe listing, lokasi, minimal 3 foto, judul &
-                  deskripsi, dan form verifikasi sudah terisi.
-                </div>
-              </div>
+                {authLoading && (
+                  <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
+                    <div className="text-sm text-gray-600">
+                      Memeriksa sesi login...
+                    </div>
+                  </div>
+                )}
+
+                {loadingExistingProperty && needsExistingProperty && (
+                  <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
+                    <div className="text-sm text-gray-600">
+                      Memuat data listing...
+                    </div>
+                  </div>
+                )}
+
+                {existingPropertyError && needsExistingProperty && (
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:mt-5">
+                    <div className="text-sm font-semibold text-red-700 sm:text-base">
+                      Gagal memuat listing
+                    </div>
+                    <div className="mt-1 text-sm text-red-600">
+                      {existingPropertyError}
+                    </div>
+                  </div>
+                )}
+
+                {!isReadyToPay && !needsExistingProperty && (
+                  <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
+                    <div className="text-sm font-semibold sm:text-base">
+                      Belum bisa bayar
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-gray-600">
+                      Pastikan: tipe listing, lokasi, minimal 3 foto, judul &
+                      deskripsi, dan form verifikasi sudah terisi.
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:mt-5">
@@ -618,8 +713,9 @@ export default function PemilikIklanPembayaranPageClient() {
                 Aktivasi dilakukan setelah pembayaran terkonfirmasi
               </div>
               <div className="mt-1 text-sm leading-6 text-blue-700">
-                Halaman ini sekarang hanya membuat payment checkout. Listing,
-                renew, boost, atau spotlight tidak diaktifkan dari sini.
+                {isEducation
+                  ? "Education Pass akan aktif setelah pembayaran berhasil terkonfirmasi."
+                  : "Halaman ini sekarang hanya membuat payment checkout. Listing, renew, boost, atau spotlight tidak diaktifkan dari sini."}
               </div>
             </div>
           </div>
@@ -634,18 +730,29 @@ export default function PemilikIklanPembayaranPageClient() {
                 "Detail pembayaran akan mengikuti produk yang dipilih."}
             </p>
 
-            {isRenew && (
+            {isRenew && !isEducation && (
               <p className="mt-3 text-sm leading-6 text-gray-600">
                 {selectedProduct?.renewalLabel ??
                   "Perpanjangan produk akan mengikuti paket yang dipilih."}
               </p>
             )}
 
-            {isAddon && (
+            {isAddon && !isEducation && (
               <p className="mt-3 text-sm leading-6 text-gray-600">
                 Add-on ini akan diterapkan ke listing dengan kode{" "}
                 <span className="font-semibold">
                   {finalKodeForDisplay(existingProperty?.kode, draft?.kode, kode)}
+                </span>
+                .
+              </p>
+            )}
+
+            {isEducation && (
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                Education Pass ini akan memberi akses premium ke video edukasi
+                TETAMO selama{" "}
+                <span className="font-semibold">
+                  {selectedProduct?.durationDays ?? 90} hari
                 </span>
                 .
               </p>
@@ -677,7 +784,8 @@ export default function PemilikIklanPembayaranPageClient() {
                   : "-"}
               </div>
 
-              {"featuredDurationDays" in (selectedProduct || {}) &&
+              {!isEducation &&
+              "featuredDurationDays" in (selectedProduct || {}) &&
               (selectedProduct as any).featuredDurationDays ? (
                 <div className="mt-2 text-sm text-gray-700">
                   <span className="font-semibold">Featured aktif:</span>{" "}
@@ -748,10 +856,18 @@ export default function PemilikIklanPembayaranPageClient() {
 
             <button
               onClick={onPay}
-              disabled={!isReadyToPay || submitting || loadingExistingProperty || authLoading}
+              disabled={
+                !isReadyToPay ||
+                submitting ||
+                loadingExistingProperty ||
+                authLoading
+              }
               className={[
                 "mt-5 w-full rounded-2xl px-5 py-3 text-sm font-semibold transition",
-                isReadyToPay && !submitting && !loadingExistingProperty && !authLoading
+                isReadyToPay &&
+                !submitting &&
+                !loadingExistingProperty &&
+                !authLoading
                   ? "bg-[#1C1C1E] text-white hover:opacity-90"
                   : "cursor-not-allowed bg-gray-200 text-gray-500",
               ].join(" ")}
