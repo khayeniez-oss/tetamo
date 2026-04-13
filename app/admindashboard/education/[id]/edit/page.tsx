@@ -570,18 +570,13 @@ export default function AdminEditEducationPage() {
   }, [educationId]);
 
   const categoryOptions = useMemo(
-    () => [
-      {
-        value: "",
-        label: loadingCategories ? ui.loadingCategories : ui.selectCategory,
-      },
-      ...categories.map((category) => ({
-        value: category.id,
-        label: category.name,
-      })),
-    ],
-    [categories, loadingCategories, ui.loadingCategories, ui.selectCategory]
-  );
+  () =>
+    categories.map((category) => ({
+      value: category.id,
+      label: category.name,
+    })),
+  [categories]
+);
 
   const contentTypeOptions = useMemo(
     () => [
@@ -1209,11 +1204,11 @@ export default function AdminEditEducationPage() {
               <div>
                 <FieldLabel>{ui.category}</FieldLabel>
                 <TetamoSelect
-                  value={form.category_id}
-                  onChange={(value: string) => updateField("category_id", value)}
-                  placeholder={loadingCategories ? ui.loadingCategories : ui.selectCategory}
-                  options={categoryOptions}
-                />
+  value={form.category_id || undefined}
+  onChange={(value: string) => updateField("category_id", value)}
+  placeholder={loadingCategories ? ui.loadingCategories : ui.selectCategory}
+  options={categoryOptions}
+/>
               </div>
 
               <div>
