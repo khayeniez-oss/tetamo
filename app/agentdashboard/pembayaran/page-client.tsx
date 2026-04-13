@@ -8,6 +8,7 @@ import {
   AGENT_PACKAGES,
   getAgentPackageById,
   getAddOnProductById,
+  getAnyProductById,
 } from "@/app/data/pricelist";
 import type {
   TetamoPayment,
@@ -38,14 +39,22 @@ type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
 };
 
 type AddOnProductUI = Exclude<ReturnType<typeof getAddOnProductById>, null>;
-type SelectedProduct = AgentPackageUI | AddOnProductUI | null;
+type EducationProductUI = Extract<
+  NonNullable<ReturnType<typeof getAnyProductById>>,
+  { productType: "education" }
+>;
+
+type SelectedProduct = AgentPackageUI | AddOnProductUI | EducationProductUI | null;
 
 function normalizePaymentFlow(
   value: string,
   isAddon: boolean,
+  isEducation: boolean,
   productId: string
 ): TetamoPaymentFlow {
   const v = value.toLowerCase();
+
+  if (isEducation) return "education-access";
 
   if (isAddon) {
     if (productId === "homepage-spotlight") return "homepage-spotlight";
@@ -57,7 +66,8 @@ function normalizePaymentFlow(
     v === "boost-listing" ||
     v === "homepage-spotlight" ||
     v === "renew-listing" ||
-    v === "new-listing"
+    v === "new-listing" ||
+    v === "education-access"
   ) {
     return v;
   }
@@ -68,7 +78,7 @@ function normalizePaymentFlow(
 function normalizeProductType(value?: string | null): TetamoProductType {
   const v = String(value || "").toLowerCase();
 
-  if (v === "membership" || v === "addon") return v;
+  if (v === "membership" || v === "addon" || v === "education") return v;
   return "listing";
 }
 
@@ -78,6 +88,10 @@ function isMembershipProduct(product: SelectedProduct): product is AgentPackageU
 
 function isAddOnProduct(product: SelectedProduct): product is AddOnProductUI {
   return Boolean(product && product.productType === "addon");
+}
+
+function isEducationProduct(product: SelectedProduct): product is EducationProductUI {
+  return Boolean(product && product.productType === "education");
 }
 
 const money = (n: number) =>
@@ -117,10 +131,14 @@ export default function AgentPembayaranPageClient() {
   const requestedProductId =
     (productFromUrl || packageFromUrl || fallbackAgentPackageId).toLowerCase();
 
+  const isEducation =
+    flow === "education-access" || requestedProductId === "education-pass";
+
   const isAddon =
-    flow === "addon" ||
-    requestedProductId === "boost-listing" ||
-    requestedProductId === "homepage-spotlight";
+    !isEducation &&
+    (flow === "addon" ||
+      requestedProductId === "boost-listing" ||
+      requestedProductId === "homepage-spotlight");
 
   const needsExistingProperty = isAddon;
 
@@ -135,12 +153,16 @@ export default function AgentPembayaranPageClient() {
   const [existingPropertyError, setExistingPropertyError] = useState("");
 
   const selectedProduct: SelectedProduct = useMemo(() => {
+    if (isEducation) {
+      return getAnyProductById("education-pass") as EducationProductUI | null;
+    }
+
     if (isAddon) {
       return getAddOnProductById(requestedProductId);
     }
 
     return getAgentPackageById(requestedProductId) as AgentPackageUI | null;
-  }, [isAddon, requestedProductId]);
+  }, [isEducation, isAddon, requestedProductId]);
 
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<
     "monthly" | "yearly"
@@ -177,6 +199,8 @@ export default function AgentPembayaranPageClient() {
     async function loadExistingProperty() {
       if (!needsExistingProperty) {
         setLoadingExistingProperty(false);
+        setExistingProperty(null);
+        setExistingPropertyError("");
         return;
       }
 
@@ -357,6 +381,12 @@ export default function AgentPembayaranPageClient() {
   const resolvedDurationLabel = useMemo(() => {
     if (!selectedProduct) return "-";
 
+    if (isEducationProduct(selectedProduct)) {
+      return currentLang === "id"
+        ? `${selectedProduct.durationDays} hari`
+        : `${selectedProduct.durationDays} days`;
+    }
+
     if (isMembershipProduct(selectedProduct)) {
       if (
         selectedBillingCycle === "monthly" &&
@@ -386,8 +416,13 @@ export default function AgentPembayaranPageClient() {
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const productBadge = useMemo(() => {
-    if (!isAddOnProduct(selectedProduct)) return null;
-    return selectedProduct.badge ?? null;
+    if (!selectedProduct) return null;
+
+    if ("badge" in selectedProduct) {
+      return selectedProduct.badge ?? null;
+    }
+
+    return null;
   }, [selectedProduct]);
 
   const listingTypeLabel = useMemo(() => {
@@ -432,12 +467,7 @@ export default function AgentPembayaranPageClient() {
     }
 
     return true;
-  }, [
-    selectedProduct,
-    needsExistingProperty,
-    existingProperty,
-    loadingExistingProperty,
-  ]);
+  }, [selectedProduct, needsExistingProperty, existingProperty, loadingExistingProperty]);
 
   function translateFeature(feature: string) {
     if (currentLang === "id") return feature;
@@ -476,12 +506,23 @@ export default function AgentPembayaranPageClient() {
       "Tampil di homepage TETAMO": "Displayed on the TETAMO homepage",
       "Slot terbatas (maksimal 3 listing aktif)":
         "Limited slots (maximum 3 active listings)",
+      "Akses premium video edukasi TETAMO":
+        "Access to TETAMO premium education videos",
+      "Aktif selama 90 hari": "Active for 90 days",
+      "Berlaku untuk owner dan non-member agent":
+        "Available for owners and non-member agents",
+      "Tidak auto renew": "No auto renew",
     };
 
     return map[feature] ?? feature;
   }
 
   function onBack() {
+    if (isEducation) {
+      router.push("/education");
+      return;
+    }
+
     if (isAddon) {
       router.push("/agentdashboard/listing-saya");
       return;
@@ -523,6 +564,7 @@ export default function AgentPembayaranPageClient() {
       const normalizedFlow = normalizePaymentFlow(
         flow,
         isAddon,
+        isEducation,
         requestedProductId
       );
 
@@ -537,17 +579,22 @@ export default function AgentPembayaranPageClient() {
         flow: normalizedFlow,
         productId: selectedProduct.id,
         productType: normalizedProductType,
-        listingCode: isAddon ? existingProperty?.kode || kode || "" : "",
+        listingCode:
+          isAddon ? existingProperty?.kode || kode || "" : "",
         amount: total,
         currency: "IDR",
-        autoRenew: true,
+        autoRenew: Boolean(selectedProduct.autoRenewDefault ?? true),
         status: "pending",
         paymentMethod: "card",
         gateway: selectedGateway,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         metadata: {
-          action: isAddon ? "addon" : "membership",
+          action: isEducation
+            ? "education-access"
+            : isAddon
+              ? "addon"
+              : "membership",
           selectedBillingCycle: isMembershipProduct(selectedProduct)
             ? selectedBillingCycle
             : null,
@@ -571,10 +618,10 @@ export default function AgentPembayaranPageClient() {
           cancelStopsFutureRenewalOnly: isMembershipProduct(selectedProduct)
             ? selectedProduct.cancelStopsFutureRenewalOnly ?? true
             : true,
-          existingPropertyId: existingProperty?.id || null,
-          existingPropertyCode: existingProperty?.kode || null,
-          existingPropertyTitle: existingProperty?.title || null,
-          listingType: existingProperty?.listing_type || null,
+          existingPropertyId: isAddon ? existingProperty?.id || null : null,
+          existingPropertyCode: isAddon ? existingProperty?.kode || null : null,
+          existingPropertyTitle: isAddon ? existingProperty?.title || null : null,
+          listingType: isAddon ? existingProperty?.listing_type || null : null,
           productDurationDays: selectedProduct.durationDays ?? null,
           paymentTitle: resolvedPaymentTitle,
           paymentDescription: resolvedPaymentDescription,
@@ -641,24 +688,72 @@ export default function AgentPembayaranPageClient() {
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          {currentLang === "id"
-            ? "Tinjau paket agen atau add-on yang dipilih lalu lanjutkan ke pembayaran."
-            : "Review the selected agent package or add-on, then continue to payment."}
+          {isEducation
+            ? currentLang === "id"
+              ? "Tinjau Education Pass lalu lanjutkan ke pembayaran."
+              : "Review the Education Pass, then continue to payment."
+            : currentLang === "id"
+              ? "Tinjau paket agen atau add-on yang dipilih lalu lanjutkan ke pembayaran."
+              : "Review the selected agent package or add-on, then continue to payment."}
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
           <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-              {isAddon
+              {isEducation
                 ? currentLang === "id"
-                  ? "Ringkasan Add-On"
-                  : "Add-On Summary"
-                : currentLang === "id"
-                ? "Ringkasan Membership Agen"
-                : "Agent Membership Summary"}
+                  ? "Ringkasan Education Pass"
+                  : "Education Pass Summary"
+                : isAddon
+                  ? currentLang === "id"
+                    ? "Ringkasan Add-On"
+                    : "Add-On Summary"
+                  : currentLang === "id"
+                    ? "Ringkasan Membership Agen"
+                    : "Agent Membership Summary"}
             </h2>
 
-            {isAddon ? (
+            {isEducation ? (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">
+                    {currentLang === "id" ? "Produk" : "Product"}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    {selectedProduct?.name ?? "Education Pass"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">
+                    {currentLang === "id" ? "Akses" : "Access"}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    {currentLang === "id"
+                      ? "Premium Education"
+                      : "Premium Education"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">
+                    {currentLang === "id" ? "Durasi" : "Duration"}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    {resolvedDurationLabel}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 p-4">
+                  <div className="text-xs text-gray-500">
+                    {currentLang === "id" ? "Pembeli" : "Buyer"}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold sm:text-base">
+                    {currentLang === "id" ? "Agen" : "Agent"}
+                  </div>
+                </div>
+              </div>
+            ) : isAddon ? (
               <>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-gray-200 p-4">
@@ -745,8 +840,8 @@ export default function AgentPembayaranPageClient() {
                           ? "Bulanan"
                           : "Monthly"
                         : currentLang === "id"
-                        ? "Tahunan"
-                        : "Yearly"
+                          ? "Tahunan"
+                          : "Yearly"
                       : "-"}
                   </div>
                 </div>
@@ -780,9 +875,13 @@ export default function AgentPembayaranPageClient() {
                   : "Checkout is created from this page"}
               </div>
               <div className="mt-1 text-sm leading-6 text-blue-700">
-                {currentLang === "id"
-                  ? "Detail paket, invoice, receipt, dan status tagihan akan terlihat di halaman Tagihan setelah pembayaran dibuat."
-                  : "Package details, invoice, receipt, and billing status will appear on the Billing page after payment is created."}
+                {isEducation
+                  ? currentLang === "id"
+                    ? "Education Pass akan aktif setelah pembayaran berhasil terkonfirmasi."
+                    : "The Education Pass will become active after successful payment confirmation."
+                  : currentLang === "id"
+                    ? "Detail paket, invoice, receipt, dan status tagihan akan terlihat di halaman Tagihan setelah pembayaran dibuat."
+                    : "Package details, invoice, receipt, and billing status will appear on the Billing page after payment is created."}
               </div>
             </div>
           </div>
@@ -868,6 +967,18 @@ export default function AgentPembayaranPageClient() {
                   {finalKodeForDisplay(existingProperty?.kode, kode)}
                 </span>
                 .
+              </p>
+            ) : null}
+
+            {isEducation ? (
+              <p className="mt-4 text-sm leading-6 text-gray-600">
+                {currentLang === "id"
+                  ? "Education Pass ini akan memberi akses premium ke video edukasi TETAMO selama "
+                  : "This Education Pass will provide premium access to TETAMO education videos for "}
+                <span className="font-semibold">
+                  {selectedProduct?.durationDays ?? 90}
+                </span>{" "}
+                {currentLang === "id" ? "hari." : "days."}
               </p>
             ) : null}
 
@@ -973,8 +1084,8 @@ export default function AgentPembayaranPageClient() {
                   ? "Membuat Checkout..."
                   : "Creating Checkout..."
                 : currentLang === "id"
-                ? "Bayar Sekarang"
-                : "Pay Now"}
+                  ? "Bayar Sekarang"
+                  : "Pay Now"}
             </button>
 
             <p className="mt-3 text-xs leading-5 text-gray-500">
