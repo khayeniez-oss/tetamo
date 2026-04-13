@@ -39,7 +39,7 @@ type EducationVideo = {
 
 type ViewerState = {
   isLoggedIn: boolean;
-  hasPaidAgentAccess: boolean;
+  hasEducationAccess: boolean;
 };
 
 function formatDate(value?: string | null) {
@@ -129,12 +129,49 @@ function normalizeEducationVideo(row: any): EducationVideo {
   };
 }
 
-/**
- * Replace this with your real paid-agent membership logic.
- */
-async function resolvePaidAgentAccess(userId: string): Promise<boolean> {
-  void userId;
-  return false;
+async function resolveEducationAccess(userId: string): Promise<boolean> {
+  const nowIso = new Date().toISOString();
+
+  try {
+    const [membershipRes, educationPassRes] = await Promise.all([
+      supabase
+        .from("agent_memberships")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gt("expires_at", nowIso)
+        .limit(1),
+      supabase
+        .from("education_access_passes")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .gt("expires_at", nowIso)
+        .limit(1),
+    ]);
+
+    if (membershipRes.error) {
+      console.error("Failed to check agent membership access:", membershipRes.error);
+    }
+
+    if (educationPassRes.error) {
+      console.error(
+        "Failed to check education access pass:",
+        educationPassRes.error
+      );
+    }
+
+    const hasMembership =
+      Array.isArray(membershipRes.data) && membershipRes.data.length > 0;
+
+    const hasEducationPass =
+      Array.isArray(educationPassRes.data) && educationPassRes.data.length > 0;
+
+    return hasMembership || hasEducationPass;
+  } catch (error) {
+    console.error("Failed to resolve education access:", error);
+    return false;
+  }
 }
 
 export default function PublicEducationPage() {
@@ -162,7 +199,7 @@ export default function PublicEducationPage() {
       webinar: lang === "id" ? "Webinar" : "Webinar",
       allAccess: lang === "id" ? "Semua Akses" : "All Access",
       public: lang === "id" ? "Free" : "Free",
-      paidAgent: lang === "id" ? "Paid Agent" : "Paid Agent",
+      premiumAccess: lang === "id" ? "Premium Access" : "Premium Access",
       loading: lang === "id" ? "Memuat video..." : "Loading videos...",
       noVideos:
         lang === "id"
@@ -177,15 +214,15 @@ export default function PublicEducationPage() {
       speaker: lang === "id" ? "Speaker" : "Speaker",
       watchNow: lang === "id" ? "Tonton Sekarang" : "Watch Now",
       unlockToWatch:
-        lang === "id" ? "Upgrade untuk Menonton" : "Upgrade to Watch",
+        lang === "id" ? "Buka untuk Menonton" : "Unlock to Watch",
       locked: lang === "id" ? "Terkunci" : "Locked",
       notSet: lang === "id" ? "Belum diatur" : "Not set",
       videosFound: (count: number) =>
         lang === "id" ? `${count} video ditemukan` : `${count} videos found`,
-      paidTagline:
+      premiumTagline:
         lang === "id"
-          ? "Khusus agent member aktif"
-          : "For active paid agent members",
+          ? "Aktif untuk member agent atau pemilik Education Pass"
+          : "Available for active agent members or Education Pass holders",
       freeTagline:
         lang === "id"
           ? "Bisa ditonton semua orang"
@@ -209,7 +246,7 @@ export default function PublicEducationPage() {
     () => [
       { value: "all", label: ui.allAccess },
       { value: "public", label: ui.public },
-      { value: "paid_agent", label: ui.paidAgent },
+      { value: "paid_agent", label: ui.premiumAccess },
     ],
     [ui]
   );
@@ -225,7 +262,7 @@ export default function PublicEducationPage() {
   >("all");
   const [viewer, setViewer] = useState<ViewerState>({
     isLoggedIn: false,
-    hasPaidAgentAccess: false,
+    hasEducationAccess: false,
   });
 
   useEffect(() => {
@@ -241,17 +278,17 @@ export default function PublicEducationPage() {
       if (!user?.id) {
         setViewer({
           isLoggedIn: false,
-          hasPaidAgentAccess: false,
+          hasEducationAccess: false,
         });
         return;
       }
 
-      const hasPaidAgentAccess = await resolvePaidAgentAccess(user.id);
+      const hasEducationAccess = await resolveEducationAccess(user.id);
 
       if (!ignore) {
         setViewer({
           isLoggedIn: true,
-          hasPaidAgentAccess,
+          hasEducationAccess,
         });
       }
     }
@@ -385,22 +422,22 @@ export default function PublicEducationPage() {
             </div>
 
             <TetamoSelect
-  value={typeFilter}
-  onChange={(value: string) =>
-    setTypeFilter(value as "all" | EducationContentType)
-  }
-  placeholder={ui.allTypes}
-  options={typeOptions}
-/>
+              value={typeFilter}
+              onChange={(value: string) =>
+                setTypeFilter(value as "all" | EducationContentType)
+              }
+              placeholder={ui.allTypes}
+              options={typeOptions}
+            />
 
-<TetamoSelect
-  value={accessFilter}
-  onChange={(value: string) =>
-    setAccessFilter(value as "all" | EducationAccessType)
-  }
-  placeholder={ui.allAccess}
-  options={accessOptions}
-/>
+            <TetamoSelect
+              value={accessFilter}
+              onChange={(value: string) =>
+                setAccessFilter(value as "all" | EducationAccessType)
+              }
+              placeholder={ui.allAccess}
+              options={accessOptions}
+            />
           </div>
         </div>
       </section>
@@ -439,7 +476,7 @@ export default function PublicEducationPage() {
                 const Icon = getTypeIcon(video.content_type);
                 const isLocked =
                   video.access_type === "paid_agent" &&
-                  !viewer.hasPaidAgentAccess;
+                  !viewer.hasEducationAccess;
 
                 return (
                   <article
@@ -477,7 +514,7 @@ export default function PublicEducationPage() {
                               <Lock size={12} />
                             ) : null}
                             {video.access_type === "paid_agent"
-                              ? ui.paidAgent
+                              ? ui.premiumAccess
                               : ui.public}
                           </div>
 
@@ -539,7 +576,7 @@ export default function PublicEducationPage() {
 
                         <p className="mt-2 text-xs text-gray-500">
                           {video.access_type === "paid_agent"
-                            ? ui.paidTagline
+                            ? ui.premiumTagline
                             : ui.freeTagline}
                         </p>
                       </div>
