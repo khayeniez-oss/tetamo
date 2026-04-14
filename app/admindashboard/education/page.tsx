@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Eye,
+  Lightbulb,
   Lock,
   Mic,
   Plus,
@@ -19,7 +20,12 @@ import { TetamoSelect } from "@/components/ui/TetamoSelect";
 
 type EducationAccessType = "public" | "paid_agent";
 type EducationStatus = "draft" | "published";
-type EducationContentType = "tutorial" | "training" | "podcast" | "webinar";
+type EducationContentType =
+  | "tutorial"
+  | "training"
+  | "podcast"
+  | "webinar"
+  | "tips";
 
 type EducationVideo = {
   id: string;
@@ -117,6 +123,8 @@ function getTypeIcon(type: EducationContentType) {
       return Mic;
     case "webinar":
       return Tv;
+    case "tips":
+      return Lightbulb;
     default:
       return Video;
   }
@@ -157,8 +165,8 @@ export default function AdminEducationPage() {
       title: "Education Manager",
       subtitle:
         lang === "id"
-          ? "Kelola video tutorial, training, podcast, dan webinar."
-          : "Manage tutorial, training, podcast, and webinar videos.",
+          ? "Kelola video tutorial, training, podcast, webinar, dan tips."
+          : "Manage tutorial, training, podcast, webinar, and tips videos.",
       createNew: lang === "id" ? "Buat Video Baru" : "Create New Video",
       searchPlaceholder:
         lang === "id"
@@ -170,12 +178,13 @@ export default function AdminEducationPage() {
       scheduled: lang === "id" ? "Scheduled" : "Scheduled",
       allAccess: lang === "id" ? "Semua Akses" : "All Access",
       public: lang === "id" ? "Public" : "Public",
-      paidAgent: lang === "id" ? "Paid Agent" : "Paid Agent",
+      premiumAccess: lang === "id" ? "Premium Access" : "Premium Access",
       allTypes: lang === "id" ? "Semua Tipe" : "All Types",
       tutorial: lang === "id" ? "Tutorial" : "Tutorial",
       training: lang === "id" ? "Training" : "Training",
       podcast: lang === "id" ? "Podcast" : "Podcast",
       webinar: lang === "id" ? "Webinar" : "Webinar",
+      tips: lang === "id" ? "Tips" : "Tips",
       totalVideos: lang === "id" ? "Total Video" : "Total Videos",
       liveNow: lang === "id" ? "Live Sekarang" : "Live Now",
       scheduledCount: lang === "id" ? "Terjadwal" : "Scheduled",
@@ -197,9 +206,14 @@ export default function AdminEducationPage() {
       updatedAt: lang === "id" ? "Updated" : "Updated",
       featured: lang === "id" ? "Featured" : "Featured",
       notSet: lang === "id" ? "Belum diatur" : "Not set",
+      missingCategory: lang === "id" ? "Kategori kosong" : "Category missing",
       videosFound: (count: number) =>
         lang === "id" ? `${count} video ditemukan` : `${count} videos found`,
       loading: lang === "id" ? "Memuat video..." : "Loading videos...",
+      premiumHelper:
+        lang === "id"
+          ? "Agent member aktif / Education Pass"
+          : "Active agent member / Education Pass",
     }),
     [lang]
   );
@@ -218,7 +232,7 @@ export default function AdminEducationPage() {
     () => [
       { value: "all", label: ui.allAccess },
       { value: "public", label: ui.public },
-      { value: "paid_agent", label: ui.paidAgent },
+      { value: "paid_agent", label: ui.premiumAccess },
     ],
     [ui]
   );
@@ -230,6 +244,7 @@ export default function AdminEducationPage() {
       { value: "training", label: ui.training },
       { value: "podcast", label: ui.podcast },
       { value: "webinar", label: ui.webinar },
+      { value: "tips", label: ui.tips },
     ],
     [ui]
   );
@@ -369,11 +384,12 @@ export default function AdminEducationPage() {
     if (type === "tutorial") return ui.tutorial;
     if (type === "training") return ui.training;
     if (type === "podcast") return ui.podcast;
-    return ui.webinar;
+    if (type === "webinar") return ui.webinar;
+    return ui.tips;
   };
 
   const getAccessLabel = (access: EducationAccessType) => {
-    return access === "paid_agent" ? ui.paidAgent : ui.public;
+    return access === "paid_agent" ? ui.premiumAccess : ui.public;
   };
 
   const getStatusLabel = (status: "draft" | "published" | "scheduled") => {
@@ -515,30 +531,19 @@ export default function AdminEducationPage() {
                   className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                 >
                   <div className="flex flex-col md:flex-row">
-                    <div className="relative h-56 w-full shrink-0 md:h-auto md:w-[260px]">
-                      {video.thumbnail_url ? (
-                        <img
-                          src={video.thumbnail_url}
-                          alt={activeTitle}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-[#1C1C1E] text-4xl font-bold text-white">
-                          {getInitials(activeTitle)}
-                        </div>
-                      )}
-
-                      <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-                        <div className="inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#1C1C1E] shadow-sm">
-                          <Icon size={14} />
-                          {getTypeLabel(video.content_type)}
-                        </div>
-
-                        {video.is_featured ? (
-                          <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
-                            {ui.featured}
+                    <div className="w-full shrink-0 md:w-[280px]">
+                      <div className="flex h-[280px] w-full items-center justify-center bg-[#F3F4F6] p-3 md:h-full md:min-h-[320px]">
+                        {video.thumbnail_url ? (
+                          <img
+                            src={video.thumbnail_url}
+                            alt={activeTitle}
+                            className="max-h-full max-w-full rounded-2xl object-contain"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#1C1C1E] text-4xl font-bold text-white">
+                            {getInitials(activeTitle)}
                           </div>
-                        ) : null}
+                        )}
                       </div>
                     </div>
 
@@ -568,9 +573,26 @@ export default function AdminEducationPage() {
                           ) : null}
                           {getAccessLabel(video.access_type)}
                         </span>
+
+                        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
+                          <Icon size={13} />
+                          {getTypeLabel(video.content_type)}
+                        </span>
+
+                        {video.is_featured ? (
+                          <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
+                            {ui.featured}
+                          </div>
+                        ) : null}
+
+                        {!video.education_categories?.name ? (
+                          <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                            {ui.missingCategory}
+                          </div>
+                        ) : null}
                       </div>
 
-                      <h2 className="mt-3 line-clamp-2 text-xl font-bold leading-8 text-[#1C1C1E]">
+                      <h2 className="mt-4 line-clamp-2 text-xl font-bold leading-8 text-[#1C1C1E]">
                         {activeTitle || "Untitled"}
                       </h2>
 
@@ -614,6 +636,12 @@ export default function AdminEducationPage() {
                           {formatDateTime(video.updated_at)}
                         </div>
                       </div>
+
+                      {video.access_type === "paid_agent" ? (
+                        <p className="mt-4 text-xs leading-6 text-gray-500">
+                          {ui.premiumHelper}
+                        </p>
+                      ) : null}
 
                       <div className="mt-6 flex flex-wrap gap-3">
                         <Link
