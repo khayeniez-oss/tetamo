@@ -408,14 +408,14 @@ export default function PublicEducationPage() {
 
   return (
     <main className="min-h-screen bg-[#FAFAF8]">
-      <section className="border-b border-gray-200 bg-white px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      <section className="border-b border-gray-200 bg-white px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
             <span className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-600">
               {ui.heroBadge}
             </span>
 
-            <h1 className="mt-4 text-3xl font-bold leading-tight text-[#1C1C1E] sm:text-4xl lg:text-5xl">
+            <h1 className="mt-3 text-2xl font-bold leading-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
               {ui.heroTitle}
             </h1>
 
@@ -424,7 +424,7 @@ export default function PublicEducationPage() {
             </p>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.6fr)_minmax(0,0.6fr)]">
+          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,0.6fr)_minmax(0,0.6fr)]">
             <div className="relative">
               <Search
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"
