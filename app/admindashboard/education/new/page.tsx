@@ -5,9 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  BookOpen,
   CalendarDays,
   Eye,
   ImageIcon,
+  Lightbulb,
+  Lock,
   Mic,
   Presentation,
   Save,
@@ -15,15 +18,18 @@ import {
   Tv,
   Upload,
   Video,
-  BookOpen,
-  Lock,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { TetamoSelect } from "@/components/ui/TetamoSelect";
 
 type EducationAccessType = "public" | "paid_agent";
-type EducationContentType = "tutorial" | "training" | "podcast" | "webinar";
+type EducationContentType =
+  | "tutorial"
+  | "training"
+  | "podcast"
+  | "webinar"
+  | "tips";
 type VideoProvider = "supabase" | "external";
 type PreviewLang = "en" | "id";
 
@@ -215,6 +221,8 @@ function getTypeIcon(type: EducationContentType) {
       return <Mic size={16} />;
     case "webinar":
       return <Tv size={16} />;
+    case "tips":
+      return <Lightbulb size={16} />;
     default:
       return <Video size={16} />;
   }
@@ -230,8 +238,8 @@ export default function AdminNewEducationPage() {
       pageTitle: lang === "id" ? "Video Education Baru" : "New Education Video",
       pageSubtitle:
         lang === "id"
-          ? "Buat video tutorial, training, podcast, atau webinar."
-          : "Create tutorial, training, podcast, or webinar videos.",
+          ? "Buat video tutorial, training, podcast, webinar, atau tips."
+          : "Create tutorial, training, podcast, webinar, or tips videos.",
       preview: lang === "id" ? "Preview" : "Preview",
       hidePreview: lang === "id" ? "Sembunyikan Preview" : "Hide Preview",
       saveDraft: lang === "id" ? "Simpan Draft" : "Save Draft",
@@ -263,6 +271,8 @@ export default function AdminNewEducationPage() {
       writerSpeaker: lang === "id" ? "Speaker / Host" : "Speaker / Host",
       category: lang === "id" ? "Kategori" : "Category",
       selectCategory: lang === "id" ? "Pilih kategori" : "Select category",
+      categoryRequired:
+        lang === "id" ? "Kategori wajib dipilih." : "Category is required.",
       loadingCategories:
         lang === "id" ? "Memuat kategori..." : "Loading categories...",
       contentType: lang === "id" ? "Tipe Konten" : "Content Type",
@@ -311,6 +321,7 @@ export default function AdminNewEducationPage() {
       training: lang === "id" ? "Training" : "Training",
       podcast: lang === "id" ? "Podcast" : "Podcast",
       webinar: lang === "id" ? "Webinar" : "Webinar",
+      tips: lang === "id" ? "Tips" : "Tips",
       scheduleStatus: lang === "id" ? "Status Schedule" : "Schedule Status",
       scheduleNow: lang === "id" ? "Publish langsung" : "Immediate publish",
       scheduleFuture: lang === "id" ? "Terjadwal" : "Scheduled",
@@ -448,13 +459,13 @@ export default function AdminNewEducationPage() {
   }, []);
 
   const categoryOptions = useMemo(
-  () =>
-    categories.map((category) => ({
-      value: category.id,
-      label: category.name,
-    })),
-  [categories]
-);
+    () =>
+      categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    [categories]
+  );
 
   const contentTypeOptions = useMemo(
     () => [
@@ -462,6 +473,7 @@ export default function AdminNewEducationPage() {
       { value: "training", label: ui.training },
       { value: "podcast", label: ui.podcast },
       { value: "webinar", label: ui.webinar },
+      { value: "tips", label: ui.tips },
     ],
     [ui]
   );
@@ -492,6 +504,14 @@ export default function AdminNewEducationPage() {
   }, [publishAtIso]);
 
   const durationNumber = Number(form.duration_seconds || 0);
+
+  const getTypeLabel = (type: EducationContentType) => {
+    if (type === "tutorial") return ui.tutorial;
+    if (type === "training") return ui.training;
+    if (type === "podcast") return ui.podcast;
+    if (type === "webinar") return ui.webinar;
+    return ui.tips;
+  };
 
   function updateField<K extends keyof EducationForm>(
     key: K,
@@ -623,6 +643,11 @@ export default function AdminNewEducationPage() {
       return;
     }
 
+    if (!form.category_id) {
+      alert(ui.categoryRequired);
+      return;
+    }
+
     if (!cleanDuration) {
       alert(ui.durationRequired);
       return;
@@ -671,7 +696,7 @@ export default function AdminNewEducationPage() {
           description: cleanDescription,
           description_id: cleanDescriptionId,
           content_type: form.content_type,
-          category_id: form.category_id || null,
+          category_id: form.category_id,
           speaker_name: cleanSpeaker || null,
           thumbnail_url: form.thumbnail_url || null,
           video_provider: form.video_provider,
@@ -877,22 +902,24 @@ export default function AdminNewEducationPage() {
               </div>
 
               <div className="p-5 sm:p-6">
-                {form.thumbnail_url ? (
-                  <img
-                    src={form.thumbnail_url}
-                    alt={previewTitle || ui.untitled}
-                    className="h-[260px] w-full rounded-3xl object-cover sm:h-[360px]"
-                  />
-                ) : (
-                  <div className="flex h-[220px] items-center justify-center rounded-3xl bg-[#1C1C1E] text-4xl font-bold text-white">
-                    {getInitials(previewTitle)}
-                  </div>
-                )}
+                <div className="flex h-[260px] w-full items-center justify-center rounded-3xl bg-[#F3F4F6] p-4 sm:h-[360px]">
+                  {form.thumbnail_url ? (
+                    <img
+                      src={form.thumbnail_url}
+                      alt={previewTitle || ui.untitled}
+                      className="max-h-full max-w-full rounded-2xl object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#1C1C1E] text-4xl font-bold text-white">
+                      {getInitials(previewTitle)}
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-6 flex flex-wrap gap-2">
                   <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
                     {getTypeIcon(form.content_type)}
-                    {form.content_type}
+                    {getTypeLabel(form.content_type)}
                   </div>
 
                   <div
@@ -981,13 +1008,13 @@ export default function AdminNewEducationPage() {
               </div>
 
               <div>
-                <FieldLabel>{ui.category}</FieldLabel>
+                <FieldLabel required>{ui.category}</FieldLabel>
                 <TetamoSelect
-  value={form.category_id || undefined}
-  onChange={(value: string) => updateField("category_id", value)}
-  placeholder={loadingCategories ? ui.loadingCategories : ui.selectCategory}
-  options={categoryOptions}
-/>
+                  value={form.category_id || undefined}
+                  onChange={(value: string) => updateField("category_id", value)}
+                  placeholder={loadingCategories ? ui.loadingCategories : ui.selectCategory}
+                  options={categoryOptions}
+                />
               </div>
 
               <div>
@@ -1097,17 +1124,19 @@ export default function AdminNewEducationPage() {
               <div>
                 <FieldLabel>{ui.thumbnail}</FieldLabel>
 
-                {form.thumbnail_url ? (
-                  <img
-                    src={form.thumbnail_url}
-                    alt="Thumbnail preview"
-                    className="h-48 w-full rounded-3xl object-cover"
-                  />
-                ) : (
-                  <div className="flex h-48 items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-[#FAFAF8] text-sm text-gray-500">
-                    {ui.noThumbnail}
-                  </div>
-                )}
+                <div className="flex h-48 items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-[#FAFAF8] p-3">
+                  {form.thumbnail_url ? (
+                    <img
+                      src={form.thumbnail_url}
+                      alt="Thumbnail preview"
+                      className="max-h-full max-w-full rounded-2xl object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
+                      {ui.noThumbnail}
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-4 flex flex-wrap gap-3">
                   <button
