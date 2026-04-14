@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Clock3,
+  Lightbulb,
   Lock,
   Mic,
   PlayCircle,
@@ -18,7 +19,12 @@ import { supabase } from "@/lib/supabase";
 import { TetamoSelect } from "@/components/ui/TetamoSelect";
 
 type EducationAccessType = "public" | "paid_agent";
-type EducationContentType = "tutorial" | "training" | "podcast" | "webinar";
+type EducationContentType =
+  | "tutorial"
+  | "training"
+  | "podcast"
+  | "webinar"
+  | "tips";
 
 type EducationVideo = {
   id: string;
@@ -101,6 +107,8 @@ function getTypeIcon(type: EducationContentType) {
       return Mic;
     case "webinar":
       return Tv;
+    case "tips":
+      return Lightbulb;
     default:
       return Video;
   }
@@ -182,12 +190,12 @@ export default function PublicEducationPage() {
       heroBadge: "TETAMO EDUCATION",
       heroTitle:
         lang === "id"
-          ? "Tutorial, training, podcast, dan webinar untuk belajar lebih cepat"
-          : "Tutorials, training, podcasts, and webinars to help you learn faster",
+          ? "Tutorial, training, podcast, webinar, dan tips untuk belajar lebih cepat"
+          : "Tutorials, training, podcasts, webinars, and tips to help you learn faster",
       heroText:
         lang === "id"
-          ? "Tonton video education Tetamo untuk panduan platform, training penjualan, insight properti, dan konten pembelajaran lainnya."
-          : "Watch Tetamo education videos for platform guides, sales training, property insights, and more learning content.",
+          ? "Tonton video education Tetamo untuk panduan platform, training penjualan, insight properti, tips praktis, dan konten pembelajaran lainnya."
+          : "Watch Tetamo education videos for platform guides, sales training, property insights, practical tips, and more learning content.",
       searchPlaceholder:
         lang === "id"
           ? "Cari judul, speaker, kategori, tipe..."
@@ -197,8 +205,9 @@ export default function PublicEducationPage() {
       training: lang === "id" ? "Training" : "Training",
       podcast: lang === "id" ? "Podcast" : "Podcast",
       webinar: lang === "id" ? "Webinar" : "Webinar",
+      tips: lang === "id" ? "Tips" : "Tips",
       allAccess: lang === "id" ? "Semua Akses" : "All Access",
-      public: lang === "id" ? "Free" : "Free",
+      free: lang === "id" ? "Free" : "Free",
       premiumAccess: lang === "id" ? "Premium Access" : "Premium Access",
       loading: lang === "id" ? "Memuat video..." : "Loading videos...",
       noVideos:
@@ -238,6 +247,7 @@ export default function PublicEducationPage() {
       { value: "training", label: ui.training },
       { value: "podcast", label: ui.podcast },
       { value: "webinar", label: ui.webinar },
+      { value: "tips", label: ui.tips },
     ],
     [ui]
   );
@@ -245,7 +255,7 @@ export default function PublicEducationPage() {
   const accessOptions = useMemo(
     () => [
       { value: "all", label: ui.allAccess },
-      { value: "public", label: ui.public },
+      { value: "public", label: ui.free },
       { value: "paid_agent", label: ui.premiumAccess },
     ],
     [ui]
@@ -264,6 +274,14 @@ export default function PublicEducationPage() {
     isLoggedIn: false,
     hasEducationAccess: false,
   });
+
+  const getTypeLabel = (type: EducationContentType) => {
+    if (type === "tutorial") return ui.tutorial;
+    if (type === "training") return ui.training;
+    if (type === "podcast") return ui.podcast;
+    if (type === "webinar") return ui.webinar;
+    return ui.tips;
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -485,22 +503,24 @@ export default function PublicEducationPage() {
                   >
                     <Link href={`/education/${video.slug}`} className="block">
                       <div className="relative">
-                        {video.thumbnail_url ? (
-                          <img
-                            src={video.thumbnail_url}
-                            alt={activeTitle}
-                            className="h-56 w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-56 w-full items-center justify-center bg-[#1C1C1E] text-4xl font-bold text-white">
-                            {getInitials(activeTitle)}
-                          </div>
-                        )}
+                        <div className="flex h-56 w-full items-center justify-center bg-[#F3F4F6] p-3">
+                          {video.thumbnail_url ? (
+                            <img
+                              src={video.thumbnail_url}
+                              alt={activeTitle}
+                              className="max-h-full max-w-full rounded-2xl object-contain"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#1C1C1E] text-4xl font-bold text-white">
+                              {getInitials(activeTitle)}
+                            </div>
+                          )}
+                        </div>
 
                         <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                           <div className="inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#1C1C1E] shadow-sm">
                             <Icon size={14} />
-                            {video.content_type}
+                            {getTypeLabel(video.content_type)}
                           </div>
 
                           <div
@@ -515,7 +535,7 @@ export default function PublicEducationPage() {
                             ) : null}
                             {video.access_type === "paid_agent"
                               ? ui.premiumAccess
-                              : ui.public}
+                              : ui.free}
                           </div>
 
                           {video.is_featured ? (
