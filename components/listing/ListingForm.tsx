@@ -49,24 +49,32 @@ export default function ListingForm(props: Props) {
   const isDisewa = draft?.listingType === "disewa";
   const hasPlan = Boolean(draft?.plan);
 
+  const isStudio = propertyType === "studio";
   const isApartment = ["apartemen", "studio"].includes(propertyType);
   const isTanah = propertyType === "tanah";
   const isIndustrial = ["gudang", "pabrik"].includes(propertyType);
-  const isCommercial = ["kantor", "ruko", "rukos"].includes(propertyType);
+  const isRuko = propertyType === "ruko";
+  const isRukos = propertyType === "rukos";
+  const isCommercial = ["kantor", "ruko"].includes(propertyType);
   const isHospitality = ["guesthouse", "hotel", "kos", "resort"].includes(
     propertyType
   );
   const isHouseLike = ["rumah", "vila"].includes(propertyType);
 
-  const isResidential =
-    isHouseLike || isApartment || isHospitality || ["ruko", "rukos"].includes(propertyType);
-
   const usesLandSize = !isApartment;
   const usesBuildingSize = !isTanah;
 
-  const showBedrooms = isResidential;
-  const showBathrooms = !isTanah;
-  const showMaidRoom = isHouseLike || ["guesthouse", "hotel", "resort"].includes(propertyType);
+  const showBedroomField =
+    !isStudio && (isHouseLike || isApartment || isHospitality || isRukos);
+  const showBedroomInput = isHospitality;
+  const showBedroomSelect = showBedroomField && !showBedroomInput;
+
+  const showBathroomField = !isTanah;
+  const showBathroomInput = isHospitality;
+  const showBathroomSelect = showBathroomField && !showBathroomInput;
+
+  const showMaidRoom =
+    isHouseLike || ["guesthouse", "hotel", "resort"].includes(propertyType);
   const showFurnishing = !isTanah && !isIndustrial;
   const showParking = !isTanah;
   const showFloor = !isTanah;
@@ -306,7 +314,7 @@ export default function ListingForm(props: Props) {
       return mergeChecklist(commonFacilities, houseFacilities, hospitalityFacilities);
     }
 
-    if (isCommercial) {
+    if (isCommercial || isRuko) {
       return mergeChecklist(commonFacilities, commercialFacilities);
     }
 
@@ -315,18 +323,12 @@ export default function ListingForm(props: Props) {
 
   const nearbyItems = useMemo(
     () => [
-      {
-        key: "near_cafe",
-        label: lang === "id" ? "Cafe" : "Cafe",
-      },
+      { key: "near_cafe", label: lang === "id" ? "Cafe" : "Cafe" },
       {
         key: "near_restaurant",
         label: lang === "id" ? "Restoran" : "Restaurant",
       },
-      {
-        key: "near_gym",
-        label: lang === "id" ? "Gym" : "Gym",
-      },
+      { key: "near_gym", label: lang === "id" ? "Gym" : "Gym" },
       {
         key: "near_coworking",
         label: lang === "id" ? "Co-working Space" : "Co-working Space",
@@ -335,10 +337,7 @@ export default function ListingForm(props: Props) {
         key: "near_beach_club",
         label: lang === "id" ? "Beach Club" : "Beach Club",
       },
-      {
-        key: "near_beach",
-        label: lang === "id" ? "Pantai" : "Beach",
-      },
+      { key: "near_beach", label: lang === "id" ? "Pantai" : "Beach" },
       {
         key: "near_supermarket",
         label: lang === "id" ? "Supermarket" : "Supermarket",
@@ -347,14 +346,8 @@ export default function ListingForm(props: Props) {
         key: "near_traditional_market",
         label: lang === "id" ? "Pasar Tradisional" : "Traditional Market",
       },
-      {
-        key: "near_mall",
-        label: "Mall",
-      },
-      {
-        key: "near_school",
-        label: lang === "id" ? "Sekolah" : "School",
-      },
+      { key: "near_mall", label: "Mall" },
+      { key: "near_school", label: lang === "id" ? "Sekolah" : "School" },
       {
         key: "near_international_school",
         label: lang === "id" ? "Sekolah Internasional" : "International School",
@@ -367,26 +360,14 @@ export default function ListingForm(props: Props) {
         key: "near_hospital",
         label: lang === "id" ? "Rumah Sakit" : "Hospital",
       },
-      {
-        key: "near_clinic",
-        label: lang === "id" ? "Klinik" : "Clinic",
-      },
+      { key: "near_clinic", label: lang === "id" ? "Klinik" : "Clinic" },
       {
         key: "near_pharmacy",
         label: lang === "id" ? "Apotek" : "Pharmacy",
       },
-      {
-        key: "near_airport",
-        label: lang === "id" ? "Bandara" : "Airport",
-      },
-      {
-        key: "near_port",
-        label: lang === "id" ? "Pelabuhan" : "Port",
-      },
-      {
-        key: "near_toll",
-        label: lang === "id" ? "Akses Tol" : "Toll Access",
-      },
+      { key: "near_airport", label: lang === "id" ? "Bandara" : "Airport" },
+      { key: "near_port", label: lang === "id" ? "Pelabuhan" : "Port" },
+      { key: "near_toll", label: lang === "id" ? "Akses Tol" : "Toll Access" },
       {
         key: "near_main_road",
         label: lang === "id" ? "Jalan Utama" : "Main Road",
@@ -403,10 +384,45 @@ export default function ListingForm(props: Props) {
     [lang]
   );
 
+  const bedSelectOptions = useMemo(
+    () => [
+      { value: "1", label: "1" },
+      { value: "2", label: "2" },
+      { value: "3", label: "3" },
+      { value: "4", label: "4" },
+      { value: "5", label: "5" },
+      { value: "6", label: "6" },
+      { value: "7", label: "7" },
+      { value: "8", label: "8" },
+      { value: "9", label: "9" },
+      { value: "10", label: "10" },
+      { value: "10+", label: "10+" },
+    ],
+    []
+  );
+
+  const bathSelectOptions = useMemo(
+    () => [
+      { value: "0", label: "0" },
+      { value: "1", label: "1" },
+      { value: "2", label: "2" },
+      { value: "3", label: "3" },
+      { value: "4", label: "4" },
+      { value: "5", label: "5" },
+      { value: "6", label: "6" },
+      { value: "7", label: "7" },
+      { value: "8", label: "8" },
+      { value: "9", label: "9" },
+      { value: "10", label: "10" },
+      { value: "10+", label: "10+" },
+    ],
+    []
+  );
+
   useEffect(() => {
     if (!isApartment) return;
 
-    if (
+    const hasApartmentHiddenValues =
       draft?.lt ||
       draft?.landUnit ||
       draft?.pricePerAre ||
@@ -415,8 +431,10 @@ export default function ListingForm(props: Props) {
       draft?.depth ||
       draft?.dimensionText ||
       draft?.roadAccess ||
-      draft?.jenisTanah
-    ) {
+      draft?.jenisTanah ||
+      draft?.jenisZoning;
+
+    if (hasApartmentHiddenValues) {
       setDraft((p: any) => ({
         ...(p || {}),
         lt: "",
@@ -428,6 +446,7 @@ export default function ListingForm(props: Props) {
         dimensionText: "",
         roadAccess: "",
         jenisTanah: "",
+        jenisZoning: "",
       }));
     }
   }, [
@@ -441,8 +460,28 @@ export default function ListingForm(props: Props) {
     draft?.dimensionText,
     draft?.roadAccess,
     draft?.jenisTanah,
+    draft?.jenisZoning,
     setDraft,
   ]);
+
+  useEffect(() => {
+    if (isStudio) {
+      if (draft?.bed !== "studio") {
+        setDraft((p: any) => ({
+          ...(p || {}),
+          bed: "studio",
+        }));
+      }
+      return;
+    }
+
+    if (draft?.bed === "studio") {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        bed: "",
+      }));
+    }
+  }, [isStudio, draft?.bed, setDraft]);
 
   useEffect(() => {
     if (!isTanah) return;
@@ -559,6 +598,72 @@ export default function ListingForm(props: Props) {
       }));
     }
   }, [showCeilingHeight, draft?.ceilingHeight, setDraft]);
+
+  useEffect(() => {
+    if (showBedroomField || isStudio) return;
+
+    if (draft?.bed) {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        bed: "",
+      }));
+    }
+  }, [showBedroomField, isStudio, draft?.bed, setDraft]);
+
+  useEffect(() => {
+    if (showBathroomField) return;
+
+    if (draft?.bath) {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        bath: "",
+      }));
+    }
+  }, [showBathroomField, draft?.bath, setDraft]);
+
+  useEffect(() => {
+    if (showMaidRoom) return;
+
+    if (draft?.maid) {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        maid: "",
+      }));
+    }
+  }, [showMaidRoom, draft?.maid, setDraft]);
+
+  useEffect(() => {
+    if (showFurnishing) return;
+
+    if (draft?.furnishing) {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        furnishing: "",
+      }));
+    }
+  }, [showFurnishing, draft?.furnishing, setDraft]);
+
+  useEffect(() => {
+    if (showParking) return;
+
+    if (draft?.garage) {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        garage: "",
+      }));
+    }
+  }, [showParking, draft?.garage, setDraft]);
+
+  useEffect(() => {
+    if (showFloor) return;
+
+    if (draft?.floor) {
+      setDraft((p: any) => ({
+        ...(p || {}),
+        floor: "",
+      }));
+    }
+  }, [showFloor, draft?.floor, setDraft]);
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -754,7 +859,9 @@ export default function ListingForm(props: Props) {
                 <input
                   className={inputBase}
                   inputMode="numeric"
-                  placeholder={lang === "id" ? "Contoh: 15000000" : "Example: 15000000"}
+                  placeholder={
+                    lang === "id" ? "Contoh: 15000000" : "Example: 15000000"
+                  }
                   value={draft?.pricePerSqm ?? ""}
                   onChange={(e) =>
                     setDraft((p: any) => ({
@@ -773,7 +880,9 @@ export default function ListingForm(props: Props) {
                   <input
                     className={inputBase}
                     inputMode="numeric"
-                    placeholder={lang === "id" ? "Contoh: 250000000" : "Example: 250000000"}
+                    placeholder={
+                      lang === "id" ? "Contoh: 250000000" : "Example: 250000000"
+                    }
                     value={draft?.pricePerAre ?? ""}
                     onChange={(e) =>
                       setDraft((p: any) => ({
@@ -842,12 +951,16 @@ export default function ListingForm(props: Props) {
               {showPricePerArea && (
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Harga per Hektare (Rp)" : "Price per Hectare (Rp)"}
+                    {lang === "id"
+                      ? "Harga per Hektare (Rp)"
+                      : "Price per Hectare (Rp)"}
                   </label>
                   <input
                     className={inputBase}
                     inputMode="numeric"
-                    placeholder={lang === "id" ? "Contoh: 2500000000" : "Example: 2500000000"}
+                    placeholder={
+                      lang === "id" ? "Contoh: 2500000000" : "Example: 2500000000"
+                    }
                     value={draft?.pricePerHectare ?? ""}
                     onChange={(e) =>
                       setDraft((p: any) => ({
@@ -903,7 +1016,9 @@ export default function ListingForm(props: Props) {
                     </label>
                     <input
                       className={inputBase}
-                      placeholder={lang === "id" ? "Contoh: 10 x 20" : "Example: 10 x 20"}
+                      placeholder={
+                        lang === "id" ? "Contoh: 10 x 20" : "Example: 10 x 20"
+                      }
                       value={draft?.dimensionText ?? ""}
                       onChange={(e) =>
                         setDraft((p: any) => ({
@@ -919,7 +1034,9 @@ export default function ListingForm(props: Props) {
               {usesBuildingSize && (
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Luas Bangunan (LB) m²" : "Building Size (LB) m²"}
+                    {lang === "id"
+                      ? "Luas Bangunan (LB) m²"
+                      : "Building Size (LB) m²"}
                   </label>
                   <input
                     className={inputBase}
@@ -936,7 +1053,18 @@ export default function ListingForm(props: Props) {
                 </div>
               )}
 
-              {showBedrooms && (
+              {isStudio && (
+                <div>
+                  <label className="block text-sm font-semibold text-[#1C1C1E]">
+                    {lang === "id" ? "Kamar Tidur" : "Bedrooms"}
+                  </label>
+                  <div className="mt-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-[#1C1C1E]">
+                    {lang === "id" ? "Studio" : "Studio"}
+                  </div>
+                </div>
+              )}
+
+              {showBedroomSelect && (
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
                     {lang === "id" ? "Kamar Tidur" : "Bedrooms"}
@@ -945,22 +1073,7 @@ export default function ListingForm(props: Props) {
                     <TetamoSelect
                       value={draft?.bed ?? ""}
                       placeholder={lang === "id" ? "Pilih" : "Select"}
-                      options={[
-                        {
-                          value: "studio",
-                          label: lang === "id" ? "Studio" : "Studio",
-                        },
-                        { value: "1", label: "1" },
-                        { value: "2", label: "2" },
-                        { value: "3", label: "3" },
-                        { value: "4", label: "4" },
-                        { value: "5", label: "5" },
-                        { value: "6", label: "6" },
-                        { value: "7", label: "7" },
-                        { value: "8", label: "8" },
-                        { value: "9", label: "9" },
-                        { value: "10", label: "10" },
-                      ]}
+                      options={bedSelectOptions}
                       onChange={(value) =>
                         setDraft((p: any) => ({ ...(p || {}), bed: value }))
                       }
@@ -969,7 +1082,29 @@ export default function ListingForm(props: Props) {
                 </div>
               )}
 
-              {showBathrooms && (
+              {showBedroomInput && (
+                <div>
+                  <label className="block text-sm font-semibold text-[#1C1C1E]">
+                    {lang === "id"
+                      ? "Jumlah Kamar / Bedroom"
+                      : "Total Rooms / Bedrooms"}
+                  </label>
+                  <input
+                    className={inputBase}
+                    inputMode="numeric"
+                    placeholder={lang === "id" ? "Contoh: 24" : "Example: 24"}
+                    value={draft?.bed ?? ""}
+                    onChange={(e) =>
+                      setDraft((p: any) => ({
+                        ...(p || {}),
+                        bed: e.target.value.replace(/[^\d+]/g, ""),
+                      }))
+                    }
+                  />
+                </div>
+              )}
+
+              {showBathroomSelect && (
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
                     {lang === "id" ? "Kamar Mandi" : "Bathrooms"}
@@ -978,24 +1113,32 @@ export default function ListingForm(props: Props) {
                     <TetamoSelect
                       value={draft?.bath ?? ""}
                       placeholder={lang === "id" ? "Pilih" : "Select"}
-                      options={[
-                        { value: "0", label: "0" },
-                        { value: "1", label: "1" },
-                        { value: "2", label: "2" },
-                        { value: "3", label: "3" },
-                        { value: "4", label: "4" },
-                        { value: "5", label: "5" },
-                        { value: "6", label: "6" },
-                        { value: "7", label: "7" },
-                        { value: "8", label: "8" },
-                        { value: "9", label: "9" },
-                        { value: "10", label: "10" },
-                      ]}
+                      options={bathSelectOptions}
                       onChange={(value) =>
                         setDraft((p: any) => ({ ...(p || {}), bath: value }))
                       }
                     />
                   </div>
+                </div>
+              )}
+
+              {showBathroomInput && (
+                <div>
+                  <label className="block text-sm font-semibold text-[#1C1C1E]">
+                    {lang === "id" ? "Jumlah Kamar Mandi" : "Total Bathrooms"}
+                  </label>
+                  <input
+                    className={inputBase}
+                    inputMode="numeric"
+                    placeholder={lang === "id" ? "Contoh: 24" : "Example: 24"}
+                    value={draft?.bath ?? ""}
+                    onChange={(e) =>
+                      setDraft((p: any) => ({
+                        ...(p || {}),
+                        bath: e.target.value.replace(/[^\d+]/g, ""),
+                      }))
+                    }
+                  />
                 </div>
               )}
 
@@ -1035,15 +1178,18 @@ export default function ListingForm(props: Props) {
                       options={[
                         {
                           value: "unfurnished",
-                          label: lang === "id" ? "Tanpa Furnitur" : "Unfurnished",
+                          label:
+                            lang === "id" ? "Tanpa Furnitur" : "Unfurnished",
                         },
                         {
                           value: "semi",
-                          label: lang === "id" ? "Semi Furnished" : "Semi Furnished",
+                          label:
+                            lang === "id" ? "Semi Furnished" : "Semi Furnished",
                         },
                         {
                           value: "full",
-                          label: lang === "id" ? "Full Furnished" : "Full Furnished",
+                          label:
+                            lang === "id" ? "Full Furnished" : "Full Furnished",
                         },
                       ]}
                       onChange={(val) =>
@@ -1150,7 +1296,9 @@ export default function ListingForm(props: Props) {
                   </label>
                   <input
                     className={inputBase}
-                    placeholder={lang === "id" ? "Contoh: Tower A" : "Example: Tower A"}
+                    placeholder={
+                      lang === "id" ? "Contoh: Tower A" : "Example: Tower A"
+                    }
                     value={draft?.towerBlock ?? ""}
                     onChange={(e) =>
                       setDraft((p: any) => ({
@@ -1190,7 +1338,9 @@ export default function ListingForm(props: Props) {
                   <input
                     className={inputBase}
                     placeholder={
-                      lang === "id" ? "Contoh: Jalan 6 meter" : "Example: 6-meter road"
+                      lang === "id"
+                        ? "Contoh: Jalan 6 meter"
+                        : "Example: 6-meter road"
                     }
                     value={draft?.roadAccess ?? ""}
                     onChange={(e) =>
@@ -1211,7 +1361,9 @@ export default function ListingForm(props: Props) {
                     </label>
                     <input
                       className={inputBase}
-                      placeholder={lang === "id" ? "Contoh: 2200 VA" : "Example: 2200 VA"}
+                      placeholder={
+                        lang === "id" ? "Contoh: 2200 VA" : "Example: 2200 VA"
+                      }
                       value={draft?.listrik ?? ""}
                       onChange={(e) =>
                         setDraft((p: any) => ({
@@ -1377,7 +1529,10 @@ export default function ListingForm(props: Props) {
                         { value: "SHM", label: "SHM" },
                         { value: "SHGB", label: "SHGB / HGB" },
                         { value: "SHMSRS", label: "SHMSRS / Strata Title" },
-                        { value: "Hak Pakai", label: lang === "id" ? "Hak Pakai" : "Hak Pakai" },
+                        {
+                          value: "Hak Pakai",
+                          label: lang === "id" ? "Hak Pakai" : "Hak Pakai",
+                        },
                         { value: "AJB", label: "AJB" },
                         { value: "PPJB", label: "PPJB" },
                         { value: "Girik", label: "Girik" },
@@ -1410,17 +1565,24 @@ export default function ListingForm(props: Props) {
                       options={[
                         {
                           value: "Hak Milik / Freehold",
-                          label: lang === "id" ? "Hak Milik / Freehold" : "Freehold / Hak Milik",
+                          label:
+                            lang === "id"
+                              ? "Hak Milik / Freehold"
+                              : "Freehold / Hak Milik",
                         },
                         {
                           value: "Hak Sewa / Leasehold",
-                          label: lang === "id" ? "Hak Sewa / Leasehold" : "Leasehold / Hak Sewa",
+                          label:
+                            lang === "id"
+                              ? "Hak Sewa / Leasehold"
+                              : "Leasehold / Hak Sewa",
                         },
                         {
                           value: "Hak Guna Bangunan / HGB",
-                          label: lang === "id"
-                            ? "Hak Guna Bangunan / HGB"
-                            : "Right to Build / HGB",
+                          label:
+                            lang === "id"
+                              ? "Hak Guna Bangunan / HGB"
+                              : "Right to Build / HGB",
                         },
                         {
                           value: "Hak Pakai",
@@ -1432,11 +1594,17 @@ export default function ListingForm(props: Props) {
                         },
                         {
                           value: "Corporate Ownership",
-                          label: lang === "id" ? "Kepemilikan Perusahaan" : "Corporate Ownership",
+                          label:
+                            lang === "id"
+                              ? "Kepemilikan Perusahaan"
+                              : "Corporate Ownership",
                         },
                         {
                           value: "Shared Ownership",
-                          label: lang === "id" ? "Kepemilikan Bersama" : "Shared Ownership",
+                          label:
+                            lang === "id"
+                              ? "Kepemilikan Bersama"
+                              : "Shared Ownership",
                         },
                         {
                           value: "Lainnya",
@@ -1465,27 +1633,43 @@ export default function ListingForm(props: Props) {
                         options={[
                           {
                             value: "Tanah Hunian",
-                            label: lang === "id" ? "Tanah Hunian" : "Residential Land",
+                            label:
+                              lang === "id"
+                                ? "Tanah Hunian"
+                                : "Residential Land",
                           },
                           {
                             value: "Tanah Komersial",
-                            label: lang === "id" ? "Tanah Komersial" : "Commercial Land",
+                            label:
+                              lang === "id"
+                                ? "Tanah Komersial"
+                                : "Commercial Land",
                           },
                           {
                             value: "Tanah Pariwisata",
-                            label: lang === "id" ? "Tanah Pariwisata" : "Tourism Land",
+                            label:
+                              lang === "id"
+                                ? "Tanah Pariwisata"
+                                : "Tourism Land",
                           },
                           {
                             value: "Tanah Pertanian",
-                            label: lang === "id" ? "Tanah Pertanian" : "Agricultural Land",
+                            label:
+                              lang === "id"
+                                ? "Tanah Pertanian"
+                                : "Agricultural Land",
                           },
                           {
                             value: "Tanah Industri",
-                            label: lang === "id" ? "Tanah Industri" : "Industrial Land",
+                            label:
+                              lang === "id" ? "Tanah Industri" : "Industrial Land",
                           },
                           {
                             value: "Tanah Mixed Use",
-                            label: lang === "id" ? "Tanah Mixed Use" : "Mixed Use Land",
+                            label:
+                              lang === "id"
+                                ? "Tanah Mixed Use"
+                                : "Mixed Use Land",
                           },
                           {
                             value: "Beachfront",
@@ -1535,19 +1719,31 @@ export default function ListingForm(props: Props) {
                         options={[
                           {
                             value: "Residential",
-                            label: lang === "id" ? "Residential / Perumahan" : "Residential",
+                            label:
+                              lang === "id"
+                                ? "Residential / Perumahan"
+                                : "Residential",
                           },
                           {
                             value: "Commercial",
-                            label: lang === "id" ? "Commercial / Komersial" : "Commercial",
+                            label:
+                              lang === "id"
+                                ? "Commercial / Komersial"
+                                : "Commercial",
                           },
                           {
                             value: "Tourism",
-                            label: lang === "id" ? "Tourism / Pariwisata" : "Tourism",
+                            label:
+                              lang === "id"
+                                ? "Tourism / Pariwisata"
+                                : "Tourism",
                           },
                           {
                             value: "Mixed Use",
-                            label: lang === "id" ? "Mixed Use / Campuran" : "Mixed Use",
+                            label:
+                              lang === "id"
+                                ? "Mixed Use / Campuran"
+                                : "Mixed Use",
                           },
                           {
                             value: "Green Zone",
@@ -1555,7 +1751,8 @@ export default function ListingForm(props: Props) {
                           },
                           {
                             value: "Yellow Zone",
-                            label: lang === "id" ? "Yellow Zone" : "Yellow Zone",
+                            label:
+                              lang === "id" ? "Yellow Zone" : "Yellow Zone",
                           },
                           {
                             value: "Pink Zone",
@@ -1563,15 +1760,24 @@ export default function ListingForm(props: Props) {
                           },
                           {
                             value: "Industrial",
-                            label: lang === "id" ? "Industrial / Industri" : "Industrial",
+                            label:
+                              lang === "id"
+                                ? "Industrial / Industri"
+                                : "Industrial",
                           },
                           {
                             value: "Agricultural",
-                            label: lang === "id" ? "Agricultural / Pertanian" : "Agricultural",
+                            label:
+                              lang === "id"
+                                ? "Agricultural / Pertanian"
+                                : "Agricultural",
                           },
                           {
                             value: "Public Facilities",
-                            label: lang === "id" ? "Fasilitas Umum" : "Public Facilities",
+                            label:
+                              lang === "id"
+                                ? "Fasilitas Umum"
+                                : "Public Facilities",
                           },
                           {
                             value: "Lainnya",

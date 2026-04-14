@@ -21,7 +21,7 @@ export default function PemilikIklanDetailPageClient() {
   }, [searchParams]);
 
   useEffect(() => {
-    setDraft((prev) => ({
+    setDraft((prev: any) => ({
       ...(prev || {}),
       mode: "create",
       source: "owner",
@@ -41,18 +41,24 @@ export default function PemilikIklanDetailPageClient() {
     const jenisTanah = String(draft?.jenisTanah || "").trim();
     const jenisZoning = String(draft?.jenisZoning || "").trim();
 
+    const isApartment = ["apartemen", "studio"].includes(propertyType);
+    const usesLandSize = !isApartment;
+    const requiresRentalType = listingType === "disewa";
+    const requiresLandLegal = propertyType === "tanah" && !requiresRentalType;
+
     const baseValid =
       propertyType.length > 0 &&
       price.length > 0 &&
-      lt.length > 0;
+      (!usesLandSize || lt.length > 0);
 
-    if (propertyType === "tanah") {
-      if (listingType === "disewa") {
-        return baseValid && rentalType.length > 0;
-      }
+    if (!baseValid) return false;
 
+    if (requiresRentalType && rentalType.length === 0) {
+      return false;
+    }
+
+    if (requiresLandLegal) {
       return (
-        baseValid &&
         sertifikat.length > 0 &&
         jenisKepemilikan.length > 0 &&
         jenisTanah.length > 0 &&
@@ -60,11 +66,7 @@ export default function PemilikIklanDetailPageClient() {
       );
     }
 
-    if (listingType === "disewa") {
-      return baseValid && rentalType.length > 0;
-    }
-
-    return baseValid;
+    return true;
   }, [
     draft?.propertyType,
     draft?.price,
