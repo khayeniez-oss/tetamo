@@ -475,7 +475,7 @@ export default function PublicEducationPage() {
               {videos.length === 0 ? ui.noVideos : ui.noResults}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="space-y-6">
               {filteredVideos.map((video) => {
                 const activeTitle =
                   lang === "id"
@@ -502,103 +502,105 @@ export default function PublicEducationPage() {
                     className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                   >
                     <Link href={`/education/${video.slug}`} className="block">
-                      <div className="relative">
-                        <div className="flex h-56 w-full items-center justify-center bg-[#F3F4F6] p-3">
-                          {video.thumbnail_url ? (
-                            <img
-                              src={video.thumbnail_url}
-                              alt={activeTitle}
-                              className="max-h-full max-w-full rounded-2xl object-contain"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#1C1C1E] text-4xl font-bold text-white">
-                              {getInitials(activeTitle)}
+                      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_260px]">
+                        <div className="p-5 sm:p-6 lg:p-7">
+                          <div className="flex flex-wrap gap-2">
+                            <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
+                              <Icon size={14} />
+                              {getTypeLabel(video.content_type)}
                             </div>
-                          )}
+
+                            <div
+                              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                                video.access_type === "paid_agent"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
+                              {video.access_type === "paid_agent" ? (
+                                <Lock size={12} />
+                              ) : null}
+                              {video.access_type === "paid_agent"
+                                ? ui.premiumAccess
+                                : ui.free}
+                            </div>
+
+                            {video.is_featured ? (
+                              <div className="inline-flex rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
+                                {ui.featured}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock3 size={13} />
+                              {formatDuration(video.duration_seconds)}
+                            </span>
+                            <span>•</span>
+                            <span>{formatDate(video.published_at)}</span>
+                          </div>
+
+                          <h2 className="mt-4 text-xl font-bold leading-8 text-[#1C1C1E] sm:text-2xl">
+                            {activeTitle}
+                          </h2>
+
+                          <p className="mt-4 line-clamp-4 text-sm leading-8 text-gray-600 sm:text-base">
+                            {activeDescription || ui.notSet}
+                          </p>
+
+                          <div className="mt-5 grid grid-cols-1 gap-2 text-sm text-gray-600 sm:grid-cols-2">
+                            <div>
+                              <span className="font-semibold text-[#1C1C1E]">
+                                {ui.category}:
+                              </span>{" "}
+                              {video.education_categories?.name || ui.notSet}
+                            </div>
+
+                            <div>
+                              <span className="font-semibold text-[#1C1C1E]">
+                                {ui.speaker}:
+                              </span>{" "}
+                              {video.speaker_name || ui.notSet}
+                            </div>
+                          </div>
+
+                          <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
+                            <PlayCircle size={16} />
+                            {isLocked ? ui.unlockToWatch : ui.watchNow}
+                          </div>
+
+                          <p className="mt-2 text-xs text-gray-500">
+                            {video.access_type === "paid_agent"
+                              ? ui.premiumTagline
+                              : ui.freeTagline}
+                          </p>
                         </div>
 
-                        <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-                          <div className="inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#1C1C1E] shadow-sm">
-                            <Icon size={14} />
-                            {getTypeLabel(video.content_type)}
+                        <div className="relative border-t border-gray-200 bg-[#F3F4F6] md:border-l md:border-t-0">
+                          <div className="flex h-[240px] items-center justify-center p-4 md:h-full md:min-h-[290px]">
+                            {video.thumbnail_url ? (
+                              <img
+                                src={video.thumbnail_url}
+                                alt={activeTitle}
+                                className="max-h-full max-w-full rounded-2xl object-contain"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#1C1C1E] text-4xl font-bold text-white">
+                                {getInitials(activeTitle)}
+                              </div>
+                            )}
                           </div>
 
-                          <div
-                            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
-                              video.access_type === "paid_agent"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-blue-100 text-blue-700"
-                            }`}
-                          >
-                            {video.access_type === "paid_agent" ? (
-                              <Lock size={12} />
-                            ) : null}
-                            {video.access_type === "paid_agent"
-                              ? ui.premiumAccess
-                              : ui.free}
-                          </div>
-
-                          {video.is_featured ? (
-                            <div className="inline-flex rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                              {ui.featured}
+                          {isLocked ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#1C1C1E] shadow-sm">
+                                <Lock size={15} />
+                                {ui.locked}
+                              </div>
                             </div>
                           ) : null}
                         </div>
-
-                        {isLocked ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-                            <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#1C1C1E] shadow-sm">
-                              <Lock size={15} />
-                              {ui.locked}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="p-5 sm:p-6">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                          <span className="inline-flex items-center gap-1">
-                            <Clock3 size={13} />
-                            {formatDuration(video.duration_seconds)}
-                          </span>
-                          <span>•</span>
-                          <span>{formatDate(video.published_at)}</span>
-                        </div>
-
-                        <h2 className="mt-3 line-clamp-2 text-lg font-bold leading-7 text-[#1C1C1E]">
-                          {activeTitle}
-                        </h2>
-
-                        <p className="mt-3 line-clamp-3 text-sm leading-7 text-gray-600">
-                          {activeDescription || ui.notSet}
-                        </p>
-
-                        <div className="mt-5 grid grid-cols-1 gap-2 text-sm text-gray-600">
-                          <div>
-                            <span className="font-semibold text-[#1C1C1E]">
-                              {ui.category}:
-                            </span>{" "}
-                            {video.education_categories?.name || ui.notSet}
-                          </div>
-
-                          <div>
-                            <span className="font-semibold text-[#1C1C1E]">
-                              {ui.speaker}:
-                            </span>{" "}
-                            {video.speaker_name || ui.notSet}
-                          </div>
-                        </div>
-
-                        <div className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
-                          <PlayCircle size={16} />
-                          {isLocked ? ui.unlockToWatch : ui.watchNow}
-                        </div>
-
-                        <p className="mt-2 text-xs text-gray-500">
-                          {video.access_type === "paid_agent"
-                            ? ui.premiumTagline
-                            : ui.freeTagline}
-                        </p>
                       </div>
                     </Link>
                   </article>
