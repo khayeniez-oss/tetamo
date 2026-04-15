@@ -795,30 +795,36 @@ export default function PemilikIklanPembayaranPageClient() {
             </div>
 
             <button
-              onClick={() => setSelectedGateway("stripe")}
-              type="button"
-              className={[
-                "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                selectedGateway === "stripe"
-                  ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E]",
-              ].join(" ")}
-            >
-              Stripe
-            </button>
+  onClick={() => setSelectedGateway("stripe")}
+  type="button"
+  className={[
+    "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+    selectedGateway === "stripe"
+      ? "border-[#1C1C1E] bg-black text-white"
+      : "border-gray-200 bg-white text-[#1C1C1E]",
+  ].join(" ")}
+>
+  <div className="font-semibold">Debit / Credit Card</div>
+  <div
+    className={[
+      "mt-1 text-xs",
+      selectedGateway === "stripe" ? "text-white/80" : "text-gray-500",
+    ].join(" ")}
+  >
+    Visa, Mastercard, JCB, American Express
+  </div>
+</button>
 
-            <button
-              onClick={() => setSelectedGateway("xendit")}
-              type="button"
-              className={[
-                "mt-3 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                selectedGateway === "xendit"
-                  ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E]",
-              ].join(" ")}
-            >
-              Xendit
-            </button>
+<button
+  type="button"
+  disabled
+  className="mt-3 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-400"
+>
+  <div className="font-semibold">QRIS / E-Wallet / Virtual Account</div>
+  <div className="mt-1 text-xs text-gray-400">
+    BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon
+  </div>
+</button>
 
             {selectedProduct?.features?.length ? (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4">
