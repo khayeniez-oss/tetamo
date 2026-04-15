@@ -30,6 +30,29 @@ type ExistingProperty = {
   property_images: { id: string }[] | null;
 };
 
+type LocalizedProduct = {
+  id: string;
+  productType: string;
+  priceIdr: number;
+  durationDays: number;
+  autoRenewDefault: boolean;
+  name: string;
+  nameEn?: string;
+  badge?: string;
+  badgeEn?: string;
+  paymentTitle: string;
+  paymentTitleEn?: string;
+  paymentDescription: string;
+  paymentDescriptionEn?: string;
+  renewalLabel: string;
+  renewalLabelEn?: string;
+  billingNote: string;
+  billingNoteEn?: string;
+  features: string[];
+  featuresEn?: string[];
+  featuredDurationDays?: number;
+};
+
 function isPlanId(v: string): v is PlanId {
   return v === "basic" || v === "featured";
 }
@@ -133,10 +156,76 @@ function getUserIdFromStoredSession(): string | null {
   return null;
 }
 
+function getLocalizedName(product: LocalizedProduct | null, lang: "id" | "en") {
+  if (!product) return "-";
+  return lang === "en" ? product.nameEn || product.name : product.name;
+}
+
+function getLocalizedBadge(
+  product: LocalizedProduct | null,
+  lang: "id" | "en"
+) {
+  if (!product) return undefined;
+  return lang === "en"
+    ? product.badgeEn || product.badge
+    : product.badge || product.badgeEn;
+}
+
+function getLocalizedPaymentTitle(
+  product: LocalizedProduct | null,
+  lang: "id" | "en"
+) {
+  if (!product) return "";
+  return lang === "en"
+    ? product.paymentTitleEn || product.paymentTitle
+    : product.paymentTitle;
+}
+
+function getLocalizedPaymentDescription(
+  product: LocalizedProduct | null,
+  lang: "id" | "en"
+) {
+  if (!product) return "";
+  return lang === "en"
+    ? product.paymentDescriptionEn || product.paymentDescription
+    : product.paymentDescription;
+}
+
+function getLocalizedRenewalLabel(
+  product: LocalizedProduct | null,
+  lang: "id" | "en"
+) {
+  if (!product) return "";
+  return lang === "en"
+    ? product.renewalLabelEn || product.renewalLabel
+    : product.renewalLabel;
+}
+
+function getLocalizedBillingNote(
+  product: LocalizedProduct | null,
+  lang: "id" | "en"
+) {
+  if (!product) return "";
+  return lang === "en"
+    ? product.billingNoteEn || product.billingNote
+    : product.billingNote;
+}
+
+function getLocalizedFeatures(
+  product: LocalizedProduct | null,
+  lang: "id" | "en"
+) {
+  if (!product) return [];
+  return lang === "en"
+    ? product.featuresEn || product.features
+    : product.features;
+}
+
 export default function PemilikIklanPembayaranPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { lang } = useLanguage();
+  const currentLang: "id" | "en" = lang === "en" ? "en" : "id";
 
   const action = String(searchParams.get("action") || "");
   const kode = String(searchParams.get("kode") || "");
@@ -173,7 +262,7 @@ export default function PemilikIklanPembayaranPageClient() {
 
   const ui = useMemo(
     () =>
-      lang === "id"
+      currentLang === "id"
         ? {
             back: "← Kembali",
             stepTitle: "Step 5 • Pembayaran",
@@ -288,20 +377,22 @@ export default function PemilikIklanPembayaranPageClient() {
             payNow: "Pay Now",
             creatingCheckout: "Creating Checkout...",
             checkingAuth: "Checking Session...",
-            checkoutNote: "Checkout will be created automatically when you click the button.",
+            checkoutNote:
+              "Checkout will be created automatically when you click the button.",
             listingCodeNotFound: "Listing code was not found.",
             relogin: "Please log in again.",
             notFoundPaymentProduct: "Payment product was not found.",
             listingTargetNotFound: "Target listing was not found.",
             loginFirst: "Please log in first.",
             checkoutUrlMissing: "Checkout URL was not found.",
-            genericCheckoutError: "Something went wrong while creating payment.",
+            genericCheckoutError:
+              "Something went wrong while creating payment.",
             soldType: "For Sale",
             rentType: "For Rent",
             auctionType: "Auction",
             activeFeatured: "Featured active",
           },
-    [lang]
+    [currentLang]
   );
 
   useEffect(() => {
@@ -415,7 +506,15 @@ export default function PemilikIklanPembayaranPageClient() {
     return () => {
       ignore = true;
     };
-  }, [needsExistingProperty, kode, authLoading, authUserId, ui.listingCodeNotFound, ui.relogin, ui.listingTargetNotFound]);
+  }, [
+    needsExistingProperty,
+    kode,
+    authLoading,
+    authUserId,
+    ui.listingCodeNotFound,
+    ui.relogin,
+    ui.listingTargetNotFound,
+  ]);
 
   const selectedPlan: PlanId = useMemo(() => {
     if (isPlanId(planFromUrlRaw)) {
@@ -467,6 +566,43 @@ export default function PemilikIklanPembayaranPageClient() {
 
     return getOwnerPackageById(selectedPlan);
   }, [effectiveProductId, selectedPlan]);
+
+  const localizedProduct = (selectedProduct || null) as LocalizedProduct | null;
+
+  const localizedName = useMemo(
+    () => getLocalizedName(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
+
+  const localizedBadge = useMemo(
+    () => getLocalizedBadge(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
+
+  const localizedPaymentTitle = useMemo(
+    () => getLocalizedPaymentTitle(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
+
+  const localizedPaymentDescription = useMemo(
+    () => getLocalizedPaymentDescription(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
+
+  const localizedRenewalLabel = useMemo(
+    () => getLocalizedRenewalLabel(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
+
+  const localizedBillingNote = useMemo(
+    () => getLocalizedBillingNote(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
+
+  const localizedFeatures = useMemo(
+    () => getLocalizedFeatures(localizedProduct, currentLang),
+    [localizedProduct, currentLang]
+  );
 
   const fotoCount = useMemo(() => {
     if (isEducation) return 0;
@@ -521,7 +657,13 @@ export default function PemilikIklanPembayaranPageClient() {
     if (!prov && !city) return "-";
     if (prov && city) return `${prov} • ${city}`;
     return prov || city;
-  }, [isEducation, draft?.province, draft?.city, needsExistingProperty, existingProperty]);
+  }, [
+    isEducation,
+    draft?.province,
+    draft?.city,
+    needsExistingProperty,
+    existingProperty,
+  ]);
 
   const judulLabel = useMemo(() => {
     if (isEducation) return "-";
@@ -594,7 +736,8 @@ export default function PemilikIklanPembayaranPageClient() {
       } = await supabase.auth.getSession();
 
       const accessToken = session?.access_token || null;
-      const userId = session?.user?.id || authUserId || getUserIdFromStoredSession();
+      const userId =
+        session?.user?.id || authUserId || getUserIdFromStoredSession();
 
       if (!userId) {
         alert(ui.loginFirst);
@@ -675,9 +818,9 @@ export default function PemilikIklanPembayaranPageClient() {
             !isEducation && "featuredDurationDays" in (selectedProduct as any)
               ? Number((selectedProduct as any).featuredDurationDays || 0)
               : null,
-          paymentTitle: selectedProduct?.paymentTitle ?? null,
-          paymentDescription: selectedProduct?.paymentDescription ?? null,
-          billingNote: selectedProduct?.billingNote ?? null,
+          paymentTitle: localizedPaymentTitle || null,
+          paymentDescription: localizedPaymentDescription || null,
+          billingNote: localizedBillingNote || null,
         },
       };
 
@@ -760,7 +903,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 <div className="rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">{ui.product}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {selectedProduct?.name ?? "Education Pass"}
+                    {localizedName || "Education Pass"}
                   </div>
                 </div>
 
@@ -871,16 +1014,16 @@ export default function PemilikIklanPembayaranPageClient() {
 
           <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-              {selectedProduct?.paymentTitle ?? ui.payment}
+              {localizedPaymentTitle || ui.payment}
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-gray-600">
-              {selectedProduct?.paymentDescription ?? ui.billingFallback}
+              {localizedPaymentDescription || ui.billingFallback}
             </p>
 
             {isRenew && !isEducation && (
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                {selectedProduct?.renewalLabel ?? ui.renewalFallback}
+                {localizedRenewalLabel || ui.renewalFallback}
               </p>
             )}
 
@@ -908,7 +1051,7 @@ export default function PemilikIklanPembayaranPageClient() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                    {selectedProduct?.name ?? "-"}
+                    {localizedName}
                   </div>
 
                   <div className="mt-1 text-sm text-gray-600">
@@ -916,9 +1059,9 @@ export default function PemilikIklanPembayaranPageClient() {
                   </div>
                 </div>
 
-                {"badge" in (selectedProduct || {}) ? (
+                {localizedBadge ? (
                   <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                    {(selectedProduct as any).badge}
+                    {localizedBadge}
                   </span>
                 ) : null}
               </div>
@@ -954,7 +1097,9 @@ export default function PemilikIklanPembayaranPageClient() {
               <div
                 className={[
                   "mt-1 text-xs",
-                  selectedGateway === "stripe" ? "text-white/80" : "text-gray-500",
+                  selectedGateway === "stripe"
+                    ? "text-white/80"
+                    : "text-gray-500",
                 ].join(" ")}
               >
                 {ui.cardSubtitle}
@@ -972,14 +1117,14 @@ export default function PemilikIklanPembayaranPageClient() {
               </div>
             </button>
 
-            {selectedProduct?.features?.length ? (
+            {localizedFeatures.length ? (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
                   {ui.whatYouGet}
                 </div>
 
                 <ul className="mt-3 space-y-2">
-                  {selectedProduct.features.map((feature, idx) => (
+                  {localizedFeatures.map((feature, idx) => (
                     <li
                       key={idx}
                       className="flex items-start gap-2 text-sm leading-6 text-gray-700"
@@ -1001,7 +1146,7 @@ export default function PemilikIklanPembayaranPageClient() {
               </div>
 
               <div className="mt-2 text-xs leading-5 text-gray-500">
-                {selectedProduct?.billingNote ?? ui.billingFallback}
+                {localizedBillingNote || ui.billingFallback}
               </div>
             </div>
 
