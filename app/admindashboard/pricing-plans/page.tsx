@@ -7,11 +7,13 @@ import {
   Package2,
   Sparkles,
   LayoutGrid,
+  BookOpen,
 } from "lucide-react";
 import {
   OWNER_PACKAGES,
   AGENT_PACKAGES,
   ADD_ON_PRODUCTS,
+  EDUCATION_PRODUCTS,
 } from "@/app/data/pricelist";
 
 function formatIdr(value: number) {
@@ -35,6 +37,22 @@ function getBillingLabel(
   return "Yearly";
 }
 
+function getEducationAudienceLabel(audience?: string) {
+  if ((audience || "").toLowerCase() === "all") {
+    return "Owner • Non-member Agent";
+  }
+
+  if ((audience || "").toLowerCase() === "owner") {
+    return "Owner";
+  }
+
+  if ((audience || "").toLowerCase() === "agent") {
+    return "Agent";
+  }
+
+  return "Education Access";
+}
+
 export default function AdminPricingPage() {
   const ownerPackages = useMemo(
     () => [...OWNER_PACKAGES].sort((a, b) => a.priceIdr - b.priceIdr),
@@ -51,14 +69,20 @@ export default function AdminPricingPage() {
     []
   );
 
+  const educationProducts = useMemo(
+    () => [...EDUCATION_PRODUCTS].sort((a, b) => a.priceIdr - b.priceIdr),
+    []
+  );
+
   const totalProducts =
-    ownerPackages.length + agentPackages.length + addOnProducts.length;
+    ownerPackages.length +
+    agentPackages.length +
+    addOnProducts.length +
+    educationProducts.length;
 
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-        {/* Header */}
-
         <div className="mb-6 sm:mb-8">
           <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl lg:text-3xl">
             Pricing Plans
@@ -70,9 +94,7 @@ export default function AdminPricingPage() {
           </p>
         </div>
 
-        {/* Summary */}
-
-        <div className="mb-6 grid grid-cols-2 gap-3 lg:mb-8 lg:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:mb-8 lg:grid-cols-5">
           <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
             <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
               Total Products
@@ -108,9 +130,16 @@ export default function AdminPricingPage() {
               {addOnProducts.length}
             </p>
           </div>
-        </div>
 
-        {/* Owner packages */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+            <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-xs">
+              Education
+            </p>
+            <p className="mt-2 text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+              {educationProducts.length}
+            </p>
+          </div>
+        </div>
 
         <section className="mb-8 sm:mb-10">
           <div className="mb-4 flex items-center gap-2 sm:mb-5">
@@ -222,8 +251,6 @@ export default function AdminPricingPage() {
             ))}
           </div>
         </section>
-
-        {/* Agent packages */}
 
         <section className="mb-8 sm:mb-10">
           <div className="mb-4 flex items-center gap-2 sm:mb-5">
@@ -353,7 +380,114 @@ export default function AdminPricingPage() {
           </div>
         </section>
 
-        {/* Add-ons */}
+        <section className="mb-8 sm:mb-10">
+          <div className="mb-4 flex items-center gap-2 sm:mb-5">
+            <BookOpen className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
+            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg lg:text-xl">
+              Education Products
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {educationProducts.map((product) => (
+              <div
+                key={product.id}
+                className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 lg:p-6"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl lg:text-2xl">
+                        {product.name}
+                      </h3>
+
+                      {product.badge ? (
+                        <span className="rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white sm:text-xs">
+                          {product.badge}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <p className="mt-2 text-xs font-medium text-gray-500 sm:text-sm">
+                      Education • {getEducationAudienceLabel(product.audience)}
+                    </p>
+
+                    <p className="mt-3 text-xs leading-6 text-gray-600 sm:text-sm sm:leading-7">
+                      {product.paymentDescription}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-gray-50 p-3 sm:p-4">
+                  <p className="text-2xl font-bold tracking-tight text-[#1C1C1E] sm:text-3xl">
+                    {formatIdr(product.priceIdr)}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+                    {product.durationDays} days
+                  </p>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="rounded-2xl border border-gray-200 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+                      Audience
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                      {getEducationAudienceLabel(product.audience)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+                      Duration
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                      {product.durationDays} days
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+                      Renewable
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                      {getBooleanLabel(product.renewable)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+                      Auto Renew
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                      {getBooleanLabel(product.autoRenewDefault)}
+                    </p>
+                  </div>
+                </div>
+
+                <ul className="mt-5 space-y-3 text-gray-700">
+                  {product.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 sm:gap-3">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 sm:h-5 sm:w-5" />
+                      <span className="text-xs leading-6 sm:text-sm sm:leading-7">
+                        {feature}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-gray-400 sm:text-[11px]">
+                    Billing Note
+                  </p>
+                  <p className="mt-2 text-xs leading-6 text-gray-600 sm:text-sm sm:leading-7">
+                    {product.billingNote}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section>
           <div className="mb-4 flex items-center gap-2 sm:mb-5">
