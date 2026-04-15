@@ -29,7 +29,7 @@ type Property = {
   verifiedListing: boolean;
 
   ownerVerified: boolean;
-  ownerPendingApproval: boolean;
+  ownerPendingVerification: boolean;
 
   agentVerified: boolean;
   agentPendingVerification: boolean;
@@ -582,13 +582,13 @@ function PropertyCard({
       );
     }
 
-    if (p.ownerPendingApproval) {
+    if (p.ownerPendingVerification) {
       return (
         <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-gray-900 shadow-sm sm:text-[11px]">
           <Clock size={11} strokeWidth={2.5} />
           {lang === "id"
-            ? "Menunggu Persetujuan"
-            : "Pending for Approval"}
+            ? "Menunggu Verifikasi"
+            : "Pending for Verification"}
         </span>
       );
     }
@@ -910,8 +910,8 @@ Is this property still available?`;
                 ? "Dijual"
                 : "For Sale"
               : lang === "id"
-              ? "Disewa"
-              : "For Rent"}
+                ? "Disewa"
+                : "For Rent"}
           </div>
 
           {p.jenisListing === "disewa" && p.rentalType ? (
@@ -1246,23 +1246,35 @@ export default function PropertiPageClient() {
           row.boost_expires_at
         );
 
-        const ownerPendingApproval =
+        const ownerPendingVerification =
           postedByType === "owner" &&
           !isVerified &&
-          (row.status === "pending_approval" ||
-            row.verification_status === "pending_approval");
+          (
+            row.status === "pending" ||
+            row.status === "pending_approval" ||
+            row.verification_status === "pending_verification" ||
+            row.verification_status === "pending_approval"
+          );
 
         const agentPendingVerification =
           postedByType === "agent" &&
           !isVerified &&
-          (row.verification_status === "pending_verification" ||
-            row.status === "pending_approval");
+          (
+            row.status === "pending" ||
+            row.status === "pending_approval" ||
+            row.verification_status === "pending_verification" ||
+            row.verification_status === "pending_approval"
+          );
 
         const developerPendingApproval =
           postedByType === "developer" &&
           !isVerified &&
-          (row.status === "pending_approval" ||
-            row.verification_status === "pending_approval");
+          (
+            row.status === "pending" ||
+            row.status === "pending_approval" ||
+            row.verification_status === "pending_verification" ||
+            row.verification_status === "pending_approval"
+          );
 
         const resolvedName = row.contact_name || "Tetamo User";
         const resolvedAgency = row.contact_agency || "";
@@ -1273,7 +1285,7 @@ export default function PropertiPageClient() {
           verifiedListing: isVerified,
 
           ownerVerified: postedByType === "owner" && isVerified,
-          ownerPendingApproval,
+          ownerPendingVerification,
 
           agentVerified: postedByType === "agent" && isVerified,
           agentPendingVerification,
@@ -1840,11 +1852,11 @@ export default function PropertiPageClient() {
         ? "Dijual"
         : "For Sale"
       : lang === "id"
-      ? "Disewa"
-      : "For Rent"
+        ? "Disewa"
+        : "For Rent"
     : lang === "id"
-    ? "Semua"
-    : "All";
+      ? "Semua"
+      : "All";
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
