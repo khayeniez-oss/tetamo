@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/app/context/LanguageContext";
 import { usePemilikDraftListing } from "../layout";
 import {
   getOwnerPackageById,
@@ -135,6 +136,7 @@ function getUserIdFromStoredSession(): string | null {
 export default function PemilikIklanPembayaranPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { lang } = useLanguage();
 
   const action = String(searchParams.get("action") || "");
   const kode = String(searchParams.get("kode") || "");
@@ -168,6 +170,139 @@ export default function PemilikIklanPembayaranPageClient() {
   const [existingPropertyError, setExistingPropertyError] = useState("");
 
   const planFromUrlRaw = String(searchParams.get("plan") || "").toLowerCase();
+
+  const ui = useMemo(
+    () =>
+      lang === "id"
+        ? {
+            back: "← Kembali",
+            stepTitle: "Step 5 • Pembayaran",
+            stepDescEducation:
+              "Tinjau Education Pass lalu lanjutkan pembayaran.",
+            stepDescDefault: "Pilih paket iklan dan lanjutkan pembayaran.",
+            summaryEducation: "Ringkasan Education Pass",
+            summaryAddon: "Ringkasan Add-On",
+            summaryListing: "Ringkasan Iklan",
+            product: "Produk",
+            access: "Akses",
+            premiumEducation: "Premium Education",
+            duration: "Durasi",
+            buyer: "Pembeli",
+            owner: "Pemilik",
+            listingType: "Tipe Listing",
+            location: "Lokasi",
+            title: "Judul",
+            photos: "Foto",
+            photosCount: (count: number) => `${count} foto`,
+            checkingSession: "Memeriksa sesi login...",
+            loadingListing: "Memuat data listing...",
+            failedLoadListing: "Gagal memuat listing",
+            cannotPayYet: "Belum bisa bayar",
+            cannotPayYetDesc:
+              "Pastikan: tipe listing, lokasi, minimal 3 foto, judul & deskripsi, dan form verifikasi sudah terisi.",
+            activationTitle: "Aktivasi dilakukan setelah pembayaran terkonfirmasi",
+            activationEducation:
+              "Education Pass akan aktif setelah pembayaran berhasil terkonfirmasi.",
+            activationDefault:
+              "Halaman ini sekarang hanya membuat payment checkout. Listing, renew, boost, atau spotlight tidak diaktifkan dari sini.",
+            payment: "Pembayaran",
+            renewalFallback:
+              "Perpanjangan produk akan mengikuti paket yang dipilih.",
+            addonAppliedTo: "Add-on ini akan diterapkan ke listing dengan kode",
+            educationDescPrefix:
+              "Education Pass ini akan memberi akses premium ke video edukasi TETAMO selama",
+            days: "hari",
+            cardTitle: "Debit / Credit Card",
+            cardSubtitle: "Visa, Mastercard, JCB, American Express",
+            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
+            otherMethodsSubtitle:
+              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            whatYouGet: "Yang Anda Dapatkan",
+            total: "Total",
+            billingFallback:
+              "Detail pembayaran akan mengikuti produk yang dipilih.",
+            payNow: "Bayar Sekarang",
+            creatingCheckout: "Membuat Checkout...",
+            checkingAuth: "Memeriksa Sesi...",
+            checkoutNote: "Checkout akan dibuat otomatis saat tombol ditekan.",
+            listingCodeNotFound: "Kode listing tidak ditemukan.",
+            relogin: "Silakan login ulang.",
+            notFoundPaymentProduct: "Produk pembayaran tidak ditemukan.",
+            listingTargetNotFound: "Listing target tidak ditemukan.",
+            loginFirst: "Silakan login terlebih dahulu.",
+            checkoutUrlMissing: "Checkout URL tidak ditemukan.",
+            genericCheckoutError:
+              "Terjadi kendala saat membuat pembayaran.",
+            soldType: "Dijual",
+            rentType: "Disewa",
+            auctionType: "Lelang",
+            activeFeatured: "Featured aktif",
+          }
+        : {
+            back: "← Back",
+            stepTitle: "Step 5 • Payment",
+            stepDescEducation:
+              "Review the Education Pass and continue to payment.",
+            stepDescDefault: "Choose your listing package and continue to payment.",
+            summaryEducation: "Education Pass Summary",
+            summaryAddon: "Add-On Summary",
+            summaryListing: "Listing Summary",
+            product: "Product",
+            access: "Access",
+            premiumEducation: "Premium Education",
+            duration: "Duration",
+            buyer: "Buyer",
+            owner: "Owner",
+            listingType: "Listing Type",
+            location: "Location",
+            title: "Title",
+            photos: "Photos",
+            photosCount: (count: number) => `${count} photos`,
+            checkingSession: "Checking login session...",
+            loadingListing: "Loading listing data...",
+            failedLoadListing: "Failed to load listing",
+            cannotPayYet: "Cannot pay yet",
+            cannotPayYetDesc:
+              "Make sure listing type, location, at least 3 photos, title, description, and verification form are all completed.",
+            activationTitle: "Activation happens after payment is confirmed",
+            activationEducation:
+              "Education Pass will become active after successful payment confirmation.",
+            activationDefault:
+              "This page currently only creates the payment checkout. Listing, renew, boost, or spotlight are not activated here directly.",
+            payment: "Payment",
+            renewalFallback:
+              "Renewal will follow the selected product package.",
+            addonAppliedTo: "This add-on will be applied to listing code",
+            educationDescPrefix:
+              "This Education Pass gives premium access to TETAMO educational videos for",
+            days: "days",
+            cardTitle: "Debit / Credit Card",
+            cardSubtitle: "Visa, Mastercard, JCB, American Express",
+            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
+            otherMethodsSubtitle:
+              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            whatYouGet: "What You Get",
+            total: "Total",
+            billingFallback:
+              "Payment details will follow the selected product.",
+            payNow: "Pay Now",
+            creatingCheckout: "Creating Checkout...",
+            checkingAuth: "Checking Session...",
+            checkoutNote: "Checkout will be created automatically when you click the button.",
+            listingCodeNotFound: "Listing code was not found.",
+            relogin: "Please log in again.",
+            notFoundPaymentProduct: "Payment product was not found.",
+            listingTargetNotFound: "Target listing was not found.",
+            loginFirst: "Please log in first.",
+            checkoutUrlMissing: "Checkout URL was not found.",
+            genericCheckoutError: "Something went wrong while creating payment.",
+            soldType: "For Sale",
+            rentType: "For Rent",
+            auctionType: "Auction",
+            activeFeatured: "Featured active",
+          },
+    [lang]
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -226,7 +361,7 @@ export default function PemilikIklanPembayaranPageClient() {
 
       if (!kode) {
         setLoadingExistingProperty(false);
-        setExistingPropertyError("Kode listing tidak ditemukan.");
+        setExistingPropertyError(ui.listingCodeNotFound);
         return;
       }
 
@@ -237,7 +372,7 @@ export default function PemilikIklanPembayaranPageClient() {
       if (!userId) {
         setLoadingExistingProperty(false);
         setExistingProperty(null);
-        setExistingPropertyError("Silakan login ulang.");
+        setExistingPropertyError(ui.relogin);
         return;
       }
 
@@ -267,7 +402,7 @@ export default function PemilikIklanPembayaranPageClient() {
       if (error || !data) {
         setExistingProperty(null);
         setLoadingExistingProperty(false);
-        setExistingPropertyError(error?.message || "Listing tidak ditemukan.");
+        setExistingPropertyError(error?.message || ui.listingTargetNotFound);
         return;
       }
 
@@ -280,7 +415,7 @@ export default function PemilikIklanPembayaranPageClient() {
     return () => {
       ignore = true;
     };
-  }, [needsExistingProperty, kode, authLoading, authUserId]);
+  }, [needsExistingProperty, kode, authLoading, authUserId, ui.listingCodeNotFound, ui.relogin, ui.listingTargetNotFound]);
 
   const selectedPlan: PlanId = useMemo(() => {
     if (isPlanId(planFromUrlRaw)) {
@@ -349,18 +484,26 @@ export default function PemilikIklanPembayaranPageClient() {
 
     if (needsExistingProperty) {
       const lt = String(existingProperty?.listing_type || "").toLowerCase();
-      if (lt === "dijual") return "Dijual";
-      if (lt === "disewa") return "Disewa";
-      if (lt === "lelang") return "Lelang";
+      if (lt === "dijual") return ui.soldType;
+      if (lt === "disewa") return ui.rentType;
+      if (lt === "lelang") return ui.auctionType;
       return "-";
     }
 
     const lt = String(draft?.listingType || "").toLowerCase();
-    if (lt === "dijual") return "Dijual";
-    if (lt === "disewa") return "Disewa";
-    if (lt === "lelang") return "Lelang";
+    if (lt === "dijual") return ui.soldType;
+    if (lt === "disewa") return ui.rentType;
+    if (lt === "lelang") return ui.auctionType;
     return "-";
-  }, [isEducation, draft?.listingType, needsExistingProperty, existingProperty]);
+  }, [
+    isEducation,
+    draft?.listingType,
+    needsExistingProperty,
+    existingProperty,
+    ui.soldType,
+    ui.rentType,
+    ui.auctionType,
+  ]);
 
   const lokasiLabel = useMemo(() => {
     if (isEducation) return "-";
@@ -446,21 +589,26 @@ export default function PemilikIklanPembayaranPageClient() {
     setSubmitting(true);
 
     try {
-      const userId = authUserId || getUserIdFromStoredSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const accessToken = session?.access_token || null;
+      const userId = session?.user?.id || authUserId || getUserIdFromStoredSession();
 
       if (!userId) {
-        alert("Please log in first.");
+        alert(ui.loginFirst);
         router.push("/login");
         return;
       }
 
       if (!selectedProduct) {
-        alert("Produk pembayaran tidak ditemukan.");
+        alert(ui.notFoundPaymentProduct);
         return;
       }
 
       if (needsExistingProperty && !existingProperty?.id) {
-        alert("Listing target tidak ditemukan.");
+        alert(ui.listingTargetNotFound);
         return;
       }
 
@@ -533,11 +681,17 @@ export default function PemilikIklanPembayaranPageClient() {
         },
       };
 
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const res = await fetch("/api/payments/create", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(paymentRecord),
       });
 
@@ -545,7 +699,7 @@ export default function PemilikIklanPembayaranPageClient() {
       console.log("create payment response:", data);
 
       if (!res.ok || !data?.success) {
-        alert(data?.message || "Failed to create payment.");
+        alert(data?.message || ui.genericCheckoutError);
         return;
       }
 
@@ -564,10 +718,10 @@ export default function PemilikIklanPembayaranPageClient() {
         return;
       }
 
-      alert("Checkout URL tidak ditemukan.");
+      alert(ui.checkoutUrlMissing);
     } catch (error: any) {
       console.error("onPay error:", error);
-      alert(error?.message || "Something went wrong while creating payment.");
+      alert(error?.message || ui.genericCheckoutError);
     } finally {
       setSubmitting(false);
     }
@@ -581,57 +735,55 @@ export default function PemilikIklanPembayaranPageClient() {
           className="text-sm text-gray-600 hover:text-gray-900"
           type="button"
         >
-          ← Kembali
+          {ui.back}
         </button>
 
         <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
-          Step 5 • Pembayaran
+          {ui.stepTitle}
         </h1>
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          {isEducation
-            ? "Tinjau Education Pass lalu lanjutkan pembayaran."
-            : "Pilih paket iklan dan lanjutkan pembayaran."}
+          {isEducation ? ui.stepDescEducation : ui.stepDescDefault}
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
           <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               {isEducation
-                ? "Ringkasan Education Pass"
+                ? ui.summaryEducation
                 : isAddon
-                  ? "Ringkasan Add-On"
-                  : "Ringkasan Iklan"}
+                  ? ui.summaryAddon
+                  : ui.summaryListing}
             </h2>
 
             {isEducation ? (
               <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">Produk</div>
+                  <div className="text-xs text-gray-500">{ui.product}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {selectedProduct?.name ?? "Education Pass"}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">Akses</div>
+                  <div className="text-xs text-gray-500">{ui.access}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
-                    Premium Education
+                    {ui.premiumEducation}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">Durasi</div>
+                  <div className="text-xs text-gray-500">{ui.duration}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {selectedProduct?.durationDays
-                      ? `${selectedProduct.durationDays} hari`
+                      ? `${selectedProduct.durationDays} ${ui.days}`
                       : "-"}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">Pembeli</div>
+                  <div className="text-xs text-gray-500">{ui.buyer}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
-                    Pemilik
+                    {ui.owner}
                   </div>
                 </div>
               </div>
@@ -639,30 +791,30 @@ export default function PemilikIklanPembayaranPageClient() {
               <>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">Tipe Listing</div>
+                    <div className="text-xs text-gray-500">{ui.listingType}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {listingTypeLabel}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">Lokasi</div>
+                    <div className="text-xs text-gray-500">{ui.location}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {lokasiLabel}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">Judul</div>
+                    <div className="text-xs text-gray-500">{ui.title}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {judulLabel}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">Foto</div>
+                    <div className="text-xs text-gray-500">{ui.photos}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
-                      {fotoCount} foto
+                      {ui.photosCount(fotoCount)}
                     </div>
                   </div>
                 </div>
@@ -670,7 +822,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 {authLoading && (
                   <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                     <div className="text-sm text-gray-600">
-                      Memeriksa sesi login...
+                      {ui.checkingSession}
                     </div>
                   </div>
                 )}
@@ -678,7 +830,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 {loadingExistingProperty && needsExistingProperty && (
                   <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                     <div className="text-sm text-gray-600">
-                      Memuat data listing...
+                      {ui.loadingListing}
                     </div>
                   </div>
                 )}
@@ -686,7 +838,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 {existingPropertyError && needsExistingProperty && (
                   <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:mt-5">
                     <div className="text-sm font-semibold text-red-700 sm:text-base">
-                      Gagal memuat listing
+                      {ui.failedLoadListing}
                     </div>
                     <div className="mt-1 text-sm text-red-600">
                       {existingPropertyError}
@@ -697,11 +849,10 @@ export default function PemilikIklanPembayaranPageClient() {
                 {!isReadyToPay && !needsExistingProperty && (
                   <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                     <div className="text-sm font-semibold sm:text-base">
-                      Belum bisa bayar
+                      {ui.cannotPayYet}
                     </div>
                     <div className="mt-1 text-sm leading-6 text-gray-600">
-                      Pastikan: tipe listing, lokasi, minimal 3 foto, judul &
-                      deskripsi, dan form verifikasi sudah terisi.
+                      {ui.cannotPayYetDesc}
                     </div>
                   </div>
                 )}
@@ -710,36 +861,32 @@ export default function PemilikIklanPembayaranPageClient() {
 
             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:mt-5">
               <div className="text-sm font-semibold text-blue-700 sm:text-base">
-                Aktivasi dilakukan setelah pembayaran terkonfirmasi
+                {ui.activationTitle}
               </div>
               <div className="mt-1 text-sm leading-6 text-blue-700">
-                {isEducation
-                  ? "Education Pass akan aktif setelah pembayaran berhasil terkonfirmasi."
-                  : "Halaman ini sekarang hanya membuat payment checkout. Listing, renew, boost, atau spotlight tidak diaktifkan dari sini."}
+                {isEducation ? ui.activationEducation : ui.activationDefault}
               </div>
             </div>
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-              {selectedProduct?.paymentTitle ?? "Pembayaran"}
+              {selectedProduct?.paymentTitle ?? ui.payment}
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-gray-600">
-              {selectedProduct?.paymentDescription ??
-                "Detail pembayaran akan mengikuti produk yang dipilih."}
+              {selectedProduct?.paymentDescription ?? ui.billingFallback}
             </p>
 
             {isRenew && !isEducation && (
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                {selectedProduct?.renewalLabel ??
-                  "Perpanjangan produk akan mengikuti paket yang dipilih."}
+                {selectedProduct?.renewalLabel ?? ui.renewalFallback}
               </p>
             )}
 
             {isAddon && !isEducation && (
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                Add-on ini akan diterapkan ke listing dengan kode{" "}
+                {ui.addonAppliedTo}{" "}
                 <span className="font-semibold">
                   {finalKodeForDisplay(existingProperty?.kode, draft?.kode, kode)}
                 </span>
@@ -749,10 +896,9 @@ export default function PemilikIklanPembayaranPageClient() {
 
             {isEducation && (
               <p className="mt-3 text-sm leading-6 text-gray-600">
-                Education Pass ini akan memberi akses premium ke video edukasi
-                TETAMO selama{" "}
+                {ui.educationDescPrefix}{" "}
                 <span className="font-semibold">
-                  {selectedProduct?.durationDays ?? 90} hari
+                  {selectedProduct?.durationDays ?? 90} {ui.days}
                 </span>
                 .
               </p>
@@ -778,9 +924,9 @@ export default function PemilikIklanPembayaranPageClient() {
               </div>
 
               <div className="mt-4 text-sm text-gray-700">
-                <span className="font-semibold">Durasi:</span>{" "}
+                <span className="font-semibold">{ui.duration}:</span>{" "}
                 {selectedProduct?.durationDays
-                  ? `${selectedProduct.durationDays} hari`
+                  ? `${selectedProduct.durationDays} ${ui.days}`
                   : "-"}
               </div>
 
@@ -788,48 +934,48 @@ export default function PemilikIklanPembayaranPageClient() {
               "featuredDurationDays" in (selectedProduct || {}) &&
               (selectedProduct as any).featuredDurationDays ? (
                 <div className="mt-2 text-sm text-gray-700">
-                  <span className="font-semibold">Featured aktif:</span>{" "}
-                  {(selectedProduct as any).featuredDurationDays} hari
+                  <span className="font-semibold">{ui.activeFeatured}:</span>{" "}
+                  {(selectedProduct as any).featuredDurationDays} {ui.days}
                 </div>
               ) : null}
             </div>
 
             <button
-  onClick={() => setSelectedGateway("stripe")}
-  type="button"
-  className={[
-    "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-    selectedGateway === "stripe"
-      ? "border-[#1C1C1E] bg-black text-white"
-      : "border-gray-200 bg-white text-[#1C1C1E]",
-  ].join(" ")}
->
-  <div className="font-semibold">Debit / Credit Card</div>
-  <div
-    className={[
-      "mt-1 text-xs",
-      selectedGateway === "stripe" ? "text-white/80" : "text-gray-500",
-    ].join(" ")}
-  >
-    Visa, Mastercard, JCB, American Express
-  </div>
-</button>
+              onClick={() => setSelectedGateway("stripe")}
+              type="button"
+              className={[
+                "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+                selectedGateway === "stripe"
+                  ? "border-[#1C1C1E] bg-black text-white"
+                  : "border-gray-200 bg-white text-[#1C1C1E]",
+              ].join(" ")}
+            >
+              <div className="font-semibold">{ui.cardTitle}</div>
+              <div
+                className={[
+                  "mt-1 text-xs",
+                  selectedGateway === "stripe" ? "text-white/80" : "text-gray-500",
+                ].join(" ")}
+              >
+                {ui.cardSubtitle}
+              </div>
+            </button>
 
-<button
-  type="button"
-  disabled
-  className="mt-3 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-400"
->
-  <div className="font-semibold">QRIS / E-Wallet / Virtual Account</div>
-  <div className="mt-1 text-xs text-gray-400">
-    BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon
-  </div>
-</button>
+            <button
+              type="button"
+              disabled
+              className="mt-3 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-400"
+            >
+              <div className="font-semibold">{ui.otherMethodsTitle}</div>
+              <div className="mt-1 text-xs text-gray-400">
+                {ui.otherMethodsSubtitle}
+              </div>
+            </button>
 
             {selectedProduct?.features?.length ? (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
-                  Yang Anda Dapatkan
+                  {ui.whatYouGet}
                 </div>
 
                 <ul className="mt-3 space-y-2">
@@ -849,14 +995,13 @@ export default function PemilikIklanPembayaranPageClient() {
             <div className="mt-5 rounded-2xl border border-gray-200 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
-                  Total
+                  {ui.total}
                 </div>
                 <div className="text-sm font-semibold">{money(total)}</div>
               </div>
 
               <div className="mt-2 text-xs leading-5 text-gray-500">
-                {selectedProduct?.billingNote ??
-                  "Detail pembayaran akan mengikuti produk yang dipilih."}
+                {selectedProduct?.billingNote ?? ui.billingFallback}
               </div>
             </div>
 
@@ -880,14 +1025,14 @@ export default function PemilikIklanPembayaranPageClient() {
               type="button"
             >
               {submitting
-                ? "Membuat Checkout..."
+                ? ui.creatingCheckout
                 : authLoading
-                  ? "Memeriksa Sesi..."
-                  : "Bayar Sekarang"}
+                  ? ui.checkingAuth
+                  : ui.payNow}
             </button>
 
             <p className="mt-3 text-xs leading-5 text-gray-500">
-              Checkout akan dibuat otomatis saat tombol ditekan.
+              {ui.checkoutNote}
             </p>
           </div>
         </div>
