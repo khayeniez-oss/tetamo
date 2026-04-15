@@ -39,11 +39,13 @@ type PaymentRow = {
   metadata: Record<string, any> | null;
 };
 
-function asObject(value: unknown): Record<string, any> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, any>)
-    : {};
-}
+type LinkedPropertyRow = {
+  id: string;
+  kode: string | null;
+  title: string | null;
+  status: string | null;
+  verification_status: string | null;
+};
 
 function formatCurrency(
   amount: number | null | undefined,
@@ -95,34 +97,56 @@ function normalizeStatus(value?: string | null): PaymentStatus {
   return "pending";
 }
 
-function getDisplayStatus(status: PaymentStatus) {
-  if (status === "checkout_created") return "pending";
-  if (status === "partially_refunded") return "refunded";
-  if (status === "cancelled") return "canceled";
-  return status;
-}
-
 function humanizePaymentType(value?: string | null, lang: "id" | "en" = "id") {
   const v = String(value || "").toLowerCase();
 
   if (v === "listing_fee") return lang === "id" ? "Iklan Listing" : "Listing Payment";
-  if (v === "featured") return lang === "id" ? "Featured Listing" : "Featured Listing";
-  if (v === "boost") return lang === "id" ? "Boost Listing" : "Boost Listing";
-  if (v === "spotlight") return lang === "id" ? "Homepage Spotlight" : "Homepage Spotlight";
-  if (v === "education") return lang === "id" ? "Education Pass" : "Education Pass";
+  if (v === "featured") return "Featured Listing";
+  if (v === "boost") return "Boost Listing";
+  if (v === "spotlight") return "Homepage Spotlight";
+  if (v === "education") return "Education Pass";
   if (v === "package") return lang === "id" ? "Paket Membership" : "Membership Package";
 
   return lang === "id" ? "Pembayaran" : "Payment";
 }
 
-function humanizePaymentMethod(lang: "id" | "en") {
-  return lang === "id" ? "Debit / Credit Card" : "Debit / Credit Card";
+function humanizePaymentMethod() {
+  return "Debit / Credit Card";
 }
 
-function getStatusUI(status: PaymentStatus, lang: "id" | "en") {
-  const normalized = getDisplayStatus(status);
+function isPropertyPendingReview(property: LinkedPropertyRow | null) {
+  if (!property) return false;
 
-  if (normalized === "paid") {
+  const status = String(property.status || "").toLowerCase();
+  const verification = String(property.verification_status || "").toLowerCase();
+
+  return (
+    status === "pending" ||
+    status === "pending_approval" ||
+    verification === "pending_verification" ||
+    verification === "pending_approval"
+  );
+}
+
+function getStateUI(
+  args: {
+    isEditApprovalFlow: boolean;
+    returnedFromSuccess: boolean;
+    status: PaymentStatus;
+    lang: "id" | "en";
+  }
+) {
+  const { isEditApprovalFlow, returnedFromSuccess, status, lang } = args;
+
+  if (isEditApprovalFlow) {
+    return {
+      icon: "✓",
+      title: lang === "id" ? "Dikirim untuk Approval" : "Submitted for Approval",
+      boxClass: "bg-yellow-50 border-yellow-200 text-yellow-700",
+    };
+  }
+
+  if (returnedFromSuccess || status === "paid") {
     return {
       icon: "✓",
       title: lang === "id" ? "Pembayaran Berhasil" : "Payment Successful",
@@ -130,16 +154,15 @@ function getStatusUI(status: PaymentStatus, lang: "id" | "en") {
     };
   }
 
-  if (normalized === "pending") {
+  if (status === "pending" || status === "checkout_created") {
     return {
       icon: "⏳",
-      title:
-        lang === "id" ? "Pembayaran Sedang Diproses" : "Payment Processing",
+      title: lang === "id" ? "Pembayaran Menunggu Konfirmasi" : "Payment Pending",
       boxClass: "bg-yellow-50 border-yellow-200 text-yellow-700",
     };
   }
 
-  if (normalized === "expired") {
+  if (status === "expired") {
     return {
       icon: "!",
       title: lang === "id" ? "Pembayaran Kadaluarsa" : "Payment Expired",
@@ -147,7 +170,7 @@ function getStatusUI(status: PaymentStatus, lang: "id" | "en") {
     };
   }
 
-  if (normalized === "canceled") {
+  if (status === "canceled" || status === "cancelled") {
     return {
       icon: "×",
       title: lang === "id" ? "Pembayaran Dibatalkan" : "Payment Cancelled",
@@ -155,7 +178,7 @@ function getStatusUI(status: PaymentStatus, lang: "id" | "en") {
     };
   }
 
-  if (normalized === "refunded") {
+  if (status === "refunded" || status === "partially_refunded") {
     return {
       icon: "↺",
       title: lang === "id" ? "Pembayaran Direfund" : "Payment Refunded",
@@ -170,228 +193,15 @@ function getStatusUI(status: PaymentStatus, lang: "id" | "en") {
   };
 }
 
-function buildPaymentContent(
-  payment: PaymentRow | null,
-  status: PaymentStatus,
-  lang: "id" | "en"
-) {
-  const metadata = asObject(payment?.metadata);
-  const activation = asObject(metadata.activation);
-  const action = String(metadata.action || "").toLowerCase();
-  const code = String(payment?.property_code_snapshot || "").trim();
-  const productName =
-    String(payment?.product_name_snapshot || "").trim() ||
-    humanizePaymentType(payment?.payment_type, lang);
-
-  const activationDone = activation.done === true;
-  const activationType = String(activation.activationType || "").toLowerCase();
-
-  const codeText = code ? ` ${code}` : "";
-
-  if (status === "paid") {
-    if (payment?.payment_type === "education") {
-      return {
-        description:
-          lang === "id"
-            ? `${productName} berhasil dibayar.${activationDone ? " Akses premium sedang aktif." : ""}`
-            : `${productName} was paid successfully.${activationDone ? " Premium access is now active." : ""}`,
-        points:
-          lang === "id"
-            ? [
-                activationDone
-                  ? "Akses education telah diaktifkan otomatis"
-                  : "Akses education sedang diproses otomatis",
-                "Riwayat pembayaran tersimpan",
-                "Anda bisa lanjut menggunakan akses premium setelah status terkonfirmasi",
-              ]
-            : [
-                activationDone
-                  ? "Education access has been activated automatically"
-                  : "Education access is being processed automatically",
-                "Your payment history has been saved",
-                "You can continue using premium access after the status is confirmed",
-              ],
-      };
-    }
-
-    if (payment?.payment_type === "boost" || payment?.payment_type === "spotlight") {
-      return {
-        description:
-          lang === "id"
-            ? `${productName} untuk listing${codeText} berhasil dibayar.`
-            : `${productName} for listing${codeText} was paid successfully.`,
-        points:
-          lang === "id"
-            ? [
-                activationDone
-                  ? "Add-on telah diaktifkan otomatis pada listing terkait"
-                  : "Add-on sedang diproses otomatis",
-                "Riwayat pembayaran tersimpan di tagihan pemilik",
-                "Silakan cek dashboard pemilik untuk status listing terbaru",
-              ]
-            : [
-                activationDone
-                  ? "The add-on has been activated automatically for the related listing"
-                  : "The add-on is being processed automatically",
-                "Payment history is saved in owner billing",
-                "Please check the owner dashboard for the latest listing status",
-              ],
-      };
-    }
-
-    if (action === "renew" || activationType === "renew-listing") {
-      return {
-        description:
-          lang === "id"
-            ? `Perpanjangan listing${codeText} berhasil dibayar.`
-            : `The renewal for listing${codeText} was paid successfully.`,
-        points:
-          lang === "id"
-            ? [
-                activationDone
-                  ? "Masa aktif listing telah diperpanjang otomatis"
-                  : "Perpanjangan listing sedang diproses otomatis",
-                "Riwayat pembayaran tersimpan di tagihan pemilik",
-                "Silakan cek dashboard pemilik untuk melihat status terbaru",
-              ]
-            : [
-                activationDone
-                  ? "The listing period has been extended automatically"
-                  : "The listing renewal is being processed automatically",
-                "Payment history is saved in owner billing",
-                "Please check the owner dashboard for the latest status",
-              ],
-      };
-    }
-
-    return {
-      description:
-        lang === "id"
-          ? `${productName} berhasil dibayar${code ? ` untuk listing ${code}` : ""}.`
-          : `${productName} was paid successfully${code ? ` for listing ${code}` : ""}.`,
-      points:
-        lang === "id"
-          ? [
-              activationDone
-                ? "Aktivasi listing telah diproses otomatis"
-                : "Aktivasi listing sedang diproses otomatis",
-              "Status pembayaran sudah tercatat",
-              "Anda bisa melihat riwayat pembayaran di tagihan pemilik",
-            ]
-          : [
-              activationDone
-                ? "Listing activation has been processed automatically"
-                : "Listing activation is being processed automatically",
-              "The payment status has been recorded",
-              "You can see payment history in owner billing",
-            ],
-    };
-  }
-
-  if (status === "pending" || status === "checkout_created") {
-    return {
-      description:
-        lang === "id"
-          ? "Pembayaran Anda masih menunggu konfirmasi. Status akan diperbarui otomatis setelah webhook Stripe masuk."
-          : "Your payment is still waiting for confirmation. The status will update automatically after the Stripe webhook arrives.",
-      points:
-        lang === "id"
-          ? [
-              "Halaman ini akan memeriksa status pembayaran secara otomatis",
-              "Jika pembayaran belum selesai, Anda bisa lanjutkan checkout",
-              "Riwayat pembayaran tetap tersimpan di tagihan pemilik",
-            ]
-          : [
-              "This page will check the payment status automatically",
-              "If the payment is not complete yet, you can continue the checkout",
-              "Payment history remains saved in owner billing",
-            ],
-    };
-  }
-
-  if (status === "expired") {
-    return {
-      description:
-        lang === "id"
-          ? "Checkout pembayaran sudah kadaluarsa."
-          : "The payment checkout has expired.",
-      points:
-        lang === "id"
-          ? [
-              "Pembayaran tidak lagi bisa dilanjutkan dari checkout lama",
-              "Silakan buat atau lanjutkan pembayaran baru dari halaman tagihan",
-            ]
-          : [
-              "The old checkout can no longer be used",
-              "Please create or continue a new payment from the billing page",
-            ],
-    };
-  }
-
-  if (status === "canceled" || status === "cancelled") {
-    return {
-      description:
-        lang === "id"
-          ? "Pembayaran dibatalkan."
-          : "The payment was cancelled.",
-      points:
-        lang === "id"
-          ? [
-              "Tidak ada aktivasi yang dijalankan",
-              "Silakan kembali ke tagihan pemilik untuk mencoba lagi",
-            ]
-          : [
-              "No activation was completed",
-              "Please return to owner billing to try again",
-            ],
-    };
-  }
-
-  if (status === "refunded" || status === "partially_refunded") {
-    return {
-      description:
-        lang === "id"
-          ? "Pembayaran sudah direfund."
-          : "The payment has been refunded.",
-      points:
-        lang === "id"
-          ? [
-              "Silakan cek detail refund di invoice atau receipt",
-              "Hubungi admin jika Anda perlu klarifikasi lebih lanjut",
-            ]
-          : [
-              "Please check the refund details in the invoice or receipt",
-              "Contact admin if you need further clarification",
-            ],
-    };
-  }
-
-  return {
-    description:
-      lang === "id"
-        ? "Pembayaran belum berhasil diselesaikan."
-        : "The payment has not been completed successfully.",
-    points:
-      lang === "id"
-        ? [
-            "Tidak ada aktivasi final yang dijalankan",
-            "Silakan cek tagihan pemilik untuk status terbaru atau lanjutkan pembayaran",
-          ]
-        : [
-            "No final activation was completed",
-            "Please check owner billing for the latest status or continue the payment",
-          ],
-  };
-}
-
 export default function PemilikIklanSuksesPageClient() {
   const searchParams = useSearchParams();
   const { lang } = useLanguage();
 
-  const locale = lang === "id" ? "id-ID" : "en-US";
+  const currentLang: "id" | "en" = lang === "en" ? "en" : "id";
+  const locale = currentLang === "id" ? "id-ID" : "en-US";
 
   const t =
-    lang === "id"
+    currentLang === "id"
       ? {
           loadingSubmission: "Memuat status pengiriman...",
           loadingPayment: "Memuat status pembayaran...",
@@ -402,32 +212,76 @@ export default function PemilikIklanSuksesPageClient() {
           codeLabel: "Kode Listing",
           createdLabel: "Dibuat",
           paidAtLabel: "Dibayar Pada",
-          whatNow: "Yang Terjadi Sekarang",
+          detailsTitle: "Detail Status",
           continuePayment: "Lanjutkan Pembayaran",
-          viewMarketplace: "Lihat Marketplace",
-          createNewListing: "Buat Iklan Baru",
+          seeListing: "Lihat Listing",
           toOwnerBilling: "Ke Tagihan Pemilik",
           toOwnerDashboard: "Ke Dashboard Pemilik",
           receiptButton: "Lihat Receipt",
           invoiceButton: "Lihat Invoice",
-          editApprovalTitle: "Dikirim untuk Persetujuan",
           editApprovalDescription: (kode: string) =>
             kode && kode !== "-"
-              ? `Perubahan listing ${kode} berhasil dikirim untuk approval. Listing tetap dapat tampil di marketplace dengan status pending approval sampai ditinjau.`
-              : "Perubahan listing berhasil dikirim untuk approval. Listing tetap dapat tampil di marketplace dengan status pending approval sampai ditinjau.",
+              ? `Perubahan listing ${kode} berhasil dikirim dan sekarang menunggu review admin.`
+              : "Perubahan listing berhasil dikirim dan sekarang menunggu review admin.",
           editApprovalPoints: [
             "Perubahan listing sudah berhasil dikirim",
             "Status listing sekarang pending approval",
-            "Listing tetap bisa tampil di marketplace",
-            "Marketplace akan menampilkan label pending approval",
+            "Anda bisa cek status terbaru dari dashboard pemilik",
           ],
-          editApprovalFooter:
-            "Halaman ini menampilkan status submit edit listing untuk owner.",
-          paymentFooter:
-            "Halaman ini hanya membaca status pembayaran owner. Tidak ada proses insert listing atau upload foto dari halaman ini.",
+          successDescriptionPending: (product: string, kode: string) =>
+            kode && kode !== "-"
+              ? `${product} berhasil dibayar. Listing ${kode} sudah dikirim dan sekarang menunggu review admin.`
+              : `${product} berhasil dibayar dan sekarang menunggu review admin.`,
+          successDescriptionLive: (product: string, kode: string) =>
+            kode && kode !== "-"
+              ? `${product} berhasil dibayar. Listing ${kode} sudah tampil di marketplace.`
+              : `${product} berhasil dibayar dan listing sudah tampil di marketplace.`,
+          successDescriptionGeneric: (product: string) =>
+            `${product} berhasil dibayar.`,
+          successPointsPending: [
+            "Pembayaran sudah tercatat",
+            "Listing sudah dikirim ke marketplace",
+            "Status listing sekarang pending review",
+          ],
+          successPointsLive: [
+            "Pembayaran sudah tercatat",
+            "Listing sudah tampil di marketplace",
+            "Anda bisa cek status terbaru dari dashboard pemilik",
+          ],
+          pendingDescription:
+            "Pembayaran Anda masih sedang dikonfirmasi. Silakan tunggu sebentar atau cek tagihan pemilik.",
+          pendingPoints: [
+            "Status pembayaran akan diperbarui otomatis",
+            "Anda bisa cek detail pembayaran di tagihan pemilik",
+          ],
+          expiredDescription:
+            "Checkout pembayaran sudah kadaluarsa. Silakan buat pembayaran baru dari tagihan pemilik.",
+          expiredPoints: [
+            "Checkout lama tidak bisa digunakan lagi",
+            "Silakan lanjutkan dari tagihan pemilik",
+          ],
+          cancelledDescription:
+            "Pembayaran dibatalkan. Silakan kembali ke tagihan pemilik jika ingin mencoba lagi.",
+          cancelledPoints: [
+            "Tidak ada aktivasi yang dijalankan",
+            "Silakan cek tagihan pemilik untuk mencoba lagi",
+          ],
+          refundedDescription:
+            "Pembayaran sudah direfund. Silakan cek invoice atau receipt untuk detail refund.",
+          refundedPoints: [
+            "Detail refund tersedia di invoice atau receipt",
+            "Hubungi admin jika Anda butuh klarifikasi lebih lanjut",
+          ],
+          failedDescription:
+            "Pembayaran belum berhasil diselesaikan. Silakan cek tagihan pemilik untuk mencoba lagi.",
+          failedPoints: [
+            "Tidak ada aktivasi final yang dijalankan",
+            "Silakan lanjutkan dari tagihan pemilik",
+          ],
           loginFirst: "Silakan login terlebih dahulu.",
           loadPaymentError: "Gagal memuat status pembayaran.",
           paymentNotFound: "Data pembayaran tidak ditemukan.",
+          successStatusText: "berhasil",
         }
       : {
           loadingSubmission: "Loading submission status...",
@@ -439,37 +293,84 @@ export default function PemilikIklanSuksesPageClient() {
           codeLabel: "Listing Code",
           createdLabel: "Created",
           paidAtLabel: "Paid At",
-          whatNow: "What Happens Now",
+          detailsTitle: "Status Details",
           continuePayment: "Continue Payment",
-          viewMarketplace: "View Marketplace",
-          createNewListing: "Create New Listing",
+          seeListing: "See Listing",
           toOwnerBilling: "Go to Owner Billing",
           toOwnerDashboard: "Go to Owner Dashboard",
           receiptButton: "View Receipt",
           invoiceButton: "View Invoice",
-          editApprovalTitle: "Submitted for Approval",
           editApprovalDescription: (kode: string) =>
             kode && kode !== "-"
-              ? `Your changes for listing ${kode} have been submitted for approval. The listing can still appear in the marketplace with pending approval status until it is reviewed.`
-              : "Your listing changes have been submitted for approval. The listing can still appear in the marketplace with pending approval status until it is reviewed.",
+              ? `Your changes for listing ${kode} have been submitted and are now waiting for admin review.`
+              : "Your listing changes have been submitted and are now waiting for admin review.",
           editApprovalPoints: [
-            "Your listing changes have been submitted successfully",
+            "Your listing changes were submitted successfully",
             "The listing status is now pending approval",
-            "The listing can still appear in the marketplace",
-            "The marketplace will show a pending approval label",
+            "You can check the latest status from the owner dashboard",
           ],
-          editApprovalFooter:
-            "This page shows the owner listing edit submission status.",
-          paymentFooter:
-            "This page only reads owner payment status. No listing insert or photo upload happens here anymore.",
+          successDescriptionPending: (product: string, kode: string) =>
+            kode && kode !== "-"
+              ? `${product} was paid successfully. Listing ${kode} has been submitted and is now pending admin review.`
+              : `${product} was paid successfully and is now pending admin review.`,
+          successDescriptionLive: (product: string, kode: string) =>
+            kode && kode !== "-"
+              ? `${product} was paid successfully. Listing ${kode} is now visible in the marketplace.`
+              : `${product} was paid successfully and the listing is now visible in the marketplace.`,
+          successDescriptionGeneric: (product: string) =>
+            `${product} was paid successfully.`,
+          successPointsPending: [
+            "Your payment has been recorded",
+            "Your listing has been submitted to the marketplace",
+            "The listing status is now pending review",
+          ],
+          successPointsLive: [
+            "Your payment has been recorded",
+            "Your listing is now visible in the marketplace",
+            "You can check the latest status from the owner dashboard",
+          ],
+          pendingDescription:
+            "Your payment is still being confirmed. Please wait a moment or check owner billing.",
+          pendingPoints: [
+            "The payment status will update automatically",
+            "You can review the payment details in owner billing",
+          ],
+          expiredDescription:
+            "The payment checkout has expired. Please create a new payment from owner billing.",
+          expiredPoints: [
+            "The old checkout can no longer be used",
+            "Please continue from owner billing",
+          ],
+          cancelledDescription:
+            "The payment was cancelled. Please return to owner billing if you want to try again.",
+          cancelledPoints: [
+            "No activation was completed",
+            "Please check owner billing to try again",
+          ],
+          refundedDescription:
+            "The payment has been refunded. Please check the invoice or receipt for refund details.",
+          refundedPoints: [
+            "Refund details are available in the invoice or receipt",
+            "Contact admin if you need further clarification",
+          ],
+          failedDescription:
+            "The payment was not completed successfully. Please check owner billing to try again.",
+          failedPoints: [
+            "No final activation was completed",
+            "Please continue from owner billing",
+          ],
           loginFirst: "Please log in first.",
           loadPaymentError: "Failed to load payment status.",
           paymentNotFound: "Payment data was not found.",
+          successStatusText: "success",
         };
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [payment, setPayment] = useState<PaymentRow | null>(null);
+  const [linkedProperty, setLinkedProperty] = useState<LinkedPropertyRow | null>(
+    null
+  );
   const [pollCount, setPollCount] = useState(0);
 
   const sessionId = String(searchParams.get("session_id") || "");
@@ -605,39 +506,60 @@ export default function PemilikIklanSuksesPageClient() {
     return normalizeStatus(payment?.status);
   }, [isEditApprovalFlow, payment?.status, urlPayment]);
 
+  const returnedFromSuccess = urlPayment === "success";
+  const successfulScreen =
+    isEditApprovalFlow || returnedFromSuccess || resolvedStatus === "paid";
+
   const resolvedKode = isEditApprovalFlow
     ? urlKode || "-"
     : payment?.property_code_snapshot || urlKode || "-";
 
-  const statusUI = isEditApprovalFlow
-    ? {
-        icon: "✓",
-        title: t.editApprovalTitle,
-        boxClass: "bg-yellow-50 border-yellow-200 text-yellow-700",
-      }
-    : getStatusUI(resolvedStatus, lang);
+  useEffect(() => {
+    let ignore = false;
 
-  const content = isEditApprovalFlow
-    ? {
-        description: t.editApprovalDescription(resolvedKode),
-        points: t.editApprovalPoints,
+    async function loadLinkedProperty() {
+      if (isEditApprovalFlow || !resolvedKode || resolvedKode === "-") {
+        setLinkedProperty(null);
+        return;
       }
-    : buildPaymentContent(payment, resolvedStatus, lang);
 
-  const shouldShowContinuePayment =
-    !isEditApprovalFlow &&
-    (resolvedStatus === "pending" || resolvedStatus === "checkout_created") &&
-    Boolean(payment?.checkout_url);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (ignore || !user) return;
+
+      const { data, error } = await supabase
+        .from("properties")
+        .select("id, kode, title, status, verification_status")
+        .eq("user_id", user.id)
+        .eq("kode", resolvedKode)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (ignore) return;
+
+      if (error || !data) {
+        setLinkedProperty(null);
+        return;
+      }
+
+      setLinkedProperty(data as LinkedPropertyRow);
+    }
+
+    loadLinkedProperty();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isEditApprovalFlow, resolvedKode, pollCount]);
 
   const shouldPoll =
     !isEditApprovalFlow &&
-    (Boolean(sessionId) || Boolean(paymentId)) &&
     pollCount < 6 &&
-    (!payment ||
-      resolvedStatus === "pending" ||
-      resolvedStatus === "checkout_created");
-
-  const showSuccessButtons = isEditApprovalFlow || resolvedStatus === "paid";
+    (Boolean(sessionId) || Boolean(paymentId) || returnedFromSuccess) &&
+    resolvedStatus !== "paid";
 
   useEffect(() => {
     if (!shouldPoll) return;
@@ -648,6 +570,159 @@ export default function PemilikIklanSuksesPageClient() {
 
     return () => clearTimeout(timer);
   }, [shouldPoll]);
+
+  const statusUI = getStateUI({
+    isEditApprovalFlow,
+    returnedFromSuccess,
+    status: resolvedStatus,
+    lang: currentLang,
+  });
+
+  const detailStatusText = successfulScreen
+    ? t.successStatusText
+    : resolvedStatus === "checkout_created"
+      ? "pending"
+      : resolvedStatus;
+
+  const productName =
+    payment?.product_name_snapshot ||
+    humanizePaymentType(payment?.payment_type, currentLang);
+
+  const propertyPendingReview = isPropertyPendingReview(linkedProperty);
+
+  const content = useMemo(() => {
+    if (isEditApprovalFlow) {
+      return {
+        description: t.editApprovalDescription(resolvedKode),
+        points: t.editApprovalPoints,
+      };
+    }
+
+    if (successfulScreen) {
+      if (payment?.payment_type === "education") {
+        return {
+          description:
+            currentLang === "id"
+              ? `${productName} berhasil dibayar. Akses premium Anda sudah diproses.`
+              : `${productName} was paid successfully. Your premium access has been processed.`,
+          points:
+            currentLang === "id"
+              ? [
+                  "Pembayaran sudah tercatat",
+                  "Akses premium akan tersedia sesuai status terbaru",
+                  "Anda bisa cek detail pembayaran di tagihan pemilik",
+                ]
+              : [
+                  "Your payment has been recorded",
+                  "Premium access will be available based on the latest status",
+                  "You can check payment details in owner billing",
+                ],
+        };
+      }
+
+      if (payment?.payment_type === "boost" || payment?.payment_type === "spotlight") {
+        return {
+          description:
+            currentLang === "id"
+              ? `${productName} berhasil dibayar untuk listing ${resolvedKode}.`
+              : `${productName} was paid successfully for listing ${resolvedKode}.`,
+          points:
+            currentLang === "id"
+              ? [
+                  "Pembayaran sudah tercatat",
+                  "Add-on sedang atau sudah diterapkan ke listing terkait",
+                  "Anda bisa cek status terbaru dari dashboard pemilik",
+                ]
+              : [
+                  "Your payment has been recorded",
+                  "The add-on is being applied or has already been applied to the related listing",
+                  "You can check the latest status from the owner dashboard",
+                ],
+        };
+      }
+
+      if (propertyPendingReview) {
+        return {
+          description: t.successDescriptionPending(productName, resolvedKode),
+          points: t.successPointsPending,
+        };
+      }
+
+      if (linkedProperty?.id) {
+        return {
+          description: t.successDescriptionLive(productName, resolvedKode),
+          points: t.successPointsLive,
+        };
+      }
+
+      return {
+        description: t.successDescriptionGeneric(productName),
+        points:
+          currentLang === "id"
+            ? [
+                "Pembayaran sudah tercatat",
+                "Anda bisa cek status terbaru dari dashboard pemilik",
+                "Riwayat pembayaran tersimpan di tagihan pemilik",
+              ]
+            : [
+                "Your payment has been recorded",
+                "You can check the latest status from the owner dashboard",
+                "Payment history is saved in owner billing",
+              ],
+      };
+    }
+
+    if (resolvedStatus === "pending" || resolvedStatus === "checkout_created") {
+      return {
+        description: t.pendingDescription,
+        points: t.pendingPoints,
+      };
+    }
+
+    if (resolvedStatus === "expired") {
+      return {
+        description: t.expiredDescription,
+        points: t.expiredPoints,
+      };
+    }
+
+    if (resolvedStatus === "canceled" || resolvedStatus === "cancelled") {
+      return {
+        description: t.cancelledDescription,
+        points: t.cancelledPoints,
+      };
+    }
+
+    if (resolvedStatus === "refunded" || resolvedStatus === "partially_refunded") {
+      return {
+        description: t.refundedDescription,
+        points: t.refundedPoints,
+      };
+    }
+
+    return {
+      description: t.failedDescription,
+      points: t.failedPoints,
+    };
+  }, [
+    isEditApprovalFlow,
+    successfulScreen,
+    resolvedStatus,
+    resolvedKode,
+    payment?.payment_type,
+    productName,
+    propertyPendingReview,
+    linkedProperty?.id,
+    currentLang,
+    t,
+  ]);
+
+  const shouldShowContinuePayment =
+    !successfulScreen &&
+    (resolvedStatus === "pending" || resolvedStatus === "checkout_created") &&
+    Boolean(payment?.checkout_url);
+
+  const listingHref = linkedProperty?.id ? `/properti/${linkedProperty.id}` : "/properti";
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -686,7 +761,7 @@ export default function PemilikIklanSuksesPageClient() {
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.statusLabel}</p>
               <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                {getDisplayStatus(resolvedStatus)}
+                {detailStatusText}
               </p>
             </div>
 
@@ -700,15 +775,14 @@ export default function PemilikIklanSuksesPageClient() {
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.typeLabel}</p>
               <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                {payment.product_name_snapshot ||
-                  humanizePaymentType(payment.payment_type, lang)}
+                {productName}
               </p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.methodLabel}</p>
               <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                {humanizePaymentMethod(lang)}
+                {humanizePaymentMethod()}
               </p>
             </div>
 
@@ -740,7 +814,7 @@ export default function PemilikIklanSuksesPageClient() {
         {content.points?.length ? (
           <div className="mt-6 rounded-3xl border border-gray-200 bg-gray-50 p-5 text-left sm:mt-8 sm:p-6">
             <div className="text-sm font-semibold text-[#1C1C1E]">
-              {t.whatNow}
+              {t.detailsTitle}
             </div>
 
             <ul className="mt-4 space-y-3">
@@ -757,7 +831,7 @@ export default function PemilikIklanSuksesPageClient() {
           </div>
         ) : null}
 
-        {!loading && !errorMessage && payment && resolvedStatus === "paid" ? (
+        {!loading && !errorMessage && payment && successfulScreen ? (
           <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
             {payment.receipt_url ? (
               <a
@@ -783,20 +857,20 @@ export default function PemilikIklanSuksesPageClient() {
           </div>
         ) : null}
 
-        {showSuccessButtons ? (
+        {successfulScreen ? (
           <div className="mt-8 grid grid-cols-1 gap-3 sm:mt-10 sm:grid-cols-3">
             <Link
-              href="/properti"
+              href={listingHref}
               className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
             >
-              {t.viewMarketplace}
+              {t.seeListing}
             </Link>
 
             <Link
-              href="/pemilik"
+              href="/pemilikdashboard/tagihan"
               className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold transition hover:bg-gray-50"
             >
-              {t.createNewListing}
+              {t.toOwnerBilling}
             </Link>
 
             <Link
@@ -834,10 +908,6 @@ export default function PemilikIklanSuksesPageClient() {
             </Link>
           </div>
         )}
-
-        <div className="mt-8 text-xs leading-5 text-gray-500">
-          {isEditApprovalFlow ? t.editApprovalFooter : t.paymentFooter}
-        </div>
       </div>
     </main>
   );
