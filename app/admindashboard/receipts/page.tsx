@@ -10,28 +10,32 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type PaymentRow = {
+type ReceiptRow = {
   id: string;
-  receipt_number: string | null;
-  billing_record_id: string | null;
-  amount: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  property_code_snapshot: string | null;
+  amount_total: number | null;
   currency: string | null;
   paid_at: string | null;
   created_at: string | null;
+  receipt_url: string | null;
+  stripe_charge_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_invoice_id: string | null;
+  product_name_snapshot: string | null;
   status:
-    | "initiated"
     | "pending"
-    | "succeeded"
+    | "checkout_created"
+    | "paid"
     | "failed"
     | "expired"
+    | "canceled"
+    | "cancelled"
     | "refunded"
+    | "partially_refunded"
     | null;
-};
-
-type BillingRecordRow = {
-  id: string;
-  invoice_number: string | null;
-  customer_name: string | null;
 };
 
 type ReceiptItem = {
@@ -76,6 +80,26 @@ function formatDate(date: string | null) {
   }).format(parsed);
 }
 
+function getReceiptNumber(row: ReceiptRow) {
+  if (row.stripe_charge_id?.trim()) {
+    return `RCT-${row.stripe_charge_id.trim()}`;
+  }
+
+  if (row.stripe_payment_intent_id?.trim()) {
+    return `RCT-${row.stripe_payment_intent_id.trim()}`;
+  }
+
+  return `RCT-${row.id.slice(0, 8).toUpperCase()}`;
+}
+
+function getInvoiceNumber(row: ReceiptRow) {
+  if (row.stripe_invoice_id?.trim()) return row.stripe_invoice_id.trim();
+  if (row.stripe_checkout_session_id?.trim()) {
+    return `INV-${row.stripe_checkout_session_id.slice(0, 8).toUpperCase()}`;
+  }
+  return "-";
+}
+
 export default function AdminReceiptsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [receipts, setReceipts] = useState<ReceiptItem[]>([]);
@@ -89,89 +113,54 @@ export default function AdminReceiptsPage() {
       setLoading(true);
       setError("");
 
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from("payments")
+      const { data, error } = await supabase
+        .from("payment_transactions")
         .select(
           `
             id,
-            receipt_number,
-            billing_record_id,
-            amount,
+            customer_name,
+            customer_email,
+            property_code_snapshot,
+            amount_total,
             currency,
             paid_at,
             created_at,
+            receipt_url,
+            stripe_charge_id,
+            stripe_payment_intent_id,
+            stripe_checkout_session_id,
+            stripe_invoice_id,
+            product_name_snapshot,
             status
           `
         )
-        .eq("status", "succeeded")
-        .not("receipt_number", "is", null)
+        .eq("status", "paid")
+        .not("receipt_url", "is", null)
         .order("paid_at", { ascending: false });
 
       if (!isMounted) return;
 
-      if (paymentsError) {
-        console.error("Failed to load receipts:", paymentsError);
+      if (error) {
+        console.error("Failed to load receipts:", error);
         setError("Gagal memuat receipt.");
         setReceipts([]);
         setLoading(false);
         return;
       }
 
-      const paymentRows = (paymentsData || []) as PaymentRow[];
-      const billingIds = Array.from(
-        new Set(
-          paymentRows
-            .map((row) => row.billing_record_id)
-            .filter((value): value is string => Boolean(value))
-        )
-      );
+      const rows = (data || []) as ReceiptRow[];
 
-      let billingMap = new Map<string, BillingRecordRow>();
-
-      if (billingIds.length > 0) {
-        const { data: billingData, error: billingError } = await supabase
-          .from("billing_records")
-          .select(
-            `
-              id,
-              invoice_number,
-              customer_name
-            `
-          )
-          .in("id", billingIds);
-
-        if (!isMounted) return;
-
-        if (billingError) {
-          console.error(
-            "Failed to load billing records for receipts:",
-            billingError
-          );
-          setError("Gagal memuat receipt.");
-          setReceipts([]);
-          setLoading(false);
-          return;
-        }
-
-        billingMap = new Map(
-          ((billingData || []) as BillingRecordRow[]).map((row) => [row.id, row])
-        );
-      }
-
-      const mapped: ReceiptItem[] = paymentRows.map((row) => {
-        const billing = row.billing_record_id
-          ? billingMap.get(row.billing_record_id)
-          : undefined;
-
-        return {
-          id: row.id,
-          receiptNumber: row.receipt_number?.trim() || "-",
-          owner: billing?.customer_name?.trim() || "Unknown",
-          invoiceNumber: billing?.invoice_number?.trim() || "-",
-          amount: formatAmount(row.amount ?? 0, row.currency),
-          date: formatDate(row.paid_at || row.created_at),
-        };
-      });
+      const mapped: ReceiptItem[] = rows.map((row) => ({
+        id: row.id,
+        receiptNumber: getReceiptNumber(row),
+        owner:
+          row.customer_name?.trim() ||
+          row.customer_email?.trim() ||
+          "Unknown",
+        invoiceNumber: getInvoiceNumber(row),
+        amount: formatAmount(row.amount_total ?? 0, row.currency),
+        date: formatDate(row.paid_at || row.created_at),
+      }));
 
       setReceipts(mapped);
       setLoading(false);
