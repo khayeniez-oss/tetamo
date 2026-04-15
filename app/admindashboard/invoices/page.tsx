@@ -19,27 +19,33 @@ type InvoiceStatus =
   | "REFUNDED"
   | "UNPAID";
 
-type BillingRecordRow = {
-  id: string;
-  invoice_number: string | null;
-  customer_name: string | null;
-  listing_code: string | null;
-  property_title: string | null;
-  description: string | null;
-  plan_code: string | null;
-  bill_type: string | null;
-  total: number | null;
-  amount: number | null;
+type AdminInvoiceRow = {
+  payment_id: string;
+  issued_at: string | null;
+  paid_at: string | null;
+  invoice_status: string | null;
   currency: string | null;
-  created_at: string | null;
-  status:
-    | "pending"
-    | "paid"
-    | "failed"
-    | "overdue"
-    | "cancelled"
-    | "refunded"
-    | null;
+  amount_subtotal: number | null;
+  amount_discount: number | null;
+  amount_tax: number | null;
+  amount_total: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  property_id: string | null;
+  property_title_snapshot: string | null;
+  property_code_snapshot: string | null;
+  source_role: string | null;
+  payment_type: string | null;
+  plan_name: string | null;
+  duration_days: number | null;
+  description: string | null;
+  stripe_invoice_id: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  metadata: Record<string, any> | null;
 };
 
 type Invoice = {
@@ -86,31 +92,49 @@ function formatDate(date: string | null) {
   }).format(parsed);
 }
 
-function normalizeStatus(status: BillingRecordRow["status"]): InvoiceStatus {
-  switch ((status || "").toLowerCase()) {
-    case "paid":
-      return "PAID";
-    case "pending":
-      return "UNPAID";
-    case "overdue":
-      return "OVERDUE";
-    case "failed":
-      return "FAILED";
-    case "cancelled":
-      return "CANCELLED";
-    case "refunded":
-      return "REFUNDED";
-    default:
-      return "UNPAID";
-  }
+function normalizeStatus(status: string | null): InvoiceStatus {
+  const v = String(status || "").toLowerCase();
+
+  if (v === "paid") return "PAID";
+  if (v === "pending" || v === "checkout_created") return "UNPAID";
+  if (v === "overdue") return "OVERDUE";
+  if (v === "failed") return "FAILED";
+  if (v === "canceled" || v === "cancelled") return "CANCELLED";
+  if (v === "refunded" || v === "partially_refunded") return "REFUNDED";
+
+  return "UNPAID";
 }
 
-function getPackageLabel(row: BillingRecordRow) {
+function humanizePaymentType(value?: string | null) {
+  const v = String(value || "").toLowerCase();
+
+  if (v === "listing_fee") return "Listing Payment";
+  if (v === "featured") return "Featured Listing";
+  if (v === "boost") return "Boost Listing";
+  if (v === "spotlight") return "Homepage Spotlight";
+  if (v === "education") return "Education Pass";
+  if (v === "package") return "Membership Package";
+
+  return "Payment";
+}
+
+function getPackageLabel(row: AdminInvoiceRow) {
   if (row.description?.trim()) return row.description.trim();
-  if (row.plan_code?.trim()) return row.plan_code.trim();
-  if (row.bill_type?.trim()) return row.bill_type.trim();
-  if (row.property_title?.trim()) return row.property_title.trim();
+  if (row.plan_name?.trim()) return row.plan_name.trim();
+  if (row.property_title_snapshot?.trim()) return row.property_title_snapshot.trim();
+  if (row.payment_type?.trim()) return humanizePaymentType(row.payment_type);
   return "-";
+}
+
+function getInvoiceNumber(row: AdminInvoiceRow) {
+  if (row.stripe_invoice_id?.trim()) return row.stripe_invoice_id.trim();
+  return `INV-${row.payment_id.slice(0, 8).toUpperCase()}`;
+}
+
+function getOwnerLabel(row: AdminInvoiceRow) {
+  if (row.customer_name?.trim()) return row.customer_name.trim();
+  if (row.customer_email?.trim()) return row.customer_email.trim();
+  return "Unknown";
 }
 
 function getStatusClasses(status: InvoiceStatus) {
@@ -146,25 +170,38 @@ export default function AdminInvoicesPage() {
       setError("");
 
       const { data, error } = await supabase
-        .from("billing_records")
+        .from("admin_invoices_view")
         .select(
           `
-            id,
-            invoice_number,
-            customer_name,
-            listing_code,
-            property_title,
-            description,
-            plan_code,
-            bill_type,
-            total,
-            amount,
+            payment_id,
+            issued_at,
+            paid_at,
+            invoice_status,
             currency,
-            created_at,
-            status
+            amount_subtotal,
+            amount_discount,
+            amount_tax,
+            amount_total,
+            customer_name,
+            customer_email,
+            customer_phone,
+            property_id,
+            property_title_snapshot,
+            property_code_snapshot,
+            source_role,
+            payment_type,
+            plan_name,
+            duration_days,
+            description,
+            stripe_invoice_id,
+            hosted_invoice_url,
+            invoice_pdf_url,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            metadata
           `
         )
-        .order("created_at", { ascending: false });
+        .order("issued_at", { ascending: false });
 
       if (!isMounted) return;
 
@@ -176,15 +213,15 @@ export default function AdminInvoicesPage() {
         return;
       }
 
-      const mapped: Invoice[] = (data || []).map((row: BillingRecordRow) => ({
-        id: row.id,
-        invoiceNumber: row.invoice_number?.trim() || "-",
-        owner: row.customer_name?.trim() || "Unknown",
-        listingCode: row.listing_code?.trim() || "-",
+      const mapped: Invoice[] = ((data || []) as AdminInvoiceRow[]).map((row) => ({
+        id: row.payment_id,
+        invoiceNumber: getInvoiceNumber(row),
+        owner: getOwnerLabel(row),
+        listingCode: row.property_code_snapshot?.trim() || "-",
         package: getPackageLabel(row),
-        amount: formatAmount(row.total ?? row.amount ?? 0, row.currency),
-        date: formatDate(row.created_at),
-        status: normalizeStatus(row.status),
+        amount: formatAmount(row.amount_total ?? row.amount_subtotal ?? 0, row.currency),
+        date: formatDate(row.paid_at || row.issued_at),
+        status: normalizeStatus(row.invoice_status),
       }));
 
       setInvoices(mapped);
