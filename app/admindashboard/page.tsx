@@ -106,8 +106,8 @@ type PropertyRow = {
   profiles: ProfileRow | ProfileRow[] | null;
 };
 
-type PaymentRow = {
-  amount: number | null;
+type PaymentTransactionRow = {
+  amount_total: number | null;
   status: string | null;
 };
 
@@ -450,25 +450,20 @@ export default function AdminDashboardPage() {
 
         try {
           const { data: paymentRows, error: paymentError } = await supabase
-            .from("payments")
-            .select("amount,status");
+            .from("payment_transactions")
+            .select("amount_total,status");
 
           if (!paymentError && paymentRows) {
-            revenueTotal = (paymentRows as PaymentRow[]).reduce((sum, row) => {
-              const status = String(row.status || "").toLowerCase();
-              const amount = typeof row.amount === "number" ? row.amount : 0;
+            revenueTotal = (paymentRows as PaymentTransactionRow[]).reduce(
+              (sum, row) => {
+                const status = String(row.status || "").toLowerCase();
+                const amount =
+                  typeof row.amount_total === "number" ? row.amount_total : 0;
 
-              return [
-                "paid",
-                "success",
-                "succeeded",
-                "completed",
-                "active",
-                "settled",
-              ].includes(status)
-                ? sum + amount
-                : sum;
-            }, 0);
+                return status === "paid" ? sum + amount : sum;
+              },
+              0
+            );
           }
         } catch {
           revenueTotal = 0;
