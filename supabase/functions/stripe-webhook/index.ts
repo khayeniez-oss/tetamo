@@ -48,6 +48,8 @@ type PropertyLookupRow = {
   featured_expires_at: string | null;
   boost_expires_at: string | null;
   spotlight_expires_at: string | null;
+  status: string | null;
+  verification_status: string | null;
 };
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -71,6 +73,7 @@ function getString(obj: Record<string, any>, key: string): string | null {
 function getNumber(obj: Record<string, any>, key: string): number | null {
   const value = obj?.[key];
   if (typeof value === "number" && Number.isFinite(value)) return value;
+
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -145,6 +148,16 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array | null {
   }
 }
 
+async function getPaymentTransactionById(id: string) {
+  const { data } = await supabaseAdmin
+    .from("payment_transactions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  return (data as PaymentTransactionRow | null) ?? null;
+}
+
 async function getPaymentTransactionForSession(
   session: Stripe.Checkout.Session
 ): Promise<PaymentTransactionRow | null> {
@@ -154,23 +167,13 @@ async function getPaymentTransactionForSession(
       : null;
 
   if (metadataPaymentId) {
-    const { data } = await supabaseAdmin
-      .from("payment_transactions")
-      .select("*")
-      .eq("id", metadataPaymentId)
-      .maybeSingle();
-
-    if (data) return data as PaymentTransactionRow;
+    const payment = await getPaymentTransactionById(metadataPaymentId);
+    if (payment) return payment;
   }
 
   if (session.client_reference_id) {
-    const { data } = await supabaseAdmin
-      .from("payment_transactions")
-      .select("*")
-      .eq("id", session.client_reference_id)
-      .maybeSingle();
-
-    if (data) return data as PaymentTransactionRow;
+    const payment = await getPaymentTransactionById(session.client_reference_id);
+    if (payment) return payment;
   }
 
   const { data } = await supabaseAdmin
@@ -180,6 +183,86 @@ async function getPaymentTransactionForSession(
     .maybeSingle();
 
   return (data as PaymentTransactionRow | null) ?? null;
+}
+
+async function getPaymentTransactionForInvoice(
+  invoice: Stripe.Invoice
+): Promise<PaymentTransactionRow | null> {
+  const metadataPaymentId =
+    typeof invoice.metadata?.payment_transaction_id === "string"
+      ? invoice.metadata.payment_transaction_id
+      : null;
+
+  if (metadataPaymentId) {
+    const payment = await getPaymentTransactionById(metadataPaymentId);
+    if (payment) return payment;
+  }
+
+  if (invoice.id) {
+    const { data } = await supabaseAdmin
+      .from("payment_transactions")
+      .select("*")
+      .eq("stripe_invoice_id", invoice.id)
+      .maybeSingle();
+
+    if (data) return data as PaymentTransactionRow;
+  }
+
+  if (typeof invoice.payment_intent === "string" && invoice.payment_intent) {
+    const { data } = await supabaseAdmin
+      .from("payment_transactions")
+      .select("*")
+      .eq("stripe_payment_intent_id", invoice.payment_intent)
+      .maybeSingle();
+
+    if (data) return data as PaymentTransactionRow;
+  }
+
+  return null;
+}
+
+async function getPaymentTransactionForCharge(
+  charge: Stripe.Charge
+): Promise<PaymentTransactionRow | null> {
+  const metadataPaymentId =
+    typeof charge.metadata?.payment_transaction_id === "string"
+      ? charge.metadata.payment_transaction_id
+      : null;
+
+  if (metadataPaymentId) {
+    const payment = await getPaymentTransactionById(metadataPaymentId);
+    if (payment) return payment;
+  }
+
+  const { data: byCharge } = await supabaseAdmin
+    .from("payment_transactions")
+    .select("*")
+    .eq("stripe_charge_id", charge.id)
+    .maybeSingle();
+
+  if (byCharge) return byCharge as PaymentTransactionRow;
+
+  if (typeof charge.payment_intent === "string" && charge.payment_intent) {
+    const { data } = await supabaseAdmin
+      .from("payment_transactions")
+      .select("*")
+      .eq("stripe_payment_intent_id", charge.payment_intent)
+      .maybeSingle();
+
+    if (data) return data as PaymentTransactionRow;
+  }
+
+  if (typeof charge.invoice === "string" && charge.invoice) {
+    const { data } = await supabaseAdmin
+      .from("payment_transactions")
+      .select("*")
+      .eq("stripe_invoice_id", charge.invoice)
+      .maybeSingle();
+
+    if (data) return data as PaymentTransactionRow;
+  }
+
+  return null;
 }
 
 async function markWebhookEvent(
@@ -195,7 +278,20 @@ async function markWebhookEvent(
     .eq("event_id", eventId);
 }
 
-async function fetchStripeArtifacts(session: Stripe.Checkout.Session) {
+function mergeStripeMetadata(
+  existingMetadata: Record<string, any>,
+  patch: Record<string, unknown>
+) {
+  return {
+    ...existingMetadata,
+    stripe: {
+      ...asObject(existingMetadata.stripe),
+      ...patch,
+    },
+  };
+}
+
+async function fetchStripeArtifactsFromSession(session: Stripe.Checkout.Session) {
   let paymentIntentId: string | null = null;
   let chargeId: string | null = null;
   let receiptUrl: string | null = null;
@@ -253,7 +349,7 @@ async function findPropertyForActivation(
     const { data, error } = await supabaseAdmin
       .from("properties")
       .select(
-        "id, user_id, kode, title, listing_expires_at, featured_expires_at, boost_expires_at, spotlight_expires_at"
+        "id, user_id, kode, title, listing_expires_at, featured_expires_at, boost_expires_at, spotlight_expires_at, status, verification_status"
       )
       .eq("id", explicitPropertyId)
       .eq("user_id", userId)
@@ -272,7 +368,7 @@ async function findPropertyForActivation(
     const { data, error } = await supabaseAdmin
       .from("properties")
       .select(
-        "id, user_id, kode, title, listing_expires_at, featured_expires_at, boost_expires_at, spotlight_expires_at"
+        "id, user_id, kode, title, listing_expires_at, featured_expires_at, boost_expires_at, spotlight_expires_at, status, verification_status"
       )
       .eq("user_id", userId)
       .eq("kode", finalListingCode)
@@ -367,32 +463,13 @@ async function insertPropertyImagesFromDraft(
   if (error) throw error;
 }
 
-async function activateNewListing(
+function buildOwnerPropertyPayloadFromDraft(
   payment: PaymentTransactionRow,
-  metadata: Record<string, any>
+  metadata: Record<string, any>,
+  draft: any
 ) {
-  if (!payment.user_id) {
-    throw new Error("Payment transaction has no user_id.");
-  }
-
-  const existing = await findPropertyForActivation(payment, metadata);
-
-  if (existing?.id) {
-    return {
-      activatedPropertyId: existing.id,
-      activatedListingCode:
-        existing.kode || payment.property_code_snapshot || "",
-      activationType: "new-listing",
-      skippedBecauseAlreadyExists: true,
-    };
-  }
-
-  const draft = parseDraftSnapshot(getString(metadata, "draftSnapshot"));
-  if (!draft) {
-    throw new Error("Draft snapshot tidak ditemukan untuk aktivasi listing baru.");
-  }
-
   const verification = asObject(draft?.verification);
+
   const listingDurationDays = toPositiveNumber(
     getNumber(metadata, "productDurationDays") ?? payment.duration_days,
     30
@@ -415,9 +492,8 @@ async function activateNewListing(
         ""
     ).trim() || null;
 
-  const propertyPayload = {
+  return {
     user_id: payment.user_id,
-
     title: draft?.title ?? "",
     listing_type: draft?.listingType ?? null,
     property_type: draft?.propertyType ?? null,
@@ -425,6 +501,7 @@ async function activateNewListing(
     description: draft?.description ?? "",
 
     status: "pending",
+    verification_status: verification.status ?? "pending_verification",
 
     country: "Indonesia",
     province: draft?.province ?? null,
@@ -475,7 +552,6 @@ async function activateNewListing(
     verification_note: verification.note ?? null,
     ownership_pdf_name: verification.ownershipPdfName ?? null,
     authorization_pdf_name: verification.authorizationPdfName ?? null,
-    verification_status: verification.status ?? "pending_verification",
     verification_data: verification,
 
     verified_ok: true,
@@ -486,7 +562,83 @@ async function activateNewListing(
     boost_expires_at: null,
     spotlight_active: false,
     spotlight_expires_at: null,
+
+    updated_at: new Date().toISOString(),
   };
+}
+
+async function activateNewListing(
+  payment: PaymentTransactionRow,
+  metadata: Record<string, any>
+) {
+  if (!payment.user_id) {
+    throw new Error("Payment transaction has no user_id.");
+  }
+
+  const existing = await findPropertyForActivation(payment, metadata);
+  const draft = parseDraftSnapshot(getString(metadata, "draftSnapshot"));
+
+  if (existing?.id) {
+    const listingDurationDays = toPositiveNumber(
+      getNumber(metadata, "productDurationDays") ?? payment.duration_days,
+      30
+    );
+
+    const featuredDurationDays = toPositiveNumber(
+      getNumber(metadata, "featuredDurationDays"),
+      0
+    );
+
+    const baseUpdate: Record<string, unknown> = {
+      status: "pending",
+      verification_status: "pending_verification",
+      posted_date: new Date().toISOString().slice(0, 10),
+      listing_expires_at: extendExpiryIso(existing.listing_expires_at, listingDurationDays),
+      updated_at: new Date().toISOString(),
+      plan_id: getString(metadata, "selectedPlan") || payment.product_id || null,
+    };
+
+    if (featuredDurationDays > 0) {
+      baseUpdate.featured_expires_at = extendExpiryIso(
+        existing.featured_expires_at,
+        featuredDurationDays
+      );
+    }
+
+    if (draft) {
+      const fullPayload = buildOwnerPropertyPayloadFromDraft(payment, metadata, draft);
+      Object.assign(baseUpdate, fullPayload);
+      baseUpdate.user_id = payment.user_id;
+      baseUpdate.kode =
+        existing.kode ||
+        payment.property_code_snapshot ||
+        getString(metadata, "existingPropertyCode") ||
+        fullPayload.kode ||
+        null;
+    }
+
+    const { error } = await supabaseAdmin
+      .from("properties")
+      .update(baseUpdate)
+      .eq("id", existing.id)
+      .eq("user_id", payment.user_id);
+
+    if (error) throw error;
+
+    return {
+      activatedPropertyId: existing.id,
+      activatedListingCode:
+        existing.kode || payment.property_code_snapshot || "",
+      activationType: "new-listing",
+      reusedExistingProperty: true,
+    };
+  }
+
+  if (!draft) {
+    throw new Error("Draft snapshot tidak ditemukan untuk aktivasi listing baru.");
+  }
+
+  const propertyPayload = buildOwnerPropertyPayloadFromDraft(payment, metadata, draft);
 
   const { data: insertedProperty, error: propertyError } = await supabaseAdmin
     .from("properties")
@@ -507,9 +659,9 @@ async function activateNewListing(
   return {
     activatedPropertyId: insertedProperty.id,
     activatedListingCode:
-      insertedProperty.kode || payment.property_code_snapshot || finalKode || "",
+      insertedProperty.kode || payment.property_code_snapshot || propertyPayload.kode || "",
     activationType: "new-listing",
-    skippedBecauseAlreadyExists: false,
+    reusedExistingProperty: false,
   };
 }
 
@@ -700,6 +852,120 @@ async function activateAfterPayment(
   };
 }
 
+async function completePaidPayment(
+  event: Stripe.Event,
+  payment: PaymentTransactionRow,
+  patch: {
+    stripeCheckoutSessionId?: string | null;
+    stripePaymentIntentId?: string | null;
+    stripeChargeId?: string | null;
+    stripeInvoiceId?: string | null;
+    receiptUrl?: string | null;
+    hostedInvoiceUrl?: string | null;
+    invoicePdfUrl?: string | null;
+    customerName?: string | null;
+    customerEmail?: string | null;
+    paymentStatus?: string | null;
+  },
+  paidAtIso: string
+) {
+  const metadata = asObject(payment.metadata);
+  const existingActivation = asObject(metadata.activation);
+  const activationDone = existingActivation.done === true;
+
+  const mergedMetadata = mergeStripeMetadata(metadata, {
+    event_type: event.type,
+    event_id: event.id,
+    payment_status: patch.paymentStatus ?? null,
+    checkout_session_id:
+      patch.stripeCheckoutSessionId ?? payment.stripe_checkout_session_id,
+    payment_intent_id:
+      patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
+    charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
+    invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
+    receipt_url: patch.receiptUrl ?? null,
+    hosted_invoice_url: patch.hostedInvoiceUrl ?? null,
+    invoice_pdf_url: patch.invoicePdfUrl ?? null,
+  });
+
+  const nextPaidAt = payment.paid_at || paidAtIso;
+
+  const { error: paymentUpdateError } = await supabaseAdmin
+    .from("payment_transactions")
+    .update({
+      status: "paid",
+      stripe_checkout_session_id:
+        patch.stripeCheckoutSessionId ?? payment.stripe_checkout_session_id,
+      stripe_payment_intent_id:
+        patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
+      stripe_charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
+      stripe_invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
+      receipt_url: patch.receiptUrl ?? payment.stripe_charge_id ? patch.receiptUrl ?? null : patch.receiptUrl ?? null,
+      hosted_invoice_url: patch.hostedInvoiceUrl ?? null,
+      invoice_pdf_url: patch.invoicePdfUrl ?? null,
+      stripe_event_id_last: event.id,
+      customer_name: patch.customerName ?? payment.customer_name ?? null,
+      customer_email: patch.customerEmail ?? payment.customer_email ?? null,
+      paid_at: nextPaidAt,
+      updated_at: new Date().toISOString(),
+      metadata: mergedMetadata,
+    })
+    .eq("id", payment.id);
+
+  if (paymentUpdateError) {
+    throw paymentUpdateError;
+  }
+
+  if (!activationDone) {
+    const activationResult = await activateAfterPayment(
+      {
+        ...payment,
+        stripe_checkout_session_id:
+          patch.stripeCheckoutSessionId ?? payment.stripe_checkout_session_id,
+        stripe_payment_intent_id:
+          patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
+        stripe_charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
+        stripe_invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
+        metadata: mergedMetadata,
+        paid_at: nextPaidAt,
+        status: "paid",
+      },
+      nextPaidAt
+    );
+
+    const finalMetadata = {
+      ...mergedMetadata,
+      activation: {
+        done: true,
+        processedAt: new Date().toISOString(),
+        ...activationResult,
+      },
+    };
+
+    const { error: activationUpdateError } = await supabaseAdmin
+      .from("payment_transactions")
+      .update({
+        metadata: finalMetadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", payment.id);
+
+    if (activationUpdateError) {
+      throw activationUpdateError;
+    }
+  }
+
+  await markWebhookEvent(event.id, {
+    processing_status: "processed",
+    checkout_session_id:
+      patch.stripeCheckoutSessionId ?? payment.stripe_checkout_session_id,
+    payment_intent_id:
+      patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
+    charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
+    invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
+  });
+}
+
 async function handlePaidCheckoutSession(
   event: Stripe.Event,
   session: Stripe.Checkout.Session
@@ -714,98 +980,96 @@ async function handlePaidCheckoutSession(
     return;
   }
 
-  const metadata = asObject(payment.metadata);
-  const existingActivation = asObject(metadata.activation);
-  const activationDone = existingActivation.done === true;
+  const artifacts = await fetchStripeArtifactsFromSession(session);
 
-  const paidAtIso = new Date().toISOString();
-  const artifacts = await fetchStripeArtifacts(session);
-
-  const mergedMetadata = {
-    ...metadata,
-    stripe: {
-      event_type: event.type,
-      event_id: event.id,
-      payment_status: session.payment_status ?? null,
-      checkout_session_id: session.id,
-      payment_intent_id: artifacts.paymentIntentId,
-      charge_id: artifacts.chargeId,
-      invoice_id: artifacts.invoiceId,
-      receipt_url: artifacts.receiptUrl,
-      hosted_invoice_url: artifacts.hostedInvoiceUrl,
-      invoice_pdf_url: artifacts.invoicePdfUrl,
+  await completePaidPayment(
+    event,
+    payment,
+    {
+      stripeCheckoutSessionId: session.id,
+      stripePaymentIntentId: artifacts.paymentIntentId,
+      stripeChargeId: artifacts.chargeId,
+      stripeInvoiceId: artifacts.invoiceId,
+      receiptUrl: artifacts.receiptUrl,
+      hostedInvoiceUrl: artifacts.hostedInvoiceUrl,
+      invoicePdfUrl: artifacts.invoicePdfUrl,
+      customerName: session.customer_details?.name ?? null,
+      customerEmail: session.customer_details?.email ?? null,
+      paymentStatus: session.payment_status ?? null,
     },
-  };
+    new Date().toISOString()
+  );
+}
 
-  const { error: paymentUpdateError } = await supabaseAdmin
-    .from("payment_transactions")
-    .update({
-      status: "paid",
-      stripe_checkout_session_id: session.id,
-      stripe_payment_intent_id:
-        artifacts.paymentIntentId ?? payment.stripe_payment_intent_id,
-      stripe_charge_id: artifacts.chargeId ?? payment.stripe_charge_id,
-      stripe_invoice_id: artifacts.invoiceId ?? payment.stripe_invoice_id,
-      receipt_url: artifacts.receiptUrl,
-      hosted_invoice_url: artifacts.hostedInvoiceUrl,
-      invoice_pdf_url: artifacts.invoicePdfUrl,
-      stripe_event_id_last: event.id,
-      customer_name:
-        session.customer_details?.name ?? payment.customer_name ?? null,
-      customer_email:
-        session.customer_details?.email ?? payment.customer_email ?? null,
-      paid_at: paidAtIso,
-      updated_at: paidAtIso,
-      metadata: mergedMetadata,
-    })
-    .eq("id", payment.id);
+async function handleInvoicePaid(
+  event: Stripe.Event,
+  invoice: Stripe.Invoice
+) {
+  const payment = await getPaymentTransactionForInvoice(invoice);
 
-  if (paymentUpdateError) {
-    throw paymentUpdateError;
-  }
-
-  if (activationDone) {
+  if (!payment) {
     await markWebhookEvent(event.id, {
       processing_status: "ignored",
-      checkout_session_id: session.id,
-      payment_intent_id: artifacts.paymentIntentId,
-      charge_id: artifacts.chargeId,
-      invoice_id: artifacts.invoiceId,
-      processing_error: "Activation already done for this payment.",
+      invoice_id: invoice.id,
+      processing_error: `No payment row found for invoice ${invoice.id}`,
     });
     return;
   }
 
-  const activationResult = await activateAfterPayment(payment, paidAtIso);
+  const paidAtIso =
+    invoice.status_transitions?.paid_at
+      ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
+      : new Date().toISOString();
 
-  const finalMetadata = {
-    ...mergedMetadata,
-    activation: {
-      done: true,
-      processedAt: new Date().toISOString(),
-      ...activationResult,
+  await completePaidPayment(
+    event,
+    payment,
+    {
+      stripePaymentIntentId:
+        typeof invoice.payment_intent === "string" ? invoice.payment_intent : null,
+      stripeInvoiceId: invoice.id,
+      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+      invoicePdfUrl: invoice.invoice_pdf ?? null,
+      customerName: invoice.customer_name ?? null,
+      customerEmail: invoice.customer_email ?? null,
+      paymentStatus: invoice.status ?? null,
     },
-  };
+    paidAtIso
+  );
+}
 
-  const { error: activationUpdateError } = await supabaseAdmin
-    .from("payment_transactions")
-    .update({
-      metadata: finalMetadata,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", payment.id);
+async function handleChargeSucceeded(
+  event: Stripe.Event,
+  charge: Stripe.Charge
+) {
+  const payment = await getPaymentTransactionForCharge(charge);
 
-  if (activationUpdateError) {
-    throw activationUpdateError;
+  if (!payment) {
+    await markWebhookEvent(event.id, {
+      processing_status: "ignored",
+      charge_id: charge.id,
+      processing_error: `No payment row found for charge ${charge.id}`,
+    });
+    return;
   }
 
-  await markWebhookEvent(event.id, {
-    processing_status: "processed",
-    checkout_session_id: session.id,
-    payment_intent_id: artifacts.paymentIntentId,
-    charge_id: artifacts.chargeId,
-    invoice_id: artifacts.invoiceId,
-  });
+  const paidAtIso = new Date(charge.created * 1000).toISOString();
+
+  await completePaidPayment(
+    event,
+    payment,
+    {
+      stripePaymentIntentId:
+        typeof charge.payment_intent === "string" ? charge.payment_intent : null,
+      stripeChargeId: charge.id,
+      stripeInvoiceId: typeof charge.invoice === "string" ? charge.invoice : null,
+      receiptUrl: charge.receipt_url ?? null,
+      customerName: charge.billing_details?.name ?? null,
+      customerEmail: charge.billing_details?.email ?? null,
+      paymentStatus: charge.status ?? null,
+    },
+    paidAtIso
+  );
 }
 
 async function handleExpiredOrFailedSession(
@@ -829,15 +1093,11 @@ async function handleExpiredOrFailedSession(
     stripe_checkout_session_id: session.id,
     stripe_event_id_last: event.id,
     updated_at: new Date().toISOString(),
-    metadata: {
-      ...metadata,
-      stripe: {
-        ...(asObject(metadata.stripe)),
-        event_type: event.type,
-        event_id: event.id,
-        checkout_session_id: session.id,
-      },
-    },
+    metadata: mergeStripeMetadata(metadata, {
+      event_type: event.type,
+      event_id: event.id,
+      checkout_session_id: session.id,
+    }),
   };
 
   if (nextStatus === "expired") {
@@ -918,7 +1178,12 @@ Deno.serve(async (request) => {
       charge_id:
         typeof baseObject.charge === "string" ? baseObject.charge : null,
       invoice_id:
-        typeof baseObject.invoice === "string" ? baseObject.invoice : null,
+        typeof baseObject.invoice === "string"
+          ? baseObject.invoice
+          : typeof baseObject.id === "string" &&
+            String(event.type).startsWith("invoice.")
+            ? baseObject.id
+            : null,
       processing_status: "received",
       payload: event,
     });
@@ -945,6 +1210,14 @@ Deno.serve(async (request) => {
           event,
           event.data.object as Stripe.Checkout.Session
         );
+        break;
+
+      case "invoice.paid":
+        await handleInvoicePaid(event, event.data.object as Stripe.Invoice);
+        break;
+
+      case "charge.succeeded":
+        await handleChargeSucceeded(event, event.data.object as Stripe.Charge);
         break;
 
       case "checkout.session.async_payment_failed":
