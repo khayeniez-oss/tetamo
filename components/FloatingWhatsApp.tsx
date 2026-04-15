@@ -1,11 +1,18 @@
 "use client";
 
-export default function FloatingWhatsApp() {
-  const phone = "6282313556606";
-  const text = encodeURIComponent(
-    "Hello TETAMO, I’m interested in a property on your website."
-  );
+import { useLanguage } from "@/app/context/LanguageContext";
 
+export default function FloatingWhatsApp() {
+  const { lang } = useLanguage();
+
+  const phone = "6282313556606";
+
+  const message =
+    lang === "id"
+      ? "Hi Tetamo, saya tertarik untuk memasang properti saya di platform Tetamo. Saya adalah pemilik/agen. Bagaimana prosesnya?"
+      : "Hi Tetamo, I’m interested in listing my property on the Tetamo platform. I am an owner/agent. How can I proceed?";
+
+  const text = encodeURIComponent(message);
   const href = `https://wa.me/${phone}?text=${text}`;
 
   return (
