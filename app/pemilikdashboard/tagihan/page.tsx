@@ -8,29 +8,33 @@ import { useLanguage } from "@/app/context/LanguageContext";
 
 type PaymentStatus =
   | "pending"
+  | "checkout_created"
   | "paid"
   | "failed"
   | "expired"
+  | "canceled"
   | "cancelled"
-  | "refunded";
+  | "refunded"
+  | "partially_refunded";
 
 type PaymentRow = {
   id: string;
-  flow: string | null;
+  source_role: string | null;
+  payment_type: string | null;
   product_id: string | null;
+  product_name_snapshot: string | null;
   product_type: string | null;
-  listing_code: string | null;
-  amount: number | null;
+  property_code_snapshot: string | null;
+  property_title_snapshot: string | null;
+  amount_total: number | null;
   currency: string | null;
   status: PaymentStatus | null;
-  gateway: string | null;
-  payment_method: string | null;
   checkout_url: string | null;
-  gateway_reference: string | null;
-  auto_renew: boolean | null;
+  stripe_checkout_session_id: string | null;
   paid_at: string | null;
-  expires_at: string | null;
+  checkout_expires_at: string | null;
   created_at: string | null;
+  metadata: Record<string, any> | null;
 };
 
 type PropertyLookupRow = {
@@ -42,7 +46,7 @@ type BillingItem = {
   id: string;
   title: string;
   listingCode: string;
-  flow: string;
+  paymentType: string;
   productId: string;
   productType: string;
   amount: number;
@@ -52,24 +56,33 @@ type BillingItem = {
   paymentMethod: string;
   checkoutUrl: string;
   autoRenew: boolean;
-  gatewayReference: string;
+  reference: string;
   paidAt: string | null;
   expiresAt: string | null;
   createdAtRaw: string | null;
   createdAtLabel: string;
 };
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
 function normalizeStatus(value?: string | null): PaymentStatus {
   const v = String(value || "").toLowerCase();
 
   if (
+    v === "checkout_created" ||
     v === "paid" ||
     v === "failed" ||
     v === "expired" ||
+    v === "canceled" ||
     v === "cancelled" ||
-    v === "refunded"
+    v === "refunded" ||
+    v === "partially_refunded"
   ) {
-    return v;
+    return v as PaymentStatus;
   }
 
   return "pending";
@@ -79,7 +92,7 @@ function formatCurrency(amount: number, currency: string, locale: string) {
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
-      currency: currency || "IDR",
+      currency: (currency || "IDR").toUpperCase(),
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {
@@ -105,25 +118,12 @@ function formatDateTime(
   }).format(date);
 }
 
-function humanizeGateway(value?: string | null) {
-  if (!value) return "-";
-  if (value.toLowerCase() === "stripe") return "Stripe";
-  if (value.toLowerCase() === "xendit") return "Xendit";
-  return value;
+function humanizeGateway(lang: "id" | "en") {
+  return lang === "id" ? "Card Checkout" : "Card Checkout";
 }
 
-function humanizePaymentMethod(value?: string | null) {
-  if (!value) return "-";
-
-  const v = value.toLowerCase();
-
-  if (v === "card") return "Card";
-  if (v === "bank_transfer") return "Bank Transfer";
-  if (v === "virtual_account") return "Virtual Account";
-  if (v === "qris") return "QRIS";
-  if (v === "ewallet") return "E-Wallet";
-
-  return value;
+function humanizePaymentMethod(lang: "id" | "en") {
+  return lang === "id" ? "Debit / Credit Card" : "Debit / Credit Card";
 }
 
 function buildOwnerTitle(
@@ -132,22 +132,30 @@ function buildOwnerTitle(
   lang: "id" | "en"
 ) {
   if (propertyTitle) return propertyTitle;
+  if (row.property_title_snapshot) return row.property_title_snapshot;
+  if (row.product_name_snapshot) return row.product_name_snapshot;
 
-  const productType = String(row.product_type || "").toLowerCase();
-  const productId = String(row.product_id || "").toLowerCase();
-  const flow = String(row.flow || "").toLowerCase();
+  const paymentType = String(row.payment_type || "").toLowerCase();
+  const metadata = asObject(row.metadata);
+  const action = String(metadata.action || "").toLowerCase();
 
-  if (productType === "addon") {
-    if (productId === "boost-listing") {
-      return lang === "id" ? "Boost Listing" : "Listing Boost";
-    }
-    if (productId === "homepage-spotlight") {
-      return "Homepage Spotlight";
-    }
-    return lang === "id" ? "Add-On Listing" : "Listing Add-On";
+  if (paymentType === "education") {
+    return "Education Pass";
   }
 
-  if (flow === "renew-listing") {
+  if (paymentType === "boost") {
+    return lang === "id" ? "Boost Listing" : "Listing Boost";
+  }
+
+  if (paymentType === "spotlight") {
+    return "Homepage Spotlight";
+  }
+
+  if (paymentType === "package") {
+    return lang === "id" ? "Paket Membership" : "Membership Package";
+  }
+
+  if (action === "renew") {
     return lang === "id" ? "Perpanjangan Listing" : "Listing Renewal";
   }
 
@@ -155,21 +163,27 @@ function buildOwnerTitle(
 }
 
 function buildTypeLabel(bill: BillingItem, lang: "id" | "en") {
-  const productType = bill.productType.toLowerCase();
-  const productId = bill.productId.toLowerCase();
-  const flow = bill.flow.toLowerCase();
+  const paymentType = bill.paymentType.toLowerCase();
+  const metadata = asObject((bill as any).metadata);
+  const action = String(metadata?.action || "").toLowerCase();
 
-  if (productType === "addon") {
-    if (productId === "boost-listing") {
-      return lang === "id" ? "BOOST LISTING" : "LISTING BOOST";
-    }
-    if (productId === "homepage-spotlight") {
-      return "HOMEPAGE SPOTLIGHT";
-    }
-    return "ADD-ON";
+  if (paymentType === "education") {
+    return "EDUCATION PASS";
   }
 
-  if (flow === "renew-listing") {
+  if (paymentType === "package") {
+    return lang === "id" ? "MEMBERSHIP" : "MEMBERSHIP";
+  }
+
+  if (paymentType === "boost") {
+    return lang === "id" ? "BOOST LISTING" : "LISTING BOOST";
+  }
+
+  if (paymentType === "spotlight") {
+    return "HOMEPAGE SPOTLIGHT";
+  }
+
+  if (action === "renew") {
     return lang === "id" ? "PERPANJANGAN" : "RENEWAL";
   }
 
@@ -177,35 +191,37 @@ function buildTypeLabel(bill: BillingItem, lang: "id" | "en") {
 }
 
 function getBillStatusUI(status: PaymentStatus, lang: "id" | "en") {
-  if (status === "paid") {
+  const normalized = status === "checkout_created" ? "pending" : status;
+
+  if (normalized === "paid") {
     return {
       label: "Paid",
       badgeClass: "bg-green-50 text-green-700 border-green-200",
     };
   }
 
-  if (status === "pending") {
+  if (normalized === "pending") {
     return {
       label: "Pending",
       badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
     };
   }
 
-  if (status === "expired") {
+  if (normalized === "expired") {
     return {
       label: lang === "id" ? "Kadaluarsa" : "Expired",
       badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
     };
   }
 
-  if (status === "cancelled") {
+  if (normalized === "canceled" || normalized === "cancelled") {
     return {
       label: lang === "id" ? "Dibatalkan" : "Cancelled",
       badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
     };
   }
 
-  if (status === "refunded") {
+  if (normalized === "refunded" || normalized === "partially_refunded") {
     return {
       label: "Refunded",
       badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
@@ -219,15 +235,35 @@ function getBillStatusUI(status: PaymentStatus, lang: "id" | "en") {
 }
 
 function getActionLabel(bill: BillingItem, lang: "id" | "en") {
-  if (bill.status === "pending" && bill.checkoutUrl) {
+  const normalizedStatus =
+    bill.status === "checkout_created" ? "pending" : bill.status;
+
+  if (normalizedStatus === "pending" && bill.checkoutUrl) {
     return lang === "id" ? "Lanjutkan Bayar" : "Continue Payment";
   }
 
-  if (bill.status === "paid") return lang === "id" ? "Berhasil Dibayar" : "Paid";
-  if (bill.status === "expired") return lang === "id" ? "Kadaluarsa" : "Expired";
-  if (bill.status === "failed") return lang === "id" ? "Gagal" : "Failed";
-  if (bill.status === "cancelled") return lang === "id" ? "Dibatalkan" : "Cancelled";
-  if (bill.status === "refunded") return "Refunded";
+  if (normalizedStatus === "paid") {
+    return lang === "id" ? "Berhasil Dibayar" : "Paid";
+  }
+
+  if (normalizedStatus === "expired") {
+    return lang === "id" ? "Kadaluarsa" : "Expired";
+  }
+
+  if (normalizedStatus === "failed") {
+    return lang === "id" ? "Gagal" : "Failed";
+  }
+
+  if (normalizedStatus === "canceled" || normalizedStatus === "cancelled") {
+    return lang === "id" ? "Dibatalkan" : "Cancelled";
+  }
+
+  if (
+    normalizedStatus === "refunded" ||
+    normalizedStatus === "partially_refunded"
+  ) {
+    return "Refunded";
+  }
 
   return lang === "id" ? "Link Tidak Tersedia" : "Link Unavailable";
 }
@@ -244,7 +280,7 @@ export default function PemilikTagihanPage() {
       ? {
           pageTitle: "Tagihan",
           pageSubtitle:
-            "Riwayat pembayaran listing, perpanjangan, boost, spotlight, dan percobaan pembayaran Anda.",
+            "Riwayat pembayaran listing, perpanjangan, boost, spotlight, education pass, dan percobaan pembayaran Anda.",
           totalRecords: "Total Tagihan",
           totalPaid: "Total Paid",
           totalPending: "Total Pending",
@@ -272,12 +308,12 @@ export default function PemilikTagihanPage() {
             "Pembayaran dibatalkan atau belum diselesaikan.",
           noteTitle: "Catatan",
           noteBody:
-            "Setiap baris di bawah adalah satu catatan pembayaran atau satu attempt pembayaran. Jadi satu listing bisa memiliki lebih dari satu riwayat jika Anda pernah mencoba ulang, membuat checkout baru, gagal, expired, atau berhasil membayar lebih dari satu produk seperti renew, boost, atau spotlight.",
+            "Setiap baris di bawah adalah satu catatan pembayaran atau satu attempt pembayaran. Jadi satu listing bisa memiliki lebih dari satu riwayat jika Anda pernah mencoba ulang, membuat checkout baru, gagal, expired, atau berhasil membayar lebih dari satu produk seperti renew, boost, spotlight, atau education pass.",
         }
       : {
           pageTitle: "Billing",
           pageSubtitle:
-            "Your listing payments, renewals, boosts, spotlights, and payment attempt history.",
+            "Your listing payments, renewals, boosts, spotlights, education pass, and payment attempt history.",
           totalRecords: "Total Records",
           totalPaid: "Total Paid",
           totalPending: "Total Pending",
@@ -305,7 +341,7 @@ export default function PemilikTagihanPage() {
             "The payment was cancelled or has not been completed.",
           noteTitle: "Note",
           noteBody:
-            "Each row below is one payment record or one payment attempt. So one listing can have more than one history entry if you retried, created a new checkout, failed, expired, or successfully paid for more than one product such as renewal, boost, or spotlight.",
+            "Each row below is one payment record or one payment attempt. So one listing can have more than one history entry if you retried, created a new checkout, failed, expired, or successfully paid for more than one product such as renewal, boost, spotlight, or education pass.",
         };
 
   const [bills, setBills] = useState<BillingItem[]>([]);
@@ -329,12 +365,12 @@ export default function PemilikTagihanPage() {
       setErrorMessage("");
 
       const { data, error } = await supabase
-        .from("payments")
+        .from("payment_transactions")
         .select(
-          "id, flow, product_id, product_type, listing_code, amount, currency, status, gateway, payment_method, checkout_url, gateway_reference, auto_renew, paid_at, expires_at, created_at"
+          "id, source_role, payment_type, product_id, product_name_snapshot, product_type, property_code_snapshot, property_title_snapshot, amount_total, currency, status, checkout_url, stripe_checkout_session_id, paid_at, checkout_expires_at, created_at, metadata"
         )
         .eq("user_id", userId)
-        .eq("user_type", "owner")
+        .eq("source_role", "owner")
         .order("created_at", { ascending: false });
 
       if (ignore) return;
@@ -351,7 +387,7 @@ export default function PemilikTagihanPage() {
       const listingCodes = Array.from(
         new Set(
           paymentRows
-            .map((item) => item.listing_code)
+            .map((item) => item.property_code_snapshot)
             .filter((item): item is string => Boolean(item))
         )
       );
@@ -387,28 +423,29 @@ export default function PemilikTagihanPage() {
       }
 
       const mapped: BillingItem[] = paymentRows.map((row) => {
-        const listingCode = row.listing_code || "-";
-        const propertyTitle = row.listing_code
-          ? propertyMap.get(row.listing_code) || null
+        const metadata = asObject(row.metadata);
+        const listingCode = row.property_code_snapshot || "-";
+        const propertyTitle = row.property_code_snapshot
+          ? propertyMap.get(row.property_code_snapshot) || null
           : null;
 
         return {
           id: row.id,
           title: buildOwnerTitle(row, propertyTitle, lang),
           listingCode,
-          flow: row.flow || "",
+          paymentType: row.payment_type || "",
           productId: row.product_id || "",
           productType: row.product_type || "",
-          amount: Number(row.amount || 0),
+          amount: Number(row.amount_total || 0),
           currency: row.currency || "IDR",
           status: normalizeStatus(row.status),
-          gateway: humanizeGateway(row.gateway),
-          paymentMethod: humanizePaymentMethod(row.payment_method),
+          gateway: humanizeGateway(lang),
+          paymentMethod: humanizePaymentMethod(lang),
           checkoutUrl: row.checkout_url || "",
-          autoRenew: Boolean(row.auto_renew),
-          gatewayReference: row.gateway_reference || "-",
+          autoRenew: Boolean(metadata.autoRenew || false),
+          reference: row.stripe_checkout_session_id || "-",
           paidAt: row.paid_at,
-          expiresAt: row.expires_at,
+          expiresAt: row.checkout_expires_at,
           createdAtRaw: row.created_at,
           createdAtLabel: formatDateTime(row.created_at, locale),
         };
@@ -435,7 +472,10 @@ export default function PemilikTagihanPage() {
 
   const totalPendingAmount = useMemo(() => {
     return bills
-      .filter((bill) => bill.status === "pending")
+      .filter(
+        (bill) =>
+          bill.status === "pending" || bill.status === "checkout_created"
+      )
       .reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
   }, [bills]);
 
@@ -570,7 +610,7 @@ export default function PemilikTagihanPage() {
                     </div>
 
                     <div className="mt-1 break-all text-xs leading-5 text-gray-500">
-                      {t.reference}: {bill.gatewayReference}
+                      {t.reference}: {bill.reference}
                     </div>
 
                     <div className="mt-1 text-xs leading-5 text-gray-500">
@@ -585,7 +625,9 @@ export default function PemilikTagihanPage() {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-                    {bill.status === "pending" && bill.checkoutUrl ? (
+                    {(bill.status === "pending" ||
+                      bill.status === "checkout_created") &&
+                    bill.checkoutUrl ? (
                       <button
                         onClick={() => handleContinuePayment(bill)}
                         className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90"
