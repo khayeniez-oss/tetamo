@@ -14,25 +14,26 @@ TYPES
 ========================= */
 
 type PaymentStatus =
-  | "initiated"
   | "pending"
-  | "succeeded"
+  | "checkout_created"
+  | "paid"
   | "failed"
   | "expired"
-  | "refunded";
+  | "canceled"
+  | "cancelled"
+  | "refunded"
+  | "partially_refunded";
 
 type PaymentRow = {
   id: string;
   user_id: string | null;
-  listing_code: string | null;
-  product_name: string | null;
-  payment_title: string | null;
-  payment_method: string | null;
-  method: string | null;
-  gateway: string | null;
-  provider: string | null;
-  amount: number | null;
-  amount_idr: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  property_code_snapshot: string | null;
+  product_name_snapshot: string | null;
+  description: string | null;
+  payment_type: string | null;
+  amount_total: number | null;
   currency: string | null;
   created_at: string | null;
   status: PaymentStatus | null;
@@ -58,34 +59,62 @@ type Payment = {
 STATUS UI
 ========================= */
 
+function normalizeStatus(value?: string | null): PaymentStatus {
+  const v = String(value || "").toLowerCase();
+
+  if (
+    v === "pending" ||
+    v === "checkout_created" ||
+    v === "paid" ||
+    v === "failed" ||
+    v === "expired" ||
+    v === "canceled" ||
+    v === "cancelled" ||
+    v === "refunded" ||
+    v === "partially_refunded"
+  ) {
+    return v as PaymentStatus;
+  }
+
+  return "pending";
+}
+
 function statusUI(status: PaymentStatus) {
-  if (status === "succeeded")
+  const normalized = status === "checkout_created" ? "pending" : status;
+
+  if (normalized === "paid")
     return {
       label: "Paid",
       badge: "bg-green-50 text-green-700 border-green-200",
     };
 
-  if (status === "pending" || status === "initiated")
+  if (normalized === "pending")
     return {
       label: "Pending",
       badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
     };
 
-  if (status === "failed")
+  if (normalized === "failed")
     return {
       label: "Failed",
       badge: "bg-red-50 text-red-700 border-red-200",
     };
 
-  if (status === "expired")
+  if (normalized === "expired")
     return {
       label: "Expired",
       badge: "bg-orange-50 text-orange-700 border-orange-200",
     };
 
+  if (normalized === "canceled" || normalized === "cancelled")
+    return {
+      label: "Cancelled",
+      badge: "bg-gray-100 text-gray-700 border-gray-200",
+    };
+
   return {
     label: "Refunded",
-    badge: "bg-gray-100 text-gray-700 border-gray-200",
+    badge: "bg-blue-50 text-blue-700 border-blue-200",
   };
 }
 
@@ -93,19 +122,13 @@ function statusUI(status: PaymentStatus) {
 HELPERS
 ========================= */
 
-function formatAmount(
-  amount: number | null,
-  amountIdr: number | null,
-  currency: string | null
-) {
+function formatAmount(amount: number | null, currency: string | null) {
   const code = (currency || "IDR").toUpperCase();
+  const value = Number(amount ?? 0);
 
-  if (code === "IDR" || amountIdr !== null) {
-    const value = Number(amountIdr ?? amount ?? 0);
+  if (code === "IDR") {
     return `Rp ${new Intl.NumberFormat("id-ID").format(value)}`;
   }
-
-  const value = Number(amount ?? amountIdr ?? 0);
 
   try {
     return new Intl.NumberFormat("en-US", {
@@ -144,6 +167,23 @@ function visiblePageNumbers(current: number, total: number) {
   return pages;
 }
 
+function humanizePaymentType(value?: string | null) {
+  const v = String(value || "").toLowerCase();
+
+  if (v === "listing_fee") return "Listing Payment";
+  if (v === "featured") return "Featured Listing";
+  if (v === "boost") return "Boost Listing";
+  if (v === "spotlight") return "Homepage Spotlight";
+  if (v === "education") return "Education Pass";
+  if (v === "package") return "Membership Package";
+
+  return "Payment";
+}
+
+function humanizeMethod() {
+  return "Debit / Credit Card";
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -166,20 +206,18 @@ export default function AdminPaymentsPage() {
       setError("");
 
       const { data: paymentsData, error: paymentsError } = await supabase
-        .from("payments")
+        .from("payment_transactions")
         .select(
           `
             id,
             user_id,
-            listing_code,
-            product_name,
-            payment_title,
-            payment_method,
-            method,
-            gateway,
-            provider,
-            amount,
-            amount_idr,
+            customer_name,
+            customer_email,
+            property_code_snapshot,
+            product_name_snapshot,
+            description,
+            payment_type,
+            amount_total,
             currency,
             created_at,
             status
@@ -198,6 +236,7 @@ export default function AdminPaymentsPage() {
       }
 
       const rows = (paymentsData || []) as PaymentRow[];
+
       const userIds = Array.from(
         new Set(
           rows
@@ -228,19 +267,19 @@ export default function AdminPaymentsPage() {
       const mapped: Payment[] = rows.map((row) => ({
         id: row.id,
         owner:
+          row.customer_name?.trim() ||
+          row.customer_email?.trim() ||
           (row.user_id ? profileMap.get(row.user_id)?.full_name : null)?.trim() ||
           "Unknown",
-        listingKode: row.listing_code?.trim() || "-",
-        package: row.product_name?.trim() || row.payment_title?.trim() || "-",
-        amount: formatAmount(row.amount, row.amount_idr, row.currency),
-        method:
-          row.payment_method?.trim() ||
-          row.method?.trim() ||
-          row.gateway?.trim() ||
-          row.provider?.trim() ||
-          "-",
+        listingKode: row.property_code_snapshot?.trim() || "-",
+        package:
+          row.product_name_snapshot?.trim() ||
+          row.description?.trim() ||
+          humanizePaymentType(row.payment_type),
+        amount: formatAmount(row.amount_total, row.currency),
+        method: humanizeMethod(),
         date: formatDate(row.created_at),
-        status: (row.status || "pending") as PaymentStatus,
+        status: normalizeStatus(row.status),
       }));
 
       setPayments(mapped);
@@ -306,7 +345,7 @@ export default function AdminPaymentsPage() {
     setError("");
 
     const { error } = await supabase
-      .from("payments")
+      .from("payment_transactions")
       .update({ status })
       .eq("id", id);
 
@@ -326,8 +365,6 @@ export default function AdminPaymentsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      {/* Header */}
-
       <div className="flex flex-col gap-1.5">
         <h1 className="text-lg font-semibold tracking-tight text-[#1C1C1E] sm:text-xl">
           Payments
@@ -336,8 +373,6 @@ export default function AdminPaymentsPage() {
           Monitor dan kelola transaksi pembayaran.
         </p>
       </div>
-
-      {/* Search */}
 
       <div className="relative">
         <Search
@@ -357,8 +392,6 @@ export default function AdminPaymentsPage() {
         />
       </div>
 
-      {/* Payments Card */}
-
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-6 text-sm text-gray-500">Loading payments...</div>
@@ -376,8 +409,6 @@ export default function AdminPaymentsPage() {
                 <div key={payment.id} className="px-3.5 py-4 sm:px-5">
                   <div className="flex flex-col gap-3.5">
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                      {/* LEFT */}
-
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span
@@ -430,8 +461,6 @@ export default function AdminPaymentsPage() {
                         </div>
                       </div>
 
-                      {/* RIGHT */}
-
                       <div className="grid grid-cols-2 gap-2.5 xl:w-[220px] xl:shrink-0">
                         <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center xl:text-right">
                           <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
@@ -445,7 +474,7 @@ export default function AdminPaymentsPage() {
                         <button
                           type="button"
                           disabled={isSaving}
-                          onClick={() => updateStatus(payment.id, "succeeded")}
+                          onClick={() => updateStatus(payment.id, "paid")}
                           className="inline-flex h-10 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
                           title="Mark as paid"
                         >
@@ -480,8 +509,6 @@ export default function AdminPaymentsPage() {
           </div>
         )}
       </div>
-
-      {/* Pagination */}
 
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
