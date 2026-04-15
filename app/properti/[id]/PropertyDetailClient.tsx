@@ -535,6 +535,147 @@ function formatUnitPrice(
   return `${formatPriceByCurrency(value, currency)} / ${suffix}`;
 }
 
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getStructuredDescription(raw?: string | null, lang?: string) {
+  const text = String(raw || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .trim();
+
+  if (!text) {
+    return {
+      intro: [] as string[],
+      detailHeading: "",
+      detailItems: [] as string[],
+    };
+  }
+
+  const detailHeadingPattern =
+    lang === "id"
+      ? /(Detail properti\s*:)/i
+      : /(Property details\s*:)/i;
+
+  const splitByHeading = text.split(detailHeadingPattern);
+
+  if (splitByHeading.length < 3) {
+    return {
+      intro: text
+        .split(/\n{2,}/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      detailHeading: "",
+      detailItems: [],
+    };
+  }
+
+  const introText = splitByHeading[0]?.trim() || "";
+  const detailHeading = splitByHeading[1]?.trim() || "";
+  const detailText = splitByHeading.slice(2).join("").trim();
+
+  const knownLabels =
+    lang === "id"
+      ? [
+          "Harga",
+          "Harga Sewa",
+          "Harga Jual",
+          "Minimum Sewa",
+          "Opsi Sewa",
+          "Transaksi",
+          "Tipe Properti",
+          "Lokasi",
+          "Luas Tanah",
+          "Luas Bangunan",
+          "Total Bangunan",
+          "Total Kamar",
+          "Tipe Kamar",
+          "Kamar Tidur",
+          "Kamar Mandi",
+          "Listrik",
+          "Air",
+          "Hadap",
+          "Furnish",
+          "Furnishing",
+          "Parkir",
+          "Ukuran Tanah",
+          "Dimensi",
+          "Legalitas",
+          "View",
+          "Fasilitas",
+          "Akses",
+        ]
+      : [
+          "Price",
+          "Rental Price",
+          "Sale Price",
+          "Minimum Lease",
+          "Lease Option",
+          "Transaction",
+          "Property Type",
+          "Location",
+          "Land Size",
+          "Building Size",
+          "Total Buildings",
+          "Total Rooms",
+          "Room Type",
+          "Bedrooms",
+          "Bathrooms",
+          "Electricity",
+          "Water",
+          "Facing",
+          "Furnish",
+          "Furnishing",
+          "Parking",
+          "Land Dimensions",
+          "Dimensions",
+          "Legal",
+          "View",
+          "Facilities",
+          "Access",
+        ];
+
+  const labelPattern = new RegExp(
+    `(${knownLabels.map(escapeRegExp).join("|")})\\s*:`,
+    "gi"
+  );
+
+  const matches = Array.from(detailText.matchAll(labelPattern));
+
+  const detailItems =
+    matches.length > 0
+      ? matches.map((match, index) => {
+          const label = match[1]?.trim() || "";
+          const valueStart = (match.index ?? 0) + match[0].length;
+          const valueEnd =
+            index + 1 < matches.length
+              ? (matches[index + 1].index ?? detailText.length)
+              : detailText.length;
+
+          const value = detailText
+            .slice(valueStart, valueEnd)
+            .replace(/\s+/g, " ")
+            .trim();
+
+          return value ? `${label}: ${value}` : `${label}:`;
+        })
+      : detailText
+          .split(/\n+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+
+  return {
+    intro: introText
+      .split(/\n{2,}/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+    detailHeading,
+    detailItems,
+  };
+}
+
 export default function PropertyDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
@@ -2111,6 +2252,14 @@ Is this property still available?`;
     .filter(([, value]) => Boolean(value))
     .map(([key]) => nearbyLabels[key] ?? key);
 
+
+  const activeDescription =
+    lang === "en" && property.descriptionEn
+      ? property.descriptionEn
+      : property.description;
+
+  const structuredDescription = getStructuredDescription(activeDescription, lang);
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -2460,12 +2609,34 @@ Is this property still available?`;
               {lang === "id" ? "Deskripsi" : "Description"}
             </h2>
 
-            <div className="mt-4 space-y-4 text-sm leading-7 text-gray-700">
-              <p>
-                {lang === "en" && property.descriptionEn
-                  ? property.descriptionEn
-                  : property.description}
-              </p>
+            <div className="mt-4 text-sm leading-7 text-gray-700">
+              {structuredDescription.intro.length > 0 ? (
+                <div className="space-y-4">
+                  {structuredDescription.intro.map((paragraph, index) => (
+                    <p key={index} className="whitespace-pre-line">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+
+              {structuredDescription.detailHeading ? (
+                <div className={structuredDescription.intro.length > 0 ? "mt-6" : ""}>
+                  <p className="font-bold">{structuredDescription.detailHeading}</p>
+
+                  {structuredDescription.detailItems.length > 0 ? (
+                    <ul className="mt-3 list-disc space-y-1 pl-5">
+                      {structuredDescription.detailItems.map((item, index) => (
+                        <li key={index} className="whitespace-pre-line">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : structuredDescription.intro.length === 0 ? (
+                <p className="whitespace-pre-line">{activeDescription}</p>
+              ) : null}
             </div>
           </div>
 
@@ -2658,4 +2829,4 @@ Is this property still available?`;
       </div>
     </main>
   );
-}                                                       
+}                                                     
