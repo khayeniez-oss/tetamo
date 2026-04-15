@@ -34,6 +34,9 @@ type PaymentRow = {
   paid_at: string | null;
   checkout_expires_at: string | null;
   created_at: string | null;
+  receipt_url: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
   metadata: Record<string, any> | null;
 };
 
@@ -55,12 +58,15 @@ type BillingItem = {
   gateway: string;
   paymentMethod: string;
   checkoutUrl: string;
+  receiptUrl: string;
+  invoiceUrl: string;
   autoRenew: boolean;
   reference: string;
   paidAt: string | null;
   expiresAt: string | null;
   createdAtRaw: string | null;
   createdAtLabel: string;
+  metadata: Record<string, any>;
 };
 
 function asObject(value: unknown): Record<string, any> {
@@ -164,7 +170,7 @@ function buildOwnerTitle(
 
 function buildTypeLabel(bill: BillingItem, lang: "id" | "en") {
   const paymentType = bill.paymentType.toLowerCase();
-  const metadata = asObject((bill as any).metadata);
+  const metadata = asObject(bill.metadata);
   const action = String(metadata?.action || "").toLowerCase();
 
   if (paymentType === "education") {
@@ -172,7 +178,7 @@ function buildTypeLabel(bill: BillingItem, lang: "id" | "en") {
   }
 
   if (paymentType === "package") {
-    return lang === "id" ? "MEMBERSHIP" : "MEMBERSHIP";
+    return "MEMBERSHIP";
   }
 
   if (paymentType === "boost") {
@@ -273,10 +279,11 @@ export default function PemilikTagihanPage() {
   const sp = useSearchParams();
   const { lang } = useLanguage();
 
-  const locale = lang === "id" ? "id-ID" : "en-US";
+  const currentLang: "id" | "en" = lang === "en" ? "en" : "id";
+  const locale = currentLang === "id" ? "id-ID" : "en-US";
 
   const t =
-    lang === "id"
+    currentLang === "id"
       ? {
           pageTitle: "Tagihan",
           pageSubtitle:
@@ -302,13 +309,17 @@ export default function PemilikTagihanPage() {
           inactive: "Nonaktif",
           continuePaymentMissing:
             "Checkout URL belum tersedia untuk tagihan ini.",
+          receiptMissing: "Receipt belum tersedia untuk tagihan ini.",
+          invoiceMissing: "Invoice belum tersedia untuk tagihan ini.",
           paidSuccessBanner:
-            "Pembayaran berhasil dibuat. Status akan berubah setelah pembayaran terkonfirmasi.",
+            "Pembayaran berhasil. Receipt dan invoice akan tampil di sini jika sudah tersedia dari Stripe.",
           cancelledBanner:
             "Pembayaran dibatalkan atau belum diselesaikan.",
           noteTitle: "Catatan",
           noteBody:
             "Setiap baris di bawah adalah satu catatan pembayaran atau satu attempt pembayaran. Jadi satu listing bisa memiliki lebih dari satu riwayat jika Anda pernah mencoba ulang, membuat checkout baru, gagal, expired, atau berhasil membayar lebih dari satu produk seperti renew, boost, spotlight, atau education pass.",
+          viewReceipt: "Lihat Receipt",
+          viewInvoice: "Lihat Invoice",
         }
       : {
           pageTitle: "Billing",
@@ -335,13 +346,17 @@ export default function PemilikTagihanPage() {
           inactive: "Inactive",
           continuePaymentMissing:
             "Checkout URL is not available for this billing record.",
+          receiptMissing: "Receipt is not available for this billing record.",
+          invoiceMissing: "Invoice is not available for this billing record.",
           paidSuccessBanner:
-            "The payment record has been created. The status will change after the payment is confirmed.",
+            "Payment successful. Receipt and invoice will appear here once available from Stripe.",
           cancelledBanner:
             "The payment was cancelled or has not been completed.",
           noteTitle: "Note",
           noteBody:
             "Each row below is one payment record or one payment attempt. So one listing can have more than one history entry if you retried, created a new checkout, failed, expired, or successfully paid for more than one product such as renewal, boost, spotlight, or education pass.",
+          viewReceipt: "View Receipt",
+          viewInvoice: "View Invoice",
         };
 
   const [bills, setBills] = useState<BillingItem[]>([]);
@@ -367,7 +382,7 @@ export default function PemilikTagihanPage() {
       const { data, error } = await supabase
         .from("payment_transactions")
         .select(
-          "id, source_role, payment_type, product_id, product_name_snapshot, product_type, property_code_snapshot, property_title_snapshot, amount_total, currency, status, checkout_url, stripe_checkout_session_id, paid_at, checkout_expires_at, created_at, metadata"
+          "id, source_role, payment_type, product_id, product_name_snapshot, product_type, property_code_snapshot, property_title_snapshot, amount_total, currency, status, checkout_url, stripe_checkout_session_id, paid_at, checkout_expires_at, created_at, receipt_url, hosted_invoice_url, invoice_pdf_url, metadata"
         )
         .eq("user_id", userId)
         .eq("source_role", "owner")
@@ -415,7 +430,7 @@ export default function PemilikTagihanPage() {
             .map((item) => [
               String(item.kode),
               item.title ||
-                (lang === "id"
+                (currentLang === "id"
                   ? "Tanpa Judul Properti"
                   : "Untitled Property"),
             ])
@@ -431,7 +446,7 @@ export default function PemilikTagihanPage() {
 
         return {
           id: row.id,
-          title: buildOwnerTitle(row, propertyTitle, lang),
+          title: buildOwnerTitle(row, propertyTitle, currentLang),
           listingCode,
           paymentType: row.payment_type || "",
           productId: row.product_id || "",
@@ -439,15 +454,18 @@ export default function PemilikTagihanPage() {
           amount: Number(row.amount_total || 0),
           currency: row.currency || "IDR",
           status: normalizeStatus(row.status),
-          gateway: humanizeGateway(lang),
-          paymentMethod: humanizePaymentMethod(lang),
+          gateway: humanizeGateway(currentLang),
+          paymentMethod: humanizePaymentMethod(currentLang),
           checkoutUrl: row.checkout_url || "",
+          receiptUrl: row.receipt_url || "",
+          invoiceUrl: row.hosted_invoice_url || row.invoice_pdf_url || "",
           autoRenew: Boolean(metadata.autoRenew || false),
           reference: row.stripe_checkout_session_id || "-",
           paidAt: row.paid_at,
           expiresAt: row.checkout_expires_at,
           createdAtRaw: row.created_at,
           createdAtLabel: formatDateTime(row.created_at, locale),
+          metadata,
         };
       });
 
@@ -462,7 +480,7 @@ export default function PemilikTagihanPage() {
     return () => {
       ignore = true;
     };
-  }, [userId, loadingProfile, lang, locale]);
+  }, [userId, loadingProfile, currentLang, locale]);
 
   const totalPaidAmount = useMemo(() => {
     return bills
@@ -490,6 +508,24 @@ export default function PemilikTagihanPage() {
     }
 
     window.open(bill.checkoutUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleViewReceipt = (bill: BillingItem) => {
+    if (!bill.receiptUrl) {
+      alert(t.receiptMissing);
+      return;
+    }
+
+    window.open(bill.receiptUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleViewInvoice = (bill: BillingItem) => {
+    if (!bill.invoiceUrl) {
+      alert(t.invoiceMissing);
+      return;
+    }
+
+    window.open(bill.invoiceUrl, "_blank", "noopener,noreferrer");
   };
 
   const isLoading = loadingProfile || loadingBills;
@@ -565,8 +601,14 @@ export default function PemilikTagihanPage() {
         ) : (
           <div className="divide-y divide-gray-100">
             {bills.map((bill) => {
-              const ui = getBillStatusUI(bill.status, lang);
-              const actionLabel = getActionLabel(bill, lang);
+              const ui = getBillStatusUI(bill.status, currentLang);
+              const actionLabel = getActionLabel(bill, currentLang);
+              const normalizedStatus =
+                bill.status === "checkout_created" ? "pending" : bill.status;
+              const canContinue =
+                (normalizedStatus === "pending") && Boolean(bill.checkoutUrl);
+              const canViewReceipt = Boolean(bill.receiptUrl);
+              const canViewInvoice = Boolean(bill.invoiceUrl);
 
               return (
                 <div
@@ -601,7 +643,7 @@ export default function PemilikTagihanPage() {
 
                     <div className="mt-3 text-xs leading-5 text-gray-500">
                       {t.code}: {bill.listingCode} • {t.type}:{" "}
-                      {buildTypeLabel(bill, lang)}
+                      {buildTypeLabel(bill, currentLang)}
                     </div>
 
                     <div className="mt-1 text-xs leading-5 text-gray-500">
@@ -625,9 +667,7 @@ export default function PemilikTagihanPage() {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-                    {(bill.status === "pending" ||
-                      bill.status === "checkout_created") &&
-                    bill.checkoutUrl ? (
+                    {canContinue ? (
                       <button
                         onClick={() => handleContinuePayment(bill)}
                         className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90"
@@ -642,6 +682,24 @@ export default function PemilikTagihanPage() {
                         {actionLabel}
                       </button>
                     )}
+
+                    {canViewReceipt ? (
+                      <button
+                        onClick={() => handleViewReceipt(bill)}
+                        className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-[#1C1C1E] hover:bg-gray-50"
+                      >
+                        {t.viewReceipt}
+                      </button>
+                    ) : null}
+
+                    {canViewInvoice ? (
+                      <button
+                        onClick={() => handleViewInvoice(bill)}
+                        className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-[#1C1C1E] hover:bg-gray-50"
+                      >
+                        {t.viewInvoice}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               );
