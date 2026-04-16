@@ -58,6 +58,7 @@ type PaymentMetadata = Record<
 >;
 
 type BillingCycle = "monthly" | "yearly";
+type VehicleType = "car" | "motor";
 
 type ProfileRow = {
   id: string;
@@ -192,6 +193,36 @@ function resolveSelectedBillingCycle(
   );
 }
 
+function normalizeVehicleType(value: unknown): VehicleType | null {
+  const v = String(value || "").toLowerCase();
+
+  if (v === "car") return "car";
+  if (v === "motor") return "motor";
+
+  return null;
+}
+
+function resolveVehicleTypeFromMetadata(
+  metadata: PaymentMetadata | undefined
+): VehicleType | null {
+  return (
+    normalizeVehicleType(metadata?.vehicleType) ||
+    normalizeVehicleType(metadata?.vehicle_type) ||
+    normalizeVehicleType(metadata?.type) ||
+    null
+  );
+}
+
+function isVehicleListingPayment(
+  payment: TetamoPayment,
+  metadata: PaymentMetadata | undefined
+) {
+  if (payment.userType !== "owner") return false;
+  if (payment.productType !== "listing") return false;
+
+  return Boolean(resolveVehicleTypeFromMetadata(metadata));
+}
+
 function resolveProductConfig(
   productId: string,
   userType: TetamoUserType,
@@ -322,7 +353,11 @@ function buildPaymentText(
   };
 }
 
-function buildDefaultSuccessUrl(origin: string, payment: TetamoPayment): string {
+function buildDefaultSuccessUrl(
+  origin: string,
+  payment: TetamoPayment,
+  metadata?: PaymentMetadata
+): string {
   if (
     payment.flow === "education-access" ||
     payment.productType === "education"
@@ -343,6 +378,24 @@ function buildDefaultSuccessUrl(origin: string, payment: TetamoPayment): string 
     url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
     url.searchParams.set("flow", payment.flow);
     url.searchParams.set("product", payment.productId);
+    return url.toString();
+  }
+
+  if (isVehicleListingPayment(payment, metadata)) {
+    const vehicleType = resolveVehicleTypeFromMetadata(metadata) || "car";
+    const url = new URL("/vehicles/create/success", origin);
+    url.searchParams.set("payment", "success");
+    url.searchParams.set("payment_id", payment.id);
+    url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+    url.searchParams.set("flow", payment.flow);
+    url.searchParams.set("product", payment.productId);
+    url.searchParams.set("vehicleType", vehicleType);
+    url.searchParams.set("plan", payment.productId);
+
+    if (payment.listingCode) {
+      url.searchParams.set("kode", payment.listingCode);
+    }
+
     return url.toString();
   }
 
@@ -364,7 +417,11 @@ function buildDefaultSuccessUrl(origin: string, payment: TetamoPayment): string 
   return url.toString();
 }
 
-function buildDefaultCancelUrl(origin: string, payment: TetamoPayment): string {
+function buildDefaultCancelUrl(
+  origin: string,
+  payment: TetamoPayment,
+  metadata?: PaymentMetadata
+): string {
   if (
     payment.flow === "education-access" ||
     payment.productType === "education"
@@ -383,6 +440,23 @@ function buildDefaultCancelUrl(origin: string, payment: TetamoPayment): string {
     url.searchParams.set("payment_id", payment.id);
     url.searchParams.set("flow", payment.flow);
     url.searchParams.set("product", payment.productId);
+    return url.toString();
+  }
+
+  if (isVehicleListingPayment(payment, metadata)) {
+    const vehicleType = resolveVehicleTypeFromMetadata(metadata) || "car";
+    const url = new URL("/vehicles/create/payment", origin);
+    url.searchParams.set("payment", "cancelled");
+    url.searchParams.set("payment_id", payment.id);
+    url.searchParams.set("flow", payment.flow);
+    url.searchParams.set("product", payment.productId);
+    url.searchParams.set("vehicleType", vehicleType);
+    url.searchParams.set("plan", payment.productId);
+
+    if (payment.listingCode) {
+      url.searchParams.set("kode", payment.listingCode);
+    }
+
     return url.toString();
   }
 
@@ -685,9 +759,11 @@ export async function POST(req: Request) {
 
     const requestOrigin = new URL(req.url).origin;
     const successUrl =
-      body.successUrl || buildDefaultSuccessUrl(requestOrigin, paymentRequest);
+      body.successUrl ||
+      buildDefaultSuccessUrl(requestOrigin, paymentRequest, bodyMetadata);
     const cancelUrl =
-      body.cancelUrl || buildDefaultCancelUrl(requestOrigin, paymentRequest);
+      body.cancelUrl ||
+      buildDefaultCancelUrl(requestOrigin, paymentRequest, bodyMetadata);
 
     const propertyId =
       getMetadataString(bodyMetadata, "existingPropertyId") || null;
@@ -727,7 +803,10 @@ export async function POST(req: Request) {
         );
       }
 
-      if (propertyData.user_id && propertyData.user_id !== paymentRequest.userId) {
+      if (
+        propertyData.user_id &&
+        propertyData.user_id !== paymentRequest.userId
+      ) {
         return NextResponse.json(
           {
             success: false,
@@ -763,6 +842,8 @@ export async function POST(req: Request) {
         ? paymentRequest.productId
         : String(productConfig?.name || paymentRequest.productId);
 
+    const vehicleType = resolveVehicleTypeFromMetadata(bodyMetadata);
+
     const metadata: Record<string, unknown> = {
       ...(paymentRequest.metadata ?? {}),
       request_source: "api/payments/create",
@@ -774,6 +855,7 @@ export async function POST(req: Request) {
       billing_note: textData.billingNote,
       stripe_currency: "idr",
       stripe_minor_amount: toStripeMinorAmount("idr", paymentRequest.amount),
+      vehicle_type: vehicleType,
     };
 
     const initialInsert = {
@@ -797,8 +879,7 @@ export async function POST(req: Request) {
       duration_days: durationDays,
       property_title_snapshot:
         propertySnapshot?.title || propertyTitleSnapshotFromBody,
-      property_code_snapshot:
-        propertySnapshot?.kode || propertyCodeSnapshot,
+      property_code_snapshot: propertySnapshot?.kode || propertyCodeSnapshot,
       customer_name: profile?.full_name || null,
       customer_email: verifiedUser?.email || profile?.email || null,
       customer_phone: profile?.phone || null,
@@ -898,9 +979,9 @@ export async function POST(req: Request) {
         product_id: paymentRequest.productId,
         product_type: paymentRequest.productType,
         flow: paymentRequest.flow,
-        listing_code:
-          propertySnapshot?.kode || propertyCodeSnapshot || "",
+        listing_code: propertySnapshot?.kode || propertyCodeSnapshot || "",
         selected_billing_cycle: selectedBillingCycle || "",
+        vehicle_type: vehicleType || "",
       },
       line_items: [
         {
