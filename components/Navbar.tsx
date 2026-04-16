@@ -21,8 +21,6 @@ import {
   BadgeDollarSign,
   Bell,
   Home,
-  CarFront,
-  Bike,
 } from "lucide-react";
 
 type ProfileData = {
@@ -196,11 +194,6 @@ export default function Navbar() {
     forSale: isID ? "Dijual" : "Sale",
     forRent: isID ? "Disewa" : "Rent",
 
-    vehicles: isID ? "Kendaraan" : "Vehicles",
-    allVehicles: isID ? "Semua Kendaraan" : "All Vehicles",
-    car: isID ? "Mobil" : "Car",
-    motor: isID ? "Motor" : "Motor",
-
     buyers: isID ? "Pembeli" : "Buyers",
     career: isID ? "Karier" : "Career",
 
@@ -229,12 +222,6 @@ export default function Navbar() {
     { label: t.forRent, href: "/properti?jenisListing=disewa", icon: Home },
   ];
 
-  const vehicleItems: MenuItem[] = [
-    { label: t.allVehicles, href: "/vehicles", icon: CarFront },
-    { label: t.car, href: "/vehicles/car", icon: CarFront },
-    { label: t.motor, href: "/vehicles/motor", icon: Bike },
-  ];
-
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
@@ -247,9 +234,7 @@ export default function Navbar() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [desktopDropdownOpen, setDesktopDropdownOpen] = useState<
-    "properties" | "vehicles" | null
-  >(null);
+  const [desktopDropdownOpen, setDesktopDropdownOpen] = useState<"properties" | null>(null);
 
   const desktopLangRef = useRef<HTMLDivElement | null>(null);
   const desktopCurrencyRef = useRef<HTMLDivElement | null>(null);
@@ -508,18 +493,6 @@ export default function Navbar() {
                 onToggle={() =>
                   setDesktopDropdownOpen((prev) =>
                     prev === "properties" ? null : "properties"
-                  )
-                }
-                onNavigate={closeAllMenus}
-              />
-
-              <DesktopDropdown
-                label={t.vehicles}
-                items={vehicleItems}
-                isOpen={desktopDropdownOpen === "vehicles"}
-                onToggle={() =>
-                  setDesktopDropdownOpen((prev) =>
-                    prev === "vehicles" ? null : "vehicles"
                   )
                 }
                 onNavigate={closeAllMenus}
@@ -932,31 +905,6 @@ export default function Navbar() {
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           {propertyItems.map((item) => {
-                            const Icon = item.icon;
-
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={closeAllMenus}
-                                className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                              >
-                                <div className="flex flex-col items-center gap-2">
-                                  <Icon className="h-4 w-4" />
-                                  <span>{item.label}</span>
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-3">
-                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                          {t.vehicles}
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {vehicleItems.map((item) => {
                             const Icon = item.icon;
 
                             return (
