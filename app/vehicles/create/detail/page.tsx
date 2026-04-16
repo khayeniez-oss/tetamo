@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import VehicleCreateDetailPageClient from "./VehicleCreateDetailPageClient";
+import DetailPageClient from "./DetailPageClient";
 
-export default function VehicleCreateDetailPage() {
+export default function Page() {
   return (
     <Suspense fallback={<main className="min-h-screen bg-white text-gray-900" />}>
-      <VehicleCreateDetailPageClient />
+      <DetailPageClient />
     </Suspense>
   );
 }
