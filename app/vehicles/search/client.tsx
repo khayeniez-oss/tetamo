@@ -2,17 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
-import {
-  Search,
-  MapPin,
-  Hash,
-  SlidersHorizontal,
-  CarFront,
-  Bike,
-} from "lucide-react";
+import { Search, MapPin, CarFront, Bike } from "lucide-react";
 
 type VehicleCategory = "car" | "motor";
 type PostedByType = "owner" | "agent" | "dealer";
@@ -31,17 +24,6 @@ type PriceRange =
   | "200jt-500jt"
   | "500jt-1m"
   | ">1m";
-
-type SuggestionItem = {
-  id: string;
-  type: "vehicle" | "location" | "kode";
-  label: string;
-  sublabel?: string;
-  query: string;
-  vehicleId?: string;
-  detailHref?: string;
-  listingTier?: ListingTier;
-};
 
 type VehicleItem = {
   id: string;
@@ -69,22 +51,6 @@ type VehicleItem = {
   detailHref: string;
 };
 
-type DbVehicleMedia = {
-  vehicle_id: string;
-  file_url: string;
-  sort_order: number | null;
-  is_cover: boolean | null;
-  media_type: "photo" | "video";
-};
-
-type DbProfile = {
-  id: string;
-  full_name: string | null;
-  agency: string | null;
-  photo_url: string | null;
-  phone: string | null;
-};
-
 type DbVehicle = {
   id: string;
   kode: string | null;
@@ -109,6 +75,20 @@ type DbVehicle = {
   approval_status: string | null;
   listing_status: string | null;
   created_at: string | null;
+};
+
+type DbVehicleMedia = {
+  vehicle_id: string;
+  file_url: string;
+  sort_order: number | null;
+  is_cover: boolean | null;
+  media_type: "photo" | "video";
+};
+
+type DbProfile = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
 };
 
 const VALID_SORTS: SortOption[] = [
@@ -180,6 +160,10 @@ function normalizeWhatsapp(phone?: string | null) {
   return digits;
 }
 
+function dedupeImages(images: string[]) {
+  return Array.from(new Set(images.filter(Boolean)));
+}
+
 function getPriceRange(value: number): PriceRange {
   if (value < 50_000_000) return "<50jt";
   if (value < 200_000_000) return "50jt-200jt";
@@ -211,14 +195,6 @@ function buildSearchableText(item: VehicleItem) {
     ${item.category}
     ${item.listingTier}
   `);
-}
-
-function parsePostedDateToTime(value: string) {
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
-
-  const fallback = Date.parse(value);
-  return Number.isNaN(fallback) ? 0 : fallback;
 }
 
 function calculateRelevanceScore(item: VehicleItem, query: string) {
@@ -267,8 +243,12 @@ function calculateRelevanceScore(item: VehicleItem, query: string) {
   return score;
 }
 
-function dedupeImages(images: string[]) {
-  return Array.from(new Set(images.filter(Boolean)));
+function parsePostedDateToTime(value: string) {
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+
+  const fallback = Date.parse(value);
+  return Number.isNaN(fallback) ? 0 : fallback;
 }
 
 function getPostedByType(source?: string | null): PostedByType {
@@ -285,6 +265,63 @@ function getDefaultPosterName(source?: string | null, lang: string = "en") {
     return lang === "id" ? "Agen Kendaraan" : "Vehicle Agent";
   }
   return lang === "id" ? "Partner Kendaraan" : "Vehicle Partner";
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </label>
+
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm text-[#1C1C1E] outline-none focus:border-[#1C1C1E]"
+        >
+          {children}
+        </select>
+
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+          ▼
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PaginationButton({
+  active,
+  children,
+  onClick,
+}: {
+  active?: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl border px-3 py-2 text-sm transition ${
+        active
+          ? "border-black bg-black text-white"
+          : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
+      }`}
+    >
+      {children}
+    </button>
+  );
 }
 
 function mapDbVehicleToUi(args: {
@@ -368,63 +405,6 @@ async function fetchVehicleRows(): Promise<DbVehicle[]> {
   return (tableResult.data || []) as DbVehicle[];
 }
 
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-        {label}
-      </label>
-
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-10 text-sm text-[#1C1C1E] outline-none focus:border-[#1C1C1E]"
-        >
-          {children}
-        </select>
-
-        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-          ▼
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function PaginationButton({
-  active,
-  children,
-  onClick,
-}: {
-  active?: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-xl border px-3 py-2 text-sm transition ${
-        active
-          ? "border-black bg-black text-white"
-          : "border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -442,10 +422,6 @@ export default function SearchPageContent() {
           search: "Cari",
           searchPlaceholder:
             "Cari mobil, motor, brand, model, kode listing, lokasi...",
-          noSuggestion: "Tidak ada saran pencarian.",
-          listingCode: "Kode Listing",
-          location: "Lokasi",
-          vehicle: "Kendaraan",
           vehicleType: "Tipe Kendaraan",
           province: "Provinsi",
           city: "Kota",
@@ -471,14 +447,13 @@ export default function SearchPageContent() {
           from: "dari",
           vehicles: "kendaraan",
           clearFilters: "Reset Filter",
-          moreFilters: "Filter Lainnya",
-          hideFilters: "Sembunyikan Filter",
           verified: "Verified",
           featured: "Featured",
           previous: "Sebelumnya",
           next: "Berikutnya",
           page: "Halaman",
           viewDetail: "Lihat Detail",
+          seller: "Penjual",
         }
       : {
           title: "Vehicle Search Results",
@@ -490,10 +465,6 @@ export default function SearchPageContent() {
           search: "Search",
           searchPlaceholder:
             "Search car, motorbike, brand, model, listing code, location...",
-          noSuggestion: "No search suggestions.",
-          listingCode: "Listing Code",
-          location: "Location",
-          vehicle: "Vehicle",
           vehicleType: "Vehicle Type",
           province: "Province",
           city: "City",
@@ -519,24 +490,23 @@ export default function SearchPageContent() {
           from: "of",
           vehicles: "vehicles",
           clearFilters: "Clear Filters",
-          moreFilters: "More Filters",
-          hideFilters: "Hide Filters",
           verified: "Verified",
           featured: "Featured",
           previous: "Previous",
           next: "Next",
           page: "Page",
           viewDetail: "View Detail",
+          seller: "Seller",
         };
 
   const qParam = searchParams.get("q") || "";
+  const provinceParam = searchParams.get("province") || "";
+  const cityParam = searchParams.get("city") || "";
   const vehicleTypeParam =
     searchParams.get("vehicleType") === "car" ||
     searchParams.get("vehicleType") === "motor"
       ? (searchParams.get("vehicleType") as "" | "car" | "motor")
       : "";
-  const provinceParam = searchParams.get("province") || "";
-  const cityParam = searchParams.get("city") || "";
   const transmissionParam = searchParams.get("transmission") || "";
   const fuelParam = searchParams.get("fuel") || "";
   const yearParam = searchParams.get("year") || "";
@@ -552,39 +522,19 @@ export default function SearchPageContent() {
     : "relevan";
 
   const parsedPage = Number(searchParams.get("page") || "1");
-  const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const currentPage =
+    Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
   const [allVehicles, setAllVehicles] = useState<VehicleItem[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-
   const [searchInput, setSearchInput] = useState(qParam);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [mobileMoreFiltersOpen, setMobileMoreFiltersOpen] = useState(false);
-
-  const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
   const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
     setSearchInput(qParam);
   }, [qParam]);
-
-  useEffect(() => {
-    function handleOutsideClick(event: MouseEvent) {
-      if (
-        searchBoxRef.current &&
-        !searchBoxRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, []);
 
   const currentSearchUrl = useMemo(() => {
     const params = searchParams.toString();
@@ -675,7 +625,7 @@ export default function SearchPageContent() {
         if (userIds.length > 0) {
           const profileResult = await supabase
             .from("profiles")
-            .select("id,full_name,agency,photo_url,phone")
+            .select("id,full_name,phone")
             .in("id", userIds);
 
           if (ignore) return;
@@ -714,8 +664,7 @@ export default function SearchPageContent() {
   }, [lang]);
 
   const provinces = useMemo(
-    () =>
-      [...new Set(allVehicles.map((item) => item.province).filter(Boolean))].sort(),
+    () => [...new Set(allVehicles.map((item) => item.province).filter(Boolean))].sort(),
     [allVehicles]
   );
 
@@ -728,8 +677,7 @@ export default function SearchPageContent() {
   }, [provinceParam, allVehicles]);
 
   const transmissions = useMemo(
-    () =>
-      [...new Set(allVehicles.map((item) => item.transmission).filter(Boolean))].sort(),
+    () => [...new Set(allVehicles.map((item) => item.transmission).filter(Boolean))].sort(),
     [allVehicles]
   );
 
@@ -740,13 +688,15 @@ export default function SearchPageContent() {
 
   const years = useMemo(
     () =>
-      [...new Set(allVehicles.map((item) => item.year).filter(Boolean))]
-        .sort((a, b) => Number(b) - Number(a)),
+      [...new Set(allVehicles.map((item) => item.year).filter(Boolean))].sort(
+        (a, b) => Number(b) - Number(a)
+      ),
     [allVehicles]
   );
 
   useEffect(() => {
     if (!provinceParam) return;
+
     const validCities = new Set(
       allVehicles
         .filter((item) => item.province === provinceParam)
@@ -757,73 +707,6 @@ export default function SearchPageContent() {
       replaceSearchUrl({ city: "" });
     }
   }, [provinceParam, cityParam, allVehicles]);
-
-  const autocompleteGroups = useMemo(() => {
-    const q = normalizeText(searchInput);
-
-    if (!q) {
-      return {
-        kode: [] as SuggestionItem[],
-        lokasi: [] as SuggestionItem[],
-        kendaraan: [] as SuggestionItem[],
-      };
-    }
-
-    const scored = allVehicles
-      .map((item) => ({
-        item,
-        score: calculateRelevanceScore(item, q),
-      }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    const kode = scored
-      .filter(({ item }) => normalizeText(item.kodeListing).includes(q))
-      .slice(0, 4)
-      .map(({ item }) => ({
-        id: `kode-${item.id}`,
-        type: "kode" as const,
-        label: item.kodeListing,
-        sublabel: `${item.title} • ${item.location}`,
-        query: item.kodeListing,
-        vehicleId: item.id,
-        detailHref: item.detailHref,
-        listingTier: item.listingTier,
-      }));
-
-    const lokasiValues = Array.from(
-      new Set(
-        allVehicles.flatMap((item) => [
-          `${item.city}, ${item.province}`,
-          item.city,
-          item.province,
-        ])
-      )
-    );
-
-    const lokasi = lokasiValues
-      .filter((value) => normalizeText(value).includes(q))
-      .slice(0, 5)
-      .map((value, index) => ({
-        id: `lokasi-${index}-${value}`,
-        type: "location" as const,
-        label: value,
-        query: value,
-      }));
-
-    const kendaraan = scored.slice(0, 6).map(({ item }) => ({
-      id: `vehicle-${item.id}`,
-      type: "vehicle" as const,
-      label: item.title,
-      sublabel: `${item.location} • ${formatIdr(item.price)}`,
-      query: item.title,
-      vehicleId: item.id,
-      detailHref: item.detailHref,
-      listingTier: item.listingTier,
-    }));
-
-    return { kode, lokasi, kendaraan };
-  }, [searchInput, allVehicles]);
 
   const filteredResults = useMemo(() => {
     const normalizedQuery = normalizeText(qParam);
@@ -841,10 +724,10 @@ export default function SearchPageContent() {
           relevanceScore > 0 ||
           searchable.includes(normalizedQuery);
 
-        const matchesVehicleType =
-          !vehicleTypeParam || item.category === vehicleTypeParam;
         const matchesProvince = !provinceParam || item.province === provinceParam;
         const matchesCity = !cityParam || item.city === cityParam;
+        const matchesVehicleType =
+          !vehicleTypeParam || item.category === vehicleTypeParam;
         const matchesTransmission =
           !transmissionParam || item.transmission === transmissionParam;
         const matchesFuel = !fuelParam || item.fuel === fuelParam;
@@ -854,9 +737,9 @@ export default function SearchPageContent() {
 
         return (
           matchesQuery &&
-          matchesVehicleType &&
           matchesProvince &&
           matchesCity &&
+          matchesVehicleType &&
           matchesTransmission &&
           matchesFuel &&
           matchesYear &&
@@ -882,9 +765,9 @@ export default function SearchPageContent() {
   }, [
     allVehicles,
     qParam,
-    vehicleTypeParam,
     provinceParam,
     cityParam,
+    vehicleTypeParam,
     transmissionParam,
     fuelParam,
     yearParam,
@@ -892,7 +775,10 @@ export default function SearchPageContent() {
     sortByParam,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredResults.length / ITEMS_PER_PAGE)
+  );
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
   const paginatedResults = filteredResults.slice(
@@ -920,58 +806,37 @@ export default function SearchPageContent() {
     return pages;
   }, [safeCurrentPage, totalPages]);
 
-  function handleSearch(customQuery?: string) {
-    const query = (customQuery ?? searchInput).trim();
-    setShowSuggestions(false);
+  function handleSearch() {
+    const query = searchInput.trim();
     pushSearchUrl({ q: query || null });
-  }
-
-  function handleSuggestionClick(item: SuggestionItem) {
-    setShowSuggestions(false);
-
-    if ((item.type === "vehicle" || item.type === "kode") && item.detailHref) {
-      router.push(
-        `${item.detailHref}?back=${encodeURIComponent(currentSearchUrl)}`
-      );
-      return;
-    }
-
-    setSearchInput(item.query);
-    pushSearchUrl({ q: item.query || null });
   }
 
   function clearFilters() {
     replaceSearchUrl({
-      vehicleType: "",
       province: "",
       city: "",
+      vehicleType: "",
       transmission: "",
       fuel: "",
       year: "",
       priceRange: "",
       sortBy: "relevan",
     });
-    setMobileMoreFiltersOpen(false);
   }
 
   const hasActiveFilters =
-    vehicleTypeParam ||
     provinceParam ||
     cityParam ||
+    vehicleTypeParam ||
     transmissionParam ||
     fuelParam ||
     yearParam ||
     priceRangeParam ||
     sortByParam !== "relevan";
 
-  const hasAutocompleteResults =
-    autocompleteGroups.kode.length > 0 ||
-    autocompleteGroups.lokasi.length > 0 ||
-    autocompleteGroups.kendaraan.length > 0;
-
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
             {t.title}
@@ -989,295 +854,41 @@ export default function SearchPageContent() {
           </p>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-          <div ref={searchBoxRef} className="relative">
-            <div className="grid grid-cols-[1fr_96px] gap-3 sm:grid-cols-[1fr_110px]">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-
-                <input
-                  type="text"
-                  value={searchInput}
-                  onFocus={() => setShowSuggestions(true)}
-                  onChange={(e) => {
-                    setSearchInput(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSearch();
-                  }}
-                  placeholder={t.searchPlaceholder}
-                  className="w-full rounded-2xl border border-gray-300 py-3 pl-11 pr-4 text-sm text-[#1C1C1E] placeholder:text-gray-400 outline-none focus:border-[#1C1C1E]"
-                />
-
-                {showSuggestions && searchInput.trim() && (
-                  <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-30 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.12)]">
-                    {hasAutocompleteResults ? (
-                      <div className="max-h-[420px] overflow-y-auto p-2">
-                        {autocompleteGroups.kode.length > 0 && (
-                          <div className="mb-2">
-                            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              {t.listingCode}
-                            </div>
-
-                            {autocompleteGroups.kode.map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => handleSuggestionClick(item)}
-                                className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-gray-50"
-                              >
-                                <div className="mt-0.5 rounded-lg bg-gray-100 p-2">
-                                  <Hash className="h-4 w-4 text-[#1C1C1E]" />
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="font-medium text-[#1C1C1E]">
-                                      {item.label}
-                                    </p>
-
-                                    {item.listingTier === "featured" ? (
-                                      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
-                                        {t.featured}
-                                      </span>
-                                    ) : null}
-                                  </div>
-
-                                  <p className="mt-1 text-sm text-gray-500">
-                                    {item.sublabel}
-                                  </p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {autocompleteGroups.lokasi.length > 0 && (
-                          <div className="mb-2">
-                            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              {t.location}
-                            </div>
-
-                            {autocompleteGroups.lokasi.map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => handleSuggestionClick(item)}
-                                className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-gray-50"
-                              >
-                                <div className="mt-0.5 rounded-lg bg-gray-100 p-2">
-                                  <MapPin className="h-4 w-4 text-[#1C1C1E]" />
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-[#1C1C1E]">
-                                    {item.label}
-                                  </p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {autocompleteGroups.kendaraan.length > 0 && (
-                          <div>
-                            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              {t.vehicle}
-                            </div>
-
-                            {autocompleteGroups.kendaraan.map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => handleSuggestionClick(item)}
-                                className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-gray-50"
-                              >
-                                <div className="mt-0.5 rounded-lg bg-gray-100 p-2">
-                                  <CarFront className="h-4 w-4 text-[#1C1C1E]" />
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="font-medium text-[#1C1C1E]">
-                                      {item.label}
-                                    </p>
-
-                                    {item.listingTier === "featured" ? (
-                                      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
-                                        {t.featured}
-                                      </span>
-                                    ) : null}
-                                  </div>
-
-                                  <p className="mt-1 text-sm text-gray-500">
-                                    {item.sublabel}
-                                  </p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="px-4 py-4 text-sm text-gray-500">
-                        {t.noSuggestion}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleSearch()}
-                className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                {t.search}
-              </button>
+        <div className="rounded-[32px] border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_160px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSearch();
+                }}
+                placeholder={t.searchPlaceholder}
+                className="h-14 w-full rounded-[20px] border border-gray-300 pl-12 pr-4 text-base text-[#1C1C1E] placeholder:text-gray-400 outline-none focus:border-[#1C1C1E]"
+              />
             </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-            <FilterSelect
-              label={t.vehicleType}
-              value={vehicleTypeParam}
-              onChange={(value) =>
-                replaceSearchUrl({ vehicleType: value as "" | "car" | "motor" })
-              }
-            >
-              <option value="">{t.allVehicleTypes}</option>
-              <option value="car">{t.car}</option>
-              <option value="motor">{t.motor}</option>
-            </FilterSelect>
-
-            <FilterSelect
-              label={t.province}
-              value={provinceParam}
-              onChange={(value) =>
-                replaceSearchUrl({ province: value, city: "" })
-              }
-            >
-              <option value="">{t.allProvince}</option>
-              {provinces.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </FilterSelect>
-
-            <FilterSelect
-              label={t.sort}
-              value={sortByParam}
-              onChange={(value) => replaceSearchUrl({ sortBy: value })}
-            >
-              <option value="relevan">{t.mostRelevant}</option>
-              <option value="terbaru">{t.newest}</option>
-              <option value="harga-rendah">{t.lowestPrice}</option>
-              <option value="harga-tinggi">{t.highestPrice}</option>
-            </FilterSelect>
 
             <button
               type="button"
-              onClick={() => setMobileMoreFiltersOpen((prev) => !prev)}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+              onClick={handleSearch}
+              className="h-14 w-full rounded-[20px] bg-[#1C1C1E] px-4 text-base font-semibold text-white transition hover:opacity-90"
             >
-              <SlidersHorizontal className="h-4 w-4" />
-              {mobileMoreFiltersOpen ? t.hideFilters : t.moreFilters}
+              {t.search}
             </button>
           </div>
 
-          {mobileMoreFiltersOpen && (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-              <FilterSelect
-                label={t.city}
-                value={cityParam}
-                onChange={(value) => replaceSearchUrl({ city: value })}
-              >
-                <option value="">{t.allCity}</option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              <FilterSelect
-                label={t.transmission}
-                value={transmissionParam}
-                onChange={(value) => replaceSearchUrl({ transmission: value })}
-              >
-                <option value="">{t.allTransmission}</option>
-                {transmissions.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              <FilterSelect
-                label={t.fuel}
-                value={fuelParam}
-                onChange={(value) => replaceSearchUrl({ fuel: value })}
-              >
-                <option value="">{t.allFuel}</option>
-                {fuels.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              <FilterSelect
-                label={t.year}
-                value={yearParam}
-                onChange={(value) => replaceSearchUrl({ year: value })}
-              >
-                <option value="">{t.allYear}</option>
-                {years.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              <FilterSelect
-                label={t.price}
-                value={priceRangeParam}
-                onChange={(value) => replaceSearchUrl({ priceRange: value })}
-              >
-                <option value="">{t.allPrice}</option>
-                <option value="<50jt">&lt; 50 Juta</option>
-                <option value="50jt-200jt">50 - 200 Juta</option>
-                <option value="200jt-500jt">200 - 500 Juta</option>
-                <option value="500jt-1m">500 Juta - 1 Miliar</option>
-                <option value=">1m">&gt; 1 Miliar</option>
-              </FilterSelect>
-            </div>
-          )}
-
-          <div className="mt-4 hidden xl:grid xl:grid-cols-7 xl:gap-3">
-            <FilterSelect
-              label={t.vehicleType}
-              value={vehicleTypeParam}
-              onChange={(value) =>
-                replaceSearchUrl({ vehicleType: value as "" | "car" | "motor" })
-              }
-            >
-              <option value="">{t.allVehicleTypes}</option>
-              <option value="car">{t.car}</option>
-              <option value="motor">{t.motor}</option>
-            </FilterSelect>
-
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <FilterSelect
               label={t.province}
               value={provinceParam}
               onChange={(value) => replaceSearchUrl({ province: value, city: "" })}
             >
               <option value="">{t.allProvince}</option>
-              {provinces.map((p) => (
-                <option key={p} value={p}>
-                  {p}
+              {provinces.map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </FilterSelect>
@@ -1288,11 +899,23 @@ export default function SearchPageContent() {
               onChange={(value) => replaceSearchUrl({ city: value })}
             >
               <option value="">{t.allCity}</option>
-              {cities.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+              {cities.map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
+            </FilterSelect>
+
+            <FilterSelect
+              label={t.vehicleType}
+              value={vehicleTypeParam}
+              onChange={(value) =>
+                replaceSearchUrl({ vehicleType: value as "" | "car" | "motor" })
+              }
+            >
+              <option value="">{t.allVehicleTypes}</option>
+              <option value="car">{t.car}</option>
+              <option value="motor">{t.motor}</option>
             </FilterSelect>
 
             <FilterSelect
@@ -1346,11 +969,7 @@ export default function SearchPageContent() {
               <option value="500jt-1m">500 Juta - 1 Miliar</option>
               <option value=">1m">&gt; 1 Miliar</option>
             </FilterSelect>
-          </div>
 
-          <div className="mt-4 hidden xl:grid xl:grid-cols-7 xl:gap-3">
-            <div className="xl:col-span-2" />
-            <div className="xl:col-span-3" />
             <FilterSelect
               label={t.sort}
               value={sortByParam}
@@ -1363,7 +982,7 @@ export default function SearchPageContent() {
             </FilterSelect>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-600">
               {t.showing} {startItem}–{endItem} {t.from} {filteredResults.length}{" "}
               {t.vehicles}
@@ -1382,11 +1001,11 @@ export default function SearchPageContent() {
         </div>
 
         {loadingData ? (
-          <div className="mt-12 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:mt-16 sm:text-base">
+          <div className="mt-10 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
             {t.loading}
           </div>
         ) : errorMessage ? (
-          <div className="mt-12 rounded-3xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-600 sm:mt-16 sm:text-base">
+          <div className="mt-10 rounded-3xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-600 sm:text-base">
             {t.failed} {errorMessage}
           </div>
         ) : paginatedResults.length > 0 ? (
@@ -1483,7 +1102,7 @@ Is this unit still available?`;
                       </div>
 
                       <p className="mt-3 text-sm text-gray-600">
-                        {lang === "id" ? "Penjual" : "Seller"}:{" "}
+                        {t.seller}:{" "}
                         <span className="font-semibold text-[#1C1C1E]">
                           {item.posterName}
                         </span>
@@ -1574,7 +1193,7 @@ Is this unit still available?`;
             </div>
           </>
         ) : (
-          <div className="mt-12 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:mt-16 sm:text-base">
+          <div className="mt-10 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
             {t.empty}
           </div>
         )}
