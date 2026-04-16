@@ -1131,8 +1131,8 @@ export default function CarPageClient() {
 
               <p className="mt-2 text-sm leading-7 text-gray-600 sm:text-base">
                 {lang === "id"
-                  ? "Temukan listing mobil dari pemilik, dealer, dan agen dengan UI marketplace Tetamo yang sama."
-                  : "Discover car listings from owners, dealers, and agents with the same Tetamo marketplace UI."}
+                  ? "Temukan listing mobil dari pemilik, dealer, dan agen dengan Tetamo."
+                  : "Discover car listings from owners, dealers, and agents with the same Tetamo."}
               </p>
             </div>
 

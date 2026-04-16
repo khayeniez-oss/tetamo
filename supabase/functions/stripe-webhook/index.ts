@@ -1,9 +1,7 @@
 import Stripe from "https://esm.sh/stripe@14?target=denonext";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2024-11-20",
-});
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!);
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
@@ -36,6 +34,9 @@ type PaymentTransactionRow = {
   stripe_payment_intent_id: string | null;
   stripe_charge_id: string | null;
   stripe_invoice_id: string | null;
+  receipt_url?: string | null;
+  hosted_invoice_url?: string | null;
+  invoice_pdf_url?: string | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -51,6 +52,8 @@ type PropertyLookupRow = {
   status: string | null;
   verification_status: string | null;
 };
+
+type VehicleType = "car" | "motor";
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -116,6 +119,39 @@ function addDaysIso(baseIso: string, days: number) {
   const base = new Date(baseIso);
   base.setUTCDate(base.getUTCDate() + days);
   return base.toISOString();
+}
+
+function normalizeVehicleType(value: unknown): VehicleType | null {
+  const v = String(value || "").toLowerCase();
+
+  if (v === "car") return "car";
+  if (v === "motor") return "motor";
+
+  return null;
+}
+
+function getVehicleTypeFromMetadata(
+  metadata: Record<string, any>
+): VehicleType | null {
+  return (
+    normalizeVehicleType(metadata?.vehicleType) ||
+    normalizeVehicleType(metadata?.vehicle_type) ||
+    normalizeVehicleType(metadata?.type) ||
+    null
+  );
+}
+
+function isVehicleListingPayment(
+  payment: PaymentTransactionRow,
+  metadata: Record<string, any>
+) {
+  const paymentType = String(payment.payment_type || "").toLowerCase();
+
+  if (paymentType !== "listing_fee" && paymentType !== "featured") {
+    return false;
+  }
+
+  return Boolean(getVehicleTypeFromMetadata(metadata));
 }
 
 function getDataUrlMime(dataUrl: string) {
@@ -593,7 +629,10 @@ async function activateNewListing(
       status: "pending",
       verification_status: "pending_verification",
       posted_date: new Date().toISOString().slice(0, 10),
-      listing_expires_at: extendExpiryIso(existing.listing_expires_at, listingDurationDays),
+      listing_expires_at: extendExpiryIso(
+        existing.listing_expires_at,
+        listingDurationDays
+      ),
       updated_at: new Date().toISOString(),
       plan_id: getString(metadata, "selectedPlan") || payment.product_id || null,
     };
@@ -606,7 +645,11 @@ async function activateNewListing(
     }
 
     if (draft) {
-      const fullPayload = buildOwnerPropertyPayloadFromDraft(payment, metadata, draft);
+      const fullPayload = buildOwnerPropertyPayloadFromDraft(
+        payment,
+        metadata,
+        draft
+      );
       Object.assign(baseUpdate, fullPayload);
       baseUpdate.user_id = payment.user_id;
       baseUpdate.kode =
@@ -638,7 +681,11 @@ async function activateNewListing(
     throw new Error("Draft snapshot tidak ditemukan untuk aktivasi listing baru.");
   }
 
-  const propertyPayload = buildOwnerPropertyPayloadFromDraft(payment, metadata, draft);
+  const propertyPayload = buildOwnerPropertyPayloadFromDraft(
+    payment,
+    metadata,
+    draft
+  );
 
   const { data: insertedProperty, error: propertyError } = await supabaseAdmin
     .from("properties")
@@ -659,7 +706,10 @@ async function activateNewListing(
   return {
     activatedPropertyId: insertedProperty.id,
     activatedListingCode:
-      insertedProperty.kode || payment.property_code_snapshot || propertyPayload.kode || "",
+      insertedProperty.kode ||
+      payment.property_code_snapshot ||
+      propertyPayload.kode ||
+      "",
     activationType: "new-listing",
     reusedExistingProperty: false,
   };
@@ -839,6 +889,19 @@ async function activateAfterPayment(
   }
 
   if (paymentType === "listing_fee" || paymentType === "featured") {
+    if (isVehicleListingPayment(payment, metadata)) {
+      const vehicleType = getVehicleTypeFromMetadata(metadata) || "car";
+
+      return {
+        activationType:
+          action === "renew"
+            ? "vehicle-renew-listing"
+            : "vehicle-new-listing",
+        vehicleType,
+        skippedBecauseVehicleStorageNotWired: true,
+      };
+    }
+
     if (action === "renew") {
       return activateRenewListing(payment, metadata);
     }
@@ -883,9 +946,10 @@ async function completePaidPayment(
       patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
     charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
     invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
-    receipt_url: patch.receiptUrl ?? null,
-    hosted_invoice_url: patch.hostedInvoiceUrl ?? null,
-    invoice_pdf_url: patch.invoicePdfUrl ?? null,
+    receipt_url: patch.receiptUrl ?? payment.receipt_url ?? null,
+    hosted_invoice_url:
+      patch.hostedInvoiceUrl ?? payment.hosted_invoice_url ?? null,
+    invoice_pdf_url: patch.invoicePdfUrl ?? payment.invoice_pdf_url ?? null,
   });
 
   const nextPaidAt = payment.paid_at || paidAtIso;
@@ -900,9 +964,10 @@ async function completePaidPayment(
         patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
       stripe_charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
       stripe_invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
-      receipt_url: patch.receiptUrl ?? payment.stripe_charge_id ? patch.receiptUrl ?? null : patch.receiptUrl ?? null,
-      hosted_invoice_url: patch.hostedInvoiceUrl ?? null,
-      invoice_pdf_url: patch.invoicePdfUrl ?? null,
+      receipt_url: patch.receiptUrl ?? payment.receipt_url ?? null,
+      hosted_invoice_url:
+        patch.hostedInvoiceUrl ?? payment.hosted_invoice_url ?? null,
+      invoice_pdf_url: patch.invoicePdfUrl ?? payment.invoice_pdf_url ?? null,
       stripe_event_id_last: event.id,
       customer_name: patch.customerName ?? payment.customer_name ?? null,
       customer_email: patch.customerEmail ?? payment.customer_email ?? null,
@@ -926,6 +991,10 @@ async function completePaidPayment(
           patch.stripePaymentIntentId ?? payment.stripe_payment_intent_id,
         stripe_charge_id: patch.stripeChargeId ?? payment.stripe_charge_id,
         stripe_invoice_id: patch.stripeInvoiceId ?? payment.stripe_invoice_id,
+        receipt_url: patch.receiptUrl ?? payment.receipt_url ?? null,
+        hosted_invoice_url:
+          patch.hostedInvoiceUrl ?? payment.hosted_invoice_url ?? null,
+        invoice_pdf_url: patch.invoicePdfUrl ?? payment.invoice_pdf_url ?? null,
         metadata: mergedMetadata,
         paid_at: nextPaidAt,
         status: "paid",
@@ -1026,7 +1095,9 @@ async function handleInvoicePaid(
     payment,
     {
       stripePaymentIntentId:
-        typeof invoice.payment_intent === "string" ? invoice.payment_intent : null,
+        typeof invoice.payment_intent === "string"
+          ? invoice.payment_intent
+          : null,
       stripeInvoiceId: invoice.id,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
       invoicePdfUrl: invoice.invoice_pdf ?? null,
@@ -1060,9 +1131,12 @@ async function handleChargeSucceeded(
     payment,
     {
       stripePaymentIntentId:
-        typeof charge.payment_intent === "string" ? charge.payment_intent : null,
+        typeof charge.payment_intent === "string"
+          ? charge.payment_intent
+          : null,
       stripeChargeId: charge.id,
-      stripeInvoiceId: typeof charge.invoice === "string" ? charge.invoice : null,
+      stripeInvoiceId:
+        typeof charge.invoice === "string" ? charge.invoice : null,
       receiptUrl: charge.receipt_url ?? null,
       customerName: charge.billing_details?.name ?? null,
       customerEmail: charge.billing_details?.email ?? null,
@@ -1182,8 +1256,8 @@ Deno.serve(async (request) => {
           ? baseObject.invoice
           : typeof baseObject.id === "string" &&
             String(event.type).startsWith("invoice.")
-            ? baseObject.id
-            : null,
+          ? baseObject.id
+          : null,
       processing_status: "received",
       payload: event,
     });

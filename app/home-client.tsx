@@ -2086,14 +2086,14 @@ export default function HomeClient() {
         <div className="mx-auto max-w-5xl">
           <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[35px] md:text-5xl lg:text-[42px]">
             {lang === "id"
-              ? "Pasang Iklan dan Temukan Properti anda di TeTamo"
-              : "Advertise and Find Your Property at TeTamo"}
+              ? "Pasang Iklan di TeTamo"
+              : "Advertise at TeTamo"}
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
             {lang === "id"
-              ? "Platform properti all-in-one di Indonesia — transparan, profesional, dan fokus pada pembeli serius."
-              : "Indonesia's all-in-one real estate hub — transparent, professional, and focused on serious buyers."}
+              ? "PROPERTY • BUSINESS • LIFESTYLE — Transparan, Profesional, dan Fokus pada klien yang serius."
+              : "PROPERTY • BUSINESS • LIFESTYLE — Transparent, Professional, and Focused on serious clients."}
           </p>
 
           <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">

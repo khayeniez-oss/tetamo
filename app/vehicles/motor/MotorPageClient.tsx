@@ -1128,8 +1128,8 @@ export default function MotorPageClient() {
 
               <p className="mt-2 text-sm leading-7 text-gray-600 sm:text-base">
                 {lang === "id"
-                  ? "Temukan listing motor dari pemilik, dealer, dan agen dengan UI marketplace Tetamo yang sama."
-                  : "Discover motorbike listings from owners, dealers, and agents with the same Tetamo marketplace UI."}
+                  ? "Temukan listing motor dari pemilik, dealer, dan agen dengan Tetamo."
+                  : "Discover motorbike listings from owners, dealers, and agents with the same Tetamo."}
               </p>
             </div>
 
