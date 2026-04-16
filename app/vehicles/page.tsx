@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { supabase } from "@/lib/supabase";
 import {
   Crown,
   Heart,
@@ -13,9 +15,13 @@ import {
   Bike,
 } from "lucide-react";
 
+type VehicleCategory = "car" | "motor";
+type PostedByType = "owner" | "agent" | "dealer";
+
 type VehicleItem = {
   id: string;
-  category: "car" | "motor";
+  slug?: string | null;
+  category: VehicleCategory;
   title: string;
   images: string[];
   price: number;
@@ -25,25 +31,71 @@ type VehicleItem = {
   fuel: string;
   mileage: string;
   posterName: string;
-  postedByType: "owner" | "agent" | "dealer";
-  whatsapp: string;
+  postedByType: PostedByType;
+  whatsapp?: string | null;
   kode?: string;
   postedDate?: string;
   verifiedListing: boolean;
+  contactUserId?: string | null;
+  detailHref: string;
+  isFeatured: boolean;
 };
 
 type DealerItem = {
   id: string;
   name: string;
-  photo: string;
+  photo?: string | null;
   location: string;
   company: string;
   experience: string;
-  whatsapp: string;
+  whatsapp?: string | null;
   verified: boolean;
 };
 
-const FEATURED_VEHICLES: VehicleItem[] = [
+type VehicleRow = {
+  id: string;
+  kode: string;
+  slug: string | null;
+  user_id: string | null;
+  owner_user_id: string | null;
+  agent_user_id: string | null;
+  source: string | null;
+  listing_type: string | null;
+  vehicle_type: string | null;
+  title: string | null;
+  description: string | null;
+  brand: string | null;
+  model: string | null;
+  variant: string | null;
+  year: number | null;
+  price: number | null;
+  currency: string | null;
+  transmission: string | null;
+  fuel: string | null;
+  mileage: string | null;
+  province: string | null;
+  city: string | null;
+  cover_image_url: string | null;
+  is_featured: boolean | null;
+  approval_status: string | null;
+  listing_status: string | null;
+  created_at: string | null;
+};
+
+type VehicleMediaRow = {
+  vehicle_id: string;
+  file_url: string;
+  sort_order: number | null;
+  is_cover: boolean | null;
+  media_type: "photo" | "video";
+};
+
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+};
+
+const FALLBACK_FEATURED_VEHICLES: VehicleItem[] = [
   {
     id: "vh-1",
     category: "car",
@@ -65,6 +117,8 @@ const FEATURED_VEHICLES: VehicleItem[] = [
     kode: "VHC-TTM-001",
     postedDate: "16 Apr 2026",
     verifiedListing: true,
+    detailHref: "/vehicles/car/vh-1",
+    isFeatured: true,
   },
   {
     id: "vh-2",
@@ -87,6 +141,8 @@ const FEATURED_VEHICLES: VehicleItem[] = [
     kode: "VHC-TTM-002",
     postedDate: "15 Apr 2026",
     verifiedListing: true,
+    detailHref: "/vehicles/car/vh-2",
+    isFeatured: true,
   },
   {
     id: "vh-3",
@@ -109,10 +165,12 @@ const FEATURED_VEHICLES: VehicleItem[] = [
     kode: "VHM-TTM-001",
     postedDate: "14 Apr 2026",
     verifiedListing: true,
+    detailHref: "/vehicles/motor/vh-3",
+    isFeatured: true,
   },
 ];
 
-const OWNER_VEHICLES: VehicleItem[] = [
+const FALLBACK_OWNER_VEHICLES: VehicleItem[] = [
   {
     id: "ov-1",
     category: "car",
@@ -133,6 +191,8 @@ const OWNER_VEHICLES: VehicleItem[] = [
     kode: "VHC-TTM-003",
     postedDate: "13 Apr 2026",
     verifiedListing: true,
+    detailHref: "/vehicles/car/ov-1",
+    isFeatured: false,
   },
   {
     id: "ov-2",
@@ -154,6 +214,8 @@ const OWNER_VEHICLES: VehicleItem[] = [
     kode: "VHM-TTM-002",
     postedDate: "12 Apr 2026",
     verifiedListing: false,
+    detailHref: "/vehicles/motor/ov-2",
+    isFeatured: false,
   },
   {
     id: "ov-3",
@@ -175,10 +237,12 @@ const OWNER_VEHICLES: VehicleItem[] = [
     kode: "VHC-TTM-004",
     postedDate: "11 Apr 2026",
     verifiedListing: true,
+    detailHref: "/vehicles/car/ov-3",
+    isFeatured: false,
   },
 ];
 
-const FEATURED_DEALERS: DealerItem[] = [
+const FALLBACK_FEATURED_DEALERS: DealerItem[] = [
   {
     id: "dealer-1",
     name: "Tetamo Auto Partner",
@@ -186,7 +250,7 @@ const FEATURED_DEALERS: DealerItem[] = [
       "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
     location: "Jakarta",
     company: "Tetamo Auto Network",
-    experience: "Featured Dealer",
+    experience: "Featured Vehicle Partner",
     whatsapp: "6281234567890",
     verified: true,
   },
@@ -208,11 +272,24 @@ const FEATURED_DEALERS: DealerItem[] = [
       "https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=600&q=80",
     location: "Surabaya",
     company: "Luxury Wheels Indonesia",
-    experience: "Premium Vehicles",
+    experience: "Premium Vehicle Partner",
     whatsapp: "6281234567897",
     verified: true,
   },
 ];
+
+const CATEGORY_FALLBACK_IMAGES: Record<VehicleCategory, string[]> = {
+  car: [
+    "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80",
+  ],
+  motor: [
+    "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1622185135505-2d7950039943?auto=format&fit=crop&w=1200&q=80",
+  ],
+};
 
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
@@ -223,10 +300,23 @@ function formatIdr(value: number | null | undefined) {
   }).format(value);
 }
 
+function formatDateLabel(value?: string | null, lang: string = "en") {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 function translateTransmission(value: string, lang: string) {
   const v = value.toLowerCase();
   if (v === "automatic") return lang === "id" ? "Automatic" : "Automatic";
   if (v === "manual") return lang === "id" ? "Manual" : "Manual";
+  if (v === "cvt") return lang === "id" ? "CVT" : "CVT";
   return value;
 }
 
@@ -239,6 +329,44 @@ function translateFuel(value: string, lang: string) {
   return value;
 }
 
+function buildVehicleDetailHref(category: VehicleCategory, slugOrId: string) {
+  return category === "motor"
+    ? `/vehicles/motor/${slugOrId}`
+    : `/vehicles/car/${slugOrId}`;
+}
+
+function normalizeSearch(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function initialsFromName(name: string) {
+  const parts = name.split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+function dedupeImages(images: string[]) {
+  return Array.from(new Set(images.filter(Boolean)));
+}
+
+function mapPostedType(source?: string | null): PostedByType {
+  if (source === "owner") return "owner";
+  if (source === "agent") return "agent";
+  return "dealer";
+}
+
+function defaultPosterName(source?: string | null, lang: string = "en") {
+  if (source === "owner") {
+    return lang === "id" ? "Pemilik Kendaraan" : "Vehicle Owner";
+  }
+  if (source === "agent") {
+    return lang === "id" ? "Agen Kendaraan" : "Vehicle Agent";
+  }
+  return lang === "id" ? "Partner Kendaraan" : "Vehicle Partner";
+}
+
 function SocialBtn({
   href,
   label,
@@ -246,7 +374,7 @@ function SocialBtn({
 }: {
   href?: string;
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   if (!href) return null;
 
@@ -341,13 +469,11 @@ function InfoCard({
   description: string;
 }) {
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-4 text-left shadow-sm sm:p-5">
+    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
       <h3 className="mb-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
         {title}
       </h3>
-      <p className="text-sm leading-6 text-gray-600 sm:leading-7">
-        {description}
-      </p>
+      <p className="text-sm leading-7 text-gray-600">{description}</p>
     </div>
   );
 }
@@ -412,11 +538,11 @@ function VehicleEngagementBar({
 
   return (
     <>
-      <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         <button
           type="button"
           onClick={toggleSave}
-          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold shadow-sm transition sm:text-[11px] ${
+          className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold shadow-sm transition sm:text-[11px] ${
             saved
               ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
               : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
@@ -431,7 +557,7 @@ function VehicleEngagementBar({
         <button
           type="button"
           onClick={toggleLike}
-          className={`flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold shadow-sm transition sm:text-[11px] ${
+          className={`flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold shadow-sm transition sm:text-[11px] ${
             liked
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
@@ -443,7 +569,7 @@ function VehicleEngagementBar({
           </span>
         </button>
 
-        <div className="flex min-h-[60px] flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center shadow-sm">
+        <div className="flex min-h-[58px] flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center shadow-sm">
           <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
             {ratingAvg.toFixed(1)}
           </div>
@@ -455,7 +581,7 @@ function VehicleEngagementBar({
         <button
           type="button"
           onClick={handleShare}
-          className="flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center shadow-sm transition hover:bg-gray-50"
+          className="flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl border border-gray-200 bg-white px-2 py-2 text-center shadow-sm transition hover:bg-gray-50"
         >
           <Share2 className="h-4 w-4 text-[#1C1C1E]" />
           <span className="text-[10px] font-semibold text-[#1C1C1E] sm:text-[11px]">
@@ -490,18 +616,93 @@ function VehicleEngagementBar({
 }
 
 function ScheduleTestDriveButton({
+  vehicleId,
+  contactUserId,
+  category,
   title,
   code,
+  whatsapp,
 }: {
+  vehicleId?: string;
+  contactUserId?: string | null;
+  category: VehicleCategory;
   title: string;
   code?: string;
+  whatsapp?: string | null;
 }) {
+  const router = useRouter();
   const { lang } = useLanguage();
   const [open, setOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submitDisabled = !selectedDate || !selectedTime;
+  const submitDisabled = !selectedDate || !selectedTime || submitting;
+
+  async function handleSubmit() {
+    if (submitDisabled) return;
+
+    if (!vehicleId || !contactUserId) {
+      if (whatsapp) {
+        window.open(`https://wa.me/${whatsapp}`, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      alert(
+        lang === "id"
+          ? "Silakan hubungi penjual secara langsung untuk mengatur jadwal viewing atau test drive."
+          : "Please contact the seller directly to arrange a viewing or test drive."
+      );
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        const nextPath =
+          typeof window !== "undefined" ? window.location.pathname : "/vehicles";
+        router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+        return;
+      }
+
+      const requestedAt = new Date(`${selectedDate}T${selectedTime}:00`);
+
+      const { error } = await supabase.from("vehicle_viewings").insert({
+        vehicle_id: vehicleId,
+        owner_user_id: contactUserId,
+        requester_user_id: user.id,
+        viewing_type: category === "motor" ? "test_ride" : "test_drive",
+        requested_at: requestedAt.toISOString(),
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      alert(
+        lang === "id"
+          ? "Permintaan test drive Anda sudah terkirim."
+          : "Your test drive request has been sent."
+      );
+
+      setOpen(false);
+      setSelectedDate("");
+      setSelectedTime("");
+    } catch (error: any) {
+      alert(
+        error?.message ||
+          (lang === "id"
+            ? "Terjadi kendala saat mengirim permintaan test drive."
+            : "Something went wrong while sending the test drive request.")
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -582,16 +783,7 @@ function ScheduleTestDriveButton({
               <button
                 type="button"
                 disabled={submitDisabled}
-                onClick={() => {
-                  alert(
-                    lang === "id"
-                      ? "Dummy test drive request sent."
-                      : "Dummy test drive request sent."
-                  );
-                  setOpen(false);
-                  setSelectedDate("");
-                  setSelectedTime("");
-                }}
+                onClick={handleSubmit}
                 className={[
                   "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
                   !submitDisabled
@@ -599,9 +791,13 @@ function ScheduleTestDriveButton({
                     : "cursor-not-allowed bg-gray-200 text-gray-500",
                 ].join(" ")}
               >
-                {lang === "id"
-                  ? "Kirim Permintaan Test Drive"
-                  : "Send Test Drive Request"}
+                {submitting
+                  ? lang === "id"
+                    ? "Mengirim..."
+                    : "Sending..."
+                  : lang === "id"
+                    ? "Kirim Permintaan Test Drive"
+                    : "Send Test Drive Request"}
               </button>
             </div>
           </div>
@@ -677,10 +873,13 @@ Is this unit still available?`;
   }
 
   function getCategoryLabel() {
-    if (item.category === "motor") {
-      return lang === "id" ? "Motor" : "Motor";
-    }
-    return lang === "id" ? "Mobil" : "Car";
+    return item.category === "motor"
+      ? lang === "id"
+        ? "Motor"
+        : "Motor"
+      : lang === "id"
+        ? "Mobil"
+        : "Car";
   }
 
   return (
@@ -697,22 +896,22 @@ Is this unit still available?`;
             </div>
           ) : (
             <div className="rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-800 sm:text-xs">
-              {lang === "id" ? "Pending Verifikasi" : "Pending Verification"}
+              {lang === "id" ? "Sedang Ditinjau" : "Under Review"}
             </div>
           )}
         </div>
 
-        {ownerMode ? null : (
+        {!ownerMode && item.isFeatured ? (
           <div className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
             <Crown className="h-3.5 w-3.5" />
             {lang === "id" ? "Unggulan" : "Featured"}
           </div>
-        )}
+        ) : null}
 
         <img
           src={item.images[imgIndex]}
           alt={item.title}
-          className="h-[410px] w-full object-cover sm:h-[360px] lg:h-[420px]"
+          className="h-[240px] w-full object-cover sm:h-[300px] lg:h-[380px]"
         />
 
         <div className="absolute right-3 bottom-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
@@ -761,23 +960,23 @@ Is this unit still available?`;
           </p>
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-            {item.kode && (
+            {item.kode ? (
               <span>
                 {lang === "id" ? "Kode:" : "Code:"}{" "}
                 <span className="font-medium text-gray-700">{item.kode}</span>
               </span>
-            )}
+            ) : null}
 
-            {item.postedDate && (
+            {item.postedDate ? (
               <span>
                 {lang === "id" ? "Tayang:" : "Posted:"}{" "}
                 <span className="font-medium text-gray-700">{item.postedDate}</span>
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <a
             href={whatsappHref}
             onClick={(e) => {
@@ -795,14 +994,21 @@ Is this unit still available?`;
           </a>
 
           <Link
-            href={item.category === "motor" ? "/vehicles/motor" : "/vehicles/car"}
+            href={item.detailHref}
             className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
           >
             {lang === "id" ? "Lihat Detail" : "View Detail"}
           </Link>
         </div>
 
-        <ScheduleTestDriveButton title={item.title} code={item.kode} />
+        <ScheduleTestDriveButton
+          vehicleId={item.id}
+          contactUserId={item.contactUserId}
+          category={item.category}
+          title={item.title}
+          code={item.kode}
+          whatsapp={item.whatsapp}
+        />
 
         <VehicleEngagementBar
           labelSave={lang === "id" ? "Simpan" : "Save"}
@@ -815,180 +1021,504 @@ Is this unit still available?`;
   );
 }
 
-function FeaturedVehiclesSection() {
+function FeaturedVehiclesSection({ items }: { items: VehicleItem[] }) {
   const { lang } = useLanguage();
 
   return (
-    <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+    <section id="vehicle-results" className="bg-gray-100 px-4 py-14 sm:px-6 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
-        <h2 className="mb-10 text-center text-2xl font-bold text-[#1C1C1E] sm:mb-12 sm:text-3xl">
+        <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
           {lang === "id" ? "Kendaraan Unggulan" : "Featured Vehicles"}
         </h2>
 
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-          {FEATURED_VEHICLES.map((item) => (
-            <VehicleCard key={item.id} item={item} />
-          ))}
-        </div>
+        <p className="mx-auto mb-10 max-w-2xl text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
+          {lang === "id"
+            ? "Pilihan unit yang tampil menonjol untuk membantu pencarian terasa lebih cepat dan lebih fokus."
+            : "Highlighted units to make browsing faster, clearer, and easier to compare."}
+        </p>
+
+        {items.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+            {items.map((item) => (
+              <VehicleCard key={item.id} item={item} />
+            ))}
+          </div>
+        ) : (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Kendaraan unggulan akan tampil di sini setelah listing dipublikasikan."
+                : "Featured vehicles will appear here after listings are published."
+            }
+          />
+        )}
       </div>
     </section>
   );
 }
 
-function FeaturedDealersSection() {
+function FeaturedDealersSection({ dealers }: { dealers: DealerItem[] }) {
   const { lang } = useLanguage();
 
   return (
-    <section className="bg-white px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+    <section className="bg-white px-4 py-14 sm:px-6 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
         <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
           {lang === "id"
-            ? "Dealer & Partner Unggulan TeTamo"
-            : "TeTamo Featured Dealers & Partners"}
+            ? "Partner Kendaraan Unggulan TeTamo"
+            : "TeTamo Featured Vehicle Partners"}
         </h2>
 
         <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
           {lang === "id"
-            ? "Dealer dan partner otomotif pilihan dengan tampilan profil yang bersih, modern, dan mudah dihubungi."
-            : "Selected automotive partners with clean, modern profiles and easy contact access."}
+            ? "Temukan partner kendaraan dengan profil yang rapi, mudah dihubungi, dan lebih nyaman untuk dijelajahi."
+            : "Meet vehicle partners with clean profiles, simple contact access, and a more comfortable browsing experience."}
         </p>
 
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-          {FEATURED_DEALERS.map((dealer) => {
-            const whatsappHref = dealer.whatsapp
-              ? `https://wa.me/${dealer.whatsapp}`
-              : "#";
+        {dealers.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+            {dealers.map((dealer) => {
+              const whatsappHref = dealer.whatsapp
+                ? `https://wa.me/${dealer.whatsapp}`
+                : "#";
 
-            return (
-              <div
-                key={dealer.id}
-                className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
-              >
-                <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2">
-                  {dealer.verified && (
-                    <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                      {lang === "id" ? "Dealer Terverifikasi" : "Verified Dealer"}
-                    </div>
-                  )}
-
-                  <div className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                    <Crown className="h-3.5 w-3.5" />
-                    {lang === "id" ? "Unggulan" : "Featured"}
-                  </div>
-                </div>
-
-                <div className="mt-10 flex items-start gap-4 sm:mt-12">
-                  <img
-                    src={dealer.photo}
-                    alt={dealer.name}
-                    className="h-24 w-24 shrink-0 rounded-2xl object-cover sm:h-28 sm:w-28"
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
-                      {dealer.name}
-                    </h3>
-
-                    <div className="mt-1 text-sm text-gray-600">{dealer.company}</div>
-                    <div className="mt-1 text-sm text-gray-500">{dealer.location}</div>
-                    <p className="mt-2 text-sm text-gray-500">{dealer.experience}</p>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap justify-center gap-3">
-                  <SocialBtn href="#" label="Instagram">
-                    <IconInstagram />
-                  </SocialBtn>
-                  <SocialBtn href="#" label="Facebook">
-                    <IconFacebook />
-                  </SocialBtn>
-                  <SocialBtn href="#" label="TikTok">
-                    <IconTikTok />
-                  </SocialBtn>
-                  <SocialBtn href="#" label="LinkedIn">
-                    <IconLinkedIn />
-                  </SocialBtn>
-                </div>
-
-                <a
-                  href={whatsappHref}
-                  onClick={(e) => {
-                    if (!dealer.whatsapp) e.preventDefault();
-                  }}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={`mt-5 inline-block w-full rounded-2xl px-4 py-3 text-center text-sm font-semibold text-white transition ${
-                    dealer.whatsapp
-                      ? "bg-[#1C1C1E] hover:opacity-90"
-                      : "cursor-not-allowed bg-gray-300"
-                  }`}
+              return (
+                <div
+                  key={dealer.id}
+                  className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
                 >
-                  WhatsApp
-                </a>
-              </div>
-            );
-          })}
-        </div>
+                  <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2">
+                    {dealer.verified ? (
+                      <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                        {lang === "id" ? "Partner Terverifikasi" : "Verified Partner"}
+                      </div>
+                    ) : null}
+
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                      <Crown className="h-3.5 w-3.5" />
+                      {lang === "id" ? "Unggulan" : "Featured"}
+                    </div>
+                  </div>
+
+                  <div className="mt-10 flex items-start gap-4 sm:mt-12">
+                    {dealer.photo ? (
+                      <img
+                        src={dealer.photo}
+                        alt={dealer.name}
+                        className="h-24 w-24 shrink-0 rounded-2xl object-cover sm:h-28 sm:w-28"
+                      />
+                    ) : (
+                      <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-[#1C1C1E] text-xl font-bold text-white sm:h-28 sm:w-28">
+                        {initialsFromName(dealer.name)}
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                        {dealer.name}
+                      </h3>
+
+                      <div className="mt-1 text-sm text-gray-600">{dealer.company}</div>
+                      <div className="mt-1 text-sm text-gray-500">{dealer.location}</div>
+                      <p className="mt-2 text-sm text-gray-500">{dealer.experience}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap justify-center gap-3">
+                    <SocialBtn href="#" label="Instagram">
+                      <IconInstagram />
+                    </SocialBtn>
+                    <SocialBtn href="#" label="Facebook">
+                      <IconFacebook />
+                    </SocialBtn>
+                    <SocialBtn href="#" label="TikTok">
+                      <IconTikTok />
+                    </SocialBtn>
+                    <SocialBtn href="#" label="LinkedIn">
+                      <IconLinkedIn />
+                    </SocialBtn>
+                  </div>
+
+                  <a
+                    href={whatsappHref}
+                    onClick={(e) => {
+                      if (!dealer.whatsapp) e.preventDefault();
+                    }}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`mt-5 inline-block w-full rounded-2xl px-4 py-3 text-center text-sm font-semibold text-white transition ${
+                      dealer.whatsapp
+                        ? "bg-[#1C1C1E] hover:opacity-90"
+                        : "cursor-not-allowed bg-gray-300"
+                    }`}
+                  >
+                    WhatsApp
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Profil partner kendaraan akan tampil di sini setelah partner aktif dipublikasikan."
+                : "Vehicle partner profiles will appear here after active partners are published."
+            }
+          />
+        )}
       </div>
     </section>
   );
 }
 
-function OwnerVehiclesSection() {
+function OwnerVehiclesSection({ items }: { items: VehicleItem[] }) {
   const { lang } = useLanguage();
 
   return (
-    <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+    <section className="bg-gray-100 px-4 py-14 sm:px-6 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
         <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
           {lang === "id"
-            ? "Kendaraan Pemilik Unggulan"
-            : "Featured Owner Vehicles"}
+            ? "Kendaraan Dari Pemilik"
+            : "Vehicles From Owners"}
         </h2>
 
         <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
           {lang === "id"
-            ? "Unit langsung dari pemilik dengan tampilan yang rapi, jelas, dan siap dipasarkan."
-            : "Units directly from owners with a clean, clear, ready-to-market presentation."}
+            ? "Pilihan unit langsung dari pemilik dengan tampilan yang rapi, jelas, dan lebih mudah dihubungi."
+            : "A selection of vehicles listed directly by owners with a clean presentation and simpler contact access."}
         </p>
 
-        <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-          {OWNER_VEHICLES.map((item) => (
-            <VehicleCard key={item.id} item={item} ownerMode />
-          ))}
-        </div>
+        {items.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+            {items.map((item) => (
+              <VehicleCard key={item.id} item={item} ownerMode />
+            ))}
+          </div>
+        ) : (
+          <SectionEmpty
+            text={
+              lang === "id"
+                ? "Kendaraan dari pemilik akan tampil di sini setelah listing diterbitkan."
+                : "Owner vehicle listings will appear here after they are published."
+            }
+          />
+        )}
       </div>
     </section>
   );
+}
+
+function buildVehicleItemFromRow(args: {
+  row: VehicleRow;
+  mediaMap: Map<string, string[]>;
+  profileMap: Map<string, string>;
+  lang: string;
+}): VehicleItem {
+  const { row, mediaMap, profileMap, lang } = args;
+
+  const category: VehicleCategory = row.vehicle_type === "motor" ? "motor" : "car";
+  const profileName =
+    profileMap.get(row.user_id || "") ||
+    profileMap.get(row.owner_user_id || "") ||
+    profileMap.get(row.agent_user_id || "") ||
+    defaultPosterName(row.source, lang);
+
+  const images = dedupeImages([
+    row.cover_image_url || "",
+    ...(mediaMap.get(row.id) || []),
+  ]);
+
+  const finalImages =
+    images.length > 0 ? images : CATEGORY_FALLBACK_IMAGES[category];
+
+  const location = [row.city, row.province].filter(Boolean).join(", ");
+  const slugOrId = row.slug || row.id;
+  const contactUserId = row.owner_user_id || row.agent_user_id || row.user_id;
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    category,
+    title: row.title || "-",
+    images: finalImages,
+    price: Number(row.price || 0),
+    location: location || "-",
+    year: row.year ? String(row.year) : "-",
+    transmission: row.transmission || "-",
+    fuel: row.fuel || "-",
+    mileage: row.mileage || "-",
+    posterName: profileName,
+    postedByType: mapPostedType(row.source),
+    whatsapp: null,
+    kode: row.kode || undefined,
+    postedDate: formatDateLabel(row.created_at, lang),
+    verifiedListing: row.approval_status === "approved",
+    contactUserId,
+    detailHref: buildVehicleDetailHref(category, slugOrId),
+    isFeatured: Boolean(row.is_featured),
+  };
+}
+
+async function fetchVehicleRows(): Promise<VehicleRow[]> {
+  const selectCols =
+    "id,kode,slug,user_id,owner_user_id,agent_user_id,source,listing_type,vehicle_type,title,description,brand,model,variant,year,price,currency,transmission,fuel,mileage,province,city,cover_image_url,is_featured,approval_status,listing_status,created_at";
+
+  const viewResult = await supabase
+    .from("vehicle_marketplace_view")
+    .select(selectCols)
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (!viewResult.error) {
+    return (viewResult.data || []) as VehicleRow[];
+  }
+
+  const tableResult = await supabase
+    .from("vehicles")
+    .select(selectCols)
+    .is("deleted_at", null)
+    .eq("approval_status", "approved")
+    .eq("listing_status", "active")
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (tableResult.error) throw tableResult.error;
+
+  return (tableResult.data || []) as VehicleRow[];
 }
 
 export default function VehiclesPage() {
+  const router = useRouter();
   const { lang } = useLanguage();
   const [q, setQ] = useState("");
+  const [liveVehicles, setLiveVehicles] = useState<VehicleItem[]>([]);
+  const [dealerCards, setDealerCards] = useState<DealerItem[]>(FALLBACK_FEATURED_DEALERS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadData() {
+      try {
+        setLoading(true);
+
+        const rows = await fetchVehicleRows();
+        if (!active) return;
+
+        if (!rows.length) {
+          setLiveVehicles([]);
+          setDealerCards(FALLBACK_FEATURED_DEALERS);
+          setLoading(false);
+          return;
+        }
+
+        const vehicleIds = rows.map((row) => row.id);
+
+        const mediaResult = await supabase
+          .from("vehicle_media")
+          .select("vehicle_id,file_url,sort_order,is_cover,media_type")
+          .in("vehicle_id", vehicleIds)
+          .eq("media_type", "photo")
+          .order("is_cover", { ascending: false })
+          .order("sort_order", { ascending: true });
+
+        const mediaRows = ((mediaResult.data || []) as VehicleMediaRow[]) || [];
+        const mediaMap = new Map<string, string[]>();
+
+        for (const media of mediaRows) {
+          const prev = mediaMap.get(media.vehicle_id) || [];
+          prev.push(media.file_url);
+          mediaMap.set(media.vehicle_id, prev);
+        }
+
+        const userIds = Array.from(
+          new Set(
+            rows
+              .flatMap((row) => [row.user_id, row.owner_user_id, row.agent_user_id])
+              .filter(Boolean)
+          )
+        ) as string[];
+
+        const profileMap = new Map<string, string>();
+
+        if (userIds.length > 0) {
+          const profileResult = await supabase
+            .from("profiles")
+            .select("id,full_name")
+            .in("id", userIds);
+
+          const profiles = ((profileResult.data || []) as ProfileRow[]) || [];
+          profiles.forEach((item) => {
+            profileMap.set(item.id, item.full_name?.trim() || "");
+          });
+        }
+
+        const mappedVehicles = rows.map((row) =>
+          buildVehicleItemFromRow({
+            row,
+            mediaMap,
+            profileMap,
+            lang,
+          })
+        );
+
+        const livePartners: DealerItem[] = rows
+          .filter((row) => row.source === "agent" || row.source === "admin")
+          .slice(0, 3)
+          .map((row) => ({
+            id: row.id,
+            name:
+              profileMap.get(row.user_id || "") ||
+              profileMap.get(row.agent_user_id || "") ||
+              defaultPosterName(row.source, lang),
+            photo: null,
+            location: [row.city, row.province].filter(Boolean).join(", ") || "-",
+            company:
+              lang === "id" ? "Partner Kendaraan TeTamo" : "TeTamo Vehicle Partner",
+            experience:
+              row.is_featured
+                ? lang === "id"
+                  ? "Partner Unggulan"
+                  : "Featured Partner"
+                : lang === "id"
+                  ? "Partner Aktif"
+                  : "Active Partner",
+            whatsapp: null,
+            verified: row.approval_status === "approved",
+          }));
+
+        if (!active) return;
+
+        setLiveVehicles(mappedVehicles);
+        setDealerCards(livePartners.length > 0 ? livePartners : FALLBACK_FEATURED_DEALERS);
+      } catch {
+        if (!active) return;
+        setLiveVehicles([]);
+        setDealerCards(FALLBACK_FEATURED_DEALERS);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadData();
+
+    return () => {
+      active = false;
+    };
+  }, [lang]);
+
+  const showcaseVehicles = useMemo(() => {
+    return liveVehicles.length > 0
+      ? liveVehicles
+      : [...FALLBACK_FEATURED_VEHICLES, ...FALLBACK_OWNER_VEHICLES];
+  }, [liveVehicles]);
+
+  const filteredVehicles = useMemo(() => {
+    const query = normalizeSearch(q);
+    if (!query) return showcaseVehicles;
+
+    return showcaseVehicles.filter((item) =>
+      normalizeSearch(
+        [
+          item.title,
+          item.location,
+          item.year,
+          item.transmission,
+          item.fuel,
+          item.mileage,
+          item.posterName,
+          item.kode,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      ).includes(query)
+    );
+  }, [showcaseVehicles, q]);
+
+  const featuredVehicles = useMemo(() => {
+    const featured = filteredVehicles.filter((item) => item.isFeatured);
+    if (featured.length > 0) return featured.slice(0, 6);
+    return filteredVehicles.slice(0, 6);
+  }, [filteredVehicles]);
+
+  const ownerVehicles = useMemo(() => {
+    return filteredVehicles
+      .filter((item) => item.postedByType === "owner")
+      .slice(0, 6);
+  }, [filteredVehicles]);
 
   const counts = useMemo(
     () => ({
-      featured: FEATURED_VEHICLES.length,
-      ownerVehicles: OWNER_VEHICLES.length,
-      dealers: FEATURED_DEALERS.length,
+      featured: featuredVehicles.length,
+      ownerVehicles: ownerVehicles.length,
+      dealers: dealerCards.length,
     }),
-    []
+    [featuredVehicles.length, ownerVehicles.length, dealerCards.length]
   );
+
+  const infoCards = useMemo(
+    () => [
+      {
+        title: lang === "id" ? "Pilihan Kendaraan Berkualitas" : "Quality Vehicle Selection",
+        description:
+          lang === "id"
+            ? "Jelajahi pilihan mobil dan motor dengan tampilan yang rapi, detail yang jelas, dan pengalaman browsing yang lebih nyaman."
+            : "Explore cars and motorbikes with a cleaner presentation, clearer details, and a more comfortable browsing experience.",
+      },
+      {
+        title: lang === "id" ? "Listing Lebih Terpercaya" : "More Trusted Listings",
+        description:
+          lang === "id"
+            ? "Setiap listing disusun lebih jelas agar proses mencari kendaraan terasa lebih aman, fokus, dan mudah dipahami."
+            : "Each listing is presented more clearly so the search feels safer, more focused, and easier to understand.",
+      },
+      {
+        title: lang === "id" ? "Hubungi Penjual Dengan Mudah" : "Simple Seller Contact",
+        description:
+          lang === "id"
+            ? "Terhubung langsung dengan penjual melalui WhatsApp, lihat detail unit, lalu lanjutkan percakapan dengan lebih cepat."
+            : "Connect directly with the seller through WhatsApp, review the unit details, and continue the conversation faster.",
+      },
+      {
+        title: lang === "id" ? "Siap Untuk Viewing & Test Drive" : "Ready for Viewing & Test Drive",
+        description:
+          lang === "id"
+            ? "Temukan unit yang sesuai, atur jadwal viewing atau test drive, dan lanjutkan proses dengan langkah yang lebih praktis."
+            : "Find the right unit, arrange a viewing or test drive, and continue with a more practical next step.",
+      },
+    ],
+    [lang]
+  );
+
+  function handleSearchClick() {
+    const query = q.trim();
+
+    if (!query) {
+      router.push("/vehicles/search");
+      return;
+    }
+
+    router.push(`/vehicles/search?q=${encodeURIComponent(query)}`);
+  }
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-gray-900">
       <section className="bg-[#F7F7F8] px-4 pb-10 pt-8 text-center sm:px-6 sm:pb-12 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
         <div className="mx-auto max-w-5xl">
-          <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[35px] md:text-5xl lg:text-[42px]">
+          <h1 className="text-[28px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[38px] md:text-5xl lg:text-[56px]">
             {lang === "id"
-              ? "Jual dan Temukan Kendaraan Anda di TeTamo"
-              : "Advertise and Find Your Vehicle at TeTamo"}
+              ? "Temukan Mobil dan Motor di TeTaMo"
+              : "Find Cars and Motorbikes on TeTaMo"}
           </h1>
 
-          <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
+          <p className="mx-auto mt-4 max-w-3xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
             {lang === "id"
-              ? "Dummy halaman kendaraan dengan UI yang mengikuti homepage properti Tetamo — siap dipakai sementara sebelum listing kendaraan dihubungkan ke database."
-              : "A dummy vehicle page that follows the same Tetamo property homepage UI — ready to use temporarily before vehicle listings are connected to the database."}
+              ? "Jelajahi pilihan kendaraan, hubungi penjual dengan mudah, dan atur viewing atau test drive dari satu tempat."
+              : "Browse vehicle listings, connect with sellers more easily, and arrange viewings or test drives in one place."}
           </p>
 
           <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">
@@ -998,6 +1528,9 @@ export default function VehiclesPage() {
                   type="text"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearchClick();
+                  }}
                   placeholder={
                     lang === "id"
                       ? "Cari mobil, motor, brand, model, lokasi..."
@@ -1009,13 +1542,7 @@ export default function VehiclesPage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  alert(
-                    lang === "id"
-                      ? "Search dummy dulu. Nanti baru disambungkan ke listing kendaraan."
-                      : "Dummy search for now. Later this can be connected to vehicle listings."
-                  )
-                }
+                onClick={handleSearchClick}
                 className="h-11 w-[92px] shrink-0 rounded-[16px] bg-[#1C1C1E] px-3 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 {lang === "id" ? "Cari" : "Search"}
@@ -1023,70 +1550,40 @@ export default function VehiclesPage() {
             </div>
           </div>
 
-          <div className="mx-auto mt-7 grid max-w-4xl grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
+          <div className="mx-auto mt-7 grid max-w-4xl grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-3">
             <Link
               href="/vehicles/car"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-white transition hover:opacity-90 sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+              className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
             >
               {lang === "id" ? "Lihat Mobil" : "View Cars"}
             </Link>
 
             <Link
               href="/vehicles/motor"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+              className="inline-flex min-h-[56px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white"
             >
               {lang === "id" ? "Lihat Motor" : "View Motor"}
             </Link>
 
             <Link
-              href="/career"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
+              href="/vehicles/create"
+              className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#D1D5DB]"
             >
-              {lang === "id"
-                ? "Daftar Partner / Dealer"
-                : "Join as Partner / Dealer"}
+              {lang === "id" ? "Pasang Kendaraan" : "List Your Vehicle"}
             </Link>
           </div>
         </div>
       </section>
 
       <section className="bg-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <InfoCard
-            title={lang === "id" ? "Tampilan Premium" : "Premium Layout"}
-            description={
-              lang === "id"
-                ? "UI mengikuti homepage properti Tetamo supaya rasa brand tetap konsisten."
-                : "The UI follows the Tetamo property homepage so the brand feel stays consistent."
-            }
-          />
-
-          <InfoCard
-            title={lang === "id" ? "Dummy Listing" : "Dummy Listings"}
-            description={
-              lang === "id"
-                ? "Saat ini masih dummy dulu sambil menunggu struktur vehicle listing siap."
-                : "This is using dummy data first while the vehicle listing structure is being prepared."
-            }
-          />
-
-          <InfoCard
-            title={lang === "id" ? "Badge & CTA Sama" : "Same Badges & CTAs"}
-            description={
-              lang === "id"
-                ? "Badge, tombol WhatsApp, View Detail, dan Schedule Test Drive dibuat dengan rasa UI yang sama."
-                : "Badges, WhatsApp, View Detail, and Schedule Test Drive use the same UI feel."
-            }
-          />
-
-          <InfoCard
-            title={lang === "id" ? "Siap Diwire Nanti" : "Ready to Wire Later"}
-            description={
-              lang === "id"
-                ? "Nanti halaman ini bisa langsung dihubungkan ke Supabase saat vehicle module siap."
-                : "Later this page can be wired directly to Supabase once the vehicle module is ready."
-            }
-          />
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {infoCards.map((card) => (
+            <InfoCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+            />
+          ))}
         </div>
 
         <div className="mx-auto mt-8 grid max-w-7xl grid-cols-1 gap-4 sm:grid-cols-3">
@@ -1108,7 +1605,7 @@ export default function VehiclesPage() {
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-xs uppercase tracking-[0.18em] text-gray-400">
-              {lang === "id" ? "Dealer Unggulan" : "Featured Dealers"}
+              {lang === "id" ? "Partner Kendaraan" : "Vehicle Partners"}
             </p>
             <p className="mt-2 text-3xl font-bold text-[#1C1C1E]">
               {counts.dealers}
@@ -1117,50 +1614,50 @@ export default function VehiclesPage() {
         </div>
       </section>
 
-      <FeaturedVehiclesSection />
-      <FeaturedDealersSection />
-      <OwnerVehiclesSection />
+      <FeaturedVehiclesSection items={featuredVehicles} />
+      <FeaturedDealersSection dealers={dealerCards} />
+      <OwnerVehiclesSection items={ownerVehicles} />
 
-      <section className="bg-white px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <section className="bg-white px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-4xl rounded-[32px] border border-gray-200 bg-[#F7F7F8] p-6 text-center shadow-sm sm:p-10">
           <h2 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
             {lang === "id"
-              ? "Vehicle Module Tetamo Masih Dummy Dulu"
-              : "Tetamo Vehicle Module Is Dummy First"}
+              ? "Siap Pasang Kendaraan Anda?"
+              : "Ready to List Your Vehicle?"}
           </h2>
 
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-gray-600 sm:text-base">
             {lang === "id"
-              ? "Next step nanti kita bisa pisahkan create/edit listing untuk mobil dan motor, lalu hubungkan ke database dengan rasa UI yang sama."
-              : "Later, the next step is to split create/edit listing flows for cars and motorbikes, then connect them to the database with the same UI feel."}
+              ? "Pasang mobil atau motor Anda dan tampilkan unit dengan presentasi yang lebih rapi dan mudah ditemukan."
+              : "List your car or motorbike and present the unit in a cleaner format that is easier for buyers to discover."}
           </p>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/vehicles/car"
-              className="inline-flex min-h-[52px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              href="/vehicles/create"
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
             >
-              {lang === "id" ? "Masuk ke Mobil" : "Go to Cars"}
+              {lang === "id" ? "Pasang Kendaraan" : "List Vehicle"}
             </Link>
 
             <Link
-              href="/vehicles/motor"
-              className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-6 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white"
+              href="/vehicles/package"
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl border border-[#1C1C1E] px-6 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:w-auto"
             >
-              {lang === "id" ? "Masuk ke Motor" : "Go to Motor"}
+              {lang === "id" ? "Lihat Paket" : "View Packages"}
             </Link>
           </div>
         </div>
       </section>
 
-      {FEATURED_VEHICLES.length === 0 ? (
+      {!loading && featuredVehicles.length === 0 && ownerVehicles.length === 0 ? (
         <section className="px-4 pb-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <SectionEmpty
               text={
                 lang === "id"
-                  ? "Belum ada dummy kendaraan untuk ditampilkan."
-                  : "There are no dummy vehicles to display yet."
+                  ? "Belum ada kendaraan yang cocok dengan pencarian Anda."
+                  : "There are no vehicles matching your search yet."
               }
             />
           </div>
