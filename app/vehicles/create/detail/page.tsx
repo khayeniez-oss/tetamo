@@ -11,6 +11,82 @@ type PlanType = "basic" | "featured";
 const inputBase =
   "mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10";
 
+const SELECT_OTHER = "__OTHER__";
+
+const CAR_CATALOG: Record<string, Record<string, string[]>> = {
+  Toyota: {
+    Fortuner: ["VRZ", "GR Sport", "G"],
+    Avanza: ["E", "G"],
+    Raize: ["G", "GR Sport"],
+    Alphard: ["X", "G", "Executive Lounge"],
+  },
+  Honda: {
+    "BR-V": ["S", "E", "Prestige"],
+    "HR-V": ["S", "E", "SE"],
+    "CR-V": ["Turbo", "RS e:HEV"],
+    Brio: ["Satya S", "Satya E", "RS"],
+  },
+  Mitsubishi: {
+    "Pajero Sport": ["Exceed", "Dakar", "Dakar Ultimate"],
+    Xpander: ["GLS", "Exceed", "Ultimate"],
+    "Xpander Cross": ["MT", "CVT"],
+  },
+  Suzuki: {
+    XL7: ["Zeta", "Beta", "Alpha"],
+    Ertiga: ["GA", "GL", "GX"],
+    Jimny: ["MT", "AT"],
+  },
+  BMW: {
+    X1: ["sDrive18i", "xLine"],
+    X3: ["xDrive30i", "M Sport"],
+    "3 Series": ["320i", "330i M Sport"],
+  },
+  "Mercedes-Benz": {
+    "C-Class": ["C200", "C300 AMG Line"],
+    "E-Class": ["E200", "E300 AMG Line"],
+    GLC: ["GLC 200", "GLC 300 AMG Line"],
+  },
+};
+
+const MOTOR_CATALOG: Record<string, Record<string, string[]>> = {
+  Yamaha: {
+    XMAX: ["Standard", "Connected", "Tech Max"],
+    NMAX: ["Neo", "Turbo", "Standard"],
+    Aerox: ["Standard", "Connected"],
+    "MT-25": ["Standard"],
+  },
+  Honda: {
+    "ADV 160": ["CBS", "ABS"],
+    "PCX 160": ["CBS", "ABS", "RoadSync"],
+    "Vario 160": ["CBS", "ABS"],
+    CBR250RR: ["Standard", "SP QS"],
+  },
+  Kawasaki: {
+    "Ninja ZX-25R": ["Standard", "SE", "RR"],
+    "KLX 150": ["Standard", "BF", "Supermoto"],
+    W175: ["Standard", "Cafe"],
+  },
+  Vespa: {
+    Primavera: ["Standard", "S"],
+    Sprint: ["Standard", "S"],
+    GTS: ["Classic", "Super Sport"],
+  },
+  Suzuki: {
+    "V-Strom 250SX": ["Standard"],
+    GSX150: ["Bandit", "S"],
+    Nex: ["Standard"],
+  },
+  KTM: {
+    "Duke 250": ["Standard"],
+    "Duke 390": ["Standard"],
+    RC390: ["Standard"],
+  },
+  "Royal Enfield": {
+    Himalayan: ["Standard", "Adventure"],
+    Classic350: ["Standard", "Chrome"],
+  },
+};
+
 const CAR_BODY_TYPES = [
   "SUV",
   "Sedan",
@@ -43,6 +119,61 @@ const CONDITION_OPTIONS = [
   "Needs Minor Repair",
 ];
 
+const CAR_ENGINE_OPTIONS = [
+  "1.0L",
+  "1.2L",
+  "1.3L",
+  "1.5L",
+  "1.8L",
+  "2.0L",
+  "2.4L",
+  "3.0L",
+  "Electric",
+];
+
+const MOTOR_ENGINE_OPTIONS = [
+  "110cc",
+  "125cc",
+  "150cc",
+  "155cc",
+  "160cc",
+  "250cc",
+  "300cc",
+  "500cc",
+  "Electric",
+];
+
+const MILEAGE_OPTIONS = [
+  "0 km",
+  "5,000 km",
+  "10,000 km",
+  "20,000 km",
+  "30,000 km",
+  "50,000 km",
+  "80,000 km",
+  "100,000 km+",
+];
+
+const SEAT_OPTIONS = ["2", "4", "5", "6", "7", "8", "9+"];
+
+function withOtherOption(options: string[], otherLabel: string) {
+  return [
+    ...options.map((item) => ({ value: item, label: item })),
+    { value: SELECT_OTHER, label: otherLabel },
+  ];
+}
+
+function buildYearOptions() {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: currentYear - 1989 }, (_, index) =>
+    String(currentYear - index)
+  );
+}
+
+function isPreset(value: string, options: string[]) {
+  return Boolean(value) && options.includes(value);
+}
+
 export default function VehicleCreateDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -54,59 +185,217 @@ export default function VehicleCreateDetailPage() {
     return planFromUrl === "featured" ? "featured" : "basic";
   }, [searchParams]);
 
-  const [brand, setBrand] = useState(draft?.brand ?? "");
-  const [model, setModel] = useState(draft?.model ?? "");
-  const [variant, setVariant] = useState(draft?.variant ?? "");
-  const [year, setYear] = useState(draft?.year ?? "");
-  const [price, setPrice] = useState(draft?.price ?? "");
-  const [transmission, setTransmission] = useState(draft?.transmission ?? "");
-  const [fuel, setFuel] = useState(draft?.fuel ?? "");
-  const [mileage, setMileage] = useState(draft?.mileage ?? "");
-  const [color, setColor] = useState(draft?.color ?? "");
-  const [condition, setCondition] = useState(draft?.condition ?? "");
-  const [bodyType, setBodyType] = useState(draft?.bodyType ?? "");
-  const [engineCc, setEngineCc] = useState(draft?.engineCc ?? "");
-  const [seats, setSeats] = useState(draft?.seats ?? "");
-  const [plateNumber, setPlateNumber] = useState(draft?.plateNumber ?? "");
-
   const vehicleType = String(draft?.vehicleType || "").trim().toLowerCase();
   const listingType = String(draft?.listingType || "").trim().toLowerCase();
 
+  const catalog = vehicleType === "motor" ? MOTOR_CATALOG : CAR_CATALOG;
+  const brandPresetOptions = Object.keys(catalog).sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const initialBrandSelection = isPreset(
+    String(draft?.brand || ""),
+    brandPresetOptions
+  )
+    ? String(draft?.brand || "")
+    : String(draft?.brand || "")
+      ? SELECT_OTHER
+      : "";
+
+  const initialCustomBrand =
+    initialBrandSelection === SELECT_OTHER ? String(draft?.brand || "") : "";
+
+  const initialBrandValue =
+    initialBrandSelection === SELECT_OTHER ? "" : initialBrandSelection;
+
+  const modelPresetOptions =
+    initialBrandValue && catalog[initialBrandValue]
+      ? Object.keys(catalog[initialBrandValue]).sort((a, b) =>
+          a.localeCompare(b)
+        )
+      : [];
+
+  const initialModelSelection = isPreset(
+    String(draft?.model || ""),
+    modelPresetOptions
+  )
+    ? String(draft?.model || "")
+    : String(draft?.model || "")
+      ? SELECT_OTHER
+      : "";
+
+  const initialCustomModel =
+    initialModelSelection === SELECT_OTHER ? String(draft?.model || "") : "";
+
+  const initialModelValue =
+    initialModelSelection === SELECT_OTHER ? "" : initialModelSelection;
+
+  const variantPresetOptions =
+    initialBrandValue &&
+    initialModelValue &&
+    catalog[initialBrandValue]?.[initialModelValue]
+      ? [...catalog[initialBrandValue][initialModelValue]].sort((a, b) =>
+          a.localeCompare(b)
+        )
+      : [];
+
+  const initialVariantSelection = isPreset(
+    String(draft?.variant || ""),
+    variantPresetOptions
+  )
+    ? String(draft?.variant || "")
+    : String(draft?.variant || "")
+      ? SELECT_OTHER
+      : "";
+
+  const initialCustomVariant =
+    initialVariantSelection === SELECT_OTHER ? String(draft?.variant || "") : "";
+
+  const yearOptions = buildYearOptions();
+  const initialYearSelection = isPreset(String(draft?.year || ""), yearOptions)
+    ? String(draft?.year || "")
+    : "";
+
+  const enginePresetOptions =
+    vehicleType === "motor" ? MOTOR_ENGINE_OPTIONS : CAR_ENGINE_OPTIONS;
+
+  const initialEngineSelection = isPreset(
+    String(draft?.engineCc || ""),
+    enginePresetOptions
+  )
+    ? String(draft?.engineCc || "")
+    : String(draft?.engineCc || "")
+      ? SELECT_OTHER
+      : "";
+
+  const initialCustomEngine =
+    initialEngineSelection === SELECT_OTHER ? String(draft?.engineCc || "") : "";
+
+  const initialMileageSelection = isPreset(
+    String(draft?.mileage || ""),
+    MILEAGE_OPTIONS
+  )
+    ? String(draft?.mileage || "")
+    : String(draft?.mileage || "")
+      ? SELECT_OTHER
+      : "";
+
+  const initialCustomMileage =
+    initialMileageSelection === SELECT_OTHER ? String(draft?.mileage || "") : "";
+
+  const initialSeatsSelection = isPreset(
+    String(draft?.seats || ""),
+    SEAT_OPTIONS
+  )
+    ? String(draft?.seats || "")
+    : "";
+
+  const [brandSelection, setBrandSelection] = useState(initialBrandSelection);
+  const [customBrand, setCustomBrand] = useState(initialCustomBrand);
+
+  const [modelSelection, setModelSelection] = useState(initialModelSelection);
+  const [customModel, setCustomModel] = useState(initialCustomModel);
+
+  const [variantSelection, setVariantSelection] = useState(initialVariantSelection);
+  const [customVariant, setCustomVariant] = useState(initialCustomVariant);
+
+  const [year, setYear] = useState(initialYearSelection);
+  const [price, setPrice] = useState(String(draft?.price ?? ""));
+  const [transmission, setTransmission] = useState(String(draft?.transmission ?? ""));
+  const [fuel, setFuel] = useState(String(draft?.fuel ?? ""));
+
+  const [mileageSelection, setMileageSelection] = useState(initialMileageSelection);
+  const [customMileage, setCustomMileage] = useState(initialCustomMileage);
+
+  const [color, setColor] = useState(String(draft?.color ?? ""));
+  const [condition, setCondition] = useState(String(draft?.condition ?? ""));
+  const [bodyType, setBodyType] = useState(String(draft?.bodyType ?? ""));
+
+  const [engineSelection, setEngineSelection] = useState(initialEngineSelection);
+  const [customEngine, setCustomEngine] = useState(initialCustomEngine);
+
+  const [seats, setSeats] = useState(initialSeatsSelection);
+  const [plateNumber, setPlateNumber] = useState(String(draft?.plateNumber ?? ""));
+
   useEffect(() => {
-    setBrand(draft?.brand ?? "");
-    setModel(draft?.model ?? "");
-    setVariant(draft?.variant ?? "");
-    setYear(draft?.year ?? "");
-    setPrice(draft?.price ?? "");
-    setTransmission(draft?.transmission ?? "");
-    setFuel(draft?.fuel ?? "");
-    setMileage(draft?.mileage ?? "");
-    setColor(draft?.color ?? "");
-    setCondition(draft?.condition ?? "");
-    setBodyType(draft?.bodyType ?? "");
-    setEngineCc(draft?.engineCc ?? "");
-    setSeats(draft?.seats ?? "");
-    setPlateNumber(draft?.plateNumber ?? "");
-  }, [
-    draft?.brand,
-    draft?.model,
-    draft?.variant,
-    draft?.year,
-    draft?.price,
-    draft?.transmission,
-    draft?.fuel,
-    draft?.mileage,
-    draft?.color,
-    draft?.condition,
-    draft?.bodyType,
-    draft?.engineCc,
-    draft?.seats,
-    draft?.plateNumber,
-  ]);
+    if (!vehicleType) {
+      router.replace(`/vehicles/create?plan=${currentPlan}`);
+    }
+  }, [vehicleType, router, currentPlan]);
+
+  const brandOptions = useMemo(
+    () =>
+      withOtherOption(
+        brandPresetOptions,
+        lang === "id" ? "Lainnya (ketik manual)" : "Other (type manually)"
+      ),
+    [brandPresetOptions, lang]
+  );
+
+  const resolvedBrand =
+    brandSelection === SELECT_OTHER ? customBrand.trim() : brandSelection;
+
+  const modelPresetDynamicOptions = useMemo(() => {
+    if (!resolvedBrand || !catalog[resolvedBrand]) return [];
+    return Object.keys(catalog[resolvedBrand]).sort((a, b) => a.localeCompare(b));
+  }, [resolvedBrand, catalog]);
+
+  const modelOptions = useMemo(
+    () =>
+      withOtherOption(
+        modelPresetDynamicOptions,
+        lang === "id" ? "Lainnya (ketik manual)" : "Other (type manually)"
+      ),
+    [modelPresetDynamicOptions, lang]
+  );
+
+  const resolvedModel =
+    modelSelection === SELECT_OTHER ? customModel.trim() : modelSelection;
+
+  const variantPresetDynamicOptions = useMemo(() => {
+    if (!resolvedBrand || !resolvedModel) return [];
+    return catalog[resolvedBrand]?.[resolvedModel] ?? [];
+  }, [resolvedBrand, resolvedModel, catalog]);
+
+  const variantOptions = useMemo(
+    () =>
+      withOtherOption(
+        variantPresetDynamicOptions,
+        lang === "id" ? "Lainnya (ketik manual)" : "Other (type manually)"
+      ),
+    [variantPresetDynamicOptions, lang]
+  );
+
+  const resolvedVariant =
+    variantSelection === SELECT_OTHER ? customVariant.trim() : variantSelection;
 
   const bodyTypeOptions = useMemo(() => {
     return vehicleType === "motor" ? MOTOR_BODY_TYPES : CAR_BODY_TYPES;
   }, [vehicleType]);
+
+  const engineOptions = useMemo(
+    () =>
+      withOtherOption(
+        enginePresetOptions,
+        lang === "id" ? "Lainnya (ketik manual)" : "Other (type manually)"
+      ),
+    [enginePresetOptions, lang]
+  );
+
+  const resolvedEngine =
+    engineSelection === SELECT_OTHER ? customEngine.trim() : engineSelection;
+
+  const mileageOptions = useMemo(
+    () =>
+      withOtherOption(
+        MILEAGE_OPTIONS,
+        lang === "id" ? "Lainnya (ketik manual)" : "Other (type manually)"
+      ),
+    [lang]
+  );
+
+  const resolvedMileage =
+    mileageSelection === SELECT_OTHER ? customMileage.trim() : mileageSelection;
 
   const pageTitle =
     vehicleType === "motor"
@@ -120,11 +409,11 @@ export default function VehicleCreateDetailPage() {
   const pageDesc =
     vehicleType === "motor"
       ? lang === "id"
-        ? "(Step 2) Isi spesifikasi utama motor Anda."
-        : "(Step 2) Fill in the main motorbike specifications."
+        ? "(Step 2) Pilih detail motor dengan lebih cepat melalui dropdown dan pilihan siap pakai."
+        : "(Step 2) Choose motorbike details faster with dropdowns and ready-made options."
       : lang === "id"
-        ? "(Step 2) Isi spesifikasi utama mobil Anda."
-        : "(Step 2) Fill in the main car specifications.";
+        ? "(Step 2) Pilih detail mobil dengan lebih cepat melalui dropdown dan pilihan siap pakai."
+        : "(Step 2) Choose car details faster with dropdowns and ready-made options.";
 
   const priceLabel =
     listingType === "disewa"
@@ -137,17 +426,17 @@ export default function VehicleCreateDetailPage() {
 
   const canNext = useMemo(() => {
     const baseValid =
-      brand.trim().length > 0 &&
-      model.trim().length > 0 &&
+      resolvedBrand.length > 0 &&
+      resolvedModel.length > 0 &&
       year.trim().length > 0 &&
       price.trim().length > 0 &&
       transmission.trim().length > 0 &&
       fuel.trim().length > 0 &&
-      mileage.trim().length > 0 &&
+      resolvedMileage.length > 0 &&
       color.trim().length > 0 &&
       condition.trim().length > 0 &&
       bodyType.trim().length > 0 &&
-      engineCc.trim().length > 0;
+      resolvedEngine.length > 0;
 
     if (!baseValid) return false;
 
@@ -157,17 +446,17 @@ export default function VehicleCreateDetailPage() {
 
     return true;
   }, [
-    brand,
-    model,
+    resolvedBrand,
+    resolvedModel,
     year,
     price,
     transmission,
     fuel,
-    mileage,
+    resolvedMileage,
     color,
     condition,
     bodyType,
-    engineCc,
+    resolvedEngine,
     seats,
     vehicleType,
   ]);
@@ -185,18 +474,18 @@ export default function VehicleCreateDetailPage() {
       source: "owner",
       plan: currentPlan,
 
-      brand,
-      model,
-      variant,
+      brand: resolvedBrand,
+      model: resolvedModel,
+      variant: resolvedVariant,
       year,
       price,
       transmission,
       fuel,
-      mileage,
+      mileage: resolvedMileage,
       color,
       condition,
       bodyType,
-      engineCc,
+      engineCc: resolvedEngine,
       seats,
       plateNumber,
     }));
@@ -260,15 +549,35 @@ export default function VehicleCreateDetailPage() {
                   {lang === "id" ? "Brand" : "Brand"}{" "}
                   <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  placeholder={
-                    lang === "id" ? "Contoh: Toyota / Yamaha" : "Example: Toyota / Yamaha"
-                  }
-                  className={inputBase}
-                />
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={brandSelection}
+                    placeholder={lang === "id" ? "Pilih brand" : "Select brand"}
+                    options={brandOptions}
+                    onChange={(value) => {
+                      setBrandSelection(value);
+                      setModelSelection("");
+                      setCustomModel("");
+                      setVariantSelection("");
+                      setCustomVariant("");
+                    }}
+                  />
+                </div>
+
+                {brandSelection === SELECT_OTHER ? (
+                  <input
+                    type="text"
+                    value={customBrand}
+                    onChange={(e) => setCustomBrand(e.target.value)}
+                    placeholder={
+                      lang === "id"
+                        ? "Ketik brand manual"
+                        : "Type brand manually"
+                    }
+                    className={inputBase}
+                  />
+                ) : null}
               </div>
 
               <div>
@@ -276,15 +585,41 @@ export default function VehicleCreateDetailPage() {
                   {lang === "id" ? "Model" : "Model"}{" "}
                   <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={
-                    lang === "id" ? "Contoh: Fortuner / XMAX" : "Example: Fortuner / XMAX"
-                  }
-                  className={inputBase}
-                />
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={modelSelection}
+                    placeholder={
+                      resolvedBrand
+                        ? lang === "id"
+                          ? "Pilih model"
+                          : "Select model"
+                        : lang === "id"
+                          ? "Pilih brand dulu"
+                          : "Select brand first"
+                    }
+                    options={modelOptions}
+                    onChange={(value) => {
+                      setModelSelection(value);
+                      setVariantSelection("");
+                      setCustomVariant("");
+                    }}
+                  />
+                </div>
+
+                {modelSelection === SELECT_OTHER ? (
+                  <input
+                    type="text"
+                    value={customModel}
+                    onChange={(e) => setCustomModel(e.target.value)}
+                    placeholder={
+                      lang === "id"
+                        ? "Ketik model manual"
+                        : "Type model manually"
+                    }
+                    className={inputBase}
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -296,15 +631,37 @@ export default function VehicleCreateDetailPage() {
                     {lang === "id" ? "(Opsional)" : "(Optional)"}
                   </span>
                 </label>
-                <input
-                  type="text"
-                  value={variant}
-                  onChange={(e) => setVariant(e.target.value)}
-                  placeholder={
-                    lang === "id" ? "Contoh: VRZ / Connected" : "Example: VRZ / Connected"
-                  }
-                  className={inputBase}
-                />
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={variantSelection}
+                    placeholder={
+                      resolvedModel
+                        ? lang === "id"
+                          ? "Pilih varian"
+                          : "Select variant"
+                        : lang === "id"
+                          ? "Pilih model dulu"
+                          : "Select model first"
+                    }
+                    options={variantOptions}
+                    onChange={(value) => setVariantSelection(value)}
+                  />
+                </div>
+
+                {variantSelection === SELECT_OTHER ? (
+                  <input
+                    type="text"
+                    value={customVariant}
+                    onChange={(e) => setCustomVariant(e.target.value)}
+                    placeholder={
+                      lang === "id"
+                        ? "Ketik varian manual"
+                        : "Type variant manually"
+                    }
+                    className={inputBase}
+                  />
+                ) : null}
               </div>
 
               <div>
@@ -312,13 +669,18 @@ export default function VehicleCreateDetailPage() {
                   {lang === "id" ? "Tahun" : "Year"}{" "}
                   <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="number"
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  placeholder="2024"
-                  className={inputBase}
-                />
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={year}
+                    placeholder={lang === "id" ? "Pilih tahun" : "Select year"}
+                    options={yearOptions.map((item) => ({
+                      value: item,
+                      label: item,
+                    }))}
+                    onChange={(value) => setYear(value)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -345,15 +707,31 @@ export default function VehicleCreateDetailPage() {
                   {lang === "id" ? "Kilometer / Mileage" : "Mileage"}{" "}
                   <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={mileage}
-                  onChange={(e) => setMileage(e.target.value)}
-                  placeholder={
-                    lang === "id" ? "Contoh: 18.000 km" : "Example: 18,000 km"
-                  }
-                  className={inputBase}
-                />
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={mileageSelection}
+                    placeholder={
+                      lang === "id" ? "Pilih mileage" : "Select mileage"
+                    }
+                    options={mileageOptions}
+                    onChange={(value) => setMileageSelection(value)}
+                  />
+                </div>
+
+                {mileageSelection === SELECT_OTHER ? (
+                  <input
+                    type="text"
+                    value={customMileage}
+                    onChange={(e) => setCustomMileage(e.target.value)}
+                    placeholder={
+                      lang === "id"
+                        ? "Contoh: 18.000 km"
+                        : "Example: 18,000 km"
+                    }
+                    className={inputBase}
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -444,21 +822,35 @@ export default function VehicleCreateDetailPage() {
                       : "Engine"}{" "}
                   <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={engineCc}
-                  onChange={(e) => setEngineCc(e.target.value)}
-                  placeholder={
-                    vehicleType === "motor"
-                      ? lang === "id"
-                        ? "Contoh: 160cc"
-                        : "Example: 160cc"
-                      : lang === "id"
-                        ? "Contoh: 2.4L / 2400cc"
-                        : "Example: 2.4L / 2400cc"
-                  }
-                  className={inputBase}
-                />
+
+                <div className="mt-2">
+                  <TetamoSelect
+                    value={engineSelection}
+                    placeholder={
+                      lang === "id" ? "Pilih mesin" : "Select engine"
+                    }
+                    options={engineOptions}
+                    onChange={(value) => setEngineSelection(value)}
+                  />
+                </div>
+
+                {engineSelection === SELECT_OTHER ? (
+                  <input
+                    type="text"
+                    value={customEngine}
+                    onChange={(e) => setCustomEngine(e.target.value)}
+                    placeholder={
+                      vehicleType === "motor"
+                        ? lang === "id"
+                          ? "Contoh: 160cc"
+                          : "Example: 160cc"
+                        : lang === "id"
+                          ? "Contoh: 2.4L / 2400cc"
+                          : "Example: 2.4L / 2400cc"
+                    }
+                    className={inputBase}
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -473,7 +865,9 @@ export default function VehicleCreateDetailPage() {
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   placeholder={
-                    lang === "id" ? "Contoh: Hitam / Putih" : "Example: Black / White"
+                    lang === "id"
+                      ? "Contoh: Hitam / Putih"
+                      : "Example: Black / White"
                   }
                   className={inputBase}
                 />
@@ -510,13 +904,18 @@ export default function VehicleCreateDetailPage() {
                     {lang === "id" ? "Jumlah Kursi" : "Seats"}{" "}
                     <span className="text-red-600">*</span>
                   </label>
-                  <input
-                    type="number"
-                    value={seats}
-                    onChange={(e) => setSeats(e.target.value)}
-                    placeholder={lang === "id" ? "Contoh: 5" : "Example: 5"}
-                    className={inputBase}
-                  />
+
+                  <div className="mt-2">
+                    <TetamoSelect
+                      value={seats}
+                      placeholder={lang === "id" ? "Pilih kursi" : "Select seats"}
+                      options={SEAT_OPTIONS.map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                      onChange={(value) => setSeats(value)}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div>
@@ -531,7 +930,9 @@ export default function VehicleCreateDetailPage() {
                     value={plateNumber}
                     onChange={(e) => setPlateNumber(e.target.value)}
                     placeholder={
-                      lang === "id" ? "Contoh: DK 1234 XX" : "Example: DK 1234 XX"
+                      lang === "id"
+                        ? "Contoh: DK 1234 XX"
+                        : "Example: DK 1234 XX"
                     }
                     className={inputBase}
                   />
@@ -551,7 +952,9 @@ export default function VehicleCreateDetailPage() {
                     value={plateNumber}
                     onChange={(e) => setPlateNumber(e.target.value)}
                     placeholder={
-                      lang === "id" ? "Contoh: B 1234 XX" : "Example: B 1234 XX"
+                      lang === "id"
+                        ? "Contoh: B 1234 XX"
+                        : "Example: B 1234 XX"
                     }
                     className={inputBase}
                   />
