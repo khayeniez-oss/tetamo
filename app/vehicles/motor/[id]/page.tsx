@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import MotorDetailClient from "./MotorDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -8,127 +9,33 @@ type PageProps = {
   params: Promise<{ id: string }>;
 };
 
-type DummyMotor = {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  price: number;
-  province: string;
-  city: string;
-  area: string;
-  bodyType: string;
-  transmission: string;
-  fuel: string;
-  year: string;
-  mileage: string;
-  status: string;
-  images: string[];
-};
+type VehicleRow = Record<string, any>;
+type VehicleMediaRow = Record<string, any>;
 
-const DUMMY_MOTORS: DummyMotor[] = [
-  {
-    id: "motor-001",
-    slug: "yamaha-xmax-connected-2024",
-    title: "Yamaha XMAX Connected 2024",
-    description:
-      "A premium maxi scooter with modern styling, smooth automatic ride, and strong road presence for city and leisure use.",
-    price: 69000000,
-    province: "Bali",
-    city: "Denpasar",
-    area: "Denpasar",
-    bodyType: "Scooter",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    year: "2024",
-    mileage: "3.200 km",
-    status: "available",
-    images: [
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1622185135505-2d7950039943?auto=format&fit=crop&w=1200&q=80",
-    ],
-  },
-  {
-    id: "motor-002",
-    slug: "honda-adv-160-2024",
-    title: "Honda ADV 160 2024",
-    description:
-      "A stylish urban adventure scooter with practical everyday comfort, elevated riding position, and sporty modern design.",
-    price: 42000000,
-    province: "Jawa Timur",
-    city: "Surabaya",
-    area: "Surabaya",
-    bodyType: "Scooter",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    year: "2024",
-    mileage: "1.900 km",
-    status: "available",
-    images: [
-      "https://images.unsplash.com/photo-1622185135825-d5fc1d3f1c7d?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-    ],
-  },
-  {
-    id: "motor-003",
-    slug: "kawasaki-ninja-zx25r-2023",
-    title: "Kawasaki Ninja ZX-25R 2023",
-    description:
-      "A performance-focused sport bike with aggressive styling, exciting manual ride feel, and strong enthusiast appeal.",
-    price: 118000000,
-    province: "DKI Jakarta",
-    city: "Jakarta Selatan",
-    area: "Jakarta Selatan",
-    bodyType: "Sport",
-    transmission: "Manual",
-    fuel: "Petrol",
-    year: "2023",
-    mileage: "7.500 km",
-    status: "available",
-    images: [
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1517846693594-1567da72af75?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-    ],
-  },
-  {
-    id: "motor-004",
-    slug: "vespa-primavera-s-2023",
-    title: "Vespa Primavera S 2023",
-    description:
-      "A fashionable scooter with timeless Italian styling, premium visual identity, and a light, smooth city ride.",
-    price: 51500000,
-    province: "Bali",
-    city: "Canggu",
-    area: "Canggu",
-    bodyType: "Scooter",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    year: "2023",
-    mileage: "4.800 km",
-    status: "available",
-    images: [
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1622185135505-2d7950039943?auto=format&fit=crop&w=1200&q=80",
-    ],
-  },
-];
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+  "https://www.tetamo.com";
+
+function getSupabaseServerClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment variables");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 function cleanText(value?: string | null) {
   return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function trimToLength(value: string, max: number) {
-  const cleaned = cleanText(value);
-  if (!cleaned) return "";
-  if (cleaned.length <= max) return cleaned;
-
-  const sliced = cleaned.slice(0, max).trim();
-  const lastSpace = sliced.lastIndexOf(" ");
-  return `${(lastSpace > 80 ? sliced.slice(0, lastSpace) : sliced).trim()}…`;
 }
 
 function formatPriceIDR(value?: number | null) {
@@ -140,91 +47,193 @@ function formatPriceIDR(value?: number | null) {
   }).format(value);
 }
 
-function buildFallbackTitle(motor: DummyMotor) {
-  return trimToLength(
-    `${cleanText(motor.title)} | ${cleanText(
-      motor.area || motor.city || motor.province
-    )} | Tetamo`,
-    70
+function mapBodyType(row: VehicleRow) {
+  return cleanText(
+    row?.body_type ||
+      row?.bodyType ||
+      row?.vehicle_body_type ||
+      row?.category ||
+      ""
   );
 }
 
-function buildFallbackDescription(motor: DummyMotor) {
+function buildMotorTitle(motor: VehicleRow) {
+  const title = cleanText(motor?.title) || "Motorbike";
+  const area = cleanText(motor?.city || motor?.area || motor?.province);
+
+  if (area) return `${title} for Sale in ${area} | Tetamo`;
+  return `${title} | Tetamo`;
+}
+
+function buildMotorDescription(motor: VehicleRow) {
+  const title = cleanText(motor?.title) || "Motorbike";
+  const bodyType = mapBodyType(motor);
+  const area = cleanText(motor?.city || motor?.area || motor?.province);
+  const year = cleanText(motor?.year);
+  const transmission = cleanText(motor?.transmission);
+  const fuel = cleanText(motor?.fuel);
+  const mileage = cleanText(motor?.mileage || motor?.odometer);
+  const price = formatPriceIDR(motor?.price);
+  const description = cleanText(motor?.description);
+
   const parts = [
-    cleanText(motor.title),
-    cleanText(motor.bodyType),
-    cleanText(motor.area || motor.city || motor.province),
-    formatPriceIDR(motor.price),
-    cleanText(motor.description),
+    bodyType,
+    area,
+    year,
+    transmission,
+    fuel,
+    mileage,
+    price ? `Price ${price}` : "",
+    description,
   ].filter(Boolean);
 
-  return trimToLength(parts.join(". "), 160);
+  return parts.length > 0
+    ? `${title}. ${parts.join(". ")}`
+    : `Explore ${title} on Tetamo.`;
 }
 
-function getMotorBySlugOrId(routeValue: string) {
-  return (
-    DUMMY_MOTORS.find((item) => item.slug === routeValue) ||
-    DUMMY_MOTORS.find((item) => item.id === routeValue) ||
-    null
-  );
+async function fetchMotorBySlugOrId(idOrSlug: string) {
+  const supabase = getSupabaseServerClient();
+  const key = cleanText(idOrSlug);
+
+  async function fetchFromTable(tableName: "vehicle_marketplace_view" | "vehicles") {
+    const bySlug = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("vehicle_type", "motor")
+      .eq("slug", key)
+      .limit(1)
+      .maybeSingle();
+
+    if (!bySlug.error && bySlug.data) {
+      return bySlug.data as VehicleRow;
+    }
+
+    const byId = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("vehicle_type", "motor")
+      .eq("id", key)
+      .limit(1)
+      .maybeSingle();
+
+    if (!byId.error && byId.data) {
+      return byId.data as VehicleRow;
+    }
+
+    return null;
+  }
+
+  let row = await fetchFromTable("vehicle_marketplace_view");
+
+  if (!row) {
+    row = await fetchFromTable("vehicles");
+  }
+
+  if (!row) return null;
+
+  let imageUrl = cleanText(row?.cover_image_url);
+
+  if (!imageUrl) {
+    const mediaResult = await supabase
+      .from("vehicle_media")
+      .select("*")
+      .eq("vehicle_id", String(row.id))
+      .eq("media_type", "photo")
+      .order("is_cover", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .limit(1);
+
+    if (!mediaResult.error) {
+      const firstPhoto = (mediaResult.data?.[0] || null) as VehicleMediaRow | null;
+      imageUrl = cleanText(firstPhoto?.file_url || firstPhoto?.public_url);
+    }
+  }
+
+  return {
+    row,
+    imageUrl,
+  };
 }
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const { id: routeValue } = await params;
-  const motor = getMotorBySlugOrId(routeValue);
-  const finalPathPart = cleanText(motor?.slug) || routeValue;
-  const canonical = `https://www.tetamo.com/vehicles/motor/${finalPathPart}`;
+  try {
+    const { id: routeValue } = await params;
+    const result = await fetchMotorBySlugOrId(routeValue);
+    const canonical = `${SITE_URL}/vehicles/motor/${routeValue}`;
 
-  if (!motor) {
+    if (!result) {
+      return {
+        title: "Motorbike Not Found | Tetamo",
+        description: "This motorbike is no longer available on Tetamo.",
+        alternates: { canonical },
+        robots: { index: false, follow: false },
+      };
+    }
+
+    const { row, imageUrl } = result;
+    const finalPathPart = cleanText(row?.slug) || cleanText(row?.id) || routeValue;
+    const finalCanonical = `${SITE_URL}/vehicles/motor/${finalPathPart}`;
+    const title = buildMotorTitle(row);
+    const description = buildMotorDescription(row);
+
     return {
-      title: "Motorbike Not Found | Tetamo",
-      description: "This motorbike is no longer available on Tetamo.",
+      title,
+      description,
+      alternates: { canonical: finalCanonical },
+      robots: { index: true, follow: true },
+      openGraph: {
+        title,
+        description,
+        url: finalCanonical,
+        siteName: "Tetamo",
+        type: "website",
+        images: imageUrl
+          ? [
+              {
+                url: imageUrl,
+                width: 1200,
+                height: 630,
+                alt: title,
+              },
+            ]
+          : undefined,
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description,
+        images: imageUrl ? [imageUrl] : undefined,
+      },
+    };
+  } catch {
+    const { id: routeValue } = await params;
+    const canonical = `${SITE_URL}/vehicles/motor/${routeValue}`;
+
+    return {
+      title: "Motorbike Detail | Tetamo",
+      description: "Explore motorbike details on Tetamo.",
       alternates: { canonical },
       robots: { index: false, follow: false },
     };
   }
-
-  const title = buildFallbackTitle(motor);
-  const description = buildFallbackDescription(motor);
-
-  return {
-    title,
-    description,
-    alternates: { canonical },
-    robots: { index: true, follow: true },
-    openGraph: {
-      title,
-      description,
-      url: canonical,
-      siteName: "Tetamo",
-      type: "website",
-      images: motor.images[0]
-        ? [
-            {
-              url: motor.images[0],
-              width: 1200,
-              height: 630,
-              alt: title,
-            },
-          ]
-        : undefined,
-    },
-  };
 }
 
 export default async function Page({ params }: PageProps) {
   const { id: routeValue } = await params;
-  const motor = getMotorBySlugOrId(routeValue);
+  const result = await fetchMotorBySlugOrId(routeValue);
 
-  if (!motor?.id) {
+  if (!result?.row?.id) {
     notFound();
   }
 
-  if (motor.slug && routeValue !== motor.slug) {
-    redirect(`/vehicles/motor/${motor.slug}`);
+  const slug = cleanText(result.row.slug);
+
+  if (slug && routeValue !== slug) {
+    redirect(`/vehicles/motor/${slug}`);
   }
 
-  return <MotorDetailClient id={motor.id} />;
+  return <MotorDetailClient id={String(result.row.id)} />;
 }
