@@ -23,9 +23,6 @@ import {
   Home,
   CarFront,
   Bike,
-  Scissors,
-  Sparkles,
-  Hand,
 } from "lucide-react";
 
 type ProfileData = {
@@ -203,12 +200,6 @@ export default function Navbar() {
     car: isID ? "Mobil" : "Car",
     motor: isID ? "Motor" : "Motor",
 
-    wellness: "Wellness",
-    hairCare: isID ? "Perawatan Rambut" : "Hair Care",
-    faceCare: isID ? "Perawatan Wajah" : "Face Care",
-    bodyCare: isID ? "Perawatan Tubuh" : "Body Care",
-    nailCare: isID ? "Perawatan Kuku" : "Nail Care",
-
     buyers: isID ? "Pembeli" : "Buyers",
     career: isID ? "Karier" : "Career",
 
@@ -229,20 +220,17 @@ export default function Navbar() {
 
   const propertyItems: MenuItem[] = [
     { label: t.allProperties, href: "/properti", icon: Building2 },
-    { label: t.forSale, href: "/properti?jenisListing=dijual", icon: BadgeDollarSign },
+    {
+      label: t.forSale,
+      href: "/properti?jenisListing=dijual",
+      icon: BadgeDollarSign,
+    },
     { label: t.forRent, href: "/properti?jenisListing=disewa", icon: Home },
   ];
 
   const vehicleItems: MenuItem[] = [
     { label: t.car, href: "/vehicles/car", icon: CarFront },
     { label: t.motor, href: "/vehicles/motor", icon: Bike },
-  ];
-
-  const wellnessItems: MenuItem[] = [
-    { label: t.hairCare, href: "/wellness/hair-care", icon: Scissors },
-    { label: t.faceCare, href: "/wellness/face-care", icon: Sparkles },
-    { label: t.bodyCare, href: "/wellness/body-care", icon: Sparkles },
-    { label: t.nailCare, href: "/wellness/nail-care", icon: Hand },
   ];
 
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
@@ -258,7 +246,7 @@ export default function Navbar() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopDropdownOpen, setDesktopDropdownOpen] = useState<
-    "properties" | "vehicles" | "wellness" | null
+    "properties" | "vehicles" | null
   >(null);
 
   const desktopLangRef = useRef<HTMLDivElement | null>(null);
@@ -530,18 +518,6 @@ export default function Navbar() {
                 onToggle={() =>
                   setDesktopDropdownOpen((prev) =>
                     prev === "vehicles" ? null : "vehicles"
-                  )
-                }
-                onNavigate={closeAllMenus}
-              />
-
-              <DesktopDropdown
-                label={t.wellness}
-                items={wellnessItems}
-                isOpen={desktopDropdownOpen === "wellness"}
-                onToggle={() =>
-                  setDesktopDropdownOpen((prev) =>
-                    prev === "wellness" ? null : "wellness"
                   )
                 }
                 onNavigate={closeAllMenus}
@@ -979,31 +955,6 @@ export default function Navbar() {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           {vehicleItems.map((item) => {
-                            const Icon = item.icon;
-
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={closeAllMenus}
-                                className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                              >
-                                <div className="flex flex-col items-center gap-2">
-                                  <Icon className="h-4 w-4" />
-                                  <span>{item.label}</span>
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-3">
-                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                          {t.wellness}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {wellnessItems.map((item) => {
                             const Icon = item.icon;
 
                             return (
