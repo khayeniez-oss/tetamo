@@ -4,9 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  Gem,
   Crown,
-  Zap,
   ShieldCheck,
   UserCheck,
   Clock,
@@ -16,6 +14,7 @@ import {
   Search,
   Share2,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
 
@@ -63,317 +62,15 @@ type RatingSummary = {
   count: number;
 };
 
+type VehicleRow = Record<string, any>;
+type VehicleMediaRow = Record<string, any>;
+type ProfileRow = Record<string, any>;
+
 const IDR_PER_USD = 16500;
 const IDR_PER_AUD = 12072;
 
-const DUMMY_MOTORS: MotorListing[] = [
-  {
-    verifiedListing: true,
-    ownerVerified: false,
-    ownerPendingVerification: false,
-    dealerVerified: true,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: true,
-    featured: false,
-    boosted: false,
-    id: "motor-001",
-    slug: "yamaha-xmax-connected-2024",
-    kode: "MTR-TTM-001",
-    postedDate: "16 Apr 2026",
-    title: "Yamaha XMAX Connected 2024",
-    priceValue: 69000000,
-    province: "Bali",
-    area: "Denpasar",
-    year: "2024",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    mileage: "3.200 km",
-    bodyType: "scooter",
-    sellerName: "Tetamo Moto Partner",
-    agency: "Tetamo Moto Network",
-    whatsapp: "6282230000001",
-    images: [
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1622185135505-2d7950039943?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "dealer",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: true,
-    ownerPendingVerification: false,
-    dealerVerified: false,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: true,
-    boosted: false,
-    id: "motor-002",
-    slug: "honda-adv-160-2024",
-    kode: "MTR-TTM-002",
-    postedDate: "15 Apr 2026",
-    title: "Honda ADV 160 2024",
-    priceValue: 42000000,
-    province: "Jawa Timur",
-    area: "Surabaya",
-    year: "2024",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    mileage: "1.900 km",
-    bodyType: "scooter",
-    sellerName: "Andre Kurniawan",
-    agency: "",
-    whatsapp: "6282230000002",
-    images: [
-      "https://images.unsplash.com/photo-1622185135825-d5fc1d3f1c7d?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "owner",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: false,
-    ownerPendingVerification: false,
-    dealerVerified: true,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: false,
-    boosted: true,
-    id: "motor-003",
-    slug: "kawasaki-ninja-zx25r-2023",
-    kode: "MTR-TTM-003",
-    postedDate: "14 Apr 2026",
-    title: "Kawasaki Ninja ZX-25R 2023",
-    priceValue: 118000000,
-    province: "DKI Jakarta",
-    area: "Jakarta Selatan",
-    year: "2023",
-    transmission: "Manual",
-    fuel: "Petrol",
-    mileage: "7.500 km",
-    bodyType: "sport",
-    sellerName: "Green Line Motors",
-    agency: "Green Line Motors",
-    whatsapp: "6282230000003",
-    images: [
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1517846693594-1567da72af75?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "dealer",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: true,
-    ownerPendingVerification: false,
-    dealerVerified: false,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: false,
-    boosted: false,
-    id: "motor-004",
-    slug: "vespa-primavera-s-2023",
-    kode: "MTR-TTM-004",
-    postedDate: "13 Apr 2026",
-    title: "Vespa Primavera S 2023",
-    priceValue: 51500000,
-    province: "Bali",
-    area: "Canggu",
-    year: "2023",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    mileage: "4.800 km",
-    bodyType: "scooter",
-    sellerName: "Melissa Hartono",
-    agency: "",
-    whatsapp: "6282230000004",
-    images: [
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1622185135505-2d7950039943?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "owner",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: false,
-    ownerPendingVerification: false,
-    dealerVerified: false,
-    dealerPendingVerification: false,
-    agentVerified: true,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: false,
-    boosted: false,
-    id: "motor-005",
-    slug: "yamaha-mt25-2022",
-    kode: "MTR-TTM-005",
-    postedDate: "12 Apr 2026",
-    title: "Yamaha MT-25 2022",
-    priceValue: 56500000,
-    province: "Jawa Barat",
-    area: "Bandung",
-    year: "2022",
-    transmission: "Manual",
-    fuel: "Petrol",
-    mileage: "9.200 km",
-    bodyType: "naked",
-    sellerName: "Randy Prasetyo",
-    agency: "Tetamo Agent Network",
-    whatsapp: "6282230000005",
-    images: [
-      "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1517846693594-1567da72af75?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "agent",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: false,
-    ownerPendingVerification: false,
-    dealerVerified: true,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: true,
-    boosted: false,
-    id: "motor-006",
-    slug: "honda-pcx-160-2024",
-    kode: "MTR-TTM-006",
-    postedDate: "11 Apr 2026",
-    title: "Honda PCX 160 2024",
-    priceValue: 35500000,
-    province: "Banten",
-    area: "BSD City",
-    year: "2024",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    mileage: "2.100 km",
-    bodyType: "scooter",
-    sellerName: "City Motohub",
-    agency: "City Motohub",
-    whatsapp: "6282230000006",
-    images: [
-      "https://images.unsplash.com/photo-1622185135505-2d7950039943?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "dealer",
-  },
-  {
-    verifiedListing: false,
-    ownerVerified: false,
-    ownerPendingVerification: true,
-    dealerVerified: false,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: false,
-    boosted: false,
-    id: "motor-007",
-    slug: "suzuki-vstrom-250sx-2023",
-    kode: "MTR-TTM-007",
-    postedDate: "10 Apr 2026",
-    title: "Suzuki V-Strom 250SX 2023",
-    priceValue: 63500000,
-    province: "DI Yogyakarta",
-    area: "Sleman",
-    year: "2023",
-    transmission: "Manual",
-    fuel: "Petrol",
-    mileage: "5.600 km",
-    bodyType: "touring",
-    sellerName: "Bagas Mahendra",
-    agency: "",
-    whatsapp: "6282230000007",
-    images: [
-      "https://images.unsplash.com/photo-1517846693594-1567da72af75?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "owner",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: false,
-    ownerPendingVerification: false,
-    dealerVerified: false,
-    dealerPendingVerification: false,
-    agentVerified: true,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: false,
-    boosted: true,
-    id: "motor-008",
-    slug: "ktm-duke-390-2022",
-    kode: "MTR-TTM-008",
-    postedDate: "09 Apr 2026",
-    title: "KTM Duke 390 2022",
-    priceValue: 89500000,
-    province: "DKI Jakarta",
-    area: "Jakarta Barat",
-    year: "2022",
-    transmission: "Manual",
-    fuel: "Petrol",
-    mileage: "8.300 km",
-    bodyType: "naked",
-    sellerName: "Jonathan Lim",
-    agency: "Tetamo Agent Network",
-    whatsapp: "6282230000008",
-    images: [
-      "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1517846693594-1567da72af75?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "agent",
-  },
-  {
-    verifiedListing: true,
-    ownerVerified: false,
-    ownerPendingVerification: false,
-    dealerVerified: true,
-    dealerPendingVerification: false,
-    agentVerified: false,
-    agentPendingVerification: false,
-    spotlight: false,
-    featured: false,
-    boosted: false,
-    id: "motor-009",
-    slug: "royal-enfield-himalayan-2024",
-    kode: "MTR-TTM-009",
-    postedDate: "08 Apr 2026",
-    title: "Royal Enfield Himalayan 2024",
-    priceValue: 148000000,
-    province: "Jawa Timur",
-    area: "Malang",
-    year: "2024",
-    transmission: "Manual",
-    fuel: "Petrol",
-    mileage: "2.700 km",
-    bodyType: "touring",
-    sellerName: "Adventure Wheels",
-    agency: "Adventure Wheels",
-    whatsapp: "6282230000009",
-    images: [
-      "https://images.unsplash.com/photo-1517846693594-1567da72af75?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1609630875171-b1321377ee65?auto=format&fit=crop&w=1200&q=80",
-    ],
-    postedByType: "dealer",
-  },
-];
+const FALLBACK_MOTOR_IMAGE =
+  "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=80";
 
 function calculateRanking(p: MotorListing) {
   let score = 0;
@@ -390,7 +87,7 @@ function calculateRanking(p: MotorListing) {
 function sortByRanking(a: MotorListing, b: MotorListing) {
   const rankDiff = calculateRanking(b) - calculateRanking(a);
   if (rankDiff !== 0) return rankDiff;
-  return String(b.id).localeCompare(String(a.id));
+  return String(b.postedDate).localeCompare(String(a.postedDate));
 }
 
 function formatIdr(value: number | null | undefined) {
@@ -439,18 +136,19 @@ function formatSecondaryPrice(
 
 function translateTransmission(value: string, lang: "id" | "en") {
   const v = value.toLowerCase();
-  if (v === "automatic") return lang === "id" ? "Automatic" : "Automatic";
-  if (v === "manual") return lang === "id" ? "Manual" : "Manual";
-  return value;
+  if (v === "automatic") return "Automatic";
+  if (v === "manual") return "Manual";
+  if (v === "cvt") return "CVT";
+  return value || "-";
 }
 
 function translateFuel(value: string, lang: "id" | "en") {
   const v = value.toLowerCase();
   if (v === "petrol") return lang === "id" ? "Bensin" : "Petrol";
-  if (v === "diesel") return lang === "id" ? "Diesel" : "Diesel";
+  if (v === "diesel") return "Diesel";
   if (v === "electric") return lang === "id" ? "Listrik" : "Electric";
-  if (v === "hybrid") return lang === "id" ? "Hybrid" : "Hybrid";
-  return value;
+  if (v === "hybrid") return "Hybrid";
+  return value || "-";
 }
 
 function motorTypeLabel(value: string, lang: "id" | "en") {
@@ -459,7 +157,237 @@ function motorTypeLabel(value: string, lang: "id" | "en") {
   if (v === "sport") return "Sport";
   if (v === "touring") return "Touring";
   if (v === "naked") return lang === "id" ? "Naked Bike" : "Naked Bike";
-  return value;
+  return value || "-";
+}
+
+function formatPostedDate(value?: string | null, lang: "id" | "en" = "en") {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(parsed);
+}
+
+function normalizePhone(value?: string | null) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("62")) return digits;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  if (digits.startsWith("8")) return `62${digits}`;
+  return digits;
+}
+
+function normalizeText(value: string) {
+  return value.toLowerCase().trim();
+}
+
+function dedupeImages(images: string[]) {
+  return Array.from(new Set(images.filter(Boolean)));
+}
+
+function getProfileName(profile?: ProfileRow | null) {
+  return (
+    String(
+      profile?.full_name ||
+        profile?.name ||
+        profile?.display_name ||
+        profile?.company_name ||
+        ""
+    ).trim() || ""
+  );
+}
+
+function getProfileAgency(profile?: ProfileRow | null) {
+  return (
+    String(
+      profile?.agency ||
+        profile?.agency_name ||
+        profile?.company ||
+        profile?.company_name ||
+        ""
+    ).trim() || ""
+  );
+}
+
+function getProfileWhatsapp(profile?: ProfileRow | null) {
+  return normalizePhone(
+    profile?.whatsapp ||
+      profile?.whatsapp_number ||
+      profile?.phone ||
+      profile?.phone_number ||
+      ""
+  );
+}
+
+function mapPostedByType(source?: string | null) {
+  const v = String(source || "").toLowerCase();
+  if (v === "owner") return "owner" as const;
+  if (v === "agent") return "agent" as const;
+  return "dealer" as const;
+}
+
+function mapBodyType(row: VehicleRow) {
+  return String(
+    row?.body_type ||
+      row?.bodyType ||
+      row?.vehicle_body_type ||
+      row?.category ||
+      ""
+  ).trim();
+}
+
+function mapVehicleToMotor(
+  row: VehicleRow,
+  mediaMap: Map<string, string[]>,
+  profileMap: Map<string, ProfileRow>,
+  lang: "id" | "en"
+): MotorListing {
+  const userId =
+    String(row?.owner_user_id || row?.agent_user_id || row?.user_id || "") || "";
+  const profile = profileMap.get(userId) || null;
+  const postedByType = mapPostedByType(row?.source || row?.role_snapshot);
+  const approved = String(row?.approval_status || "").toLowerCase() === "approved";
+  const listingStatus = String(row?.listing_status || "").toLowerCase();
+
+  const images = dedupeImages([
+    String(row?.cover_image_url || ""),
+    ...(mediaMap.get(String(row?.id || "")) || []),
+  ]);
+
+  return {
+    verifiedListing: approved,
+    ownerVerified: postedByType === "owner" && approved,
+    ownerPendingVerification:
+      postedByType === "owner" && !approved && listingStatus.includes("pending"),
+    dealerVerified: postedByType === "dealer" && approved,
+    dealerPendingVerification:
+      postedByType === "dealer" && !approved && listingStatus.includes("pending"),
+    agentVerified: postedByType === "agent" && approved,
+    agentPendingVerification:
+      postedByType === "agent" && !approved && listingStatus.includes("pending"),
+
+    spotlight: false,
+    featured: Boolean(row?.is_featured),
+    boosted: false,
+
+    id: String(row?.id || ""),
+    slug: String(row?.slug || row?.id || ""),
+    kode: String(row?.kode || row?.listing_code || "-"),
+    postedDate: formatPostedDate(row?.created_at, lang),
+
+    title: String(row?.title || "-"),
+    priceValue: Number(row?.price || 0),
+    province: String(row?.province || "-"),
+    area: String(row?.city || row?.area || "-"),
+
+    year: String(row?.year || "-"),
+    transmission: String(row?.transmission || "-"),
+    fuel: String(row?.fuel || "-"),
+    mileage: String(row?.mileage || row?.odometer || "-"),
+    bodyType: mapBodyType(row) || "-",
+
+    sellerName:
+      getProfileName(profile) ||
+      (postedByType === "owner"
+        ? lang === "id"
+          ? "Pemilik Kendaraan"
+          : "Vehicle Owner"
+        : postedByType === "agent"
+          ? lang === "id"
+            ? "Agen Kendaraan"
+            : "Vehicle Agent"
+          : lang === "id"
+            ? "Partner Kendaraan"
+            : "Vehicle Partner"),
+    agency: getProfileAgency(profile),
+    whatsapp:
+      getProfileWhatsapp(profile) ||
+      normalizePhone(row?.whatsapp || row?.phone || row?.contact_phone || ""),
+    images: images.length > 0 ? images : [FALLBACK_MOTOR_IMAGE],
+
+    postedByType,
+  };
+}
+
+async function fetchMotorsFromSupabase(lang: "id" | "en") {
+  let baseRows: VehicleRow[] = [];
+
+  const viewResult = await supabase
+    .from("vehicle_marketplace_view")
+    .select("*")
+    .eq("vehicle_type", "motor")
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (viewResult.error) {
+    const tableResult = await supabase
+      .from("vehicles")
+      .select("*")
+      .eq("vehicle_type", "motor")
+      .eq("approval_status", "approved")
+      .eq("listing_status", "active")
+      .order("is_featured", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (tableResult.error) throw tableResult.error;
+    baseRows = (tableResult.data || []) as VehicleRow[];
+  } else {
+    baseRows = (viewResult.data || []) as VehicleRow[];
+  }
+
+  const vehicleIds = baseRows.map((row) => String(row.id)).filter(Boolean);
+
+  const mediaMap = new Map<string, string[]>();
+  if (vehicleIds.length > 0) {
+    const mediaResult = await supabase
+      .from("vehicle_media")
+      .select("*")
+      .in("vehicle_id", vehicleIds)
+      .eq("media_type", "photo")
+      .order("is_cover", { ascending: false })
+      .order("sort_order", { ascending: true });
+
+    if (!mediaResult.error) {
+      const mediaRows = (mediaResult.data || []) as VehicleMediaRow[];
+      mediaRows.forEach((media) => {
+        const vehicleId = String(media?.vehicle_id || "");
+        const current = mediaMap.get(vehicleId) || [];
+        const url = String(media?.file_url || media?.public_url || "").trim();
+        if (url) {
+          current.push(url);
+          mediaMap.set(vehicleId, current);
+        }
+      });
+    }
+  }
+
+  const userIds = Array.from(
+    new Set(
+      baseRows
+        .map((row) =>
+          String(row?.owner_user_id || row?.agent_user_id || row?.user_id || "")
+        )
+        .filter(Boolean)
+    )
+  );
+
+  const profileMap = new Map<string, ProfileRow>();
+  if (userIds.length > 0) {
+    const profileResult = await supabase.from("profiles").select("*").in("id", userIds);
+
+    if (!profileResult.error) {
+      const profiles = (profileResult.data || []) as ProfileRow[];
+      profiles.forEach((profile) => {
+        profileMap.set(String(profile.id), profile);
+      });
+    }
+  }
+
+  return baseRows.map((row) => mapVehicleToMotor(row, mediaMap, profileMap, lang));
 }
 
 function FilterChip({
@@ -555,9 +483,7 @@ function MotorCard({
         return (
           <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 shadow-sm sm:text-[11px]">
             <Clock size={11} strokeWidth={2.5} />
-            {lang === "id"
-              ? "Menunggu Verifikasi"
-              : "Pending for Verification"}
+            {lang === "id" ? "Menunggu Verifikasi" : "Pending for Verification"}
           </span>
         );
       }
@@ -579,9 +505,7 @@ function MotorCard({
         return (
           <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 shadow-sm sm:text-[11px]">
             <Clock size={11} strokeWidth={2.5} />
-            {lang === "id"
-              ? "Menunggu Verifikasi"
-              : "Pending for Verification"}
+            {lang === "id" ? "Menunggu Verifikasi" : "Pending for Verification"}
           </span>
         );
       }
@@ -602,9 +526,7 @@ function MotorCard({
       return (
         <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-gray-900 shadow-sm sm:text-[11px]">
           <Clock size={11} strokeWidth={2.5} />
-          {lang === "id"
-            ? "Menunggu Verifikasi"
-            : "Pending for Verification"}
+          {lang === "id" ? "Menunggu Verifikasi" : "Pending for Verification"}
         </span>
       );
     }
@@ -613,6 +535,15 @@ function MotorCard({
   }
 
   function handleWhatsAppInquiry() {
+    if (!p.whatsapp) {
+      alert(
+        lang === "id"
+          ? "Nomor WhatsApp penjual belum tersedia."
+          : "The seller WhatsApp number is not available yet."
+      );
+      return;
+    }
+
     const message =
       lang === "id"
         ? `Halo, saya melihat motor ini di TETAMO dan tertarik.
@@ -640,49 +571,20 @@ Is this unit still available?`;
   }
 
   function handleScheduleTestRide() {
-    alert(
-      lang === "id"
-        ? "Dummy schedule test ride dulu. Nanti kita sambungkan ke form / leads."
-        : "Dummy schedule test ride for now. Later we can connect it to a form / leads flow."
-    );
+    window.location.href = `/vehicles/motor/${p.slug || p.id}`;
   }
 
   return (
-    <div
-      className={[
-        "relative overflow-hidden rounded-3xl border bg-white transition-all duration-300",
-        p.spotlight
-          ? "border-[#00CFE8] shadow-[0_0_0_1px_#00CFE8,0_18px_42px_rgba(0,207,232,0.20),0_10px_28px_rgba(0,0,0,0.08)] sm:scale-[1.01] sm:-translate-y-1 sm:hover:-translate-y-2 sm:hover:scale-[1.015]"
-          : p.featured
-            ? "border-[#D4A017] shadow-[0_0_0_1px_#D4A017,0_8px_25px_rgba(212,160,23,0.25)]"
-            : p.boosted
-              ? "border-slate-200 shadow-[0_0_0_1px_rgba(226,232,240,1),0_10px_28px_rgba(148,163,184,0.18)]"
-              : "border-gray-200 shadow-sm",
-      ].join(" ")}
-    >
+    <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
       <div className="relative">
         <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            {p.spotlight && (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1C1C1E] shadow-[0_6px_18px_rgba(0,0,0,0.12)] backdrop-blur-sm sm:text-[11px]">
-                <Gem size={13} className="text-[#00CFE8]" />
-                SPOTLIGHT
-              </span>
-            )}
-
-            {p.featured && (
+            {p.featured ? (
               <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#B8860B] shadow-md sm:text-[11px]">
                 <Crown size={13} className="text-[#FFD700]" />
                 FEATURED
               </span>
-            )}
-
-            {p.boosted && !p.featured && !p.spotlight && (
-              <span className="inline-flex w-fit items-center gap-1 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-[10px] font-bold text-slate-700 shadow-md sm:text-[11px]">
-                <Zap size={13} className="text-[#F59E0B]" />
-                BOOST
-              </span>
-            )}
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -887,8 +789,8 @@ export default function MotorPageClient() {
   const sp = useSearchParams();
   const bodyType = sp.get("type");
 
-  const [all] = useState<MotorListing[]>(DUMMY_MOTORS);
-  const [loading] = useState(false);
+  const [all, setAll] = useState<MotorListing[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
   const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
@@ -904,6 +806,32 @@ export default function MotorPageClient() {
     {}
   );
   const [marketplaceSearch, setMarketplaceSearch] = useState("");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadMotors() {
+      try {
+        setLoading(true);
+        const rows = await fetchMotorsFromSupabase(lang);
+
+        if (ignore) return;
+        setAll(rows);
+      } catch (error) {
+        console.error("Failed to load motors:", error);
+        if (!ignore) setAll([]);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadMotors();
+
+    return () => {
+      ignore = true;
+    };
+  }, [lang]);
 
   useEffect(() => {
     const nextSaveCountMap: Record<string, number> = {};
@@ -926,6 +854,10 @@ export default function MotorPageClient() {
     setRatingSummaryMap(nextRatingSummaryMap);
     setShareCountMap(nextShareCountMap);
   }, [all]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [bodyType, marketplaceSearch]);
 
   function handleToggleSave(propertyId: string) {
     const currentlySaved = Boolean(savedMap[propertyId]);
@@ -1040,20 +972,10 @@ export default function MotorPageClient() {
     }));
   }
 
-  function handleMarketplaceSearchSubmit(
-    e: React.FormEvent<HTMLFormElement>
-  ) {
-    e.preventDefault();
-  }
-
   const filtered = useMemo(() => {
     let list = [...all];
 
-    if (
-      bodyType === "scooter" ||
-      bodyType === "sport" ||
-      bodyType === "touring"
-    ) {
+    if (bodyType === "scooter" || bodyType === "sport" || bodyType === "touring") {
       list = list.filter((p) => p.bodyType === bodyType);
     }
 
@@ -1078,29 +1000,13 @@ export default function MotorPageClient() {
       );
     }
 
-    const spotlight = list.filter((p) => p.spotlight).sort(sortByRanking);
-    const featured = list
-      .filter((p) => !p.spotlight && p.featured)
-      .sort(sortByRanking);
-    const boosted = list
-      .filter((p) => !p.spotlight && !p.featured && p.boosted)
-      .sort(sortByRanking);
-    const normal = list
-      .filter((p) => !p.spotlight && !p.featured && !p.boosted)
-      .sort(sortByRanking);
-
-    return [...spotlight, ...featured, ...boosted, ...normal];
+    return [...list].sort(sortByRanking);
   }, [all, bodyType, marketplaceSearch]);
 
   const pageSize = 9;
-  const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    setPage(1);
-  }, [bodyType, marketplaceSearch]);
-
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const start = (page - 1) * pageSize;
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
   const paged = filtered.slice(start, start + pageSize);
 
   const currentFilterLabel =
@@ -1128,15 +1034,12 @@ export default function MotorPageClient() {
 
               <p className="mt-2 text-sm leading-7 text-gray-600 sm:text-base">
                 {lang === "id"
-                  ? "Temukan listing motor dari pemilik, dealer, dan agen dengan Tetamo."
-                  : "Discover motorbike listings from owners, dealers, and agents with the same Tetamo."}
+                  ? "Temukan listing motor dari pemilik, dealer, dan agen dengan tampilan Tetamo yang lebih rapi."
+                  : "Discover motorbike listings from owners, dealers, and agents with a cleaner Tetamo marketplace experience."}
               </p>
             </div>
 
-            <form
-              onSubmit={handleMarketplaceSearchSubmit}
-              className="w-full xl:max-w-[420px]"
-            >
+            <div className="w-full xl:max-w-[420px]">
               <div className="rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
                 <div className="flex items-center gap-2">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#F7F7F8] text-gray-500">
@@ -1156,14 +1059,15 @@ export default function MotorPageClient() {
                   />
 
                   <button
-                    type="submit"
+                    type="button"
                     className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90 sm:text-sm"
+                    onClick={() => setPage(1)}
                   >
                     {lang === "id" ? "Cari" : "Search"}
                   </button>
                 </div>
               </div>
-            </form>
+            </div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
@@ -1233,7 +1137,7 @@ export default function MotorPageClient() {
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
+            disabled={safePage === 1}
             className="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-gray-200 px-3 py-2.5 text-[13px] font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:min-w-[110px] sm:px-4 sm:py-3 sm:text-sm"
           >
             {lang === "id" ? "Sebelumnya" : "Prev"}
@@ -1241,14 +1145,14 @@ export default function MotorPageClient() {
 
           <div className="shrink-0 text-center text-[13px] text-gray-600 sm:text-sm">
             {lang === "id" ? "Halaman" : "Page"}{" "}
-            <span className="font-semibold">{page}</span> /{" "}
+            <span className="font-semibold">{safePage}</span> /{" "}
             <span className="font-semibold">{totalPages}</span>
           </div>
 
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
+            disabled={safePage === totalPages}
             className="inline-flex min-w-[92px] items-center justify-center rounded-2xl border border-gray-200 px-3 py-2.5 text-[13px] font-medium transition hover:bg-gray-50 disabled:opacity-40 sm:min-w-[110px] sm:px-4 sm:py-3 sm:text-sm"
           >
             {lang === "id" ? "Berikutnya" : "Next"}
