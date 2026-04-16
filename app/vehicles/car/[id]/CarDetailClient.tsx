@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
+import { supabase } from "@/lib/supabase";
 import {
   Instagram,
   Facebook,
   Linkedin,
   Youtube,
   Music2,
-  Gem,
   Crown,
-  Zap,
   CarFront,
   Calendar,
   Gauge,
@@ -30,6 +29,8 @@ import {
 } from "lucide-react";
 
 type SupportedCurrency = "IDR" | "USD" | "AUD";
+type RawRow = Record<string, any>;
+type RawProfile = Record<string, any>;
 
 type CarItem = {
   id: string;
@@ -59,9 +60,7 @@ type CarItem = {
   photo: string;
   images: string[];
   videoUrl?: string;
-  spotlight?: boolean;
   featured?: boolean;
-  boosted?: boolean;
   verifiedListing: boolean;
   ownerApproved: boolean;
   dealerVerified: boolean;
@@ -75,200 +74,11 @@ type CarItem = {
 
 const FALLBACK_POSTER_PHOTO =
   "https://randomuser.me/api/portraits/men/32.jpg";
+const FALLBACK_CAR_IMAGE =
+  "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=1200&q=80";
 
 const IDR_PER_USD = 16500;
 const IDR_PER_AUD = 12072;
-
-const DUMMY_CARS: CarItem[] = [
-  {
-    id: "car-001",
-    slug: "toyota-fortuner-vrz-2023",
-    kodeListing: "CAR-TTM-001",
-    postedDate: "16 Apr 2026",
-    title: "Toyota Fortuner VRZ 2023",
-    description:
-      "A premium SUV in excellent condition with a strong diesel engine, bold exterior styling, and a spacious interior suitable for family mobility or business use.\n\nVehicle details:\nYear: 2023\nTransmission: Automatic\nFuel: Diesel\nMileage: 18.000 km\nBody Type: SUV\nColor: Black\nEngine: 2.8L\nCondition: Excellent",
-    descriptionEn:
-      "A premium SUV in excellent condition with a strong diesel engine, bold exterior styling, and a spacious interior suitable for family mobility or business use.\n\nVehicle details:\nYear: 2023\nTransmission: Automatic\nFuel: Diesel\nMileage: 18,000 km\nBody Type: SUV\nColor: Black\nEngine: 2.8L\nCondition: Excellent",
-    priceValue: 685000000,
-    province: "DKI Jakarta",
-    area: "Jakarta Selatan",
-    year: "2023",
-    transmission: "Automatic",
-    fuel: "Diesel",
-    mileage: "18.000 km",
-    bodyType: "SUV",
-    color: "Black",
-    engine: "2.8L",
-    condition: "Excellent",
-    marketType: "Secondary",
-    sellerName: "Tetamo Auto Partner",
-    agency: "Tetamo Auto Network",
-    phone: "081234567890",
-    whatsapp: "6281234567890",
-    email: "partner@tetamo.com",
-    photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
-    images: [
-      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1200&q=80",
-    ],
-    videoUrl: "",
-    spotlight: true,
-    featured: false,
-    boosted: false,
-    verifiedListing: true,
-    ownerApproved: false,
-    dealerVerified: true,
-    postedByType: "dealer",
-    instagramUrl: "https://instagram.com/tetamo",
-    facebookUrl: "https://facebook.com/tetamo",
-    tiktokUrl: "https://tiktok.com/@tetamo",
-    youtubeUrl: "",
-    linkedinUrl: "https://linkedin.com/company/tetamo",
-  },
-  {
-    id: "car-002",
-    slug: "honda-hrv-se-2022",
-    kodeListing: "CAR-TTM-002",
-    postedDate: "15 Apr 2026",
-    title: "Honda HR-V SE 2022",
-    description:
-      "A stylish crossover with efficient petrol consumption, a clean interior setup, and a practical cabin layout ideal for daily city use.\n\nVehicle details:\nYear: 2022\nTransmission: Automatic\nFuel: Petrol\nMileage: 24.000 km\nBody Type: SUV\nColor: White\nEngine: 1.5L\nCondition: Very Good",
-    descriptionEn:
-      "A stylish crossover with efficient petrol consumption, a clean interior setup, and a practical cabin layout ideal for daily city use.\n\nVehicle details:\nYear: 2022\nTransmission: Automatic\nFuel: Petrol\nMileage: 24,000 km\nBody Type: SUV\nColor: White\nEngine: 1.5L\nCondition: Very Good",
-    priceValue: 382000000,
-    province: "Jawa Barat",
-    area: "Bandung",
-    year: "2022",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    mileage: "24.000 km",
-    bodyType: "SUV",
-    color: "White",
-    engine: "1.5L",
-    condition: "Very Good",
-    marketType: "Secondary",
-    sellerName: "Rama Pratama",
-    agency: "",
-    phone: "081234567891",
-    whatsapp: "6281234567891",
-    email: "rama@example.com",
-    photo: FALLBACK_POSTER_PHOTO,
-    images: [
-      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80",
-    ],
-    videoUrl: "",
-    spotlight: false,
-    featured: true,
-    boosted: false,
-    verifiedListing: true,
-    ownerApproved: true,
-    dealerVerified: false,
-    postedByType: "owner",
-    instagramUrl: "",
-    facebookUrl: "",
-    tiktokUrl: "",
-    youtubeUrl: "",
-    linkedinUrl: "",
-  },
-  {
-    id: "car-003",
-    slug: "bmw-320i-sport-2021",
-    kodeListing: "CAR-TTM-003",
-    postedDate: "14 Apr 2026",
-    title: "BMW 320i Sport 2021",
-    description:
-      "A sporty executive sedan with refined handling, clean premium cabin lines, and a powerful brand presence for buyers seeking a more elevated driving experience.",
-    descriptionEn:
-      "A sporty executive sedan with refined handling, clean premium cabin lines, and a powerful brand presence for buyers seeking a more elevated driving experience.",
-    priceValue: 799000000,
-    province: "Jawa Timur",
-    area: "Surabaya",
-    year: "2021",
-    transmission: "Automatic",
-    fuel: "Petrol",
-    mileage: "21.500 km",
-    bodyType: "Sedan",
-    color: "Blue",
-    engine: "2.0L",
-    condition: "Excellent",
-    marketType: "Secondary",
-    sellerName: "Luxury Wheels ID",
-    agency: "Luxury Wheels Indonesia",
-    phone: "081234567892",
-    whatsapp: "6281234567892",
-    email: "sales@luxurywheels.id",
-    photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=600&q=80",
-    images: [
-      "https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80",
-    ],
-    videoUrl: "",
-    spotlight: false,
-    featured: false,
-    boosted: true,
-    verifiedListing: true,
-    ownerApproved: false,
-    dealerVerified: true,
-    postedByType: "dealer",
-    instagramUrl: "https://instagram.com/tetamo",
-    facebookUrl: "",
-    tiktokUrl: "",
-    youtubeUrl: "",
-    linkedinUrl: "",
-  },
-  {
-    id: "car-004",
-    slug: "hyundai-ioniq-5-prime-2024",
-    kodeListing: "CAR-TTM-004",
-    postedDate: "13 Apr 2026",
-    title: "Hyundai Ioniq 5 Prime 2024",
-    description:
-      "A futuristic EV with a quiet drive, spacious modern interior, and a clean minimalist look for buyers moving toward an electric lifestyle.",
-    descriptionEn:
-      "A futuristic EV with a quiet drive, spacious modern interior, and a clean minimalist look for buyers moving toward an electric lifestyle.",
-    priceValue: 845000000,
-    province: "Banten",
-    area: "BSD City",
-    year: "2024",
-    transmission: "Automatic",
-    fuel: "Electric",
-    mileage: "6.000 km",
-    bodyType: "EV",
-    color: "Silver",
-    engine: "Electric",
-    condition: "Excellent",
-    marketType: "Secondary",
-    sellerName: "Angelina Hartono",
-    agency: "",
-    phone: "081234567893",
-    whatsapp: "6281234567893",
-    email: "angelina@example.com",
-    photo: FALLBACK_POSTER_PHOTO,
-    images: [
-      "https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1486496572940-2bb2341fdbdf?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?auto=format&fit=crop&w=1200&q=80",
-    ],
-    videoUrl: "",
-    spotlight: false,
-    featured: false,
-    boosted: false,
-    verifiedListing: true,
-    ownerApproved: true,
-    dealerVerified: false,
-    postedByType: "owner",
-    instagramUrl: "",
-    facebookUrl: "",
-    tiktokUrl: "",
-    youtubeUrl: "",
-    linkedinUrl: "",
-  },
-];
 
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
@@ -331,6 +141,19 @@ function normalizeExternalUrl(url?: string | null) {
   return `https://${trimmed}`;
 }
 
+function normalizePhone(value?: string | null) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("62")) return digits;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  if (digits.startsWith("8")) return `62${digits}`;
+  return digits;
+}
+
+function dedupeImages(images: string[]) {
+  return Array.from(new Set(images.filter(Boolean)));
+}
+
 function getCarHref(car: { slug?: string | null; id: string }) {
   return `/vehicles/car/${car.slug || car.id}`;
 }
@@ -344,7 +167,6 @@ function getSellerLabel(
     if (postedByType === "agent") return "Agen";
     return "Pemilik";
   }
-
   if (postedByType === "dealer") return "Dealer";
   if (postedByType === "agent") return "Agent";
   return "Owner";
@@ -352,18 +174,169 @@ function getSellerLabel(
 
 function translateTransmission(value: string, lang: string) {
   const v = value.toLowerCase();
-  if (v === "automatic") return lang === "id" ? "Automatic" : "Automatic";
-  if (v === "manual") return lang === "id" ? "Manual" : "Manual";
-  return value;
+  if (v === "automatic") return "Automatic";
+  if (v === "manual") return "Manual";
+  if (v === "cvt") return "CVT";
+  return value || "-";
 }
 
 function translateFuel(value: string, lang: string) {
   const v = value.toLowerCase();
   if (v === "petrol") return lang === "id" ? "Bensin" : "Petrol";
-  if (v === "diesel") return lang === "id" ? "Diesel" : "Diesel";
+  if (v === "diesel") return "Diesel";
   if (v === "electric") return lang === "id" ? "Listrik" : "Electric";
-  if (v === "hybrid") return lang === "id" ? "Hybrid" : "Hybrid";
-  return value;
+  if (v === "hybrid") return "Hybrid";
+  return value || "-";
+}
+
+function mapPostedByType(source?: string | null) {
+  const v = String(source || "").toLowerCase();
+  if (v === "owner") return "owner" as const;
+  if (v === "agent") return "agent" as const;
+  return "dealer" as const;
+}
+
+function mapBodyType(row: RawRow) {
+  return String(
+    row?.body_type ||
+      row?.bodyType ||
+      row?.vehicle_body_type ||
+      row?.category ||
+      ""
+  ).trim();
+}
+
+function formatPostedDate(value?: string | null, lang: string = "en") {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(d);
+}
+
+function getProfileName(profile?: RawProfile | null) {
+  return (
+    String(
+      profile?.full_name ||
+        profile?.name ||
+        profile?.display_name ||
+        profile?.company_name ||
+        ""
+    ).trim() || ""
+  );
+}
+
+function getProfileAgency(profile?: RawProfile | null) {
+  return (
+    String(
+      profile?.agency ||
+        profile?.agency_name ||
+        profile?.company ||
+        profile?.company_name ||
+        ""
+    ).trim() || ""
+  );
+}
+
+function getProfileWhatsapp(profile?: RawProfile | null) {
+  return normalizePhone(
+    profile?.whatsapp ||
+      profile?.whatsapp_number ||
+      profile?.phone ||
+      profile?.phone_number ||
+      ""
+  );
+}
+
+function getProfileEmail(profile?: RawProfile | null) {
+  return String(profile?.email || "").trim();
+}
+
+function getProfilePhoto(profile?: RawProfile | null) {
+  return (
+    String(profile?.photo_url || profile?.avatar_url || profile?.photo || "").trim() ||
+    FALLBACK_POSTER_PHOTO
+  );
+}
+
+function mapRawToCarItem(
+  row: RawRow,
+  profile: RawProfile | null,
+  photoUrls: string[],
+  videoUrl: string,
+  lang: string
+): CarItem {
+  const postedByType = mapPostedByType(row?.source || row?.role_snapshot);
+  const approved = String(row?.approval_status || "").toLowerCase() === "approved";
+
+  const sellerName =
+    getProfileName(profile) ||
+    (postedByType === "owner"
+      ? lang === "id"
+        ? "Pemilik Kendaraan"
+        : "Vehicle Owner"
+      : postedByType === "agent"
+        ? lang === "id"
+          ? "Agen Kendaraan"
+          : "Vehicle Agent"
+        : lang === "id"
+          ? "Partner Kendaraan"
+          : "Vehicle Partner");
+
+  return {
+    id: String(row?.id || ""),
+    slug: String(row?.slug || row?.id || ""),
+    kodeListing: String(row?.kode || row?.listing_code || "-"),
+    postedDate: formatPostedDate(row?.created_at, lang),
+    title: String(row?.title || "-"),
+    description: String(row?.description || ""),
+    descriptionEn: String(row?.description_en || row?.description || ""),
+    priceValue: Number(row?.price || 0),
+    province: String(row?.province || "-"),
+    area: String(row?.city || row?.area || "-"),
+    year: String(row?.year || "-"),
+    transmission: String(row?.transmission || "-"),
+    fuel: String(row?.fuel || "-"),
+    mileage: String(row?.mileage || row?.odometer || "-"),
+    bodyType: mapBodyType(row) || "-",
+    color: String(row?.color || "-"),
+    engine: String(row?.engine_cc || row?.engine || "-"),
+    condition: String(row?.condition || "-"),
+    marketType:
+      String(row?.listing_type || "").toLowerCase() === "disewa"
+        ? lang === "id"
+          ? "Disewa"
+          : "For Rent"
+        : lang === "id"
+          ? "Dijual"
+          : "For Sale",
+    sellerName,
+    agency: getProfileAgency(profile),
+    phone: normalizePhone(
+      profile?.phone || profile?.phone_number || row?.phone || row?.contact_phone || ""
+    ),
+    whatsapp:
+      getProfileWhatsapp(profile) ||
+      normalizePhone(row?.whatsapp || row?.phone || row?.contact_phone || ""),
+    email: getProfileEmail(profile),
+    photo: getProfilePhoto(profile),
+    images: photoUrls.length > 0 ? photoUrls : [FALLBACK_CAR_IMAGE],
+    videoUrl,
+    featured: Boolean(row?.is_featured),
+    verifiedListing: approved,
+    ownerApproved: postedByType === "owner" && approved,
+    dealerVerified: postedByType === "dealer" && approved,
+    postedByType,
+    instagramUrl: String(profile?.instagram_url || profile?.instagram || ""),
+    facebookUrl: String(profile?.facebook_url || profile?.facebook || ""),
+    tiktokUrl: String(profile?.tiktok_url || profile?.tiktok || ""),
+    youtubeUrl: String(profile?.youtube_url || profile?.youtube || ""),
+    linkedinUrl: String(profile?.linkedin_url || profile?.linkedin || ""),
+  };
 }
 
 function SocialCircle({
@@ -389,6 +362,116 @@ function SocialCircle({
   );
 }
 
+async function fetchOrderedCars() {
+  const viewResult = await supabase
+    .from("vehicle_marketplace_view")
+    .select("id,slug")
+    .eq("vehicle_type", "car")
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (!viewResult.error) {
+    return (viewResult.data || []) as Array<{ id: string; slug?: string | null }>;
+  }
+
+  const tableResult = await supabase
+    .from("vehicles")
+    .select("id,slug")
+    .eq("vehicle_type", "car")
+    .eq("approval_status", "approved")
+    .eq("listing_status", "active")
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (tableResult.error) throw tableResult.error;
+  return (tableResult.data || []) as Array<{ id: string; slug?: string | null }>;
+}
+
+async function fetchSingleCar(idOrSlug: string, lang: string) {
+  const slugKey = String(idOrSlug || "").trim();
+
+  async function fetchFromTable(tableName: "vehicle_marketplace_view" | "vehicles") {
+    const bySlug = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("vehicle_type", "car")
+      .eq("slug", slugKey)
+      .limit(1)
+      .maybeSingle();
+
+    if (!bySlug.error && bySlug.data) return bySlug.data as RawRow;
+
+    const byId = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("vehicle_type", "car")
+      .eq("id", slugKey)
+      .limit(1)
+      .maybeSingle();
+
+    if (!byId.error && byId.data) return byId.data as RawRow;
+    return null;
+  }
+
+  let row = await fetchFromTable("vehicle_marketplace_view");
+  if (!row) row = await fetchFromTable("vehicles");
+  if (!row) return null;
+
+  const vehicleId = String(row.id || "");
+
+  const mediaResult = await supabase
+    .from("vehicle_media")
+    .select("*")
+    .eq("vehicle_id", vehicleId)
+    .order("is_cover", { ascending: false })
+    .order("sort_order", { ascending: true });
+
+  const mediaRows = mediaResult.error ? [] : ((mediaResult.data || []) as RawRow[]);
+
+  const photoUrls = dedupeImages([
+    String(row?.cover_image_url || ""),
+    ...mediaRows
+      .filter((item) => String(item?.media_type || "") === "photo")
+      .map((item) => String(item?.file_url || item?.public_url || "").trim()),
+  ]);
+
+  const firstVideo =
+    mediaRows.find((item) => String(item?.media_type || "") === "video") || null;
+
+  const videoUrl = String(
+    firstVideo?.file_url || firstVideo?.public_url || row?.video_url || ""
+  ).trim();
+
+  const userIds = Array.from(
+    new Set(
+      [
+        String(row?.owner_user_id || ""),
+        String(row?.agent_user_id || ""),
+        String(row?.user_id || ""),
+      ].filter(Boolean)
+    )
+  );
+
+  let profile: RawProfile | null = null;
+  if (userIds.length > 0) {
+    const profileResult = await supabase
+      .from("profiles")
+      .select("*")
+      .in("id", userIds);
+
+    if (!profileResult.error) {
+      const profiles = (profileResult.data || []) as RawProfile[];
+      profile =
+        profiles.find((item) => String(item.id) === String(row?.owner_user_id || "")) ||
+        profiles.find((item) => String(item.id) === String(row?.agent_user_id || "")) ||
+        profiles.find((item) => String(item.id) === String(row?.user_id || "")) ||
+        null;
+    }
+  }
+
+  return mapRawToCarItem(row, profile, photoUrls, videoUrl, lang);
+}
+
 export default function CarDetailClient({ id }: { id: string }) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
@@ -396,7 +479,6 @@ export default function CarDetailClient({ id }: { id: string }) {
     currency === "AUD" ? "AUD" : currency === "USD" ? "USD" : "IDR";
 
   const router = useRouter();
-  const pathname = usePathname();
 
   const [jadwalOpen, setJadwalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
@@ -412,19 +494,48 @@ export default function CarDetailClient({ id }: { id: string }) {
   const [displayRatingCount, setDisplayRatingCount] = useState(18);
   const [displayShareCount, setDisplayShareCount] = useState(6);
 
-  const property = useMemo(
-    () => DUMMY_CARS.find((item) => item.id === id) || null,
-    [id]
-  );
+  const [loading, setLoading] = useState(true);
+  const [property, setProperty] = useState<CarItem | null>(null);
+  const [orderedCars, setOrderedCars] = useState<Array<{ id: string; slug?: string | null }>>([]);
 
-  const orderedCars = useMemo(
-    () => DUMMY_CARS.map((item) => ({ id: item.id, slug: item.slug })),
-    []
-  );
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadDetail() {
+      try {
+        setLoading(true);
+
+        const [orderList, car] = await Promise.all([
+          fetchOrderedCars(),
+          fetchSingleCar(id, lang),
+        ]);
+
+        if (ignore) return;
+
+        setOrderedCars(orderList);
+        setProperty(car);
+        setIdx(0);
+      } catch (error) {
+        console.error("Failed to load car detail:", error);
+        if (!ignore) {
+          setOrderedCars([]);
+          setProperty(null);
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadDetail();
+
+    return () => {
+      ignore = true;
+    };
+  }, [id, lang]);
 
   const propertyIndex = useMemo(
-    () => orderedCars.findIndex((x) => x.id === id),
-    [orderedCars, id]
+    () => orderedCars.findIndex((x) => x.id === property?.id),
+    [orderedCars, property?.id]
   );
 
   const prevProperty =
@@ -433,10 +544,6 @@ export default function CarDetailClient({ id }: { id: string }) {
     propertyIndex >= 0 && propertyIndex < orderedCars.length - 1
       ? orderedCars[propertyIndex + 1]
       : null;
-
-  useEffect(() => {
-    setIdx(0);
-  }, [id]);
 
   const nextImg = () =>
     property &&
@@ -545,6 +652,15 @@ export default function CarDetailClient({ id }: { id: string }) {
   function handleWhatsAppClick() {
     if (!property) return;
 
+    if (!property.whatsapp) {
+      alert(
+        lang === "id"
+          ? "Nomor WhatsApp penjual belum tersedia."
+          : "The seller WhatsApp number is not available yet."
+      );
+      return;
+    }
+
     const message =
       lang === "id"
         ? `Halo ${property.sellerName}, saya tertarik dengan mobil ini di TETAMO.
@@ -571,20 +687,63 @@ Is this unit still available?`;
     window.open(whatsappURL, "_blank");
   }
 
-  function handleTestDriveRequest() {
+  async function handleTestDriveRequest() {
     if (!property || !selectedDate || !selectedTime) return;
 
-    const sellerLabel = getSellerLabel(property.postedByType, lang);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    alert(
-      lang === "id"
-        ? `Permintaan test drive berhasil dikirim. ${sellerLabel} akan menghubungi Anda untuk konfirmasi.`
-        : `Test drive request sent successfully. The ${sellerLabel.toLowerCase()} will contact you for confirmation.`
+      if (!user) {
+        router.push(`/login?next=${encodeURIComponent(getCarHref(property))}`);
+        return;
+      }
+
+      const requestedAt = new Date(`${selectedDate}T${selectedTime}:00`);
+
+      const { error } = await supabase.from("vehicle_viewings").insert({
+        vehicle_id: property.id,
+        requester_user_id: user.id,
+        viewing_type: "test_drive",
+        requested_at: requestedAt.toISOString(),
+        status: "pending",
+        note: `Requested from car detail page ${property.kodeListing}`,
+      });
+
+      if (error) throw error;
+
+      const sellerLabel = getSellerLabel(property.postedByType, lang);
+
+      alert(
+        lang === "id"
+          ? `Permintaan test drive berhasil dikirim. ${sellerLabel} akan menghubungi Anda untuk konfirmasi.`
+          : `Test drive request sent successfully. The ${sellerLabel.toLowerCase()} will contact you for confirmation.`
+      );
+
+      setJadwalOpen(false);
+      setSelectedDate("");
+      setSelectedTime("");
+    } catch (error) {
+      console.error("Failed to create test drive request:", error);
+      alert(
+        lang === "id"
+          ? "Terjadi kendala saat mengirim permintaan test drive."
+          : "Something went wrong while sending the test drive request."
+      );
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-white text-gray-900">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
+          <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:text-base">
+            {lang === "id" ? "Memuat detail mobil..." : "Loading car detail..."}
+          </div>
+        </div>
+      </main>
     );
-
-    setJadwalOpen(false);
-    setSelectedDate("");
-    setSelectedTime("");
   }
 
   if (!property) {
@@ -753,41 +912,27 @@ Is this unit still available?`;
             <div className="relative overflow-hidden rounded-[28px]">
               <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-24px)] flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  {property.spotlight && (
-                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1C1C1E] shadow-[0_6px_18px_rgba(0,0,0,0.12)] backdrop-blur-sm sm:text-[11px]">
-                      <Gem size={13} className="text-[#00CFE8]" />
-                      SPOTLIGHT
-                    </span>
-                  )}
-
-                  {property.featured && (
-                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#B8860B] shadow-md sm:text-[11px]">
+                  {property.featured ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#B8860B] shadow-md sm:text-[11px]">
                       <Crown size={13} className="text-[#FFD700]" />
                       FEATURED
                     </span>
-                  )}
-
-                  {property.boosted && !property.featured && !property.spotlight && (
-                    <span className="inline-flex w-fit items-center gap-1 rounded-full border border-slate-200 bg-white/95 px-2.5 py-1 text-[10px] font-bold text-slate-700 shadow-md sm:text-[11px]">
-                      <Zap size={13} className="text-[#F59E0B]" />
-                      BOOST
-                    </span>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   {property.dealerVerified ? (
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#B8860B] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
                       <BadgeCheck size={11} strokeWidth={2.5} />
                       {lang === "id" ? "Dealer Terverifikasi" : "Verified Dealer"}
                     </span>
                   ) : property.ownerApproved ? (
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm sm:text-[11px]">
                       <ShieldCheck size={11} strokeWidth={2.5} />
                       {lang === "id" ? "Pemilik Terverifikasi" : "Verified Owner"}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#1C1C1E]/20 bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-gray-900 shadow-sm sm:text-[11px]">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[#1C1C1E]/20 bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-gray-900 shadow-sm sm:text-[11px]">
                       <Clock size={11} strokeWidth={2.5} />
                       {lang === "id"
                         ? "Menunggu Verifikasi"
@@ -807,7 +952,6 @@ Is this unit still available?`;
                 type="button"
                 onClick={prevImg}
                 className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-                aria-label="Previous image"
               >
                 ‹
               </button>
@@ -816,7 +960,6 @@ Is this unit still available?`;
                 type="button"
                 onClick={nextImg}
                 className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-                aria-label="Next image"
               >
                 ›
               </button>
@@ -862,7 +1005,7 @@ Is this unit still available?`;
             <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 sm:text-xs">
-                  {lang === "id" ? "Dijual" : "For Sale"}
+                  {property.marketType}
                 </span>
 
                 <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-700 sm:text-xs">
@@ -915,7 +1058,7 @@ Is this unit still available?`;
                   onClick={openJadwal}
                   className="rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
                 >
-                  {lang === "id" ? "Schedule Test Drive" : "Schedule Test Drive"}
+                  {lang === "id" ? "Jadwal Test Drive" : "Schedule Test Drive"}
                 </button>
               </div>
 
@@ -993,8 +1136,6 @@ Is this unit still available?`;
                         ? "text-amber-500"
                         : "text-gray-300 hover:text-amber-400"
                     }`}
-                    aria-label={`Rate ${value}`}
-                    title={`Rate ${value}`}
                   >
                     <Star
                       className="h-3.5 w-3.5"
@@ -1003,6 +1144,29 @@ Is this unit still available?`;
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {detailChips.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.key}
+                    className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 text-[#1C1C1E]" />
+                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        {item.label}
+                      </div>
+                    </div>
+
+                    <div className="mt-2 text-sm font-semibold text-[#1C1C1E]">
+                      {item.value}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
@@ -1014,21 +1178,23 @@ Is this unit still available?`;
                 />
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
-                    {getSellerLabel(property.postedByType, lang)}
-                  </p>
-                  <h2 className="mt-1 text-lg font-bold text-[#1C1C1E]">
+                  <div className="text-lg font-bold text-[#1C1C1E]">
                     {property.sellerName}
-                  </h2>
-                  {property.agency ? (
-                    <p className="text-sm text-gray-500">{property.agency}</p>
-                  ) : null}
-                  <p className="mt-1 text-sm text-gray-500">{property.email}</p>
+                  </div>
+
+                  <div className="mt-1 text-sm text-gray-500">
+                    {getSellerLabel(property.postedByType, lang)}
+                    {property.agency ? ` • ${property.agency}` : ""}
+                  </div>
+
+                  <div className="mt-2 text-sm text-gray-600">
+                    {property.area}, {property.province}
+                  </div>
                 </div>
               </div>
 
               {socialLinks.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-5 flex flex-wrap gap-2">
                   {socialLinks.map((item) => (
                     <SocialCircle
                       key={item.key}
@@ -1039,73 +1205,46 @@ Is this unit still available?`;
                   ))}
                 </div>
               ) : null}
-            </div>
-          </div>
-        </div>
 
-        <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-xl font-bold text-[#1C1C1E]">
-            {lang === "id" ? "Detail Kendaraan" : "Vehicle Details"}
-          </h2>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {detailChips.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <div
-                  key={item.key}
-                  className="rounded-2xl border border-gray-200 bg-[#FAFAFA] p-4"
+              <div className="mt-5 grid gap-3">
+                <button
+                  type="button"
+                  onClick={handleWhatsAppClick}
+                  className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#1C1C1E] shadow-sm">
-                      <Icon className="h-5 w-5" />
-                    </div>
+                  WhatsApp
+                </button>
 
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
-                        {item.label}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                        {item.value}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-xl font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Deskripsi" : "Description"}
-            </h2>
-
-            <div className="mt-4 space-y-4 text-sm leading-7 text-gray-600 sm:text-base">
-              {activeDescription.split("\n").map((paragraph, index) =>
-                paragraph.trim() ? <p key={index}>{paragraph}</p> : null
-              )}
+                {property.email ? (
+                  <a
+                    href={`mailto:${property.email}`}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                  >
+                    Email
+                  </a>
+                ) : null}
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-xl font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Catatan" : "Notes"}
-            </h2>
+            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="text-lg font-bold text-[#1C1C1E]">
+                {lang === "id" ? "Deskripsi" : "Description"}
+              </div>
 
-            <div className="mt-4 space-y-3 text-sm leading-7 text-gray-600">
-              <p>
-                {lang === "id"
-                  ? "Ini adalah halaman detail mobil dummy yang mengikuti gaya UI halaman detail properti Tetamo."
-                  : "This is a dummy car detail page following the Tetamo property detail page UI style."}
-              </p>
-              <p>
-                {lang === "id"
-                  ? "Nanti bagian ini bisa dihubungkan ke Supabase, lead form, dealer profiles, dan test drive flow yang real."
-                  : "Later this can be connected to Supabase, real lead forms, dealer profiles, and a real test drive flow."}
-              </p>
+              <div className="mt-4 space-y-3 text-sm leading-7 text-gray-600">
+                {activeDescription
+                  ? activeDescription
+                      .split("\n")
+                      .filter(Boolean)
+                      .map((line, index) => <p key={index}>{line}</p>)
+                  : (
+                    <p>
+                      {lang === "id"
+                        ? "Deskripsi belum tersedia."
+                        : "Description is not available yet."}
+                    </p>
+                  )}
+              </div>
             </div>
           </div>
         </div>
@@ -1170,7 +1309,7 @@ Is this unit still available?`;
                 type="button"
                 onClick={handleTestDriveRequest}
                 disabled={!selectedDate || !selectedTime}
-                className="rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {lang === "id"
                   ? "Kirim Permintaan Test Drive"
