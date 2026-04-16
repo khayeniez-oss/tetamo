@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,11 +20,23 @@ import {
   Shield,
   BadgeDollarSign,
   Bell,
+  Home,
+  CarFront,
+  Bike,
+  Scissors,
+  Sparkles,
+  Hand,
 } from "lucide-react";
 
 type ProfileData = {
   full_name: string | null;
   role: string | null;
+};
+
+type MenuItem = {
+  label: string;
+  href: string;
+  icon: ComponentType<{ className?: string }>;
 };
 
 const NOTIFICATIONS_HREF = "/notifications";
@@ -119,6 +131,57 @@ function MobileNotificationButton({
   );
 }
 
+function DesktopDropdown({
+  label,
+  items,
+  isOpen,
+  onToggle,
+  onNavigate,
+}: {
+  label: string;
+  items: MenuItem[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="inline-flex items-center gap-1 text-[15px] font-medium text-[#2C2C2E] transition hover:text-black"
+      >
+        <span>{label}</span>
+        <ChevronDown
+          className={`h-4 w-4 transition ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 top-[calc(100%+12px)] min-w-[240px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+          {items.map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={`${label}-${item.href}`}
+                href={item.href}
+                onClick={onNavigate}
+                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+              >
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-[#FAFAFA] text-[#1C1C1E]">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Navbar() {
   const router = useRouter();
   const { lang, setLang } = useLanguage();
@@ -128,13 +191,26 @@ export default function Navbar() {
 
   const t = {
     brandTagline: isID
-      ? "SEMUA DALAM SATU - PUSAT PROPERTI"
-      : "ALL IN ONE - REAL ESTATE HUB",
+      ? "PROPERTI • BISNIS • GAYA HIDUP"
+      : "PROPERTY • BUSINESS • LIFESTYLE",
 
-    allProperties: isID ? "Properti" : "Properties",
+    properties: isID ? "Properti" : "Properties",
+    allProperties: isID ? "Semua Properti" : "All Properties",
     forSale: isID ? "Dijual" : "Sale",
     forRent: isID ? "Disewa" : "Rent",
+
+    vehicles: isID ? "Kendaraan" : "Vehicles",
+    car: isID ? "Mobil" : "Car",
+    motor: isID ? "Motor" : "Motor",
+
+    wellness: "Wellness",
+    hairCare: isID ? "Perawatan Rambut" : "Hair Care",
+    faceCare: isID ? "Perawatan Wajah" : "Face Care",
+    bodyCare: isID ? "Perawatan Tubuh" : "Body Care",
+    nailCare: isID ? "Perawatan Kuku" : "Nail Care",
+
     buyers: isID ? "Pembeli" : "Buyers",
+    career: isID ? "Karier" : "Career",
 
     account: isID ? "Akun" : "Account",
     loading: isID ? "Memuat..." : "Loading...",
@@ -151,6 +227,24 @@ export default function Navbar() {
     notifications: isID ? "Notifikasi" : "Notifications",
   };
 
+  const propertyItems: MenuItem[] = [
+    { label: t.allProperties, href: "/properti", icon: Building2 },
+    { label: t.forSale, href: "/properti?jenisListing=dijual", icon: BadgeDollarSign },
+    { label: t.forRent, href: "/properti?jenisListing=disewa", icon: Home },
+  ];
+
+  const vehicleItems: MenuItem[] = [
+    { label: t.car, href: "/vehicles/car", icon: CarFront },
+    { label: t.motor, href: "/vehicles/motor", icon: Bike },
+  ];
+
+  const wellnessItems: MenuItem[] = [
+    { label: t.hairCare, href: "/wellness/hair-care", icon: Scissors },
+    { label: t.faceCare, href: "/wellness/face-care", icon: Sparkles },
+    { label: t.bodyCare, href: "/wellness/body-care", icon: Sparkles },
+    { label: t.nailCare, href: "/wellness/nail-care", icon: Hand },
+  ];
+
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
@@ -163,6 +257,9 @@ export default function Navbar() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [desktopDropdownOpen, setDesktopDropdownOpen] = useState<
+    "properties" | "vehicles" | "wellness" | null
+  >(null);
 
   const desktopLangRef = useRef<HTMLDivElement | null>(null);
   const desktopCurrencyRef = useRef<HTMLDivElement | null>(null);
@@ -170,12 +267,14 @@ export default function Navbar() {
   const mobileCurrencyRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const desktopNavRef = useRef<HTMLDivElement | null>(null);
 
   function closeAllMenus() {
     setLangOpen(false);
     setCurrencyOpen(false);
     setAccountOpen(false);
     setMobileMenuOpen(false);
+    setDesktopDropdownOpen(null);
   }
 
   async function loadProfileByUserId(
@@ -330,6 +429,10 @@ export default function Navbar() {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(target)) {
         setMobileMenuOpen(false);
       }
+
+      if (desktopNavRef.current && !desktopNavRef.current.contains(target)) {
+        setDesktopDropdownOpen(null);
+      }
     }
 
     document.addEventListener("mousedown", handleOutsideClick);
@@ -358,6 +461,7 @@ export default function Navbar() {
     setNotificationCount(0);
     setAccountOpen(false);
     setMobileMenuOpen(false);
+    setDesktopDropdownOpen(null);
     router.push("/");
     router.refresh();
   }
@@ -402,28 +506,53 @@ export default function Navbar() {
             </div>
           </Link>
 
-          <div className="hidden items-center gap-6 md:flex lg:gap-10">
-            <nav className="flex items-center gap-5 text-[15px] font-medium text-[#2C2C2E] lg:gap-9">
-              <Link href="/properti" className="transition hover:text-black">
-                {t.allProperties}
-              </Link>
+          <div className="hidden items-center gap-5 md:flex lg:gap-8">
+            <nav
+              ref={desktopNavRef}
+              className="flex items-center gap-4 text-[15px] font-medium text-[#2C2C2E] lg:gap-6"
+            >
+              <DesktopDropdown
+                label={t.properties}
+                items={propertyItems}
+                isOpen={desktopDropdownOpen === "properties"}
+                onToggle={() =>
+                  setDesktopDropdownOpen((prev) =>
+                    prev === "properties" ? null : "properties"
+                  )
+                }
+                onNavigate={closeAllMenus}
+              />
 
-              <Link
-                href="/properti?jenisListing=dijual"
-                className="transition hover:text-black"
-              >
-                {t.forSale}
-              </Link>
+              <DesktopDropdown
+                label={t.vehicles}
+                items={vehicleItems}
+                isOpen={desktopDropdownOpen === "vehicles"}
+                onToggle={() =>
+                  setDesktopDropdownOpen((prev) =>
+                    prev === "vehicles" ? null : "vehicles"
+                  )
+                }
+                onNavigate={closeAllMenus}
+              />
 
-              <Link
-                href="/properti?jenisListing=disewa"
-                className="transition hover:text-black"
-              >
-                {t.forRent}
-              </Link>
+              <DesktopDropdown
+                label={t.wellness}
+                items={wellnessItems}
+                isOpen={desktopDropdownOpen === "wellness"}
+                onToggle={() =>
+                  setDesktopDropdownOpen((prev) =>
+                    prev === "wellness" ? null : "wellness"
+                  )
+                }
+                onNavigate={closeAllMenus}
+              />
 
               <Link href="/pembeli" className="transition hover:text-black">
                 {t.buyers}
+              </Link>
+
+              <Link href="/career" className="transition hover:text-black">
+                {t.career}
               </Link>
             </nav>
 
@@ -435,6 +564,7 @@ export default function Navbar() {
                     setLangOpen((prev) => !prev);
                     setCurrencyOpen(false);
                     setAccountOpen(false);
+                    setDesktopDropdownOpen(null);
                   }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
                 >
@@ -485,6 +615,7 @@ export default function Navbar() {
                     setCurrencyOpen((prev) => !prev);
                     setLangOpen(false);
                     setAccountOpen(false);
+                    setDesktopDropdownOpen(null);
                   }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
                 >
@@ -556,6 +687,7 @@ export default function Navbar() {
                     setAccountOpen((prev) => !prev);
                     setLangOpen(false);
                     setCurrencyOpen(false);
+                    setDesktopDropdownOpen(null);
                   }}
                   className="inline-flex h-12 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-4 text-[15px] font-semibold text-white transition hover:opacity-90 lg:h-14 lg:px-5"
                 >
@@ -683,6 +815,7 @@ export default function Navbar() {
                   setLangOpen(false);
                   setMobileMenuOpen(false);
                   setAccountOpen(false);
+                  setDesktopDropdownOpen(null);
                 }}
                 className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
@@ -748,6 +881,7 @@ export default function Navbar() {
                   setCurrencyOpen(false);
                   setMobileMenuOpen(false);
                   setAccountOpen(false);
+                  setDesktopDropdownOpen(null);
                 }}
                 className="inline-flex h-10 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
@@ -798,6 +932,7 @@ export default function Navbar() {
                   setLangOpen(false);
                   setCurrencyOpen(false);
                   setAccountOpen(false);
+                  setDesktopDropdownOpen(null);
                 }}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90"
                 aria-label={t.menu}
@@ -810,41 +945,102 @@ export default function Navbar() {
               </button>
 
               {mobileMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,360px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
+                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,380px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
                   <div className="p-3">
-                    <nav className="grid grid-cols-2 gap-2">
-                      <Link
-                        href="/properti"
-                        onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.allProperties}
-                      </Link>
+                    <div className="space-y-3">
+                      <div className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-3">
+                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                          {t.properties}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {propertyItems.map((item) => {
+                            const Icon = item.icon;
 
-                      <Link
-                        href="/properti?jenisListing=dijual"
-                        onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.forSale}
-                      </Link>
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={closeAllMenus}
+                                className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                              >
+                                <div className="flex flex-col items-center gap-2">
+                                  <Icon className="h-4 w-4" />
+                                  <span>{item.label}</span>
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                      <Link
-                        href="/properti?jenisListing=disewa"
-                        onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.forRent}
-                      </Link>
+                      <div className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-3">
+                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                          {t.vehicles}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {vehicleItems.map((item) => {
+                            const Icon = item.icon;
 
-                      <Link
-                        href="/pembeli"
-                        onClick={closeAllMenus}
-                        className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-                      >
-                        {t.buyers}
-                      </Link>
-                    </nav>
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={closeAllMenus}
+                                className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                              >
+                                <div className="flex flex-col items-center gap-2">
+                                  <Icon className="h-4 w-4" />
+                                  <span>{item.label}</span>
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-3">
+                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                          {t.wellness}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {wellnessItems.map((item) => {
+                            const Icon = item.icon;
+
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={closeAllMenus}
+                                className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                              >
+                                <div className="flex flex-col items-center gap-2">
+                                  <Icon className="h-4 w-4" />
+                                  <span>{item.label}</span>
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          href="/pembeli"
+                          onClick={closeAllMenus}
+                          className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          {t.buyers}
+                        </Link>
+
+                        <Link
+                          href="/career"
+                          onClick={closeAllMenus}
+                          className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          {t.career}
+                        </Link>
+                      </div>
+                    </div>
 
                     <div className="mt-3 rounded-[26px] border border-gray-200 bg-gradient-to-b from-[#fafafa] to-white p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                       {sessionLoading ? (
