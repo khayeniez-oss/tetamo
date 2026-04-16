@@ -197,6 +197,7 @@ export default function Navbar() {
     forRent: isID ? "Disewa" : "Rent",
 
     vehicles: isID ? "Kendaraan" : "Vehicles",
+    allVehicles: isID ? "Semua Kendaraan" : "All Vehicles",
     car: isID ? "Mobil" : "Car",
     motor: isID ? "Motor" : "Motor",
 
@@ -229,6 +230,7 @@ export default function Navbar() {
   ];
 
   const vehicleItems: MenuItem[] = [
+    { label: t.allVehicles, href: "/vehicles", icon: CarFront },
     { label: t.car, href: "/vehicles/car", icon: CarFront },
     { label: t.motor, href: "/vehicles/motor", icon: Bike },
   ];
@@ -953,7 +955,7 @@ export default function Navbar() {
                         <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
                           {t.vehicles}
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                           {vehicleItems.map((item) => {
                             const Icon = item.icon;
 
