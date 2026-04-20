@@ -27,6 +27,7 @@ type ExistingProperty = {
 };
 
 type BillingCycle = "monthly" | "yearly";
+type GatewayType = "stripe" | "xendit";
 
 type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
   availableBillingCycles?: BillingCycle[];
@@ -203,15 +204,15 @@ function getProductName(
   }
 
   if (product.id === "boost-listing") {
-    return lang === "id" ? "Boost Listing" : "Boost Listing";
+    return "Boost Listing";
   }
 
   if (product.id === "homepage-spotlight") {
-    return lang === "id" ? "Homepage Spotlight" : "Homepage Spotlight";
+    return "Homepage Spotlight";
   }
 
   if (product.id === "education-pass") {
-    return lang === "id" ? "Education Pass" : "Education Pass";
+    return "Education Pass";
   }
 
   return cleanProviderWords(product.name);
@@ -414,13 +415,142 @@ export default function AgentPembayaranPageClient() {
   const searchParams = useSearchParams();
   const { lang } = useLanguage();
 
-  const currentLang = lang === "id" ? "id" : "en";
+  const currentLang: "id" | "en" = lang === "id" ? "id" : "en";
 
   const flow = String(searchParams.get("flow") || "agent-membership");
   const packageFromUrl = String(searchParams.get("package") || "").toLowerCase();
   const productFromUrl = String(searchParams.get("product") || "").toLowerCase();
   const kode = String(searchParams.get("kode") || "");
   const billingFromUrl = String(searchParams.get("billing") || "").toLowerCase();
+
+  const [selectedGateway, setSelectedGateway] =
+    useState<GatewayType>("stripe");
+
+  const ui = useMemo(
+    () =>
+      currentLang === "id"
+        ? {
+            back: "← Kembali",
+            pageTitle: "Pembayaran Agen",
+            pageDescEducation:
+              "Tinjau Education Pass lalu lanjutkan ke pembayaran.",
+            pageDescDefault:
+              "Tinjau paket agen atau add-on yang dipilih lalu lanjutkan ke pembayaran.",
+            summaryEducation: "Ringkasan Education Pass",
+            summaryAddon: "Ringkasan Add-On",
+            summaryMembership: "Ringkasan Membership Agen",
+            product: "Produk",
+            package: "Paket",
+            billingType: "Tipe Tagihan",
+            activeListingLimit: "Limit Listing Aktif",
+            activePeriod: "Masa Aktif",
+            autoRenew: "Auto Renew",
+            autoRenewDefault: "Aktif secara default",
+            listingType: "Tipe Listing",
+            location: "Lokasi",
+            title: "Judul",
+            photos: "Foto",
+            photosCount: (count: number) => `${count} foto`,
+            loadingListing: "Memuat data listing...",
+            failedLoadListing: "Gagal memuat listing",
+            secureCheckout: "Aktivasi dilakukan setelah pembayaran terkonfirmasi",
+            secureCheckoutDesc:
+              "Halaman ini hanya membuat payment checkout. Paket agen, add-on, atau akses edukasi akan aktif setelah pembayaran berhasil terkonfirmasi.",
+            chooseBillingType: "Pilih Tipe Tagihan",
+            yearly: "Tahunan",
+            monthly: "Bulanan",
+            month: "bulan",
+            year: "tahun",
+            commitment: "komitmen",
+            addonAppliedTo: "Add-on ini akan diterapkan ke listing dengan kode",
+            duration: "Durasi",
+            days: "hari",
+            cardTitle: "Debit / Credit Card",
+            cardSubtitle: "Visa, Mastercard, JCB, American Express",
+            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
+            otherMethodsSubtitle:
+              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            whatYouGet: "Yang Anda Dapatkan",
+            total: "Total",
+            payNow: "Bayar Sekarang",
+            preparingPayment: "Menyiapkan Pembayaran...",
+            checkoutNote:
+              "Checkout akan dibuat otomatis saat tombol ditekan.",
+            listingCodeNotFound: "Kode listing tidak ditemukan.",
+            relogin: "Silakan login ulang.",
+            listingNotFound: "Listing tidak ditemukan.",
+            loginFirst: "Silakan login terlebih dahulu.",
+            targetListingNotFound: "Listing target tidak ditemukan.",
+            checkoutMissing: "Checkout pembayaran tidak ditemukan.",
+            createPaymentFailed: "Gagal membuat pembayaran.",
+            genericPaymentError:
+              "Terjadi kesalahan saat membuat pembayaran.",
+            soldType: "Dijual",
+            rentType: "Disewa",
+            auctionType: "Lelang",
+          }
+        : {
+            back: "← Back",
+            pageTitle: "Agent Payment",
+            pageDescEducation:
+              "Review the Education Pass, then continue to payment.",
+            pageDescDefault:
+              "Review the selected agent package or add-on, then continue to payment.",
+            summaryEducation: "Education Pass Summary",
+            summaryAddon: "Add-On Summary",
+            summaryMembership: "Agent Membership Summary",
+            product: "Product",
+            package: "Package",
+            billingType: "Billing Type",
+            activeListingLimit: "Active Listing Limit",
+            activePeriod: "Active Period",
+            autoRenew: "Auto Renew",
+            autoRenewDefault: "Enabled by default",
+            listingType: "Listing Type",
+            location: "Location",
+            title: "Title",
+            photos: "Photos",
+            photosCount: (count: number) => `${count} photos`,
+            loadingListing: "Loading listing data...",
+            failedLoadListing: "Failed to load listing",
+            secureCheckout: "Activation happens after payment is confirmed",
+            secureCheckoutDesc:
+              "This page only creates the payment checkout. Agent package, add-on, or education access will be activated after successful payment confirmation.",
+            chooseBillingType: "Choose Billing Type",
+            yearly: "Yearly",
+            monthly: "Monthly",
+            month: "month",
+            year: "year",
+            commitment: "commitment",
+            addonAppliedTo: "This add-on will be applied to listing code",
+            duration: "Duration",
+            days: "days",
+            cardTitle: "Debit / Credit Card",
+            cardSubtitle: "Visa, Mastercard, JCB, American Express",
+            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
+            otherMethodsSubtitle:
+              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            whatYouGet: "What You Get",
+            total: "Total",
+            payNow: "Pay Now",
+            preparingPayment: "Preparing Payment...",
+            checkoutNote:
+              "Checkout will be created automatically when you click the button.",
+            listingCodeNotFound: "Listing code was not found.",
+            relogin: "Please log in again.",
+            listingNotFound: "Listing was not found.",
+            loginFirst: "Please log in first.",
+            targetListingNotFound: "Target listing was not found.",
+            checkoutMissing: "Payment checkout was not found.",
+            createPaymentFailed: "Failed to create payment.",
+            genericPaymentError:
+              "Something went wrong while creating payment.",
+            soldType: "For Sale",
+            rentType: "For Rent",
+            auctionType: "Auction",
+          },
+    [currentLang]
+  );
 
   const sortedAgentPackages = useMemo(() => {
     return ([...AGENT_PACKAGES] as AgentPackageUI[]).sort(
@@ -510,11 +640,7 @@ export default function AgentPembayaranPageClient() {
 
       if (!kode) {
         setLoadingExistingProperty(false);
-        setExistingPropertyError(
-          currentLang === "id"
-            ? "Kode listing tidak ditemukan."
-            : "Listing code was not found."
-        );
+        setExistingPropertyError(ui.listingCodeNotFound);
         return;
       }
 
@@ -529,11 +655,7 @@ export default function AgentPembayaranPageClient() {
       if (authError || !user) {
         if (!ignore) {
           setLoadingExistingProperty(false);
-          setExistingPropertyError(
-            currentLang === "id"
-              ? "Silakan login ulang."
-              : "Please login again."
-          );
+          setExistingPropertyError(ui.relogin);
         }
         return;
       }
@@ -560,12 +682,7 @@ export default function AgentPembayaranPageClient() {
       if (error || !data) {
         setExistingProperty(null);
         setLoadingExistingProperty(false);
-        setExistingPropertyError(
-          error?.message ||
-            (currentLang === "id"
-              ? "Listing tidak ditemukan."
-              : "Listing was not found.")
-        );
+        setExistingPropertyError(error?.message || ui.listingNotFound);
         return;
       }
 
@@ -578,7 +695,13 @@ export default function AgentPembayaranPageClient() {
     return () => {
       ignore = true;
     };
-  }, [needsExistingProperty, kode, currentLang]);
+  }, [
+    needsExistingProperty,
+    kode,
+    ui.listingCodeNotFound,
+    ui.relogin,
+    ui.listingNotFound,
+  ]);
 
   const total = useMemo(() => {
     if (!selectedProduct) return 0;
@@ -658,17 +781,17 @@ export default function AgentPembayaranPageClient() {
     const lt = String(existingProperty?.listing_type || "").toLowerCase();
 
     if (currentLang === "id") {
-      if (lt === "dijual") return "Dijual";
-      if (lt === "disewa") return "Disewa";
-      if (lt === "lelang") return "Lelang";
+      if (lt === "dijual") return ui.soldType;
+      if (lt === "disewa") return ui.rentType;
+      if (lt === "lelang") return ui.auctionType;
       return "-";
     }
 
-    if (lt === "dijual") return "For Sale";
-    if (lt === "disewa") return "For Rent";
-    if (lt === "lelang") return "Auction";
+    if (lt === "dijual") return ui.soldType;
+    if (lt === "disewa") return ui.rentType;
+    if (lt === "lelang") return ui.auctionType;
     return "-";
-  }, [existingProperty, currentLang]);
+  }, [existingProperty, currentLang, ui.soldType, ui.rentType, ui.auctionType]);
 
   const lokasiLabel = useMemo(() => {
     const prov = String(existingProperty?.province || "").trim();
@@ -731,21 +854,13 @@ export default function AgentPembayaranPageClient() {
       } = await supabase.auth.getUser();
 
       if (authError || !user) {
-        alert(
-          currentLang === "id"
-            ? "Silakan login terlebih dahulu."
-            : "Please log in first."
-        );
+        alert(ui.loginFirst);
         router.push("/login");
         return;
       }
 
       if (needsExistingProperty && !existingProperty?.id) {
-        alert(
-          currentLang === "id"
-            ? "Listing target tidak ditemukan."
-            : "Target listing was not found."
-        );
+        alert(ui.targetListingNotFound);
         return;
       }
 
@@ -783,7 +898,7 @@ export default function AgentPembayaranPageClient() {
         autoRenew: Boolean(selectedProduct.autoRenewDefault ?? true),
         status: "pending",
         paymentMethod: "card",
-        gateway: "stripe",
+        gateway: selectedGateway,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         metadata: {
@@ -854,33 +969,29 @@ export default function AgentPembayaranPageClient() {
       const data = await res.json();
 
       if (!res.ok || !data?.success) {
-        alert(
-          data?.message ||
-            (currentLang === "id"
-              ? "Gagal membuat pembayaran."
-              : "Failed to create payment.")
-        );
+        alert(data?.message || ui.createPaymentFailed);
         return;
       }
 
-      if (data?.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+      const checkoutUrl =
+        data?.checkoutUrl ||
+        data?.checkout_url ||
+        data?.url ||
+        data?.sessionUrl ||
+        data?.session_url ||
+        data?.data?.checkoutUrl ||
+        data?.data?.checkout_url ||
+        data?.data?.url;
+
+      if (checkoutUrl) {
+        window.location.assign(checkoutUrl);
         return;
       }
 
-      alert(
-        currentLang === "id"
-          ? "Checkout pembayaran tidak ditemukan."
-          : "Payment checkout was not found."
-      );
+      alert(ui.checkoutMissing);
     } catch (error: any) {
       console.error("agent onPay error:", error);
-      alert(
-        error?.message ||
-          (currentLang === "id"
-            ? "Terjadi kesalahan saat membuat pembayaran."
-            : "Something went wrong while creating payment.")
-      );
+      alert(error?.message || ui.genericPaymentError);
     } finally {
       setSubmitting(false);
     }
@@ -892,83 +1003,61 @@ export default function AgentPembayaranPageClient() {
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           onClick={onBack}
           className="text-sm text-gray-600 hover:text-gray-900"
           type="button"
         >
-          ← {currentLang === "id" ? "Kembali" : "Back"}
+          {ui.back}
         </button>
 
         <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
-          {currentLang === "id" ? "Pembayaran Agen" : "Agent Payment"}
+          {ui.pageTitle}
         </h1>
 
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
-          {isEducation
-            ? currentLang === "id"
-              ? "Tinjau Education Pass lalu lanjutkan ke pembayaran."
-              : "Review the Education Pass, then continue to payment."
-            : currentLang === "id"
-            ? "Tinjau paket agen atau add-on yang dipilih lalu lanjutkan ke pembayaran."
-            : "Review the selected agent package or add-on, then continue to payment."}
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
+          {isEducation ? ui.pageDescEducation : ui.pageDescDefault}
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
           <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:col-span-2">
             <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
               {isEducation
-                ? currentLang === "id"
-                  ? "Ringkasan Education Pass"
-                  : "Education Pass Summary"
+                ? ui.summaryEducation
                 : isAddon
-                ? currentLang === "id"
-                  ? "Ringkasan Add-On"
-                  : "Add-On Summary"
-                : currentLang === "id"
-                ? "Ringkasan Membership Agen"
-                : "Agent Membership Summary"}
+                ? ui.summaryAddon
+                : ui.summaryMembership}
             </h2>
 
             {isAddon ? (
               <>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">
-                      {currentLang === "id" ? "Tipe Listing" : "Listing Type"}
-                    </div>
+                    <div className="text-xs text-gray-500">{ui.listingType}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {listingTypeLabel}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">
-                      {currentLang === "id" ? "Lokasi" : "Location"}
-                    </div>
+                    <div className="text-xs text-gray-500">{ui.location}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {lokasiLabel}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">
-                      {currentLang === "id" ? "Judul" : "Title"}
-                    </div>
+                    <div className="text-xs text-gray-500">{ui.title}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {judulLabel}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 p-4">
-                    <div className="text-xs text-gray-500">
-                      {currentLang === "id" ? "Foto" : "Photos"}
-                    </div>
+                    <div className="text-xs text-gray-500">{ui.photos}</div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
-                      {currentLang === "id"
-                        ? `${fotoCount} foto`
-                        : `${fotoCount} photos`}
+                      {ui.photosCount(fotoCount)}
                     </div>
                   </div>
                 </div>
@@ -976,9 +1065,7 @@ export default function AgentPembayaranPageClient() {
                 {loadingExistingProperty ? (
                   <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                     <div className="text-sm text-gray-600">
-                      {currentLang === "id"
-                        ? "Memuat data listing..."
-                        : "Loading listing data..."}
+                      {ui.loadingListing}
                     </div>
                   </div>
                 ) : null}
@@ -986,9 +1073,7 @@ export default function AgentPembayaranPageClient() {
                 {existingPropertyError ? (
                   <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:mt-5">
                     <div className="text-sm font-semibold text-red-700 sm:text-base">
-                      {currentLang === "id"
-                        ? "Gagal memuat listing"
-                        : "Failed to load listing"}
+                      {ui.failedLoadListing}
                     </div>
                     <div className="mt-1 text-sm text-red-600">
                       {existingPropertyError}
@@ -1000,13 +1085,7 @@ export default function AgentPembayaranPageClient() {
               <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">
-                    {isEducation
-                      ? currentLang === "id"
-                        ? "Produk"
-                        : "Product"
-                      : currentLang === "id"
-                      ? "Paket"
-                      : "Package"}
+                    {isEducation ? ui.product : ui.package}
                   </div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {selectedProduct?.name ?? "-"}
@@ -1014,9 +1093,7 @@ export default function AgentPembayaranPageClient() {
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Tipe Tagihan" : "Billing Type"}
-                  </div>
+                  <div className="text-xs text-gray-500">{ui.billingType}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {isMembershipProduct(selectedProduct)
                       ? getBillingCycleLabel(selectedBillingCycle, currentLang)
@@ -1027,9 +1104,7 @@ export default function AgentPembayaranPageClient() {
                 {isMembershipProduct(selectedProduct) ? (
                   <div className="rounded-2xl border border-gray-200 p-4">
                     <div className="text-xs text-gray-500">
-                      {currentLang === "id"
-                        ? "Limit Listing Aktif"
-                        : "Active Listing Limit"}
+                      {ui.activeListingLimit}
                     </div>
                     <div className="mt-1 text-sm font-semibold sm:text-base">
                       {listingLimit > 0
@@ -1042,20 +1117,16 @@ export default function AgentPembayaranPageClient() {
                 ) : null}
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Masa Aktif" : "Active Period"}
-                  </div>
+                  <div className="text-xs text-gray-500">{ui.activePeriod}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {resolvedDurationLabel}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">Auto Renew</div>
+                  <div className="text-xs text-gray-500">{ui.autoRenew}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {currentLang === "id"
-                      ? "Aktif secara default"
-                      : "Enabled by default"}
+                    {ui.autoRenewDefault}
                   </div>
                 </div>
               </div>
@@ -1063,14 +1134,10 @@ export default function AgentPembayaranPageClient() {
 
             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:mt-5">
               <div className="text-sm font-semibold text-blue-700 sm:text-base">
-                {currentLang === "id"
-                  ? "Checkout pembayaran aman"
-                  : "Secure payment checkout"}
+                {ui.secureCheckout}
               </div>
               <div className="mt-1 text-sm leading-6 text-blue-700">
-                {currentLang === "id"
-                  ? "Setelah pembayaran berhasil, sistem akan mengaktifkan paket agen dan mencatat invoice/receipt secara otomatis."
-                  : "After successful payment, the system will activate the agent package and record the invoice/receipt automatically."}
+                {ui.secureCheckoutDesc}
               </div>
             </div>
           </div>
@@ -1087,9 +1154,7 @@ export default function AgentPembayaranPageClient() {
             {isMembershipProduct(selectedProduct) ? (
               <div className="mt-4">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
-                  {currentLang === "id"
-                    ? "Pilih Tipe Tagihan"
-                    : "Choose Billing Type"}
+                  {ui.chooseBillingType}
                 </div>
 
                 <div className="mt-3 grid grid-cols-1 gap-3">
@@ -1104,9 +1169,7 @@ export default function AgentPembayaranPageClient() {
                           : "border-gray-200 bg-white text-[#1C1C1E]",
                       ].join(" ")}
                     >
-                      <div className="font-semibold">
-                        {currentLang === "id" ? "Tahunan" : "Yearly"}
-                      </div>
+                      <div className="font-semibold">{ui.yearly}</div>
                       <div className="mt-1 text-xs opacity-80">
                         {money(selectedProduct.priceIdr)}
                       </div>
@@ -1124,18 +1187,12 @@ export default function AgentPembayaranPageClient() {
                           : "border-gray-200 bg-white text-[#1C1C1E]",
                       ].join(" ")}
                     >
-                      <div className="font-semibold">
-                        {currentLang === "id" ? "Bulanan" : "Monthly"}
-                      </div>
+                      <div className="font-semibold">{ui.monthly}</div>
                       <div className="mt-1 text-xs opacity-80">
                         {money(getMembershipTotal(selectedProduct, "monthly"))}
-                        {currentLang === "id"
-                          ? ` / bulan • komitmen ${
-                              selectedProduct.monthlyCommitmentMonths ?? 12
-                            } bulan`
-                          : ` / month • ${
-                              selectedProduct.monthlyCommitmentMonths ?? 12
-                            }-month commitment`}
+                        {` / ${ui.month} • ${ui.commitment} ${
+                          selectedProduct.monthlyCommitmentMonths ?? 12
+                        } ${ui.month}`}
                       </div>
                     </button>
                   ) : null}
@@ -1145,9 +1202,7 @@ export default function AgentPembayaranPageClient() {
 
             {isAddon ? (
               <p className="mt-4 text-sm leading-6 text-gray-600">
-                {currentLang === "id"
-                  ? "Add-on ini akan diterapkan ke listing dengan kode "
-                  : "This add-on will be applied to listing code "}
+                {ui.addonAppliedTo}{" "}
                 <span className="font-semibold">
                   {finalKodeForDisplay(existingProperty?.kode, kode)}
                 </span>
@@ -1175,26 +1230,49 @@ export default function AgentPembayaranPageClient() {
               </div>
 
               <div className="mt-4 text-sm text-gray-700">
-                <span className="font-semibold">
-                  {currentLang === "id" ? "Durasi:" : "Duration:"}
-                </span>{" "}
+                <span className="font-semibold">{ui.duration}:</span>{" "}
                 {resolvedDurationLabel}
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-[#1C1C1E] bg-black px-4 py-3 text-left text-sm text-white">
-              <div className="font-semibold">Debit / Credit Card</div>
-              <div className="mt-1 text-xs opacity-80">
-                {currentLang === "id"
-                  ? "QRIS, virtual account, transfer bank, dan metode lokal lainnya segera tersedia."
-                  : "QRIS, virtual account, bank transfer, and other local payment methods are coming soon."}
+            <button
+              onClick={() => setSelectedGateway("stripe")}
+              type="button"
+              className={[
+                "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+                selectedGateway === "stripe"
+                  ? "border-[#1C1C1E] bg-black text-white"
+                  : "border-gray-200 bg-white text-[#1C1C1E]",
+              ].join(" ")}
+            >
+              <div className="font-semibold">{ui.cardTitle}</div>
+              <div
+                className={[
+                  "mt-1 text-xs",
+                  selectedGateway === "stripe"
+                    ? "text-white/80"
+                    : "text-gray-500",
+                ].join(" ")}
+              >
+                {ui.cardSubtitle}
               </div>
-            </div>
+            </button>
+
+            <button
+              type="button"
+              disabled
+              className="mt-3 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-400"
+            >
+              <div className="font-semibold">{ui.otherMethodsTitle}</div>
+              <div className="mt-1 text-xs text-gray-400">
+                {ui.otherMethodsSubtitle}
+              </div>
+            </button>
 
             {selectedProduct?.features?.length ? (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
-                  {currentLang === "id" ? "Yang Anda Dapatkan" : "What You Get"}
+                  {ui.whatYouGet}
                 </div>
 
                 <ul className="mt-3 space-y-2">
@@ -1214,7 +1292,7 @@ export default function AgentPembayaranPageClient() {
             <div className="mt-5 rounded-2xl border border-gray-200 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-[#1C1C1E]">
-                  Total
+                  {ui.total}
                 </div>
                 <div className="text-sm font-semibold">{money(total)}</div>
               </div>
@@ -1235,19 +1313,11 @@ export default function AgentPembayaranPageClient() {
               ].join(" ")}
               type="button"
             >
-              {submitting
-                ? currentLang === "id"
-                  ? "Menyiapkan Pembayaran..."
-                  : "Preparing Payment..."
-                : currentLang === "id"
-                ? "Bayar Sekarang"
-                : "Pay Now"}
+              {submitting ? ui.preparingPayment : ui.payNow}
             </button>
 
             <p className="mt-3 text-xs leading-5 text-gray-500">
-              {currentLang === "id"
-                ? "Checkout pembayaran akan dibuat otomatis saat tombol ditekan."
-                : "Payment checkout will be created automatically when the button is pressed."}
+              {ui.checkoutNote}
             </p>
           </div>
         </div>
