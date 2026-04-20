@@ -872,6 +872,140 @@ async function activateEducationEntitlement(
   };
 }
 
+function normalizeMembershipBillingCycle(value: unknown): "monthly" | "yearly" {
+  const v = String(value || "").toLowerCase();
+  return v === "monthly" ? "monthly" : "yearly";
+}
+
+function resolveAgentListingLimit(
+  payment: PaymentTransactionRow,
+  metadata: Record<string, any>
+) {
+  const directLimit =
+    getNumber(metadata, "listingLimit") ||
+    getNumber(metadata, "activeListingLimit") ||
+    getNumber(metadata, "listing_limit") ||
+    getNumber(metadata, "active_listing_limit");
+
+  if (directLimit && directLimit > 0) return directLimit;
+
+  const packageId = String(payment.product_id || "").toLowerCase();
+  const packageName = String(
+    metadata.packageName || payment.product_name_snapshot || ""
+  ).toLowerCase();
+
+  const value = `${packageId} ${packageName}`;
+
+  if (value.includes("starter")) return 30;
+  if (value.includes("silver")) return 100;
+  if (value.includes("gold")) return 500;
+
+  return 0;
+}
+
+async function activateAgentMembership(
+  payment: PaymentTransactionRow,
+  paidAtIso: string
+) {
+  if (!payment.user_id) {
+    throw new Error("Payment transaction has no user_id for agent membership.");
+  }
+
+  const metadata = asObject(payment.metadata);
+
+  const billingCycle = normalizeMembershipBillingCycle(
+    metadata.selectedBillingCycle ||
+      metadata.selected_billing_cycle ||
+      metadata.billingCycle ||
+      metadata.billing_cycle
+  );
+
+  const packageId = String(
+    metadata.packageId || metadata.package_id || payment.product_id || ""
+  ).trim();
+
+  const packageName = String(
+    metadata.packageName ||
+      metadata.package_name ||
+      payment.product_name_snapshot ||
+      packageId
+  ).trim();
+
+  const listingLimit = resolveAgentListingLimit(payment, metadata);
+
+  const packageTermDays = toPositiveNumber(
+    getNumber(metadata, "packageTermDays") ||
+      getNumber(metadata, "package_term_days") ||
+      getNumber(metadata, "productDurationDays") ||
+      payment.duration_days,
+    billingCycle === "monthly" ? 30 : 365
+  );
+
+  const startsAt = paidAtIso;
+  const expiresAt = addDaysIso(paidAtIso, packageTermDays);
+  const nowIso = new Date().toISOString();
+
+  await supabaseAdmin
+    .from("agent_memberships")
+    .update({
+      status: "expired",
+      updated_at: nowIso,
+    })
+    .eq("user_id", payment.user_id)
+    .eq("status", "active")
+    .neq("payment_id", payment.id);
+
+  const { error } = await supabaseAdmin.from("agent_memberships").upsert(
+    {
+      user_id: payment.user_id,
+      payment_id: payment.id,
+      package_id: packageId,
+      package_name: packageName,
+      billing_cycle: billingCycle,
+      status: "active",
+      auto_renew: true,
+      starts_at: startsAt,
+      expires_at: expiresAt,
+      metadata: {
+        ...metadata,
+        payment_transaction_id: payment.id,
+        payment_type: payment.payment_type,
+        product_type: payment.product_type,
+        product_id: payment.product_id,
+        product_name_snapshot: payment.product_name_snapshot,
+        amount_total: payment.amount_total,
+        currency: payment.currency,
+        activated_from: "stripe_webhook",
+        activated_at: nowIso,
+        package_id: packageId,
+        package_name: packageName,
+        billing_cycle: billingCycle,
+        listing_limit: listingLimit,
+        active_listing_limit: listingLimit,
+        starts_at: startsAt,
+        expires_at: expiresAt,
+      },
+      updated_at: nowIso,
+    },
+    { onConflict: "payment_id" }
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    activationType: "agent-membership",
+    agentMembership: true,
+    packageId,
+    packageName,
+    billingCycle,
+    listingLimit,
+    startsAt,
+    expiresAt,
+  };
+}
+
 async function activateAfterPayment(
   payment: PaymentTransactionRow,
   paidAtIso: string
@@ -882,6 +1016,10 @@ async function activateAfterPayment(
 
   if (paymentType === "education") {
     return activateEducationEntitlement(payment, paidAtIso);
+  }
+
+  if (paymentType === "package") {
+    return activateAgentMembership(payment, paidAtIso);
   }
 
   if (paymentType === "boost" || paymentType === "spotlight") {
