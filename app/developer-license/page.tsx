@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Building2,
-  BriefcaseBusiness,
   ClipboardList,
   Mail,
   MessageSquareMore,
   ShieldCheck,
+  FileText,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 
@@ -56,16 +58,17 @@ function InputField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
+      <label className="mb-2 block text-sm font-semibold text-[#1C1C1E]">
         {label}
         {required ? <span className="ml-1 text-[#b42318]">*</span> : null}
       </label>
+
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-500 focus:border-[#1C1C1E]"
+        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
       />
     </div>
   );
@@ -86,16 +89,17 @@ function TextareaField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
+      <label className="mb-2 block text-sm font-semibold text-[#1C1C1E]">
         {label}
         {required ? <span className="ml-1 text-[#b42318]">*</span> : null}
       </label>
+
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={5}
-        className="w-full resize-none rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-500 focus:border-[#1C1C1E]"
+        className="w-full resize-none rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E]"
       />
     </div>
   );
@@ -106,7 +110,7 @@ function InfoCard({
   title,
   desc,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   desc: string;
 }) {
@@ -115,7 +119,9 @@ function InfoCard({
       <div className="mb-3 inline-flex rounded-2xl border border-[#e5e5e7] bg-[#f8f8f8] p-2.5">
         {icon}
       </div>
+
       <h3 className="text-base font-semibold text-[#1C1C1E]">{title}</h3>
+
       <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#6e6e73]">
         {desc}
       </p>
@@ -145,122 +151,129 @@ export default function DeveloperLicensePage() {
     [contactWhatsApp]
   );
 
+  const pageText = useMemo(
+    () =>
+      lang === "id"
+        ? {
+            back: "Kembali ke Sign Up",
+            eyebrow: "TETAMO Developer License",
+            title: "Request a Quote untuk Menggunakan Lisensi TETAMO",
+            subtitle:
+              "Halaman ini khusus untuk developer, project owner, dan perusahaan properti yang ingin menggunakan sistem berlisensi TETAMO untuk kebutuhan pemasaran proyek, listing, inquiry buyer/renter, dan workflow digital properti.",
+            primaryPoint:
+              "Ini bukan paket agent dan bukan paket owner. Ini adalah permintaan penawaran project-based license.",
+            requestTitle: "Request a Quote",
+            requestDesc:
+              "Kirim detail proyek Anda. Tim TETAMO akan meninjau kebutuhan lisensi, skala proyek, dan ruang lingkup penggunaan sebelum mengirimkan penawaran resmi.",
+            suitableTitle: "Untuk Siapa",
+            suitableDesc:
+              "• Developer perumahan, cluster, villa, apartemen, dan mixed-use\n• Project owner yang membutuhkan sistem listing dan inquiry\n• Perusahaan properti yang ingin memakai platform license untuk proyek mereka",
+            licenseTitle: "Lisensi Dapat Mencakup",
+            licenseDesc:
+              "• Project listing dan branded project presence\n• Inquiry buyer/renter dan lead management\n• Digital property workflow untuk project marketing\n• Penggunaan sistem TETAMO berdasarkan ruang lingkup yang disetujui",
+            processTitle: "Alur Request",
+            process1: "1. Kirim detail proyek",
+            process2: "2. TETAMO meninjau scope lisensi",
+            process3: "3. TETAMO mengirimkan quotation",
+            formTitle: "Developer License Quotation Form",
+            formDesc:
+              "Isi informasi utama proyek Anda agar kami bisa menyiapkan quotation yang sesuai.",
+            fullName: "Nama Lengkap",
+            fullNamePh: "Masukkan nama lengkap Anda",
+            companyName: "Nama Perusahaan",
+            companyNamePh: "Masukkan nama perusahaan",
+            email: "Email",
+            emailPh: "Masukkan email aktif",
+            whatsapp: "WhatsApp / Telepon",
+            whatsappPh: "Masukkan nomor WhatsApp / telepon",
+            projectName: "Nama Proyek",
+            projectNamePh: "Masukkan nama proyek",
+            projectLocation: "Lokasi Proyek",
+            projectLocationPh: "Contoh: Bali, Jakarta, Surabaya",
+            propertyType: "Jenis Proyek",
+            propertyTypePh: "Contoh: Villa, Apartemen, Perumahan, Komersial",
+            unitCount: "Jumlah Unit / Scope Proyek",
+            unitCountPh: "Contoh: 120 unit / 3 proyek / multi-location",
+            timeline: "Target Timeline",
+            timelinePh: "Contoh: Launch Q3 2026",
+            requirements: "Kebutuhan Lisensi",
+            requirementsPh:
+              "Jelaskan bagaimana proyek Anda ingin menggunakan TETAMO, fitur yang dibutuhkan, jumlah listing, target market, dan kebutuhan workflow.",
+            noteTitle: "Catatan Penting",
+            noteDesc:
+              "Submitting this form does not activate any package. Developer access is reviewed by TETAMO and handled through a formal project-based quotation.",
+            sendEmail: "Kirim via Email",
+            sendWhatsApp: "Kirim via WhatsApp",
+            success:
+              "Permintaan Anda sudah siap dikirim. Silakan lanjutkan melalui email atau WhatsApp yang terbuka.",
+            requiredAlert: "Mohon lengkapi semua field wajib terlebih dahulu.",
+            noMethodAlert:
+              "Metode kontak belum dikonfigurasi. Tambahkan email atau WhatsApp TETAMO terlebih dahulu.",
+            subject: "Developer License Quotation Request - TETAMO",
+          }
+        : {
+            back: "Back to Sign Up",
+            eyebrow: "TETAMO Developer License",
+            title: "Request a Quote to Use the TETAMO License",
+            subtitle:
+              "This page is specifically for developers, project owners, and property companies who want to use TETAMO’s licensed platform system for project marketing, listings, buyer/renter inquiries, and digital property workflow.",
+            primaryPoint:
+              "This is not an agent package and not an owner listing package. This is a project-based license quotation request.",
+            requestTitle: "Request a Quote",
+            requestDesc:
+              "Send your project details. The TETAMO team will review the license requirements, project scale, and usage scope before sending an official quotation.",
+            suitableTitle: "Who This Is For",
+            suitableDesc:
+              "• Housing, cluster, villa, apartment, and mixed-use developers\n• Project owners who need listing and inquiry systems\n• Property companies that want to use a licensed platform for their project",
+            licenseTitle: "The License Can Cover",
+            licenseDesc:
+              "• Project listings and branded project presence\n• Buyer/renter inquiries and lead management\n• Digital property workflow for project marketing\n• Use of the TETAMO system based on the approved scope",
+            processTitle: "Request Flow",
+            process1: "1. Submit project details",
+            process2: "2. TETAMO reviews the license scope",
+            process3: "3. TETAMO sends a quotation",
+            formTitle: "Developer License Quotation Form",
+            formDesc:
+              "Complete the key project information so we can prepare the right quotation.",
+            fullName: "Full Name",
+            fullNamePh: "Enter your full name",
+            companyName: "Company Name",
+            companyNamePh: "Enter your company name",
+            email: "Email",
+            emailPh: "Enter your active email",
+            whatsapp: "WhatsApp / Phone",
+            whatsappPh: "Enter your WhatsApp / phone number",
+            projectName: "Project Name",
+            projectNamePh: "Enter your project name",
+            projectLocation: "Project Location",
+            projectLocationPh: "Example: Bali, Jakarta, Surabaya",
+            propertyType: "Project Type",
+            propertyTypePh: "Example: Villa, Apartment, Housing, Commercial",
+            unitCount: "Unit Count / Project Scope",
+            unitCountPh: "Example: 120 units / 3 projects / multi-location",
+            timeline: "Target Timeline",
+            timelinePh: "Example: Launch Q3 2026",
+            requirements: "License Requirements",
+            requirementsPh:
+              "Explain how your project wants to use TETAMO, features needed, number of listings, target market, and workflow requirements.",
+            noteTitle: "Important Note",
+            noteDesc:
+              "Submitting this form does not activate any package. Developer access is reviewed by TETAMO and handled through a formal project-based quotation.",
+            sendEmail: "Send by Email",
+            sendWhatsApp: "Send by WhatsApp",
+            success:
+              "Your request is ready to send. Please continue through the email or WhatsApp window that opened.",
+            requiredAlert: "Please complete all required fields first.",
+            noMethodAlert:
+              "No contact method is configured yet. Add TETAMO email or WhatsApp first.",
+            subject: "Developer License Quotation Request - TETAMO",
+          },
+    [lang]
+  );
+
   const updateField = (key: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
-
-  const pageText =
-    lang === "id"
-      ? {
-          back: "Kembali ke daftar",
-          eyebrow: "Lisensi Developer Tetamo",
-          title: "Custom License to Use untuk Developer",
-          subtitle:
-            "Tetamo tidak menawarkan paket standar untuk Developer. Akses Developer ditawarkan melalui skema License to Use yang disesuaikan dengan kebutuhan proyek, skala bisnis, dan ruang lingkup kerja sama.",
-          ctaBoxTitle: "Request a Quotation",
-          ctaBoxDesc:
-            "Isi detail proyek Anda dan kirim permintaan penawaran. Kami akan meninjau kebutuhan Anda untuk menyiapkan proposal lisensi yang sesuai.",
-          whoTitle: "Cocok untuk",
-          who1: "Developer perumahan dan cluster",
-          who2: "Proyek villa, apartemen, dan mixed-use",
-          who3: "Project marketing dan multi-project group",
-          scopeTitle: "Apa yang bisa dicakup",
-          scope1: "Eksposur proyek dan branded presence di Tetamo",
-          scope2: "License to use dengan struktur komersial khusus",
-          scope3: "Penyesuaian berdasarkan skala proyek dan kebutuhan bisnis",
-          formTitle: "Form Permintaan Penawaran",
-          formDesc:
-            "Berikan informasi utama proyek Anda agar kami bisa menyiapkan penawaran yang relevan.",
-          fullName: "Nama Lengkap",
-          fullNamePh: "Masukkan nama lengkap Anda",
-          companyName: "Nama Perusahaan",
-          companyNamePh: "Masukkan nama perusahaan",
-          email: "Email",
-          emailPh: "Masukkan email aktif",
-          whatsapp: "WhatsApp / Telepon",
-          whatsappPh: "Masukkan nomor WhatsApp / telepon",
-          projectName: "Nama Proyek",
-          projectNamePh: "Masukkan nama proyek",
-          projectLocation: "Lokasi Proyek",
-          projectLocationPh: "Contoh: Bali, Jakarta, Surabaya",
-          propertyType: "Jenis Properti / Proyek",
-          propertyTypePh: "Contoh: Perumahan, Villa, Apartemen, Komersial",
-          unitCount: "Jumlah Unit / Project Scope",
-          unitCountPh: "Contoh: 120 unit / 3 proyek",
-          requirements: "Kebutuhan Anda",
-          requirementsPh:
-            "Jelaskan apa yang Anda butuhkan dari Tetamo, target, atau kebutuhan khusus lisensi Anda.",
-          timeline: "Target Timeline",
-          timelinePh: "Contoh: Launch Q3 2026",
-          noteTitle: "Catatan",
-          noteDesc:
-            "Halaman ini belum mengaktifkan paket self-serve untuk Developer. Semua permintaan Developer akan diproses melalui penawaran khusus License to Use.",
-          sendEmail: "Kirim via Email",
-          sendWhatsApp: "Kirim via WhatsApp",
-          success:
-            "Permintaan Anda sudah siap dikirim. Silakan lanjutkan dari email atau WhatsApp yang terbuka.",
-          altContact: "Atau kembali ke halaman daftar",
-          signupLink: "Kembali ke Sign Up",
-          requiredAlert: "Mohon lengkapi semua field wajib terlebih dahulu.",
-          noMethodAlert:
-            "Metode kontak belum dikonfigurasi. Tambahkan email atau WhatsApp Tetamo terlebih dahulu.",
-          subject: "Permintaan Penawaran Developer License - Tetamo",
-        }
-      : {
-          back: "Back to signup",
-          eyebrow: "Tetamo Developer License",
-          title: "Custom License to Use for Developers",
-          subtitle:
-            "Tetamo does not offer a standard package for Developers. Developer access is offered through a License to Use arrangement tailored to project needs, business scale, and commercial scope.",
-          ctaBoxTitle: "Request a Quotation",
-          ctaBoxDesc:
-            "Share your project details and send a quotation request. We will review your needs and prepare a suitable licensing proposal.",
-          whoTitle: "Best for",
-          who1: "Housing and residential developers",
-          who2: "Villa, apartment, and mixed-use projects",
-          who3: "Project marketing teams and multi-project groups",
-          scopeTitle: "What the license can cover",
-          scope1: "Project exposure and branded presence on Tetamo",
-          scope2: "License-to-use structure with custom commercial terms",
-          scope3: "Setup tailored to project scale and business requirements",
-          formTitle: "Quotation Request Form",
-          formDesc:
-            "Share the key details below so we can prepare a relevant quotation.",
-          fullName: "Full Name",
-          fullNamePh: "Enter your full name",
-          companyName: "Company Name",
-          companyNamePh: "Enter your company name",
-          email: "Email",
-          emailPh: "Enter your active email",
-          whatsapp: "WhatsApp / Phone",
-          whatsappPh: "Enter your WhatsApp / phone number",
-          projectName: "Project Name",
-          projectNamePh: "Enter your project name",
-          projectLocation: "Project Location",
-          projectLocationPh: "Example: Bali, Jakarta, Surabaya",
-          propertyType: "Property / Project Type",
-          propertyTypePh: "Example: Housing, Villa, Apartment, Commercial",
-          unitCount: "Unit Count / Project Scope",
-          unitCountPh: "Example: 120 units / 3 projects",
-          requirements: "Your Requirements",
-          requirementsPh:
-            "Tell us what you need from Tetamo, your goals, or any special licensing requirements.",
-          timeline: "Preferred Timeline",
-          timelinePh: "Example: Launch Q3 2026",
-          noteTitle: "Note",
-          noteDesc:
-            "This page does not activate a self-serve Developer package. All Developer requests are handled through a custom License to Use quotation flow.",
-          sendEmail: "Send by Email",
-          sendWhatsApp: "Send by WhatsApp",
-          success:
-            "Your request is ready to send. Please continue in the email or WhatsApp window that opened.",
-          altContact: "Or go back to the signup page",
-          signupLink: "Back to Sign Up",
-          requiredAlert: "Please complete all required fields first.",
-          noMethodAlert:
-            "No contact method is configured yet. Add Tetamo email or WhatsApp first.",
-          subject: "Developer License Quotation Request - Tetamo",
-        };
 
   const requiredFieldsFilled =
     form.fullName.trim() &&
@@ -275,8 +288,8 @@ export default function DeveloperLicensePage() {
   const messageBody = useMemo(() => {
     return `${
       lang === "id"
-        ? "Halo Tetamo, saya ingin meminta penawaran untuk Developer License."
-        : "Hello Tetamo, I would like to request a quotation for a Developer License."
+        ? "Halo TETAMO, saya ingin meminta quotation untuk Developer License."
+        : "Hello TETAMO, I would like to request a quotation for a Developer License."
     }
 
 ${pageText.fullName}: ${form.fullName}
@@ -286,14 +299,14 @@ ${pageText.whatsapp}: ${form.whatsapp}
 ${pageText.projectName}: ${form.projectName}
 ${pageText.projectLocation}: ${form.projectLocation}
 ${pageText.propertyType}: ${form.propertyType}
-${pageText.unitCount}: ${form.unitCount}
-${pageText.timeline}: ${form.timeline}
+${pageText.unitCount}: ${form.unitCount || "-"}
+${pageText.timeline}: ${form.timeline || "-"}
 
 ${pageText.requirements}:
 ${form.requirements}`.trim();
   }, [form, lang, pageText]);
 
-  const handleSendEmail = () => {
+  function handleSendEmail() {
     if (!requiredFieldsFilled) {
       alert(pageText.requiredAlert);
       return;
@@ -311,11 +324,12 @@ ${form.requirements}`.trim();
     )}&body=${encodeURIComponent(messageBody)}`;
 
     window.location.href = mailto;
+
     setSubmitting(false);
     setSubmitted(true);
-  };
+  }
 
-  const handleSendWhatsApp = () => {
+  function handleSendWhatsApp() {
     if (!requiredFieldsFilled) {
       alert(pageText.requiredAlert);
       return;
@@ -333,44 +347,42 @@ ${form.requirements}`.trim();
     )}`;
 
     window.open(waUrl, "_blank", "noopener,noreferrer");
+
     setSubmitting(false);
     setSubmitted(true);
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-6">
+    <main className="min-h-screen bg-[#f5f5f7] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="mb-5 sm:mb-6">
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-2.5 text-sm font-medium text-[#1C1C1E] transition hover:bg-[#f8f8f8]"
+            className="inline-flex items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8]"
           >
             <ArrowLeft className="h-4 w-4" />
             {pageText.back}
           </Link>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-6">
-            <div className="rounded-[28px] border border-[#e5e5e7] bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
-              <div className="inline-flex items-center rounded-full border border-[#e5e5e7] bg-[#fafafa] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6e6e73]">
+        <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
+          <div className="min-w-0 space-y-6">
+            <div className="rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:p-7 lg:p-8">
+              <div className="inline-flex max-w-full items-center rounded-full border border-[#e5e5e7] bg-[#fafafa] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6e6e73] sm:text-[11px]">
                 {pageText.eyebrow}
               </div>
 
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#1C1C1E] sm:text-4xl">
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#1C1C1E] sm:text-4xl lg:text-5xl">
                 {pageText.title}
               </h1>
 
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6e6e73] sm:text-base">
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-[#6e6e73] sm:text-base">
                 {pageText.subtitle}
               </p>
 
-              <div className="mt-6 rounded-3xl border border-[#e5e5e7] bg-[#fafafa] p-5">
-                <h2 className="text-base font-semibold text-[#1C1C1E]">
-                  {pageText.ctaBoxTitle}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
-                  {pageText.ctaBoxDesc}
+              <div className="mt-5 rounded-3xl border border-[#1C1C1E]/10 bg-[#fafafa] p-4 sm:p-5">
+                <p className="text-sm font-semibold leading-6 text-[#1C1C1E] sm:text-base">
+                  {pageText.primaryPoint}
                 </p>
               </div>
             </div>
@@ -378,21 +390,23 @@ ${form.requirements}`.trim();
             <div className="grid gap-4 sm:grid-cols-2">
               <InfoCard
                 icon={<Building2 className="h-5 w-5 text-[#1C1C1E]" />}
-                title={pageText.whoTitle}
-                desc={`• ${pageText.who1}\n• ${pageText.who2}\n• ${pageText.who3}`}
+                title={pageText.suitableTitle}
+                desc={pageText.suitableDesc}
               />
+
               <InfoCard
                 icon={<ShieldCheck className="h-5 w-5 text-[#1C1C1E]" />}
-                title={pageText.scopeTitle}
-                desc={`• ${pageText.scope1}\n• ${pageText.scope2}\n• ${pageText.scope3}`}
+                title={pageText.licenseTitle}
+                desc={pageText.licenseDesc}
               />
             </div>
 
-            <div className="rounded-[28px] border border-[#e5e5e7] bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
+            <div className="rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:p-7 lg:p-8">
               <div className="flex items-start gap-3">
                 <div className="rounded-2xl border border-[#e5e5e7] bg-[#f8f8f8] p-2.5">
                   <ClipboardList className="h-5 w-5 text-[#1C1C1E]" />
                 </div>
+
                 <div>
                   <h2 className="text-xl font-semibold text-[#1C1C1E]">
                     {pageText.formTitle}
@@ -411,6 +425,7 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("fullName", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.companyName}
                   placeholder={pageText.companyNamePh}
@@ -418,6 +433,7 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("companyName", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.email}
                   type="email"
@@ -426,6 +442,7 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("email", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.whatsapp}
                   placeholder={pageText.whatsappPh}
@@ -433,6 +450,7 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("whatsapp", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.projectName}
                   placeholder={pageText.projectNamePh}
@@ -440,6 +458,7 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("projectName", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.projectLocation}
                   placeholder={pageText.projectLocationPh}
@@ -447,6 +466,7 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("projectLocation", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.propertyType}
                   placeholder={pageText.propertyTypePh}
@@ -454,12 +474,14 @@ ${form.requirements}`.trim();
                   onChange={(value) => updateField("propertyType", value)}
                   required
                 />
+
                 <InputField
                   label={pageText.unitCount}
                   placeholder={pageText.unitCountPh}
                   value={form.unitCount}
                   onChange={(value) => updateField("unitCount", value)}
                 />
+
                 <div className="sm:col-span-2">
                   <InputField
                     label={pageText.timeline}
@@ -468,6 +490,7 @@ ${form.requirements}`.trim();
                     onChange={(value) => updateField("timeline", value)}
                   />
                 </div>
+
                 <div className="sm:col-span-2">
                   <TextareaField
                     label={pageText.requirements}
@@ -511,63 +534,54 @@ ${form.requirements}`.trim();
               </div>
 
               {submitted ? (
-                <p className="mt-4 text-sm leading-6 text-[#166534]">
-                  {pageText.success}
-                </p>
-              ) : null}
-
-              <p className="mt-5 text-sm leading-6 text-[#6e6e73]">
-                {pageText.altContact}{" "}
-                <Link
-                  href="/signup"
-                  className="font-semibold text-[#1C1C1E] underline underline-offset-4"
-                >
-                  {pageText.signupLink}
-                </Link>
-              </p>
-            </div>
-          </div>
-
-          <div className="h-fit rounded-[28px] border border-[#e5e5e7] bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
-            <div className="rounded-3xl border border-[#e5e5e7] bg-[#fafafa] p-5">
-              <div className="mb-3 inline-flex rounded-2xl border border-[#e5e5e7] bg-white p-2.5">
-                <BriefcaseBusiness className="h-5 w-5 text-[#1C1C1E]" />
-              </div>
-              <h2 className="text-lg font-semibold text-[#1C1C1E]">
-                {lang === "id"
-                  ? "Mengapa bukan paket standar?"
-                  : "Why not a standard package?"}
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-[#6e6e73]">
-                {lang === "id"
-                  ? "Kebutuhan Developer biasanya berbeda dari Owner dan Agent. Karena itu, Tetamo menanganinya melalui penawaran khusus License to Use agar struktur komersial, eksposur proyek, dan ruang lingkup kerja sama dapat disesuaikan."
-                  : "Developer needs are usually different from Owner and Agent flows. Tetamo handles them through a custom License to Use quotation so the commercial structure, project exposure, and scope of collaboration can be tailored properly."}
-              </p>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {[
-                lang === "id"
-                  ? "Pendekatan yang lebih cocok untuk proyek developer"
-                  : "A better fit for developer-scale projects",
-                lang === "id"
-                  ? "Diskusi komersial yang lebih fleksibel"
-                  : "More flexible commercial discussion",
-                lang === "id"
-                  ? "Lebih jelas daripada memaksakan paket self-serve"
-                  : "Clearer than forcing a self-serve package",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="rounded-2xl border border-[#e5e5e7] bg-white px-4 py-3 text-sm text-[#1C1C1E]"
-                >
-                  {item}
+                <div className="mt-4 flex items-start gap-2 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm leading-6 text-green-700">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{pageText.success}</p>
                 </div>
-              ))}
+              ) : null}
             </div>
           </div>
-        </div>
+
+          <aside className="min-w-0 space-y-6 lg:sticky lg:top-28">
+            <div className="rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:p-7 lg:p-8">
+              <div className="mb-4 inline-flex rounded-2xl border border-[#e5e5e7] bg-[#f8f8f8] p-2.5">
+                <Send className="h-5 w-5 text-[#1C1C1E]" />
+              </div>
+
+              <h2 className="text-xl font-semibold text-[#1C1C1E]">
+                {pageText.requestTitle}
+              </h2>
+
+              <p className="mt-3 text-sm leading-7 text-[#6e6e73]">
+                {pageText.requestDesc}
+              </p>
+            </div>
+
+            <div className="rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-sm sm:p-7">
+              <div className="mb-4 inline-flex rounded-2xl border border-[#e5e5e7] bg-[#f8f8f8] p-2.5">
+                <FileText className="h-5 w-5 text-[#1C1C1E]" />
+              </div>
+
+              <h2 className="text-xl font-semibold text-[#1C1C1E]">
+                {pageText.processTitle}
+              </h2>
+
+              <div className="mt-5 space-y-3">
+                {[pageText.process1, pageText.process2, pageText.process3].map(
+                  (item) => (
+                    <div
+                      key={item}
+                      className="rounded-2xl border border-[#e5e5e7] bg-[#fafafa] px-4 py-3 text-sm font-medium leading-6 text-[#1C1C1E]"
+                    >
+                      {item}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </aside>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
