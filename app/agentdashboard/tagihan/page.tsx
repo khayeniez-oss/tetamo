@@ -2,154 +2,171 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  CreditCard,
+  ExternalLink,
+  FileText,
+  PackageCheck,
+  Receipt,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
+
+type MembershipStatus = "active" | "expired" | "cancelled" | "pending" | null;
 
 type PaymentStatus =
   | "initiated"
   | "pending"
-  | "succeeded"
+  | "checkout_created"
+  | "paid"
   | "failed"
   | "expired"
   | "refunded"
-  | "paid"
   | "completed"
+  | "succeeded"
   | "settled"
-  | "active"
   | null;
 
-type BillingStatus =
-  | "pending"
-  | "paid"
-  | "failed"
-  | "overdue"
-  | "cancelled"
-  | "refunded"
-  | null;
-
-type PaymentRow = {
+type AgentMembershipRow = {
   id: string;
   user_id: string | null;
-  billing_record_id: string | null;
-  listing_code: string | null;
-
-  product_id?: string | null;
-  product_type?: string | null;
-  flow?: string | null;
-  metadata?: Record<string, unknown> | null;
-
-  product_name: string | null;
-  payment_title: string | null;
-  payment_description: string | null;
-  billing_note: string | null;
-  payment_method: string | null;
-  method: string | null;
-  gateway: string | null;
-  provider: string | null;
-  amount: number | null;
-  amount_idr: number | null;
-  currency: string | null;
-  status: PaymentStatus;
-  receipt_number: string | null;
-  checkout_url: string | null;
-  created_at: string | null;
-  paid_at: string | null;
+  payment_id: string | null;
+  package_id: string | null;
+  package_name: string | null;
+  billing_cycle: string | null;
+  listing_limit: number | null;
+  status: MembershipStatus;
+  auto_renew: boolean | null;
+  starts_at: string | null;
   expires_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
-type BillingRow = {
+type PaymentTransactionRow = {
   id: string;
   user_id: string | null;
-  invoice_number: string | null;
-  listing_code: string | null;
-  property_title: string | null;
-  description: string | null;
-  plan_code: string | null;
-  bill_type: string | null;
-  total: number | null;
-  amount: number | null;
+  property_id: string | null;
+  source_role: string | null;
+  payment_type: string | null;
+  product_id: string | null;
+  product_name_snapshot: string | null;
+  product_type: string | null;
+  status: PaymentStatus;
   currency: string | null;
-  created_at: string | null;
-  due_at: string | null;
+  amount_subtotal: number | null;
+  amount_total: number | null;
+  description: string | null;
+  plan_name: string | null;
+  duration_days: number | null;
+  property_title_snapshot: string | null;
+  property_code_snapshot: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  checkout_url: string | null;
+  checkout_expires_at: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_charge_id: string | null;
+  stripe_invoice_id: string | null;
+  receipt_url: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
   paid_at: string | null;
-  status: BillingStatus;
+  expired_at: string | null;
+  failed_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 type HistoryDisplayStatus =
-  | "initiated"
+  | "checkout_created"
   | "pending"
   | "paid"
   | "failed"
   | "expired"
   | "refunded"
-  | "unpaid"
-  | "overdue"
-  | "cancelled";
+  | "unpaid";
 
-type HistoryCategory = "membership" | "addon" | "other";
-
-type RenewTarget = {
-  kind: "membership" | "addon" | "none";
-  href: string;
-};
+type HistoryCategory = "membership" | "addon" | "education" | "other";
 
 type HistoryItem = {
   id: string;
-  billingId: string;
   paymentId: string;
   sortDate: string;
 
   title: string;
   packageName: string;
-  billingType: string;
+  paymentType: string;
   category: HistoryCategory;
   productId: string;
-
-  listingCode: string;
-  invoiceNumber: string;
-  receiptNumber: string;
   planCode: string;
-  billType: string;
+  billingType: string;
+  listingCode: string;
 
   amount: string;
   method: string;
+  status: HistoryDisplayStatus;
 
   createdDate: string;
-  dueDate: string;
+  createdDateTime: string;
   paidDate: string;
+  paidDateTime: string;
   expiryDate: string;
 
-  status: HistoryDisplayStatus;
   checkoutUrl: string;
+  receiptUrl: string;
+  hostedInvoiceUrl: string;
+  invoicePdfUrl: string;
+
+  canRetry: boolean;
+  canRenew: boolean;
+  renewHref: string;
 };
 
-function cleanText(value: string | null | undefined) {
+function cleanText(value: unknown) {
   const v = String(value || "").trim();
   return v || "-";
 }
 
+function emptyToBlank(value: unknown) {
+  const v = String(value || "").trim();
+  return v === "-" ? "" : v;
+}
+
 function getMetaString(
-  metadata: Record<string, unknown> | null | undefined,
+  metadata: Record<string, any> | null | undefined,
   key: string
 ) {
   const value = metadata?.[key];
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
-function formatAmount(
-  amount: number | null,
-  amountIdr: number | null,
-  currency: string | null
+function getNestedMetaString(
+  metadata: Record<string, any> | null | undefined,
+  objectKey: string,
+  key: string
 ) {
-  const code = (currency || "IDR").toUpperCase();
+  const obj = metadata?.[objectKey];
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return "";
+  const value = (obj as Record<string, any>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
 
-  if (code === "IDR" || amountIdr !== null) {
-    const value = Number(amountIdr ?? amount ?? 0);
+function formatAmount(amount: number | null, currency: string | null) {
+  const code = String(currency || "idr").toUpperCase();
+  const value = Number(amount || 0);
+
+  if (code === "IDR") {
     return `Rp ${new Intl.NumberFormat("id-ID").format(value)}`;
   }
-
-  const value = Number(amount ?? amountIdr ?? 0);
 
   try {
     return new Intl.NumberFormat("en-US", {
@@ -162,64 +179,68 @@ function formatAmount(
   }
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, lang: string) {
   if (!value) return "-";
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
 
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   }).format(parsed);
 }
 
-function normalizeHistoryStatus(
-  paymentStatus: PaymentStatus | undefined,
-  billingStatus: BillingStatus | undefined
-): HistoryDisplayStatus {
-  const p = String(paymentStatus || "").toLowerCase();
-  const b = String(billingStatus || "").toLowerCase();
+function formatDateTime(value: string | null, lang: string) {
+  if (!value) return "-";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+function normalizeStatus(status: PaymentStatus): HistoryDisplayStatus {
+  const s = String(status || "").toLowerCase();
 
   if (
-    p === "succeeded" ||
-    p === "paid" ||
-    p === "completed" ||
-    p === "settled" ||
-    p === "active"
+    s === "paid" ||
+    s === "completed" ||
+    s === "succeeded" ||
+    s === "settled"
   ) {
     return "paid";
   }
 
-  if (p === "initiated") return "initiated";
-  if (p === "pending") return "pending";
-  if (p === "failed") return "failed";
-  if (p === "expired") return "expired";
-  if (p === "refunded") return "refunded";
-
-  if (b === "paid") return "paid";
-  if (b === "failed") return "failed";
-  if (b === "overdue") return "overdue";
-  if (b === "cancelled") return "cancelled";
-  if (b === "refunded") return "refunded";
+  if (s === "checkout_created") return "checkout_created";
+  if (s === "pending" || s === "initiated") return "pending";
+  if (s === "failed") return "failed";
+  if (s === "expired") return "expired";
+  if (s === "refunded") return "refunded";
 
   return "unpaid";
 }
 
 function statusUI(status: HistoryDisplayStatus, lang: string) {
-  const currentLang = lang === "id" ? "id" : "en";
+  const isID = lang === "id";
 
   switch (status) {
     case "paid":
       return {
-        label: currentLang === "id" ? "Lunas" : "Paid",
+        label: isID ? "Lunas" : "Paid",
         badge: "bg-green-50 text-green-700 border-green-200",
       };
-    case "initiated":
+    case "checkout_created":
       return {
-        label: currentLang === "id" ? "Dimulai" : "Initiated",
-        badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
+        label: isID ? "Checkout Dibuat" : "Checkout Created",
+        badge: "bg-blue-50 text-blue-700 border-blue-200",
       };
     case "pending":
       return {
@@ -228,290 +249,285 @@ function statusUI(status: HistoryDisplayStatus, lang: string) {
       };
     case "failed":
       return {
-        label: currentLang === "id" ? "Gagal" : "Failed",
+        label: isID ? "Gagal" : "Failed",
         badge: "bg-red-50 text-red-700 border-red-200",
       };
     case "expired":
       return {
-        label: currentLang === "id" ? "Kedaluwarsa" : "Expired",
+        label: isID ? "Kedaluwarsa" : "Expired",
         badge: "bg-orange-50 text-orange-700 border-orange-200",
       };
     case "refunded":
       return {
-        label: currentLang === "id" ? "Refund" : "Refunded",
+        label: isID ? "Refund" : "Refunded",
         badge: "bg-blue-50 text-blue-700 border-blue-200",
-      };
-    case "overdue":
-      return {
-        label: currentLang === "id" ? "Jatuh Tempo" : "Overdue",
-        badge: "bg-orange-50 text-orange-700 border-orange-200",
-      };
-    case "cancelled":
-      return {
-        label: currentLang === "id" ? "Dibatalkan" : "Cancelled",
-        badge: "bg-gray-100 text-gray-700 border-gray-200",
       };
     case "unpaid":
     default:
       return {
-        label: currentLang === "id" ? "Belum Dibayar" : "Unpaid",
+        label: isID ? "Belum Dibayar" : "Unpaid",
         badge: "bg-gray-100 text-gray-700 border-gray-200",
       };
   }
 }
 
-function buildTitleFromBilling(row: BillingRow) {
-  if (row.description?.trim()) return row.description.trim();
-  if (row.property_title?.trim()) return row.property_title.trim();
-  if (row.plan_code?.trim()) return row.plan_code.trim();
-  if (row.bill_type?.trim()) return row.bill_type.trim();
-  return "Tetamo Billing";
+function membershipStatusUI(status: MembershipStatus, expiresAt: string | null, lang: string) {
+  const isID = lang === "id";
+  const now = new Date();
+  const expiry = expiresAt ? new Date(expiresAt) : null;
+  const expiredByDate = expiry && !Number.isNaN(expiry.getTime()) && expiry < now;
+
+  if (status === "active" && !expiredByDate) {
+    return {
+      label: isID ? "Aktif" : "Active",
+      badge: "bg-green-50 text-green-700 border-green-200",
+    };
+  }
+
+  if (status === "cancelled") {
+    return {
+      label: isID ? "Dibatalkan" : "Cancelled",
+      badge: "bg-gray-100 text-gray-700 border-gray-200",
+    };
+  }
+
+  if (status === "pending") {
+    return {
+      label: "Pending",
+      badge: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    };
+  }
+
+  return {
+    label: isID ? "Kedaluwarsa" : "Expired",
+    badge: "bg-orange-50 text-orange-700 border-orange-200",
+  };
 }
 
-function buildTitleFromPayment(row: PaymentRow) {
-  if (row.product_name?.trim()) return row.product_name.trim();
-  if (row.payment_title?.trim()) return row.payment_title.trim();
-  if (row.payment_description?.trim()) return row.payment_description.trim();
-  if (row.billing_note?.trim()) return row.billing_note.trim();
-  return "Tetamo Payment";
-}
+function inferCategory(row: PaymentTransactionRow): HistoryCategory {
+  const paymentType = String(row.payment_type || "").toLowerCase();
+  const productType = String(row.product_type || "").toLowerCase();
 
-function joinTexts(values: Array<string | null | undefined>) {
-  return values
-    .map((value) => String(value || "").trim())
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function inferProductId(payment?: PaymentRow, billing?: BillingRow) {
-  const directProductId = String(payment?.product_id || "").trim().toLowerCase();
-  if (directProductId) return directProductId;
-
-  const metadataProductId = getMetaString(payment?.metadata, "productId").toLowerCase();
-  if (metadataProductId) return metadataProductId;
-
-  const metadataPackageId = getMetaString(payment?.metadata, "packageId").toLowerCase();
-  if (metadataPackageId) return metadataPackageId;
-
-  const text = joinTexts([
-    billing?.plan_code,
-    billing?.bill_type,
-    billing?.description,
-    payment?.product_name,
-    payment?.payment_title,
-    payment?.payment_description,
-    payment?.billing_note,
-  ]);
-
-  if (text.includes("agent pro")) return "agent-pro";
-  if (text.includes("gold")) return "gold";
-  if (text.includes("silver")) return "silver";
-  if (text.includes("homepage spotlight")) return "homepage-spotlight";
-  if (text.includes("spotlight")) return "homepage-spotlight";
-  if (text.includes("boost")) return "boost-listing";
-
-  return "";
-}
-
-function inferCategory(payment?: PaymentRow, billing?: BillingRow): HistoryCategory {
-  const productType = String(payment?.product_type || "").trim().toLowerCase();
-  const flow = String(payment?.flow || "").trim().toLowerCase();
-  const productId = inferProductId(payment, billing);
-
-  if (
-    productType === "membership" ||
-    flow === "agent-membership" ||
-    productId === "silver" ||
-    productId === "gold" ||
-    productId === "agent-pro"
-  ) {
+  if (paymentType === "package" || productType === "membership") {
     return "membership";
   }
 
   if (
-    productType === "addon" ||
-    flow === "boost-listing" ||
-    flow === "homepage-spotlight" ||
-    productId === "boost-listing" ||
-    productId === "homepage-spotlight"
+    paymentType === "boost" ||
+    paymentType === "spotlight" ||
+    productType === "addon"
   ) {
     return "addon";
   }
 
-  const text = joinTexts([
-    payment?.product_name,
-    payment?.payment_title,
-    payment?.payment_description,
-    payment?.billing_note,
-    billing?.description,
-    billing?.plan_code,
-    billing?.bill_type,
-  ]);
-
-  if (
-    text.includes("boost") ||
-    text.includes("spotlight") ||
-    text.includes("addon") ||
-    text.includes("add-on")
-  ) {
-    return "addon";
-  }
-
-  if (
-    text.includes("silver") ||
-    text.includes("gold") ||
-    text.includes("agent pro") ||
-    text.includes("membership")
-  ) {
-    return "membership";
+  if (paymentType === "education" || productType === "education") {
+    return "education";
   }
 
   return "other";
 }
 
-function inferPackageName(payment?: PaymentRow, billing?: BillingRow) {
-  const productId = inferProductId(payment, billing);
-
-  if (productId === "silver") return "Silver";
-  if (productId === "gold") return "Gold";
-  if (productId === "agent-pro") return "Agent Pro";
-  if (productId === "boost-listing") return "Boost Listing";
-  if (productId === "homepage-spotlight") return "Homepage Spotlight";
-
-  const metadataPackageName = getMetaString(payment?.metadata, "packageName");
-  if (metadataPackageName) return metadataPackageName;
-
-  const text = joinTexts([
-    billing?.plan_code,
-    payment?.product_name,
-    payment?.payment_title,
-    payment?.payment_description,
-    payment?.billing_note,
-    billing?.description,
-    billing?.bill_type,
-  ]);
-
-  if (text.includes("agent pro")) return "Agent Pro";
-  if (text.includes("gold")) return "Gold";
-  if (text.includes("silver")) return "Silver";
-  if (text.includes("homepage spotlight")) return "Homepage Spotlight";
-  if (text.includes("spotlight")) return "Homepage Spotlight";
-  if (text.includes("boost")) return "Boost Listing";
-
-  return cleanText(
-    billing?.plan_code ||
-      payment?.product_name ||
-      payment?.payment_title ||
-      billing?.description ||
-      payment?.payment_description ||
-      billing?.bill_type
-  );
-}
-
 function inferBillingType(
-  payment?: PaymentRow,
-  billing?: BillingRow,
-  lang: string = "id"
+  row: PaymentTransactionRow,
+  matchedMembership: AgentMembershipRow | null,
+  lang: string
 ) {
-  const currentLang = lang === "id" ? "id" : "en";
+  const isID = lang === "id";
 
-  const selectedBillingCycle = getMetaString(payment?.metadata, "selectedBillingCycle").toLowerCase();
+  const direct =
+    getMetaString(row.metadata, "selectedBillingCycle") ||
+    getMetaString(row.metadata, "selected_billing_cycle") ||
+    getMetaString(row.metadata, "billingCycle") ||
+    getMetaString(row.metadata, "billing_cycle") ||
+    matchedMembership?.billing_cycle ||
+    "";
 
-  if (selectedBillingCycle === "monthly") {
-    return currentLang === "id" ? "Bulanan" : "Monthly";
-  }
+  const normalized = String(direct || "").toLowerCase();
 
-  if (selectedBillingCycle === "yearly") {
-    return currentLang === "id" ? "Tahunan" : "Yearly";
-  }
+  if (normalized === "monthly") return isID ? "Bulanan" : "Monthly";
+  if (normalized === "yearly") return isID ? "Tahunan" : "Yearly";
 
-  const productType = String(payment?.product_type || "").trim().toLowerCase();
-  const flow = String(payment?.flow || "").trim().toLowerCase();
-  const productId = inferProductId(payment, billing);
-
-  if (
-    productType === "addon" ||
-    flow === "boost-listing" ||
-    flow === "homepage-spotlight" ||
-    productId === "boost-listing" ||
-    productId === "homepage-spotlight"
-  ) {
-    return "Add-On";
-  }
-
-  const text = joinTexts([
-    billing?.plan_code,
-    billing?.bill_type,
-    payment?.product_name,
-    payment?.payment_title,
-    payment?.payment_description,
-    payment?.billing_note,
-    billing?.description,
-  ]);
-
-  if (text.includes("monthly") || text.includes("bulanan")) {
-    return currentLang === "id" ? "Bulanan" : "Monthly";
-  }
-
-  if (
-    text.includes("yearly") ||
-    text.includes("tahunan") ||
-    text.includes("annual") ||
-    text.includes("per year")
-  ) {
-    return currentLang === "id" ? "Tahunan" : "Yearly";
-  }
-
-  if (
-    text.includes("boost") ||
-    text.includes("spotlight") ||
-    text.includes("addon") ||
-    text.includes("add-on")
-  ) {
-    return "Add-On";
-  }
+  const category = inferCategory(row);
+  if (category === "addon") return "Add-On";
+  if (category === "education") return "Education";
 
   return "-";
 }
 
-function buildRenewTarget(item: HistoryItem): RenewTarget {
-  if (item.category === "membership" && item.productId) {
-    return {
-      kind: "membership",
-      href: `/agentdashboard/paket?renew=1&package=${encodeURIComponent(
-        item.productId
-      )}`,
-    };
+function inferPackageName(
+  row: PaymentTransactionRow,
+  matchedMembership: AgentMembershipRow | null
+) {
+  return cleanText(
+    matchedMembership?.package_name ||
+      getMetaString(row.metadata, "packageName") ||
+      getMetaString(row.metadata, "package_name") ||
+      row.product_name_snapshot ||
+      row.plan_name ||
+      row.product_id ||
+      row.description
+  );
+}
+
+function inferExpiryDate(
+  row: PaymentTransactionRow,
+  matchedMembership: AgentMembershipRow | null
+) {
+  return (
+    matchedMembership?.expires_at ||
+    getNestedMetaString(row.metadata, "activation", "expiresAt") ||
+    getNestedMetaString(row.metadata, "activation", "endsAt") ||
+    getMetaString(row.metadata, "expires_at") ||
+    row.checkout_expires_at ||
+    null
+  );
+}
+
+function getPaymentTypeLabel(row: PaymentTransactionRow, lang: string) {
+  const isID = lang === "id";
+  const paymentType = String(row.payment_type || "").toLowerCase();
+
+  if (paymentType === "package") return isID ? "Membership Agen" : "Agent Membership";
+  if (paymentType === "boost") return "Boost Listing";
+  if (paymentType === "spotlight") return "Homepage Spotlight";
+  if (paymentType === "education") return "Education";
+  if (paymentType === "listing_fee") return isID ? "Biaya Listing" : "Listing Fee";
+  if (paymentType === "featured") return "Featured Listing";
+
+  return cleanText(row.payment_type || row.product_type || "Payment");
+}
+
+function buildRenewHref(item: {
+  category: HistoryCategory;
+  productId: string;
+  listingCode: string;
+}) {
+  if (item.category === "membership" && item.productId && item.productId !== "-") {
+    return `/agentdashboard/paket?renew=1&package=${encodeURIComponent(
+      item.productId
+    )}`;
   }
 
   if (
     item.category === "addon" &&
     item.productId &&
-    item.listingCode !== "-" &&
-    item.listingCode
+    item.productId !== "-" &&
+    item.listingCode &&
+    item.listingCode !== "-"
   ) {
-    return {
-      kind: "addon",
-      href: `/agentdashboard/pembayaran?flow=addon&product=${encodeURIComponent(
-        item.productId
-      )}&kode=${encodeURIComponent(item.listingCode)}`,
-    };
+    return `/agentdashboard/pembayaran?flow=addon&product=${encodeURIComponent(
+      item.productId
+    )}&kode=${encodeURIComponent(item.listingCode)}`;
   }
 
+  return "";
+}
+
+function mapTransactionToHistoryItem(
+  row: PaymentTransactionRow,
+  memberships: AgentMembershipRow[],
+  lang: string
+): HistoryItem {
+  const matchedMembership =
+    memberships.find((m) => m.payment_id === row.id) || null;
+
+  const category = inferCategory(row);
+  const productId = cleanText(row.product_id);
+  const packageName = inferPackageName(row, matchedMembership);
+  const billingType = inferBillingType(row, matchedMembership, lang);
+  const status = normalizeStatus(row.status);
+  const listingCode = cleanText(
+    row.property_code_snapshot ||
+      getMetaString(row.metadata, "existingPropertyCode") ||
+      getMetaString(row.metadata, "listing_code")
+  );
+
+  const expiryRaw = inferExpiryDate(row, matchedMembership);
+
+  const baseForRenew = {
+    category,
+    productId,
+    listingCode,
+  };
+
+  const renewHref = buildRenewHref(baseForRenew);
+
+  const method =
+    String(row.stripe_checkout_session_id || row.stripe_payment_intent_id || "")
+      .trim()
+      ? "Card via Stripe"
+      : "Stripe";
+
+  const title =
+    row.description ||
+    getMetaString(row.metadata, "paymentTitle") ||
+    getMetaString(row.metadata, "payment_title") ||
+    packageName;
+
   return {
-    kind: "none",
-    href: "",
+    id: row.id,
+    paymentId: row.id,
+    sortDate: row.created_at || row.updated_at || new Date().toISOString(),
+
+    title: cleanText(title),
+    packageName,
+    paymentType: getPaymentTypeLabel(row, lang),
+    category,
+    productId,
+    planCode: productId,
+    billingType,
+    listingCode,
+
+    amount: formatAmount(row.amount_total ?? row.amount_subtotal ?? 0, row.currency),
+    method,
+    status,
+
+    createdDate: formatDate(row.created_at, lang),
+    createdDateTime: formatDateTime(row.created_at, lang),
+    paidDate: formatDate(row.paid_at, lang),
+    paidDateTime: formatDateTime(row.paid_at, lang),
+    expiryDate: formatDate(expiryRaw, lang),
+
+    checkoutUrl: emptyToBlank(row.checkout_url),
+    receiptUrl: emptyToBlank(row.receipt_url),
+    hostedInvoiceUrl: emptyToBlank(row.hosted_invoice_url),
+    invoicePdfUrl: emptyToBlank(row.invoice_pdf_url),
+
+    canRetry:
+      Boolean(row.checkout_url) &&
+      ["checkout_created", "pending", "failed", "expired", "unpaid"].includes(
+        status
+      ),
+    canRenew: Boolean(renewHref),
+    renewHref,
   };
 }
 
 export default function AgentTagihanPage() {
   const { lang } = useLanguage();
+  const isID = lang === "id";
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [memberships, setMemberships] = useState<AgentMembershipRow[]>([]);
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [paymentResult, setPaymentResult] = useState<
+    "success" | "cancelled" | null
+  >(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+
+    if (payment === "success") {
+      setPaymentResult("success");
+    } else if (payment === "cancelled") {
+      setPaymentResult("cancelled");
+    }
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -528,205 +544,118 @@ export default function AgentTagihanPage() {
       if (ignore) return;
 
       if (authError || !user) {
-        setError(lang === "id" ? "Silakan login ulang." : "Please log in again.");
+        setError(isID ? "Silakan login ulang." : "Please log in again.");
         setItems([]);
+        setMemberships([]);
         setLoading(false);
         return;
       }
 
-      const [paymentsRes, billingsRes] = await Promise.all([
+      const [membershipsRes, transactionsRes] = await Promise.all([
         supabase
-          .from("payments")
-          .select("*")
+          .from("agent_memberships")
+          .select(
+            `
+              id,
+              user_id,
+              payment_id,
+              package_id,
+              package_name,
+              billing_cycle,
+              listing_limit,
+              status,
+              auto_renew,
+              starts_at,
+              expires_at,
+              metadata,
+              created_at,
+              updated_at
+            `
+          )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false }),
 
         supabase
-          .from("billing_records")
-          .select("*")
+          .from("payment_transactions")
+          .select(
+            `
+              id,
+              user_id,
+              property_id,
+              source_role,
+              payment_type,
+              product_id,
+              product_name_snapshot,
+              product_type,
+              status,
+              currency,
+              amount_subtotal,
+              amount_total,
+              description,
+              plan_name,
+              duration_days,
+              property_title_snapshot,
+              property_code_snapshot,
+              customer_name,
+              customer_email,
+              checkout_url,
+              checkout_expires_at,
+              stripe_checkout_session_id,
+              stripe_payment_intent_id,
+              stripe_charge_id,
+              stripe_invoice_id,
+              receipt_url,
+              hosted_invoice_url,
+              invoice_pdf_url,
+              paid_at,
+              expired_at,
+              failed_at,
+              metadata,
+              created_at,
+              updated_at
+            `
+          )
           .eq("user_id", user.id)
+          .eq("source_role", "agent")
           .order("created_at", { ascending: false }),
       ]);
 
       if (ignore) return;
 
-      if (paymentsRes.error) {
-        console.error("Failed to load agent payments:", paymentsRes.error);
+      if (membershipsRes.error) {
+        console.error("Failed to load agent memberships:", membershipsRes.error);
       }
 
-      if (billingsRes.error) {
-        console.error("Failed to load agent billing records:", billingsRes.error);
+      if (transactionsRes.error) {
+        console.error("Failed to load payment transactions:", transactionsRes.error);
       }
 
-      if (paymentsRes.error && billingsRes.error) {
+      if (membershipsRes.error && transactionsRes.error) {
         setError(
-          lang === "id"
-            ? "Gagal memuat riwayat tagihan."
-            : "Failed to load billing history."
+          isID
+            ? "Gagal memuat tagihan agen."
+            : "Failed to load agent billing."
         );
         setItems([]);
+        setMemberships([]);
         setLoading(false);
         return;
       }
 
-      const payments = (paymentsRes.data || []) as PaymentRow[];
-      const billings = (billingsRes.data || []) as BillingRow[];
+      const membershipRows = (membershipsRes.data || []) as AgentMembershipRow[];
+      const transactionRows = (transactionsRes.data ||
+        []) as PaymentTransactionRow[];
 
-      const billingMap = new Map<string, BillingRow>();
-      billings.forEach((billing) => {
-        billingMap.set(billing.id, billing);
-      });
-
-      const latestPaymentByBillingId = new Map<string, PaymentRow>();
-      payments.forEach((payment) => {
-        if (
-          payment.billing_record_id &&
-          !latestPaymentByBillingId.has(payment.billing_record_id)
-        ) {
-          latestPaymentByBillingId.set(payment.billing_record_id, payment);
-        }
-      });
-
-      const billingItems: HistoryItem[] = billings.map((billing) => {
-        const latestPayment = latestPaymentByBillingId.get(billing.id);
-        const status = normalizeHistoryStatus(
-          latestPayment?.status,
-          billing.status
+      const historyItems = transactionRows
+        .map((row) => mapTransactionToHistoryItem(row, membershipRows, lang))
+        .sort(
+          (a, b) =>
+            new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime()
         );
 
-        const packageName = inferPackageName(latestPayment, billing);
-        const billingType = inferBillingType(latestPayment, billing, lang);
-        const category = inferCategory(latestPayment, billing);
-        const productId = inferProductId(latestPayment, billing);
-
-        const methodText = cleanText(
-          latestPayment?.payment_method ||
-            latestPayment?.method ||
-            latestPayment?.gateway ||
-            latestPayment?.provider
-        );
-
-        const rawTitle = latestPayment
-          ? buildTitleFromPayment(latestPayment)
-          : buildTitleFromBilling(billing);
-
-        return {
-          id: billing.id,
-          billingId: billing.id,
-          paymentId: latestPayment?.id || "",
-          sortDate:
-            latestPayment?.created_at ||
-            billing.created_at ||
-            new Date().toISOString(),
-
-          title:
-            rawTitle === "Tetamo Payment" && packageName !== "-"
-              ? packageName
-              : rawTitle,
-
-          packageName,
-          billingType,
-          category,
-          productId,
-
-          listingCode: cleanText(
-            latestPayment?.listing_code || billing.listing_code
-          ),
-          invoiceNumber: cleanText(billing.invoice_number),
-          receiptNumber: cleanText(latestPayment?.receipt_number),
-          planCode: cleanText(billing.plan_code),
-          billType: cleanText(billing.bill_type),
-
-          amount: formatAmount(
-            latestPayment?.amount ?? billing.total ?? billing.amount ?? 0,
-            latestPayment?.amount_idr ?? null,
-            latestPayment?.currency ?? billing.currency ?? "IDR"
-          ),
-
-          method: methodText,
-          createdDate: formatDate(billing.created_at),
-          dueDate: formatDate(billing.due_at),
-          paidDate: formatDate(latestPayment?.paid_at || billing.paid_at),
-          expiryDate: formatDate(latestPayment?.expires_at || null),
-
-          status,
-          checkoutUrl:
-            cleanText(latestPayment?.checkout_url) === "-"
-              ? ""
-              : cleanText(latestPayment?.checkout_url),
-        };
-      });
-
-      const orphanPayments: HistoryItem[] = payments
-        .filter(
-          (payment) =>
-            !payment.billing_record_id || !billingMap.has(payment.billing_record_id)
-        )
-        .map((payment) => {
-          const packageName = inferPackageName(payment, undefined);
-          const billingType = inferBillingType(payment, undefined, lang);
-          const category = inferCategory(payment, undefined);
-          const productId = inferProductId(payment, undefined);
-
-          const methodText = cleanText(
-            payment.payment_method ||
-              payment.method ||
-              payment.gateway ||
-              payment.provider
-          );
-
-          const rawTitle = buildTitleFromPayment(payment);
-
-          return {
-            id: payment.id,
-            billingId: "",
-            paymentId: payment.id,
-            sortDate: payment.created_at || new Date().toISOString(),
-
-            title:
-              rawTitle === "Tetamo Payment" && packageName !== "-"
-                ? packageName
-                : rawTitle,
-
-            packageName,
-            billingType,
-            category,
-            productId,
-
-            listingCode: cleanText(payment.listing_code),
-            invoiceNumber: "-",
-            receiptNumber: cleanText(payment.receipt_number),
-            planCode: "-",
-            billType: "-",
-
-            amount: formatAmount(
-              payment.amount ?? 0,
-              payment.amount_idr ?? null,
-              payment.currency
-            ),
-
-            method: methodText,
-            createdDate: formatDate(payment.created_at),
-            dueDate: "-",
-            paidDate: formatDate(payment.paid_at),
-            expiryDate: formatDate(payment.expires_at),
-
-            status: normalizeHistoryStatus(payment.status, null),
-            checkoutUrl:
-              cleanText(payment.checkout_url) === "-"
-                ? ""
-                : cleanText(payment.checkout_url),
-          };
-        });
-
-      const merged = [...billingItems, ...orphanPayments].sort((a, b) => {
-        return new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime();
-      });
-
-      if (!ignore) {
-        setItems(merged);
-        setLoading(false);
-      }
+      setMemberships(membershipRows);
+      setItems(historyItems);
+      setLoading(false);
     }
 
     loadBillingHistory();
@@ -734,7 +663,30 @@ export default function AgentTagihanPage() {
     return () => {
       ignore = true;
     };
-  }, [lang]);
+  }, [lang, isID]);
+
+  const activeMembership = useMemo(() => {
+    const now = new Date();
+
+    const active = memberships.find((membership) => {
+      const expiresAt = membership.expires_at
+        ? new Date(membership.expires_at)
+        : null;
+
+      return (
+        membership.status === "active" &&
+        (!expiresAt ||
+          Number.isNaN(expiresAt.getTime()) ||
+          expiresAt.getTime() >= now.getTime())
+      );
+    });
+
+    return active || memberships[0] || null;
+  }, [memberships]);
+
+  const latestPayment = useMemo(() => {
+    return items[0] || null;
+  }, [items]);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return items;
@@ -745,64 +697,135 @@ export default function AgentTagihanPage() {
       const searchable = `
         ${item.title}
         ${item.packageName}
+        ${item.paymentType}
         ${item.billingType}
         ${item.planCode}
-        ${item.billType}
         ${item.listingCode}
-        ${item.invoiceNumber}
-        ${item.receiptNumber}
         ${item.method}
         ${item.status}
         ${item.productId}
+        ${item.amount}
       `.toLowerCase();
 
       return words.every((word) => searchable.includes(word));
     });
   }, [searchQuery, items]);
 
-  const latestMembership = useMemo(() => {
-    return items.find((item) => item.category === "membership") ?? null;
-  }, [items]);
+  const activeMembershipUI = activeMembership
+    ? membershipStatusUI(activeMembership.status, activeMembership.expires_at, lang)
+    : null;
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-5 sm:py-8 lg:px-6 lg:py-10">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-xl font-bold tracking-tight text-[#1C1C1E] sm:text-2xl">
-            {lang === "id" ? "Tagihan Agen" : "Agent Billing"}
+            {isID ? "Tagihan Agen" : "Agent Billing"}
           </h1>
+
           <p className="mt-1 text-xs text-gray-500 sm:text-sm">
-            {lang === "id"
-              ? "Lihat paket yang dipilih, kode tagihan, invoice, receipt, dan status pembayaran Anda di sini."
-              : "View your selected package, billing codes, invoice, receipt, and payment status here."}
+            {isID
+              ? "Lihat status membership, pembayaran Stripe, invoice, receipt, dan riwayat tagihan Anda di sini."
+              : "View your membership status, Stripe payments, invoices, receipts, and billing history here."}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] text-gray-500 sm:text-xs">
-              {lang === "id" ? "Paket Terakhir" : "Latest Package"}
+        {paymentResult === "success" ? (
+          <div className="mb-5 rounded-3xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 shadow-sm">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">
+                  {isID ? "Pembayaran berhasil." : "Payment successful."}
+                </p>
+                <p className="mt-1 leading-6">
+                  {isID
+                    ? "Stripe telah menerima pembayaran Anda. Membership akan tampil aktif setelah webhook selesai memproses pembayaran."
+                    : "Stripe has received your payment. Your membership will appear active once the webhook finishes processing the payment."}
+                </p>
+              </div>
             </div>
-            <div className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-              {latestMembership?.packageName || "-"}
+          </div>
+        ) : null}
+
+        {paymentResult === "cancelled" ? (
+          <div className="mb-5 rounded-3xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800 shadow-sm">
+            <div className="flex items-start gap-3">
+              <RefreshCw className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">
+                  {isID ? "Pembayaran dibatalkan." : "Payment cancelled."}
+                </p>
+                <p className="mt-1 leading-6">
+                  {isID
+                    ? "Anda dapat melanjutkan pembayaran dari riwayat tagihan jika checkout masih tersedia."
+                    : "You can continue payment from the billing history if the checkout is still available."}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+              <PackageCheck className="h-4 w-4" />
+              {isID ? "Paket Aktif" : "Active Package"}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+              {activeMembership?.package_name || "-"}
             </div>
           </div>
 
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] text-gray-500 sm:text-xs">
-              {lang === "id" ? "Tipe Tagihan" : "Billing Type"}
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+              <ShieldCheck className="h-4 w-4" />
+              {isID ? "Limit Listing" : "Listing Limit"}
             </div>
-            <div className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-              {latestMembership?.billingType || "-"}
+            <div className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+              {activeMembership?.listing_limit
+                ? isID
+                  ? `${activeMembership.listing_limit} listing aktif`
+                  : `${activeMembership.listing_limit} active listings`
+                : "-"}
             </div>
           </div>
 
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] text-gray-500 sm:text-xs">
-              {lang === "id" ? "Status Terakhir" : "Latest Status"}
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+              <CreditCard className="h-4 w-4" />
+              {isID ? "Tipe Tagihan" : "Billing Type"}
             </div>
-            <div className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-              {latestMembership ? statusUI(latestMembership.status, lang).label : "-"}
+            <div className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
+              {activeMembership?.billing_cycle
+                ? activeMembership.billing_cycle === "monthly"
+                  ? isID
+                    ? "Bulanan"
+                    : "Monthly"
+                  : isID
+                  ? "Tahunan"
+                  : "Yearly"
+                : "-"}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+              <CalendarDays className="h-4 w-4" />
+              {isID ? "Status / Expired" : "Status / Expiry"}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {activeMembershipUI ? (
+                <span
+                  className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium sm:text-xs ${activeMembershipUI.badge}`}
+                >
+                  {activeMembershipUI.label}
+                </span>
+              ) : null}
+
+              <span className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                {formatDate(activeMembership?.expires_at || null, lang)}
+              </span>
             </div>
           </div>
         </div>
@@ -816,9 +839,9 @@ export default function AgentTagihanPage() {
           <input
             type="text"
             placeholder={
-              lang === "id"
-                ? "Cari paket, invoice, receipt, plan code, atau status..."
-                : "Search package, invoice, receipt, plan code, or status..."
+              isID
+                ? "Cari paket, billing type, plan code, status, atau metode..."
+                : "Search package, billing type, plan code, status, or method..."
             }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -829,9 +852,7 @@ export default function AgentTagihanPage() {
         <div className="mt-6 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-8">
           {loading ? (
             <div className="p-4 text-xs text-gray-500 sm:p-6 sm:text-sm">
-              {lang === "id"
-                ? "Memuat riwayat tagihan..."
-                : "Loading billing history..."}
+              {isID ? "Memuat riwayat tagihan..." : "Loading billing history..."}
             </div>
           ) : error ? (
             <div className="p-4 text-xs text-red-600 sm:p-6 sm:text-sm">
@@ -839,22 +860,12 @@ export default function AgentTagihanPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-4 text-xs text-gray-500 sm:p-6 sm:text-sm">
-              {lang === "id"
-                ? "Belum ada riwayat tagihan."
-                : "No billing history yet."}
+              {isID ? "Belum ada riwayat tagihan." : "No billing history yet."}
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
               {filtered.map((item) => {
                 const ui = statusUI(item.status, lang);
-                const canRetry =
-                  Boolean(item.checkoutUrl) &&
-                  ["initiated", "pending", "failed", "expired", "unpaid"].includes(
-                    item.status
-                  );
-
-                const renewTarget = buildRenewTarget(item);
-                const canRenew = renewTarget.kind !== "none";
 
                 return (
                   <div
@@ -870,11 +881,11 @@ export default function AgentTagihanPage() {
                         </span>
 
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 sm:px-3 sm:text-xs">
-                          {item.billingType === "-"
-                            ? lang === "id"
-                              ? "Tagihan"
-                              : "Billing"
-                            : item.billingType}
+                          {item.billingType === "-" ? item.paymentType : item.billingType}
+                        </span>
+
+                        <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 sm:px-3 sm:text-xs">
+                          {item.paymentType}
                         </span>
                       </div>
 
@@ -893,50 +904,39 @@ export default function AgentTagihanPage() {
                             {item.packageName}
                           </span>
                         </p>
+
                         <p>
-                          {lang === "id" ? "Tipe Tagihan:" : "Billing Type:"}{" "}
+                          {isID ? "Tipe Tagihan:" : "Billing Type:"}{" "}
                           <span className="font-medium text-gray-700">
                             {item.billingType}
                           </span>
                         </p>
+
                         <p>
                           Plan Code:{" "}
                           <span className="font-medium text-gray-700">
                             {item.planCode}
                           </span>
                         </p>
-                        <p>
-                          Bill Type:{" "}
-                          <span className="font-medium text-gray-700">
-                            {item.billType}
-                          </span>
-                        </p>
+
                         <p>
                           Listing Code:{" "}
                           <span className="font-medium text-gray-700">
                             {item.listingCode}
                           </span>
                         </p>
+
                         <p>
                           Method:{" "}
                           <span className="font-medium text-gray-700">
                             {item.method}
                           </span>
                         </p>
+
                         <p>
-                          Invoice:{" "}
-                          <span className="font-medium text-gray-700">
-                            {item.invoiceNumber}
-                          </span>
-                        </p>
-                        <p>
-                          Receipt:{" "}
-                          <span className="font-medium text-gray-700">
-                            {item.receiptNumber === "-"
-                              ? lang === "id"
-                                ? "Belum tersedia"
-                                : "Not available yet"
-                              : item.receiptNumber}
+                          Payment ID:{" "}
+                          <span className="break-all font-medium text-gray-700">
+                            {item.paymentId}
                           </span>
                         </p>
                       </div>
@@ -946,61 +946,94 @@ export default function AgentTagihanPage() {
                       <p className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
                         {item.amount}
                       </p>
+
                       <p>
-                        {lang === "id" ? "Dibuat:" : "Created:"} {item.createdDate}
+                        {isID ? "Dibuat:" : "Created:"} {item.createdDateTime}
                       </p>
+
                       <p>
-                        {lang === "id" ? "Jatuh Tempo:" : "Due:"} {item.dueDate}
+                        {isID ? "Dibayar:" : "Paid:"} {item.paidDateTime}
                       </p>
+
                       <p>
-                        {lang === "id" ? "Dibayar:" : "Paid:"} {item.paidDate}
-                      </p>
-                      <p>
-                        {lang === "id" ? "Kedaluwarsa:" : "Expired:"} {item.expiryDate}
+                        {isID ? "Expired:" : "Expiry:"} {item.expiryDate}
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[220px] lg:flex-col lg:items-end">
-                      {item.invoiceNumber !== "-" ? (
-                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 sm:text-xs">
-                          Invoice Ready
-                        </span>
-                      ) : null}
-
-                      {item.receiptNumber !== "-" && item.paymentId ? (
+                    <div className="flex flex-wrap items-start gap-2 lg:min-w-[230px] lg:flex-col lg:items-end">
+                      {item.status === "paid" ? (
                         <Link
                           href={`/agentdashboard/tagihan/receipt/${item.paymentId}`}
-                          className="inline-flex rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-medium text-green-700 transition hover:bg-green-100 sm:px-4 sm:text-sm"
+                          className="inline-flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-medium text-green-700 transition hover:bg-green-100 sm:px-4 sm:text-sm"
                         >
-                          {lang === "id" ? "Lihat Receipt" : "View Receipt"}
+                          <Receipt className="h-4 w-4" />
+                          {isID ? "Lihat Receipt" : "View Receipt"}
                         </Link>
                       ) : null}
 
-                      {canRenew ? (
-                        <Link
-                          href={renewTarget.href}
-                          className="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-100 sm:px-4 sm:text-sm"
+                      {item.receiptUrl ? (
+                        <a
+                          href={item.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
                         >
-                          {renewTarget.kind === "membership"
-                            ? lang === "id"
+                          <ExternalLink className="h-4 w-4" />
+                          Stripe Receipt
+                        </a>
+                      ) : null}
+
+                      {item.hostedInvoiceUrl ? (
+                        <a
+                          href={item.hostedInvoiceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Stripe Invoice
+                        </a>
+                      ) : null}
+
+                      {item.invoicePdfUrl ? (
+                        <a
+                          href={item.invoicePdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
+                        >
+                          <FileText className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : null}
+
+                      {item.canRenew ? (
+                        <Link
+                          href={item.renewHref}
+                          className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 transition hover:bg-blue-100 sm:px-4 sm:text-sm"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          {item.category === "membership"
+                            ? isID
                               ? "Perpanjang Membership"
                               : "Renew Membership"
-                            : lang === "id"
+                            : isID
                             ? "Perpanjang Add-On"
                             : "Renew Add-On"}
                         </Link>
                       ) : null}
 
-                      {canRetry ? (
+                      {item.canRetry ? (
                         <a
                           href={item.checkoutUrl}
-                          className="inline-flex rounded-xl bg-[#1C1C1E] px-3.5 py-2 text-xs font-medium text-white transition hover:opacity-90 sm:px-4 sm:text-sm"
+                          className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-3.5 py-2 text-xs font-medium text-white transition hover:opacity-90 sm:px-4 sm:text-sm"
                         >
+                          <CreditCard className="h-4 w-4" />
                           {item.status === "failed" || item.status === "expired"
-                            ? lang === "id"
+                            ? isID
                               ? "Coba Lagi"
                               : "Try Again"
-                            : lang === "id"
+                            : isID
                             ? "Lanjutkan Bayar"
                             : "Continue Payment"}
                         </a>
