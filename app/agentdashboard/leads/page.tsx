@@ -1,16 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import {
+  CalendarDays,
+  MessageCircle,
+  Phone,
+  Search,
+  UserCheck,
+} from "lucide-react";
+import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
 type LeadStatus = "new" | "contacted" | "viewing" | "interested" | "closed";
 type ViewingStatus = "scheduled" | "rescheduled" | "done" | "no_show" | null;
 type StatusFilter = "all" | LeadStatus;
+type SourceFilter = "all" | "whatsapp" | "viewing" | "general";
 
 type LeadRow = {
   id: string;
   property_id: string | null;
+  property_code: string | null;
+  property_title: string | null;
+  source: string | null;
   sender_name: string | null;
   sender_phone: string | null;
   sender_email: string | null;
@@ -49,6 +60,8 @@ type Lead = {
   createdAt: string;
   status: LeadStatus;
   leadType: string;
+  source: string;
+  sourceType: SourceFilter;
   viewingDate: string | null;
   viewingTime: string | null;
   viewingStatus: ViewingStatus;
@@ -61,79 +74,135 @@ function normalizeLeadStatus(value?: string | null): LeadStatus {
   if (v === "viewing") return "viewing";
   if (v === "interested") return "interested";
   if (v === "closed") return "closed";
+
   return "new";
 }
 
-function normalizeViewingStatus(value?: string | null): ViewingStatus {
+function normalizeSourceType(leadType?: string | null, source?: string | null): SourceFilter {
+  const combined = `${leadType || ""} ${source || ""}`.trim().toLowerCase();
+
+  if (
+    combined.includes("whatsapp") ||
+    combined.includes("wa") ||
+    combined.includes("chat")
+  ) {
+    return "whatsapp";
+  }
+
+  if (
+    combined.includes("viewing") ||
+    combined.includes("schedule") ||
+    combined.includes("appointment")
+  ) {
+    return "viewing";
+  }
+
+  return "general";
+}
+
+function normalizeViewingStatus(
+  value: string | null | undefined,
+  sourceType: SourceFilter
+): ViewingStatus {
   const v = (value || "").trim().toLowerCase();
 
   if (v === "scheduled") return "scheduled";
   if (v === "rescheduled") return "rescheduled";
   if (v === "done") return "done";
   if (v === "no_show") return "no_show";
+
+  if (sourceType === "viewing") return "scheduled";
+
   return null;
 }
 
-function leadStatusUI(status: LeadStatus) {
+function sourceTypeUI(source: SourceFilter, lang: string) {
+  const isID = lang === "id";
+
+  if (source === "whatsapp") {
+    return {
+      label: isID ? "Lead WhatsApp" : "WhatsApp Lead",
+      badgeClass: "bg-green-50 text-green-700 border-green-200",
+    };
+  }
+
+  if (source === "viewing") {
+    return {
+      label: isID ? "Request Viewing" : "Viewing Request",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
+    };
+  }
+
+  return {
+    label: isID ? "Inquiry Umum" : "General Inquiry",
+    badgeClass: "bg-gray-100 text-gray-700 border-gray-200",
+  };
+}
+
+function leadStatusUI(status: LeadStatus, lang: string) {
+  const isID = lang === "id";
+
   if (status === "new") {
     return {
-      label: "Baru",
+      label: isID ? "Baru" : "New",
       badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
     };
   }
 
   if (status === "contacted") {
     return {
-      label: "Sudah Dihubungi",
+      label: isID ? "Dihubungi" : "Contacted",
       badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
     };
   }
 
   if (status === "viewing") {
     return {
-      label: "Jadwal Viewing",
+      label: isID ? "Tahap Viewing" : "Viewing Stage",
       badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
     };
   }
 
   if (status === "interested") {
     return {
-      label: "Sangat Tertarik",
+      label: isID ? "Tertarik" : "Interested",
       badgeClass: "bg-green-50 text-green-700 border-green-200",
     };
   }
 
   return {
-    label: "Selesai",
-    badgeClass: "bg-gray-100 text-gray-700 border-gray-200",
+    label: "Closed",
+    badgeClass: "bg-black text-white border-black",
   };
 }
 
-function viewingStatusUI(status: ViewingStatus) {
+function viewingStatusUI(status: ViewingStatus, lang: string) {
+  const isID = lang === "id";
+
   if (status === "scheduled") {
     return {
-      label: "Terjadwal",
+      label: isID ? "Terjadwal" : "Scheduled",
       badgeClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
     };
   }
 
   if (status === "rescheduled") {
     return {
-      label: "Dijadwalkan Ulang",
+      label: isID ? "Dijadwalkan Ulang" : "Rescheduled",
       badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
     };
   }
 
   if (status === "done") {
     return {
-      label: "Viewing Selesai",
+      label: isID ? "Jadwal Selesai" : "Appointment Done",
       badgeClass: "bg-green-50 text-green-700 border-green-200",
     };
   }
 
   if (status === "no_show") {
     return {
-      label: "No Show",
+      label: isID ? "Tidak Hadir" : "No Show",
       badgeClass: "bg-red-50 text-red-700 border-red-200",
     };
   }
@@ -149,21 +218,39 @@ function formatCurrency(value: number | null | undefined) {
   }).format(value || 0);
 }
 
-function formatDate(value?: string | null) {
+function parseLocalDate(value?: string | null) {
+  if (!value) return null;
+
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3) return null;
+
+  const [year, month, day] = parts;
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+}
+
+function formatDate(value: string | null | undefined, lang: string) {
   if (!value) return "-";
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+  const parsed = parseLocalDate(value) || new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
 
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(date);
+  }).format(parsed);
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return "-";
+  return value.length >= 5 ? value.slice(0, 5) : value;
 }
 
 function normalizePhoneForWhatsapp(phone?: string | null) {
   if (!phone) return "";
+
   const digits = phone.replace(/[^\d]/g, "");
 
   if (digits.startsWith("62")) return digits;
@@ -185,14 +272,150 @@ function buildPropertyLocation(row?: PropertyRow | null) {
   return parts.length > 0 ? parts.join(", ") : "-";
 }
 
+function buildPropertyUrl(lead: Lead) {
+  if (lead.propertyId) {
+    return `https://www.tetamo.com/properti/${lead.propertyId}`;
+  }
+
+  return "https://www.tetamo.com";
+}
+
 export default function AgentLeadsPage() {
+  const { lang } = useLanguage();
+  const isID = lang === "id";
+
+  const ui = useMemo(
+    () =>
+      isID
+        ? {
+            pageTitle: "Leads",
+            pageDesc:
+              "Kelola semua leads buyer berdasarkan sumber, status follow-up, dan progres viewing.",
+            searchPlaceholder:
+              "Cari buyer, nomor, email, kode listing, lokasi, harga, atau pesan...",
+            listTitle: "Daftar Leads",
+            loading: "Memuat leads...",
+            empty: "Belum ada leads untuk agent ini.",
+            loginError: "Silakan login sebagai agent terlebih dahulu.",
+            updateError: "Gagal mengubah status lead.",
+            all: "Semua",
+            sourceAll: "Semua Sumber",
+            sourceWhatsapp: "WhatsApp",
+            sourceViewing: "Request Viewing",
+            sourceGeneral: "Inquiry Umum",
+            new: "Baru",
+            contacted: "Dihubungi",
+            viewing: "Tahap Viewing",
+            interested: "Tertarik",
+            closed: "Closed",
+            contact: "Hubungi",
+            whatsapp: "WhatsApp",
+            noPhone: "Nomor tidak tersedia",
+            property: "Properti",
+            code: "Kode",
+            location: "Lokasi",
+            price: "Harga",
+            messageLabel: "Pesan",
+            requestedSchedule: "Jadwal diminta",
+            leadSource: "Sumber Lead",
+            leadStage: "Tahap Lead",
+            show: (start: number, end: number, total: number) =>
+              `Menampilkan ${start}–${end} dari ${total} leads`,
+            prev: "Sebelumnya",
+            next: "Berikutnya",
+            noName: "Tanpa Nama",
+            noProperty: "Properti",
+            message: (lead: Lead, agentName: string) =>
+              `Halo ${lead.buyerName},
+
+Saya ${agentName}, agent dari TETAMO.
+
+Anda sebelumnya menghubungi kami terkait properti berikut:
+
+🏠 ${lead.propertyTitle}
+📍 ${lead.propertyLocation}
+💰 ${lead.propertyPrice}
+
+${buildPropertyUrl(lead)}
+
+Jika Anda berminat, kita bisa:
+
+1️⃣ Diskusi lebih lanjut
+2️⃣ Kirim detail lengkap
+3️⃣ Jadwalkan viewing
+
+Silakan beri tahu waktu yang paling nyaman untuk Anda.`,
+          }
+        : {
+            pageTitle: "Leads",
+            pageDesc:
+              "Manage buyer leads by source, follow-up status, and viewing progress.",
+            searchPlaceholder:
+              "Search buyer, phone, email, listing code, location, price, or message...",
+            listTitle: "Lead List",
+            loading: "Loading leads...",
+            empty: "No leads found for this agent yet.",
+            loginError: "Please log in as an agent first.",
+            updateError: "Failed to update lead status.",
+            all: "All",
+            sourceAll: "All Sources",
+            sourceWhatsapp: "WhatsApp",
+            sourceViewing: "Viewing Request",
+            sourceGeneral: "General Inquiry",
+            new: "New",
+            contacted: "Contacted",
+            viewing: "Viewing Stage",
+            interested: "Interested",
+            closed: "Closed",
+            contact: "Call",
+            whatsapp: "WhatsApp",
+            noPhone: "Phone number unavailable",
+            property: "Property",
+            code: "Code",
+            location: "Location",
+            price: "Price",
+            messageLabel: "Message",
+            requestedSchedule: "Requested schedule",
+            leadSource: "Lead Source",
+            leadStage: "Lead Stage",
+            show: (start: number, end: number, total: number) =>
+              `Showing ${start}–${end} of ${total} leads`,
+            prev: "Previous",
+            next: "Next",
+            noName: "No Name",
+            noProperty: "Property",
+            message: (lead: Lead, agentName: string) =>
+              `Hi ${lead.buyerName},
+
+This is ${agentName}, an agent from TETAMO.
+
+You previously contacted us regarding this property:
+
+🏠 ${lead.propertyTitle}
+📍 ${lead.propertyLocation}
+💰 ${lead.propertyPrice}
+
+${buildPropertyUrl(lead)}
+
+If you are interested, we can:
+
+1️⃣ Discuss further
+2️⃣ Send full details
+3️⃣ Schedule a viewing
+
+Please let me know the most convenient time for you.`,
+          },
+    [isID]
+  );
+
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [agentName, setAgentName] = useState("Agent TETAMO");
+  const [agentName, setAgentName] = useState("TETAMO Agent");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const ITEMS_PER_PAGE = 12;
@@ -214,17 +437,21 @@ export default function AgentLeadsPage() {
       if (authError || !user) {
         setLeads([]);
         setLoading(false);
-        setErrorMessage("Silakan login sebagai agent terlebih dahulu.");
+        setErrorMessage(ui.loginError);
         return;
       }
 
       const [{ data: profileData }, { data: leadsData, error: leadsError }] =
         await Promise.all([
-          supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .maybeSingle(),
           supabase
             .from("leads")
             .select(
-              "id, property_id, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role"
+              "id, property_id, property_code, property_title, source, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role"
             )
             .eq("receiver_user_id", user.id)
             .eq("receiver_role", "agent")
@@ -245,6 +472,7 @@ export default function AgentLeadsPage() {
       }
 
       const leadRows = (leadsData || []) as LeadRow[];
+
       const propertyIds = Array.from(
         new Set(leadRows.map((lead) => lead.property_id).filter(Boolean))
       ) as string[];
@@ -267,30 +495,43 @@ export default function AgentLeadsPage() {
         }
 
         propertyMap = new Map(
-          ((propertyData || []) as PropertyRow[]).map((item) => [item.id, item])
+          ((propertyData || []) as PropertyRow[]).map((item) => [
+            item.id,
+            item,
+          ])
         );
       }
 
       const mapped: Lead[] = leadRows.map((lead) => {
-        const property = lead.property_id ? propertyMap.get(lead.property_id) : null;
+        const property = lead.property_id
+          ? propertyMap.get(lead.property_id)
+          : null;
+
+        const sourceType = normalizeSourceType(lead.lead_type, lead.source);
+        const viewingStatus = normalizeViewingStatus(
+          lead.viewing_status,
+          sourceType
+        );
 
         return {
           id: lead.id,
           propertyId: lead.property_id,
-          listingKode: property?.kode || "-",
-          propertyTitle: property?.title || "Properti",
+          listingKode: property?.kode || lead.property_code || "-",
+          propertyTitle: property?.title || lead.property_title || ui.noProperty,
           propertyPrice: formatCurrency(property?.price || 0),
           propertyLocation: buildPropertyLocation(property),
-          buyerName: lead.sender_name || "Tanpa Nama",
+          buyerName: lead.sender_name || ui.noName,
           buyerPhone: lead.sender_phone || "-",
           buyerEmail: lead.sender_email || "-",
           message: lead.message || "-",
-          createdAt: formatDate(lead.created_at),
+          createdAt: formatDate(lead.created_at, lang),
           status: normalizeLeadStatus(lead.status),
           leadType: lead.lead_type || "lead",
+          source: lead.source || "-",
+          sourceType,
           viewingDate: lead.viewing_date,
           viewingTime: lead.viewing_time,
-          viewingStatus: normalizeViewingStatus(lead.viewing_status),
+          viewingStatus,
         };
       });
 
@@ -303,11 +544,11 @@ export default function AgentLeadsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [lang, ui.loginError, ui.noName, ui.noProperty]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, sourceFilter]);
 
   async function updateLead(
     id: string,
@@ -322,23 +563,23 @@ export default function AgentLeadsPage() {
 
     if (error) {
       setUpdatingId(null);
-      alert(error.message || "Gagal mengubah status lead.");
+      alert(error.message || ui.updateError);
       return false;
     }
 
     setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === id
-          ? {
-              ...lead,
-              status: (payload.status ?? lead.status) as LeadStatus,
-              viewingStatus:
-                payload.viewing_status === undefined
-                  ? lead.viewingStatus
-                  : payload.viewing_status,
-            }
-          : lead
-      )
+      prev.map((lead) => {
+        if (lead.id !== id) return lead;
+
+        return {
+          ...lead,
+          status: (payload.status ?? lead.status) as LeadStatus,
+          viewingStatus:
+            payload.viewing_status === undefined
+              ? lead.viewingStatus
+              : normalizeViewingStatus(payload.viewing_status, lead.sourceType),
+        };
+      })
     );
 
     setUpdatingId(null);
@@ -356,7 +597,11 @@ export default function AgentLeadsPage() {
       status: nextStatus,
     };
 
-    if (target.leadType === "viewing" && nextStatus === "viewing" && !target.viewingStatus) {
+    if (
+      target.sourceType === "viewing" &&
+      nextStatus === "viewing" &&
+      !target.viewingStatus
+    ) {
       payload.viewing_status = "scheduled";
     }
 
@@ -378,6 +623,9 @@ export default function AgentLeadsPage() {
       const matchesStatus =
         statusFilter === "all" || lead.status === statusFilter;
 
+      const matchesSource =
+        sourceFilter === "all" || lead.sourceType === sourceFilter;
+
       const searchable = `
         ${lead.buyerName}
         ${lead.buyerPhone}
@@ -387,73 +635,122 @@ export default function AgentLeadsPage() {
         ${lead.propertyLocation}
         ${lead.listingKode}
         ${lead.propertyPrice}
+        ${lead.leadType}
+        ${lead.source}
+        ${lead.sourceType}
+        ${lead.status}
+        ${lead.viewingStatus || ""}
       `.toLowerCase();
 
       const matchesSearch = !q || searchable.includes(q);
 
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesSource && matchesSearch;
     });
-  }, [leads, search, statusFilter]);
+  }, [leads, search, statusFilter, sourceFilter]);
 
   const totalPages = Math.max(
     1,
     Math.ceil(filteredLeads.length / ITEMS_PER_PAGE)
   );
 
+  const safePage = Math.min(currentPage, totalPages);
+
   const paginatedLeads = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const start = (safePage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
     return filteredLeads.slice(start, end);
-  }, [filteredLeads, currentPage]);
+  }, [filteredLeads, safePage]);
 
   const startItem =
-    filteredLeads.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, filteredLeads.length);
+    filteredLeads.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+
+  const endItem = Math.min(safePage * ITEMS_PER_PAGE, filteredLeads.length);
+
+  const statusOptions: Array<{ key: StatusFilter; label: string }> = [
+    { key: "all", label: ui.all },
+    { key: "new", label: ui.new },
+    { key: "contacted", label: ui.contacted },
+    { key: "viewing", label: ui.viewing },
+    { key: "interested", label: ui.interested },
+    { key: "closed", label: ui.closed },
+  ];
+
+  const sourceOptions: Array<{ key: SourceFilter; label: string }> = [
+    { key: "all", label: ui.sourceAll },
+    { key: "whatsapp", label: ui.sourceWhatsapp },
+    { key: "viewing", label: ui.sourceViewing },
+    { key: "general", label: ui.sourceGeneral },
+  ];
 
   return (
     <div className="min-w-0">
       <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">Leads</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Kelola leads buyer dan pantau progres follow-up.
-        </p>
+        <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+          {ui.pageTitle}
+        </h1>
+        <p className="mt-1 text-sm leading-6 text-gray-500">{ui.pageDesc}</p>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative w-full lg:max-w-md">
+      <div className="mb-6 space-y-3">
+        <div className="relative w-full">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari buyer, kode listing, lokasi, pesan..."
+            placeholder={ui.searchPlaceholder}
             className="w-full rounded-2xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#1C1C1E]"
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: "all", label: "Semua" },
-            { key: "new", label: "Baru" },
-            { key: "contacted", label: "Dihubungi" },
-            { key: "viewing", label: "Viewing" },
-            { key: "interested", label: "Tertarik" },
-            { key: "closed", label: "Selesai" },
-          ].map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setStatusFilter(item.key as StatusFilter)}
-              className={[
-                "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                statusFilter === item.key
-                  ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
-              ].join(" ")}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              {ui.leadSource}
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {sourceOptions.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setSourceFilter(item.key)}
+                  className={[
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                    sourceFilter === item.key
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                      : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              {ui.leadStage}
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setStatusFilter(item.key)}
+                  className={[
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                    statusFilter === item.key
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                      : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -466,53 +763,32 @@ export default function AgentLeadsPage() {
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-4 sm:p-6">
           <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-            Daftar Leads
+            {ui.listTitle}
           </h2>
         </div>
 
         {loading ? (
-          <div className="p-6 text-sm text-gray-500">Loading leads...</div>
+          <div className="p-6 text-sm text-gray-500">{ui.loading}</div>
         ) : paginatedLeads.length === 0 ? (
-          <div className="p-6 text-sm text-gray-500">
-            Belum ada leads untuk agent ini.
-          </div>
+          <div className="p-6 text-sm text-gray-500">{ui.empty}</div>
         ) : (
           <div className="divide-y divide-gray-100">
             {paginatedLeads.map((lead) => {
-              const ui = leadStatusUI(lead.status);
-              const viewingUi =
-                lead.leadType === "viewing"
-                  ? viewingStatusUI(lead.viewingStatus)
+              const sourceBadge = sourceTypeUI(lead.sourceType, lang);
+              const leadBadge = leadStatusUI(lead.status, lang);
+              const appointmentBadge =
+                lead.sourceType === "viewing"
+                  ? viewingStatusUI(lead.viewingStatus, lang)
                   : null;
 
               const whatsappPhone = normalizePhoneForWhatsapp(lead.buyerPhone);
               const callPhone = normalizePhoneForCall(lead.buyerPhone);
 
-              const message = encodeURIComponent(
-                `Halo ${lead.buyerName},
-
-Saya ${agentName}, agent dari TETAMO.
-
-Anda sebelumnya tertarik dengan properti berikut:
-
-🏠 ${lead.propertyTitle}
-📍 ${lead.propertyLocation}
-💰 ${lead.propertyPrice}
-
-https://tetamo.com/listing/${lead.listingKode}
-
-Jika Anda berminat, kita juga bisa:
-
-1️⃣ Diskusi lebih lanjut
-2️⃣ Kirim detail lengkap
-3️⃣ Jadwalkan viewing
-
-Silakan beri tahu waktu yang paling nyaman untuk Anda.`
-              );
-
               const whatsappLink = whatsappPhone
-                ? `https://wa.me/${whatsappPhone}?text=${message}`
-                : "#";
+                ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
+                    ui.message(lead, agentName)
+                  )}`
+                : "";
 
               const isUpdating = updatingId === lead.id;
 
@@ -522,115 +798,188 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${ui.badgeClass}`}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${sourceBadge.badgeClass}`}
                         >
-                          {ui.label}
+                          {lead.sourceType === "whatsapp" ? (
+                            <MessageCircle className="h-3.5 w-3.5" />
+                          ) : lead.sourceType === "viewing" ? (
+                            <CalendarDays className="h-3.5 w-3.5" />
+                          ) : (
+                            <UserCheck className="h-3.5 w-3.5" />
+                          )}
+                          {sourceBadge.label}
                         </span>
 
-                        {lead.leadType === "viewing" ? (
-                          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
-                            Viewing Request
-                          </span>
-                        ) : null}
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${leadBadge.badgeClass}`}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          {leadBadge.label}
+                        </span>
 
-                        {viewingUi ? (
+                        {appointmentBadge ? (
                           <span
-                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${viewingUi.badgeClass}`}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${appointmentBadge.badgeClass}`}
                           >
-                            {viewingUi.label}
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            {appointmentBadge.label}
                           </span>
                         ) : null}
 
-                        <div className="text-xs text-gray-500">{lead.createdAt}</div>
+                        <div className="text-xs text-gray-500">
+                          {lead.createdAt}
+                        </div>
                       </div>
 
                       <p className="mt-3 text-base font-semibold text-[#1C1C1E]">
                         {lead.buyerName}
                       </p>
 
-                      <p className="mt-1 text-sm text-gray-500">{lead.buyerPhone}</p>
-
-                      {lead.buyerEmail !== "-" ? (
-                        <p className="break-all text-sm text-gray-500">{lead.buyerEmail}</p>
-                      ) : null}
-
-                      <p className="mt-3 text-sm leading-6 text-gray-700">
-                        {lead.message}
+                      <p className="mt-1 text-sm text-gray-500">
+                        {lead.buyerPhone}
                       </p>
 
-                      <div className="mt-3 text-xs leading-5 text-gray-500">
-                        Properti: {lead.propertyTitle} • Kode: {lead.listingKode}
+                      {lead.buyerEmail !== "-" ? (
+                        <p className="break-all text-sm text-gray-500">
+                          {lead.buyerEmail}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                          {ui.messageLabel}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-gray-700">
+                          {lead.message}
+                        </p>
                       </div>
 
-                      <div className="mt-1 text-xs leading-5 text-gray-500">
-                        Lokasi: {lead.propertyLocation} • Harga: {lead.propertyPrice}
+                      <div className="mt-4 grid grid-cols-1 gap-3 text-xs leading-5 text-gray-500 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                          <p>
+                            {ui.property}:{" "}
+                            <span className="font-medium text-gray-700">
+                              {lead.propertyTitle}
+                            </span>
+                          </p>
+                          <p>
+                            {ui.code}:{" "}
+                            <span className="font-medium text-gray-700">
+                              {lead.listingKode}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                          <p>
+                            {ui.location}:{" "}
+                            <span className="font-medium text-gray-700">
+                              {lead.propertyLocation}
+                            </span>
+                          </p>
+                          <p>
+                            {ui.price}:{" "}
+                            <span className="font-medium text-gray-700">
+                              {lead.propertyPrice}
+                            </span>
+                          </p>
+                        </div>
                       </div>
 
-                      {lead.leadType === "viewing" &&
-                      (lead.viewingDate || lead.viewingTime) ? (
-                        <div className="mt-2 text-xs text-amber-700">
-                          Jadwal diminta: {lead.viewingDate || "-"} • {lead.viewingTime || "-"}
+                      {lead.sourceType === "viewing" ? (
+                        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700">
+                          {ui.requestedSchedule}:{" "}
+                          {formatDate(lead.viewingDate, lang)} •{" "}
+                          {formatTime(lead.viewingTime)}
                         </div>
                       ) : null}
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {lead.status !== "viewing" && (
+                        {lead.status !== "viewing" ? (
                           <button
                             type="button"
                             onClick={() => updateLeadStatus(lead.id, "viewing")}
                             disabled={isUpdating}
                             className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
                           >
-                            Viewing
+                            {ui.viewing}
                           </button>
-                        )}
+                        ) : null}
 
-                        {lead.status !== "interested" && (
+                        {lead.status !== "interested" ? (
                           <button
                             type="button"
-                            onClick={() => updateLeadStatus(lead.id, "interested")}
+                            onClick={() =>
+                              updateLeadStatus(lead.id, "interested")
+                            }
                             disabled={isUpdating}
                             className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:opacity-50"
                           >
-                            Interested
+                            {ui.interested}
                           </button>
-                        )}
+                        ) : null}
 
-                        {lead.status !== "closed" && (
+                        {lead.status !== "closed" ? (
                           <button
                             type="button"
                             onClick={() => updateLeadStatus(lead.id, "closed")}
                             disabled={isUpdating}
                             className="rounded-xl border border-gray-300 bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                           >
-                            Closed
+                            {ui.closed}
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
 
-                    <div className="grid w-full grid-cols-2 gap-2 xl:w-auto xl:min-w-[220px]">
-                      <a
-                        href={callPhone ? `tel:${callPhone}` : "#"}
-                        onClick={() => {
-                          void markAsContacted(lead.id);
-                        }}
-                        className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                      >
-                        Hubungi
-                      </a>
+                    <div className="grid w-full grid-cols-2 gap-2 xl:w-auto xl:min-w-[230px]">
+                      {callPhone ? (
+                        <a
+                          href={`tel:${callPhone}`}
+                          onClick={() => {
+                            void markAsContacted(lead.id);
+                          }}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Phone className="h-4 w-4" />
+                          {ui.contact}
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          title={ui.noPhone}
+                          className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-400"
+                        >
+                          <Phone className="h-4 w-4" />
+                          {ui.contact}
+                        </button>
+                      )}
 
-                      <a
-                        href={whatsappLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => {
-                          void markAsContacted(lead.id);
-                        }}
-                        className="inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white hover:opacity-90"
-                      >
-                        WhatsApp
-                      </a>
+                      {whatsappLink ? (
+                        <a
+                          href={whatsappLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            void markAsContacted(lead.id);
+                          }}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white hover:opacity-90"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          {ui.whatsapp}
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          title={ui.noPhone}
+                          className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-gray-200 px-4 py-2.5 text-sm text-gray-400"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          {ui.whatsapp}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -639,46 +988,53 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`
           </div>
         )}
 
-        {filteredLeads.length > 0 && (
-          <div className="flex flex-col gap-4 border-t border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        {filteredLeads.length > 0 ? (
+          <div className="flex flex-col gap-4 border-t border-gray-100 px-4 py-4 sm:px-6">
             <p className="text-sm text-gray-500">
-              Menampilkan {startItem}–{endItem} dari {filteredLeads.length} leads
+              {ui.show(startItem, endItem, filteredLeads.length)}
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
+                type="button"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="rounded-xl border border-gray-200 bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={safePage === 1}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Sebelumnya
+                {ui.prev}
               </button>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={[
-                    "rounded-xl border px-3 py-2 text-sm",
-                    currentPage === page
-                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                      : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
-                  ].join(" ")}
-                >
-                  {page}
-                </button>
-              ))}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={[
+                      "rounded-xl border px-3 py-2 text-sm",
+                      safePage === page
+                        ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                        : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
 
               <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="rounded-xl border border-gray-200 bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                type="button"
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={safePage === totalPages}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Berikutnya
+                {ui.next}
               </button>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
