@@ -7,6 +7,8 @@ import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { AGENT_PACKAGES } from "@/app/data/pricelist";
 
+type BillingCycle = "monthly" | "yearly";
+
 type ProfileRow = {
   id: string;
   role: string | null;
@@ -15,11 +17,92 @@ type ProfileRow = {
 };
 
 type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
-  availableBillingCycles?: Array<"monthly" | "yearly">;
+  availableBillingCycles?: BillingCycle[];
   monthlyPriceIdr?: number;
   monthlyCommitmentMonths?: number;
   monthlyBillingNote?: string;
+  listingLimit?: number;
+  activeListings?: number;
 };
+
+function formatIdr(value: number) {
+  return `Rp ${value.toLocaleString("id-ID")}`;
+}
+
+function isContactPackage(pkg: AgentPackageUI) {
+  const name = String(pkg.name || "").toLowerCase();
+  const billingCycle = String(pkg.billingCycle || "").toLowerCase();
+
+  return (
+    Number(pkg.priceIdr || 0) <= 0 ||
+    name.includes("platinum") ||
+    name.includes("custom") ||
+    name.includes("contact") ||
+    billingCycle.includes("contact")
+  );
+}
+
+function getListingLimit(pkg: AgentPackageUI) {
+  const directLimit =
+    Number(pkg.listingLimit || 0) || Number(pkg.activeListings || 0);
+
+  if (directLimit > 0) return directLimit;
+
+  const featureText = (pkg.features || []).join(" ");
+  const match = featureText.match(/(\d+)\s*(Listing|Listings)/i);
+
+  if (match?.[1]) return Number(match[1]);
+
+  return 0;
+}
+
+function getAvailableBillingCycles(pkg: AgentPackageUI): BillingCycle[] {
+  if (isContactPackage(pkg)) return [];
+
+  const available = pkg.availableBillingCycles || [];
+  const cycles = new Set<BillingCycle>();
+
+  available.forEach((cycle) => cycles.add(cycle));
+
+  if (pkg.billingCycle === "monthly") cycles.add("monthly");
+  if (pkg.billingCycle === "yearly") cycles.add("yearly");
+
+  if (pkg.monthlyPriceIdr && pkg.monthlyPriceIdr > 0) cycles.add("monthly");
+  if (pkg.priceIdr && pkg.priceIdr > 0) cycles.add(pkg.billingCycle || "yearly");
+
+  if (cycles.size === 0) cycles.add("yearly");
+
+  return Array.from(cycles);
+}
+
+function getDefaultBillingCycle(pkg: AgentPackageUI | null): BillingCycle {
+  if (!pkg) return "yearly";
+
+  const cycles = getAvailableBillingCycles(pkg);
+
+  if (pkg.billingCycle === "monthly" && cycles.includes("monthly")) {
+    return "monthly";
+  }
+
+  if (cycles.includes("yearly")) return "yearly";
+  return cycles[0] || "yearly";
+}
+
+function getCyclePrice(pkg: AgentPackageUI, cycle: BillingCycle) {
+  if (cycle === "monthly") {
+    if (pkg.monthlyPriceIdr && pkg.monthlyPriceIdr > 0) {
+      return pkg.monthlyPriceIdr;
+    }
+
+    if (pkg.billingCycle === "monthly") {
+      return pkg.priceIdr;
+    }
+
+    return Math.ceil(Number(pkg.priceIdr || 0) / 12);
+  }
+
+  return Number(pkg.priceIdr || 0);
+}
 
 export default function AgentPaketPage() {
   const router = useRouter();
@@ -31,12 +114,22 @@ export default function AgentPaketPage() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const sortedPackages = useMemo(() => {
-    return ([...AGENT_PACKAGES] as AgentPackageUI[]).sort(
-      (a, b) => a.priceIdr - b.priceIdr
-    );
+    return ([...AGENT_PACKAGES] as AgentPackageUI[]).sort((a, b) => {
+      const aContact = isContactPackage(a);
+      const bContact = isContactPackage(b);
+
+      if (aContact && !bContact) return 1;
+      if (!aContact && bContact) return -1;
+
+      return Number(a.priceIdr || 0) - Number(b.priceIdr || 0);
+    });
   }, []);
 
-  const highestPackageId = sortedPackages[sortedPackages.length - 1]?.id ?? "";
+  const highestPaidPackageId =
+    [...sortedPackages]
+      .filter((pkg) => !isContactPackage(pkg))
+      .sort((a, b) => Number(b.priceIdr || 0) - Number(a.priceIdr || 0))[0]
+      ?.id ?? "";
 
   const [selectedPackageId, setSelectedPackageId] = useState(
     sortedPackages[0]?.id ?? ""
@@ -44,6 +137,36 @@ export default function AgentPaketPage() {
 
   const selectedPackage =
     sortedPackages.find((pkg) => pkg.id === selectedPackageId) ?? null;
+
+  const [selectedBillingCycle, setSelectedBillingCycle] =
+    useState<BillingCycle>(() => getDefaultBillingCycle(selectedPackage));
+
+  const selectedPackageIsContact = selectedPackage
+    ? isContactPackage(selectedPackage)
+    : false;
+
+  const selectedListingLimit = selectedPackage
+    ? getListingLimit(selectedPackage)
+    : 0;
+
+  const selectedAvailableBillingCycles = selectedPackage
+    ? getAvailableBillingCycles(selectedPackage)
+    : [];
+
+  const selectedPrice =
+    selectedPackage && !selectedPackageIsContact
+      ? getCyclePrice(selectedPackage, selectedBillingCycle)
+      : 0;
+
+  useEffect(() => {
+    if (!selectedPackage) return;
+
+    const available = getAvailableBillingCycles(selectedPackage);
+
+    if (available.length > 0 && !available.includes(selectedBillingCycle)) {
+      setSelectedBillingCycle(getDefaultBillingCycle(selectedPackage));
+    }
+  }, [selectedPackage, selectedBillingCycle]);
 
   useEffect(() => {
     let ignore = false;
@@ -117,103 +240,151 @@ export default function AgentPaketPage() {
     return lang === "id" ? "Rekomendasi" : "Recommended";
   }
 
+  function getContactLabel() {
+    return lang === "id" ? "Hubungi Kami" : "Contact Us";
+  }
+
   function getPackageIntro(packageName: string) {
     const name = packageName.toLowerCase();
 
     if (lang === "id") {
+      if (name.includes("starter")) {
+        return "Untuk agen yang ingin mulai listing aktif dengan biaya bulanan yang ringan.";
+      }
+
       if (name.includes("silver")) {
-        return "Untuk agen yang ingin mulai tampil profesional dengan biaya terjangkau.";
+        return "Untuk agen yang ingin tampil profesional dengan kapasitas listing lebih besar.";
       }
+
       if (name.includes("gold")) {
-        return "Untuk agen aktif yang ingin branding lebih kuat dan visibilitas lebih tinggi.";
+        return "Untuk agen aktif dan agensi kecil yang ingin kapasitas listing lebih kuat.";
       }
-      if (name.includes("pro")) {
-        return "Untuk agen serius dan agensi yang ingin eksposur premium dan skala lebih besar.";
+
+      if (name.includes("platinum")) {
+        return "Untuk agensi besar atau kebutuhan volume listing khusus.";
       }
+
       return "Pilih paket agen yang paling sesuai dengan kebutuhan bisnis Anda.";
     }
 
+    if (name.includes("starter")) {
+      return "For agents who want to start with active listings and a simple monthly plan.";
+    }
+
     if (name.includes("silver")) {
-      return "For agents who want a professional start at an affordable price.";
+      return "For agents who want a professional start with a larger listing capacity.";
     }
+
     if (name.includes("gold")) {
-      return "For active agents who want stronger branding and better visibility.";
+      return "For active agents and small agencies that need stronger listing capacity.";
     }
-    if (name.includes("pro")) {
-      return "For serious agents and agencies who want premium exposure and larger scale.";
+
+    if (name.includes("platinum")) {
+      return "For larger agencies or custom listing volume needs.";
     }
+
     return "Choose the package that best fits your business needs.";
   }
 
   function getBillingLabel(pkg: AgentPackageUI) {
-    const available = pkg.availableBillingCycles ?? [pkg.billingCycle];
+    if (isContactPackage(pkg)) return getContactLabel();
+
+    const available = getAvailableBillingCycles(pkg);
     const hasMonthly = available.includes("monthly");
     const hasYearly = available.includes("yearly");
 
     if (lang === "id") {
-      if (hasMonthly && hasYearly) return "Tahunan • Opsi bayar bulanan tersedia";
+      if (hasMonthly && hasYearly) {
+        return "Tahunan • Opsi bayar bulanan tersedia";
+      }
+
       if (hasMonthly) return "Bulanan";
       return "Tahunan";
     }
 
-    if (hasMonthly && hasYearly) return "Yearly • Monthly option available";
+    if (hasMonthly && hasYearly) {
+      return "Yearly • Monthly option available";
+    }
+
     if (hasMonthly) return "Monthly";
     return "Yearly";
   }
 
   function getPriceSuffix(pkg: AgentPackageUI) {
+    if (isContactPackage(pkg)) return "";
+
+    return lang === "id"
+      ? pkg.billingCycle === "monthly"
+        ? "/ bulan"
+        : "/ tahun"
+      : pkg.billingCycle === "monthly"
+      ? "/ month"
+      : "/ year";
+  }
+
+  function getBillingCycleLabel(cycle: BillingCycle) {
     if (lang === "id") {
-      return pkg.billingCycle === "monthly" ? "/ bulan" : "/ tahun";
+      return cycle === "monthly" ? "Bulanan" : "Tahunan";
     }
-    return pkg.billingCycle === "monthly" ? "/ month" : "/ year";
+
+    return cycle === "monthly" ? "Monthly" : "Yearly";
   }
 
   function translateFeature(feature: string) {
     if (lang === "id") return feature;
 
     const map: Record<string, string> = {
-      "50 Listing Aktif": "50 Active Listings",
+      "30 Listing Aktif": "30 Active Listings",
       "100 Listing Aktif": "100 Active Listings",
       "500 Listing Aktif": "500 Active Listings",
-      "Membership aktif selama 30 hari": "Membership active for 30 days",
       "Membership aktif selama 1 tahun": "Membership active for 1 year",
-      "Website Profil Agen": "Professional Agent Profile Website",
-      "Website Profil Agen (Terhubung ke Media Sosial)":
-        "Agent Profile Website (Connected to Social Media)",
+      "Website Profil Agen": "Agent Profile Website",
       "Integrasi Media Sosial": "Social Media Integration",
       "Dashboard Leads": "Leads Dashboard",
       "Jadwal Viewing": "Viewing Schedule",
-      "Paket & Tagihan": "Package & Billing",
-      "Pembayaran / Receipt": "Payment / Receipt",
-      "Analytics / Insights": "Analytics & Insights",
+      "Paket & Tagihan": "Packages & Billing",
+      "Pembayaran / Receipt": "Payments / Receipt",
+      "Analytics / Insights": "Analytics / Insights",
       "Tracking Komisi": "Commission Tracking",
       "Akses Boost & Spotlight": "Access to Boost & Spotlight",
       "1 AI Avatar Video Perkenalan": "1 AI Avatar Introduction Video",
       "3 Listing Unggulan Gratis (90 hari masing-masing)":
         "3 Free Featured Listings (90 days each)",
-      "3 Featured Listing Slot": "3 Featured Listing Slots",
-      "Visibilitas listing lebih tinggi": "Stronger listing visibility",
-      "Penempatan Agen Unggulan": "Featured Agent Placement",
-      "Eksposur premium di platform": "Premium exposure across the platform",
-      "Slot terbatas (7 agen saja)": "Limited slots (7 agents only)",
+      "Prioritas visibilitas listing": "Listing visibility priority",
+      "Eligible untuk penempatan Agen Unggulan":
+        "Eligible for Featured Agent placement",
+      "Kesempatan eksposur premium di platform":
+        "Opportunity for premium platform exposure",
+      "Slot Agen Unggulan terbatas (7 agen)":
+        "Limited Featured Agent slots (7 agents)",
       "Tersedia opsi bayar bulanan": "Monthly payment option available",
       "Auto renew aktif secara default": "Auto renew enabled by default",
-      "Prioritas Lead dari Buyer, WhatsApp Langsung dari Listing":
-        "Priority buyer leads, direct WhatsApp from listing",
-      "Optimasi Judul & Deskripsi (SEO Friendly)":
-        "Title & Description Optimization (SEO Friendly)",
-      "Promosi Featured Listing di Media Sosial TETAMO":
-        "Featured Listing Promotion on TETAMO Social Media",
-      "Direkomendasikan ke Buyer sesuai Area":
-        "Recommended to buyers by area",
-      "Support Admin 09.00 – 14.00": "Admin Support 09.00 – 14.00",
     };
 
     return map[feature] ?? feature;
   }
 
+  function handleSelectPackage(pkg: AgentPackageUI) {
+    setSelectedPackageId(pkg.id);
+    setSelectedBillingCycle(getDefaultBillingCycle(pkg));
+  }
+
   async function handleContinue() {
     if (!selectedPackage || submitting) return;
+
+    if (selectedPackageIsContact) {
+      const subject = encodeURIComponent(
+        `Tetamo Agent ${selectedPackage.name} Inquiry`
+      );
+      const body = encodeURIComponent(
+        `Hello Tetamo,\n\nI am interested in the ${selectedPackage.name} agent package.\n\nName: ${
+          profile?.full_name || ""
+        }\nEmail: ${profile?.email || ""}\n\nPlease send me more details.`
+      );
+
+      window.location.href = `mailto:inquiry@tetamo.com?subject=${subject}&body=${body}`;
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -222,6 +393,8 @@ export default function AgentPaketPage() {
       router.push(
         `/agentdashboard/pembayaran?package=${encodeURIComponent(
           selectedPackage.id
+        )}&billing=${encodeURIComponent(
+          selectedBillingCycle
         )}&flow=agent-membership`
       );
     } catch (error: any) {
@@ -273,13 +446,15 @@ export default function AgentPaketPage() {
             <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5 lg:gap-6">
               {sortedPackages.map((pkg) => {
                 const checked = selectedPackageId === pkg.id;
-                const isRecommended = pkg.id === highestPackageId;
+                const isRecommended = pkg.id === highestPaidPackageId;
+                const contactPackage = isContactPackage(pkg);
+                const listingLimit = getListingLimit(pkg);
 
                 return (
                   <button
                     key={pkg.id}
                     type="button"
-                    onClick={() => setSelectedPackageId(pkg.id)}
+                    onClick={() => handleSelectPackage(pkg)}
                     className={[
                       "relative flex h-full flex-col rounded-3xl border bg-white p-4 text-left shadow-sm transition sm:p-5 lg:p-6",
                       checked
@@ -306,6 +481,14 @@ export default function AgentPaketPage() {
                           {getBillingLabel(pkg)}
                         </p>
 
+                        {listingLimit > 0 ? (
+                          <p className="mt-2 text-xs font-semibold text-[#1C1C1E] sm:text-sm">
+                            {lang === "id"
+                              ? `${listingLimit} listing aktif`
+                              : `${listingLimit} active listings`}
+                          </p>
+                        ) : null}
+
                         <p className="mt-3 text-xs leading-6 text-gray-600 sm:text-sm sm:leading-7">
                           {getPackageIntro(pkg.name)}
                         </p>
@@ -313,24 +496,32 @@ export default function AgentPaketPage() {
 
                       <div
                         className={[
-                          "mt-1 h-5 w-5 shrink-0 rounded-full border-2 transition sm:h-6 sm:w-6",
+                          "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition sm:h-6 sm:w-6",
                           checked
                             ? "border-[#1C1C1E] bg-[#1C1C1E]"
                             : "border-gray-400 bg-white",
                         ].join(" ")}
-                      />
+                      >
+                        {checked ? (
+                          <span className="h-2 w-2 rounded-full bg-white" />
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-5">
                       <div className="text-2xl font-bold tracking-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
-                        Rp {pkg.priceIdr.toLocaleString("id-ID")}
+                        {contactPackage
+                          ? getContactLabel()
+                          : formatIdr(pkg.priceIdr)}
                       </div>
 
-                      <div className="mt-1 text-xs text-gray-600 sm:text-sm lg:text-base">
-                        {getPriceSuffix(pkg)}
-                      </div>
+                      {!contactPackage ? (
+                        <div className="mt-1 text-xs text-gray-600 sm:text-sm lg:text-base">
+                          {getPriceSuffix(pkg)}
+                        </div>
+                      ) : null}
 
-                      {pkg.monthlyPriceIdr ? (
+                      {!contactPackage && pkg.monthlyPriceIdr ? (
                         <p className="mt-3 text-xs leading-6 text-gray-500 sm:text-sm sm:leading-6">
                           {lang === "id"
                             ? `Atau Rp ${pkg.monthlyPriceIdr.toLocaleString(
@@ -349,7 +540,10 @@ export default function AgentPaketPage() {
 
                     <ul className="mt-5 flex-1 space-y-3 text-gray-700">
                       {pkg.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5 sm:gap-3">
+                        <li
+                          key={idx}
+                          className="flex items-start gap-2.5 sm:gap-3"
+                        >
                           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 sm:h-5 sm:w-5" />
                           <span className="text-xs leading-6 sm:text-sm sm:leading-7 lg:text-[15px]">
                             {translateFeature(feature)}
@@ -362,6 +556,62 @@ export default function AgentPaketPage() {
               })}
             </div>
 
+            {selectedPackage &&
+            !selectedPackageIsContact &&
+            selectedAvailableBillingCycles.length > 1 ? (
+              <div className="mx-auto mt-6 max-w-xl rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+                <p className="text-center text-sm font-semibold text-[#1C1C1E]">
+                  {lang === "id"
+                    ? "Pilih cara pembayaran"
+                    : "Choose billing option"}
+                </p>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {selectedAvailableBillingCycles.map((cycle) => {
+                    const checked = selectedBillingCycle === cycle;
+                    const price = getCyclePrice(selectedPackage, cycle);
+
+                    return (
+                      <button
+                        key={cycle}
+                        type="button"
+                        onClick={() => setSelectedBillingCycle(cycle)}
+                        className={[
+                          "rounded-2xl border px-4 py-3 text-center transition",
+                          checked
+                            ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                            : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
+                        ].join(" ")}
+                      >
+                        <div className="text-sm font-semibold">
+                          {getBillingCycleLabel(cycle)}
+                        </div>
+                        <div className="mt-1 text-xs opacity-80">
+                          {formatIdr(price)}
+                          {cycle === "monthly"
+                            ? lang === "id"
+                              ? " / bulan"
+                              : " / month"
+                            : lang === "id"
+                            ? " / tahun"
+                            : " / year"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedBillingCycle === "monthly" &&
+                selectedPackage.monthlyCommitmentMonths ? (
+                  <p className="mt-3 text-center text-xs leading-5 text-gray-500">
+                    {lang === "id"
+                      ? `Pembayaran bulanan berlaku dengan komitmen ${selectedPackage.monthlyCommitmentMonths} bulan.`
+                      : `Monthly billing applies with a ${selectedPackage.monthlyCommitmentMonths}-month commitment.`}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:gap-4">
               <button
                 type="button"
@@ -373,6 +623,8 @@ export default function AgentPaketPage() {
                   ? lang === "id"
                     ? "Memproses..."
                     : "Processing..."
+                  : selectedPackageIsContact
+                  ? getContactLabel()
                   : lang === "id"
                   ? "Lanjut ke Pembayaran"
                   : "Continue to Payment"}
@@ -380,9 +632,29 @@ export default function AgentPaketPage() {
 
               <p className="text-center text-xs text-gray-500 sm:text-sm">
                 {selectedPackage
-                  ? lang === "id"
-                    ? `Paket terpilih: ${selectedPackage.name}`
-                    : `Selected package: ${selectedPackage.name}`
+                  ? selectedPackageIsContact
+                    ? lang === "id"
+                      ? `Paket terpilih: ${selectedPackage.name}`
+                      : `Selected package: ${selectedPackage.name}`
+                    : lang === "id"
+                    ? `Paket terpilih: ${
+                        selectedPackage.name
+                      } • ${getBillingCycleLabel(
+                        selectedBillingCycle
+                      )} • ${formatIdr(selectedPrice)}${
+                        selectedListingLimit > 0
+                          ? ` • ${selectedListingLimit} listing aktif`
+                          : ""
+                      }`
+                    : `Selected package: ${
+                        selectedPackage.name
+                      } • ${getBillingCycleLabel(
+                        selectedBillingCycle
+                      )} • ${formatIdr(selectedPrice)}${
+                        selectedListingLimit > 0
+                          ? ` • ${selectedListingLimit} active listings`
+                          : ""
+                      }`
                   : ""}
               </p>
             </div>
