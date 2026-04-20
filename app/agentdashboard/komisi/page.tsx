@@ -17,8 +17,10 @@ import {
   Pencil,
   Trash2,
   X,
+  Search,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/app/context/LanguageContext";
 
 type CommissionStatus =
   | "pending"
@@ -29,6 +31,9 @@ type CommissionStatus =
   | "disputed";
 
 type CommissionDealType = "sale" | "rent" | "renewal" | "other";
+
+type StatusFilter = "all" | CommissionStatus;
+type DealTypeFilter = "all" | CommissionDealType;
 
 type CommissionRow = {
   id: string;
@@ -87,6 +92,29 @@ const EMPTY_FORM: FormState = {
   notes: "",
 };
 
+function toNumber(value: number | string | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return 0;
+}
+
+function calculateCommissionAmount(
+  dealValue: number | string | null | undefined,
+  commissionRate: number | string | null | undefined
+) {
+  const value = toNumber(dealValue);
+  const rate = toNumber(commissionRate);
+
+  if (value <= 0 || rate <= 0) return 0;
+
+  return Math.round((value * rate) / 100);
+}
+
 function formatCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -95,51 +123,53 @@ function formatCurrency(value: number | null | undefined) {
   }).format(Number(value || 0));
 }
 
-function formatDate(value?: string | null) {
+function formatDate(value: string | null | undefined, lang: string) {
   if (!value) return "-";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
 
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   }).format(date);
 }
 
-function statusUI(status: CommissionStatus) {
+function statusUI(status: CommissionStatus, lang: string) {
+  const isID = lang === "id";
+
   if (status === "paid") {
     return {
-      label: "Paid",
+      label: isID ? "Dibayar" : "Paid",
       className: "border-green-200 bg-green-50 text-green-700",
     };
   }
 
   if (status === "approved") {
     return {
-      label: "Approved",
+      label: isID ? "Disetujui" : "Approved",
       className: "border-blue-200 bg-blue-50 text-blue-700",
     };
   }
 
   if (status === "waiting_confirmation") {
     return {
-      label: "Waiting Confirmation",
+      label: isID ? "Menunggu Konfirmasi" : "Waiting Confirmation",
       className: "border-yellow-200 bg-yellow-50 text-yellow-700",
     };
   }
 
   if (status === "cancelled") {
     return {
-      label: "Cancelled",
+      label: isID ? "Dibatalkan" : "Cancelled",
       className: "border-red-200 bg-red-50 text-red-700",
     };
   }
 
   if (status === "disputed") {
     return {
-      label: "Disputed",
+      label: isID ? "Sengketa" : "Disputed",
       className: "border-orange-200 bg-orange-50 text-orange-700",
     };
   }
@@ -150,11 +180,13 @@ function statusUI(status: CommissionStatus) {
   };
 }
 
-function dealTypeLabel(type: CommissionDealType) {
-  if (type === "sale") return "Sale";
-  if (type === "rent") return "Rent";
-  if (type === "renewal") return "Renewal";
-  return "Other";
+function dealTypeLabel(type: CommissionDealType, lang: string) {
+  const isID = lang === "id";
+
+  if (type === "sale") return isID ? "Jual" : "Sale";
+  if (type === "rent") return isID ? "Sewa" : "Rent";
+  if (type === "renewal") return isID ? "Perpanjangan" : "Renewal";
+  return isID ? "Lainnya" : "Other";
 }
 
 function StatCard({
@@ -166,7 +198,7 @@ function StatCard({
   value: string | number;
   icon: ReactNode;
 }) {
-  const isLongText = typeof value === "string" && value.length > 12;
+  const isLongText = typeof value === "string" && value.length > 14;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-3.5 shadow-sm sm:p-5">
@@ -175,6 +207,7 @@ function StatCard({
           <p className="text-[11px] leading-4 text-gray-500 sm:text-sm">
             {title}
           </p>
+
           <p
             className={[
               "mt-2 break-words font-semibold leading-tight text-[#1C1C1E]",
@@ -194,11 +227,174 @@ function StatCard({
 }
 
 export default function AgentKomisiPage() {
+  const { lang } = useLanguage();
+  const isID = lang === "id";
+
+  const ui = useMemo(
+    () =>
+      isID
+        ? {
+            pageTitle: "Komisi",
+            pageDesc:
+              "Catatan komisi manual untuk deal properti yang berhasil atau sedang berjalan.",
+            addCommission: "Tambah Komisi",
+            manualTitle: "Catatan Komisi Manual",
+            manualDesc:
+              "Halaman ini hanya untuk mencatat komisi agent secara manual. Pembayaran komisi saat ini masih dilakukan di luar sistem TETAMO.",
+            totalCommission: "Total Komisi",
+            paidCommission: "Sudah Dibayar",
+            pendingCommission: "Belum Dibayar",
+            totalRecords: "Total Record",
+            historyTitle: "Riwayat Komisi",
+            historyDesc: "Semua record komisi yang Anda input manual.",
+            searchPlaceholder:
+              "Cari properti, kode listing, client, metode pembayaran, atau catatan...",
+            statusFilter: "Filter Status",
+            dealTypeFilter: "Filter Deal",
+            all: "Semua",
+            loading: "Memuat komisi...",
+            empty:
+              "Belum ada record komisi. Klik Tambah Komisi untuk mulai mencatat.",
+            summary: "Ringkasan",
+            biggestCommission: "Komisi Terbesar",
+            paidRecords: "Record Dibayar",
+            pendingRecords: "Record Pending",
+            howToUse: "Cara Pakai",
+            importantNote: "Catatan Penting",
+            howTo1: "Klik Tambah Komisi.",
+            howTo2: "Isi detail properti, client, nilai deal, dan rate komisi.",
+            howTo3: "Sistem akan menghitung estimasi komisi dari deal value × rate.",
+            howTo4: "Update status saat komisi disetujui atau dibayar.",
+            note1: "Halaman ini belum terhubung ke payout otomatis TETAMO.",
+            note2: "Semua komisi di sini adalah record manual agent.",
+            note3: "Pembayaran komisi masih dilakukan di luar platform.",
+            propertyTitle: "Judul Properti",
+            listingCode: "Kode Listing",
+            client: "Client",
+            clientName: "Nama Client",
+            clientPhone: "Telepon Client",
+            clientEmail: "Email Client",
+            dealType: "Tipe Deal",
+            dealValue: "Nilai Deal",
+            rate: "Rate Komisi",
+            commission: "Komisi",
+            dealDate: "Tanggal Deal",
+            paidDate: "Tanggal Dibayar",
+            paymentMethod: "Metode Pembayaran",
+            paymentReference: "Referensi Pembayaran",
+            notes: "Catatan",
+            edit: "Edit",
+            delete: "Hapus",
+            modalAdd: "Tambah Komisi",
+            modalEdit: "Edit Komisi",
+            cancel: "Batal",
+            save: "Simpan Komisi",
+            update: "Update Komisi",
+            saving: "Menyimpan...",
+            preview: "Estimasi Komisi",
+            requiredProperty: "Property title wajib diisi.",
+            requiredClient: "Client name wajib diisi.",
+            invalidDealValue: "Deal value harus lebih besar dari 0.",
+            invalidRate: "Commission rate tidak valid.",
+            userNotFound: "User agent tidak ditemukan.",
+            loadError: "Gagal memuat komisi.",
+            updateError: "Gagal update komisi.",
+            insertError: "Gagal tambah komisi.",
+            deleteConfirm: "Hapus record komisi ini?",
+            deleteError: "Gagal hapus komisi.",
+            loginError: "Silakan login sebagai agent terlebih dahulu.",
+            sale: "Jual",
+            rent: "Sewa",
+            renewal: "Perpanjangan",
+            other: "Lainnya",
+          }
+        : {
+            pageTitle: "Commission",
+            pageDesc:
+              "Manual commission records for successful or ongoing property deals.",
+            addCommission: "Add Commission",
+            manualTitle: "Manual Commission Record",
+            manualDesc:
+              "This page is only for manually tracking agent commissions. Commission payment is currently handled outside the TETAMO system.",
+            totalCommission: "Total Commission",
+            paidCommission: "Paid",
+            pendingCommission: "Unpaid / Pending",
+            totalRecords: "Total Records",
+            historyTitle: "Commission History",
+            historyDesc: "All commission records you manually entered.",
+            searchPlaceholder:
+              "Search property, listing code, client, payment method, or notes...",
+            statusFilter: "Status Filter",
+            dealTypeFilter: "Deal Filter",
+            all: "All",
+            loading: "Loading commissions...",
+            empty:
+              "No commission records yet. Click Add Commission to start tracking.",
+            summary: "Summary",
+            biggestCommission: "Biggest Commission",
+            paidRecords: "Paid Records",
+            pendingRecords: "Pending Records",
+            howToUse: "How to Use",
+            importantNote: "Important Note",
+            howTo1: "Click Add Commission.",
+            howTo2: "Fill property, client, deal value, and commission rate.",
+            howTo3: "The system calculates estimated commission from deal value × rate.",
+            howTo4: "Update the status when commission is approved or paid.",
+            note1: "This page is not connected to automatic TETAMO payout yet.",
+            note2: "All commissions here are manual agent records.",
+            note3: "Commission payment is still handled outside the platform.",
+            propertyTitle: "Property Title",
+            listingCode: "Listing Code",
+            client: "Client",
+            clientName: "Client Name",
+            clientPhone: "Client Phone",
+            clientEmail: "Client Email",
+            dealType: "Deal Type",
+            dealValue: "Deal Value",
+            rate: "Commission Rate",
+            commission: "Commission",
+            dealDate: "Deal Date",
+            paidDate: "Paid Date",
+            paymentMethod: "Payment Method",
+            paymentReference: "Payment Reference",
+            notes: "Notes",
+            edit: "Edit",
+            delete: "Delete",
+            modalAdd: "Add Commission",
+            modalEdit: "Edit Commission",
+            cancel: "Cancel",
+            save: "Save Commission",
+            update: "Update Commission",
+            saving: "Saving...",
+            preview: "Estimated Commission",
+            requiredProperty: "Property title is required.",
+            requiredClient: "Client name is required.",
+            invalidDealValue: "Deal value must be greater than 0.",
+            invalidRate: "Commission rate is invalid.",
+            userNotFound: "Agent user was not found.",
+            loadError: "Failed to load commission.",
+            updateError: "Failed to update commission.",
+            insertError: "Failed to add commission.",
+            deleteConfirm: "Delete this commission record?",
+            deleteError: "Failed to delete commission.",
+            loginError: "Please log in as an agent first.",
+            sale: "Sale",
+            rent: "Rent",
+            renewal: "Renewal",
+            other: "Other",
+          },
+    [isID]
+  );
+
   const [agentUserId, setAgentUserId] = useState<string | null>(null);
   const [records, setRecords] = useState<CommissionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [dealTypeFilter, setDealTypeFilter] = useState<DealTypeFilter>("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -217,7 +413,7 @@ export default function AgentKomisiPage() {
       setAgentUserId(null);
       setRecords([]);
       setLoading(false);
-      setErrorMessage("Silakan login sebagai agent terlebih dahulu.");
+      setErrorMessage(ui.loginError);
       return;
     }
 
@@ -256,16 +452,28 @@ export default function AgentKomisiPage() {
     if (error) {
       setRecords([]);
       setLoading(false);
-      setErrorMessage(error.message || "Gagal memuat komisi.");
+      setErrorMessage(error.message || ui.loadError);
       return;
     }
 
-    const mapped = ((data || []) as CommissionRow[]).map((row) => ({
-      ...row,
-      deal_value: Number(row.deal_value || 0),
-      commission_rate: Number(row.commission_rate || 0),
-      commission_amount: Number(row.commission_amount || 0),
-    }));
+    const mapped = ((data || []) as CommissionRow[]).map((row) => {
+      const dealValue = Number(row.deal_value || 0);
+      const commissionRate = Number(row.commission_rate || 0);
+      const calculatedCommission = calculateCommissionAmount(
+        dealValue,
+        commissionRate
+      );
+
+      return {
+        ...row,
+        deal_value: dealValue,
+        commission_rate: commissionRate,
+        commission_amount:
+          Number(row.commission_amount || 0) > 0
+            ? Number(row.commission_amount || 0)
+            : calculatedCommission,
+      };
+    });
 
     setRecords(mapped);
     setLoading(false);
@@ -273,7 +481,37 @@ export default function AgentKomisiPage() {
 
   useEffect(() => {
     void loadCommissions();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
+
+  const filteredRecords = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return records.filter((item) => {
+      const statusOk =
+        statusFilter === "all" || item.status === statusFilter;
+
+      const dealTypeOk =
+        dealTypeFilter === "all" || item.deal_type === dealTypeFilter;
+
+      const searchable = `
+        ${item.property_title}
+        ${item.listing_code || ""}
+        ${item.client_name}
+        ${item.client_phone || ""}
+        ${item.client_email || ""}
+        ${item.deal_type}
+        ${item.status}
+        ${item.payment_method || ""}
+        ${item.payment_reference || ""}
+        ${item.notes || ""}
+      `.toLowerCase();
+
+      const searchOk = !q || searchable.includes(q);
+
+      return statusOk && dealTypeOk && searchOk;
+    });
+  }, [records, search, statusFilter, dealTypeFilter]);
 
   const summary = useMemo(() => {
     const totalCommission = records.reduce(
@@ -291,13 +529,27 @@ export default function AgentKomisiPage() {
       )
       .reduce((sum, item) => sum + Number(item.commission_amount || 0), 0);
 
+    const biggestCommission = Math.max(
+      0,
+      ...records.map((item) => Number(item.commission_amount || 0))
+    );
+
     return {
       totalRecords: records.length,
       totalCommission,
       paidCommission,
       pendingCommission,
+      biggestCommission,
+      paidRecords: records.filter((item) => item.status === "paid").length,
+      pendingRecords: records.filter((item) =>
+        ["pending", "waiting_confirmation", "approved"].includes(item.status)
+      ).length,
     };
   }, [records]);
+
+  const formCommissionPreview = useMemo(() => {
+    return calculateCommissionAmount(form.dealValue, form.commissionRate);
+  }, [form.dealValue, form.commissionRate]);
 
   function openAddModal() {
     setEditingId(null);
@@ -341,27 +593,27 @@ export default function AgentKomisiPage() {
 
   async function handleSave() {
     if (!agentUserId) {
-      alert("User agent tidak ditemukan.");
+      alert(ui.userNotFound);
       return;
     }
 
     if (!form.propertyTitle.trim()) {
-      alert("Property title wajib diisi.");
+      alert(ui.requiredProperty);
       return;
     }
 
     if (!form.clientName.trim()) {
-      alert("Client name wajib diisi.");
+      alert(ui.requiredClient);
       return;
     }
 
     if (!form.dealValue.trim() || Number(form.dealValue) <= 0) {
-      alert("Deal value harus lebih besar dari 0.");
+      alert(ui.invalidDealValue);
       return;
     }
 
     if (!form.commissionRate.trim() || Number(form.commissionRate) < 0) {
-      alert("Commission rate tidak valid.");
+      alert(ui.invalidRate);
       return;
     }
 
@@ -395,7 +647,7 @@ export default function AgentKomisiPage() {
 
       if (error) {
         setSaving(false);
-        alert(error.message || "Gagal update komisi.");
+        alert(error.message || ui.updateError);
         return;
       }
     } else {
@@ -405,7 +657,7 @@ export default function AgentKomisiPage() {
 
       if (error) {
         setSaving(false);
-        alert(error.message || "Gagal tambah komisi.");
+        alert(error.message || ui.insertError);
         return;
       }
     }
@@ -418,7 +670,7 @@ export default function AgentKomisiPage() {
   async function handleDelete(id: string) {
     if (!agentUserId) return;
 
-    const confirmed = window.confirm("Hapus record komisi ini?");
+    const confirmed = window.confirm(ui.deleteConfirm);
     if (!confirmed) return;
 
     const { error } = await supabase
@@ -428,32 +680,53 @@ export default function AgentKomisiPage() {
       .eq("agent_user_id", agentUserId);
 
     if (error) {
-      alert(error.message || "Gagal hapus komisi.");
+      alert(error.message || ui.deleteError);
       return;
     }
 
     await loadCommissions();
   }
 
+  const statusOptions: Array<{ key: StatusFilter; label: string }> = [
+    { key: "all", label: ui.all },
+    { key: "pending", label: statusUI("pending", lang).label },
+    {
+      key: "waiting_confirmation",
+      label: statusUI("waiting_confirmation", lang).label,
+    },
+    { key: "approved", label: statusUI("approved", lang).label },
+    { key: "paid", label: statusUI("paid", lang).label },
+    { key: "cancelled", label: statusUI("cancelled", lang).label },
+    { key: "disputed", label: statusUI("disputed", lang).label },
+  ];
+
+  const dealTypeOptions: Array<{ key: DealTypeFilter; label: string }> = [
+    { key: "all", label: ui.all },
+    { key: "sale", label: dealTypeLabel("sale", lang) },
+    { key: "rent", label: dealTypeLabel("rent", lang) },
+    { key: "renewal", label: dealTypeLabel("renewal", lang) },
+    { key: "other", label: dealTypeLabel("other", lang) },
+  ];
+
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <div className="min-w-0">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
-            Komisi
+            {ui.pageTitle}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Catatan komisi manual untuk transaksi properti yang berhasil.
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
+            {ui.pageDesc}
           </p>
         </div>
 
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 sm:w-auto"
         >
           <Plus className="h-4 w-4" />
-          Tambah Komisi
+          {ui.addCommission}
         </button>
       </div>
 
@@ -461,11 +734,8 @@ export default function AgentKomisiPage() {
         <div className="flex items-start gap-3">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <p className="font-semibold">Manual Commission Record</p>
-            <p className="mt-1 leading-6">
-              Halaman ini mencatat komisi agent secara manual.
-              Pembayaran komisi saat ini masih dilakukan di luar sistem TETAMO.
-            </p>
+            <p className="font-semibold">{ui.manualTitle}</p>
+            <p className="mt-1 leading-6">{ui.manualDesc}</p>
           </div>
         </div>
       </div>
@@ -476,58 +746,109 @@ export default function AgentKomisiPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
-          title="Total Komisi"
+          title={ui.totalCommission}
           value={formatCurrency(summary.totalCommission)}
           icon={<TrendingUp className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
         <StatCard
-          title="Sudah Dibayar"
+          title={ui.paidCommission}
           value={formatCurrency(summary.paidCommission)}
           icon={<CheckCircle2 className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
         <StatCard
-          title="Masih Pending"
+          title={ui.pendingCommission}
           value={formatCurrency(summary.pendingCommission)}
           icon={<Clock className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
         <StatCard
-          title="Total Records"
+          title={ui.totalRecords}
           value={summary.totalRecords}
           icon={<Wallet className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />}
         />
       </div>
 
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={ui.searchPlaceholder}
+            className="w-full rounded-2xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#1C1C1E]"
+          />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              {ui.statusFilter}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setStatusFilter(item.key)}
+                  className={[
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                    statusFilter === item.key
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                      : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              {ui.dealTypeFilter}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {dealTypeOptions.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setDealTypeFilter(item.key)}
+                  className={[
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                    dealTypeFilter === item.key
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                      : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 md:p-6 xl:col-span-2">
-          <div className="flex flex-col gap-3 border-b border-gray-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
-                Riwayat Komisi
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Semua record komisi yang Anda input manual.
-              </p>
-            </div>
-
-            <span className="inline-flex w-fit items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-semibold text-gray-700 sm:text-xs">
-              Supabase Live
-            </span>
+          <div className="border-b border-gray-100 pb-5">
+            <h2 className="text-lg font-semibold text-[#1C1C1E] sm:text-xl">
+              {ui.historyTitle}
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-gray-500">
+              {ui.historyDesc}
+            </p>
           </div>
 
           {loading ? (
-            <div className="py-8 text-sm text-gray-500">
-              Loading komisi...
-            </div>
-          ) : records.length === 0 ? (
-            <div className="py-8 text-sm text-gray-500">
-              Belum ada record komisi. Klik <span className="font-semibold">Tambah Komisi</span> untuk mulai mencatat.
-            </div>
+            <div className="py-8 text-sm text-gray-500">{ui.loading}</div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="py-8 text-sm text-gray-500">{ui.empty}</div>
           ) : (
             <div className="mt-5 space-y-4">
-              {records.map((item) => {
-                const ui = statusUI(item.status);
+              {filteredRecords.map((item) => {
+                const status = statusUI(item.status, lang);
 
                 return (
                   <div
@@ -541,63 +862,81 @@ export default function AgentKomisiPage() {
                             {item.property_title}
                           </p>
                           <span
-                            className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${ui.className}`}
+                            className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${status.className}`}
                           >
-                            {ui.label}
+                            {status.label}
                           </span>
                         </div>
 
                         <p className="mt-1 text-sm text-gray-500">
-                          Kode: {item.listing_code || "-"}
+                          {ui.listingCode}: {item.listing_code || "-"}
                         </p>
 
                         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                           <div>
-                            <p className="text-xs text-gray-500">Client</p>
+                            <p className="text-xs text-gray-500">{ui.client}</p>
                             <p className="mt-1 text-sm font-medium text-[#1C1C1E]">
                               {item.client_name}
                             </p>
+                            {item.client_phone ? (
+                              <p className="mt-1 text-xs text-gray-500">
+                                {item.client_phone}
+                              </p>
+                            ) : null}
+                            {item.client_email ? (
+                              <p className="mt-1 break-all text-xs text-gray-500">
+                                {item.client_email}
+                              </p>
+                            ) : null}
                           </div>
 
                           <div>
-                            <p className="text-xs text-gray-500">Deal Type</p>
+                            <p className="text-xs text-gray-500">
+                              {ui.dealType}
+                            </p>
                             <p className="mt-1 text-sm font-medium text-[#1C1C1E]">
-                              {dealTypeLabel(item.deal_type)}
+                              {dealTypeLabel(item.deal_type, lang)}
                             </p>
                           </div>
 
                           <div>
-                            <p className="text-xs text-gray-500">Deal Value</p>
+                            <p className="text-xs text-gray-500">
+                              {ui.dealValue}
+                            </p>
                             <p className="mt-1 text-sm font-medium text-[#1C1C1E]">
                               {formatCurrency(item.deal_value)}
                             </p>
                           </div>
 
                           <div>
-                            <p className="text-xs text-gray-500">Rate</p>
+                            <p className="text-xs text-gray-500">{ui.rate}</p>
                             <p className="mt-1 text-sm font-medium text-[#1C1C1E]">
                               {Number(item.commission_rate || 0)}%
                             </p>
                           </div>
 
                           <div>
-                            <p className="text-xs text-gray-500">Deal Date</p>
+                            <p className="text-xs text-gray-500">
+                              {ui.dealDate}
+                            </p>
                             <p className="mt-1 text-sm font-medium text-[#1C1C1E]">
-                              {formatDate(item.deal_date)}
+                              {formatDate(item.deal_date, lang)}
                             </p>
                           </div>
 
                           <div>
-                            <p className="text-xs text-gray-500">Paid Date</p>
+                            <p className="text-xs text-gray-500">
+                              {ui.paidDate}
+                            </p>
                             <p className="mt-1 text-sm font-medium text-[#1C1C1E]">
-                              {formatDate(item.paid_date)}
+                              {formatDate(item.paid_date, lang)}
                             </p>
                           </div>
                         </div>
 
                         {item.notes ? (
                           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                            <p className="text-xs text-gray-500">Notes</p>
+                            <p className="text-xs text-gray-500">{ui.notes}</p>
                             <p className="mt-1 whitespace-pre-line text-sm leading-6 text-gray-700">
                               {item.notes}
                             </p>
@@ -605,16 +944,18 @@ export default function AgentKomisiPage() {
                         ) : null}
                       </div>
 
-                      <div className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-4 lg:w-[240px]">
-                        <p className="text-xs text-gray-500">Komisi</p>
-                        <p className="mt-2 text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+                      <div className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-4 lg:w-[250px]">
+                        <p className="text-xs text-gray-500">
+                          {ui.commission}
+                        </p>
+                        <p className="mt-2 break-words text-xl font-bold text-[#1C1C1E] sm:text-2xl">
                           {formatCurrency(item.commission_amount)}
                         </p>
 
                         <div className="mt-4 space-y-3">
                           <div>
                             <p className="text-xs text-gray-500">
-                              Payment Method
+                              {ui.paymentMethod}
                             </p>
                             <p className="mt-1 break-words text-sm font-medium text-[#1C1C1E]">
                               {item.payment_method || "-"}
@@ -622,7 +963,9 @@ export default function AgentKomisiPage() {
                           </div>
 
                           <div>
-                            <p className="text-xs text-gray-500">Reference</p>
+                            <p className="text-xs text-gray-500">
+                              {ui.paymentReference}
+                            </p>
                             <p className="mt-1 break-words text-sm font-medium text-[#1C1C1E]">
                               {item.payment_reference || "-"}
                             </p>
@@ -636,7 +979,7 @@ export default function AgentKomisiPage() {
                             className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-3 py-2 text-sm font-medium text-[#1C1C1E] hover:bg-gray-50"
                           >
                             <Pencil className="h-4 w-4" />
-                            Edit
+                            {ui.edit}
                           </button>
 
                           <button
@@ -645,7 +988,7 @@ export default function AgentKomisiPage() {
                             className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4" />
-                            Delete
+                            {ui.delete}
                           </button>
                         </div>
                       </div>
@@ -660,35 +1003,31 @@ export default function AgentKomisiPage() {
         <div className="space-y-6">
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 md:p-6">
             <h2 className="text-lg font-semibold text-[#1C1C1E]">
-              Ringkasan
+              {ui.summary}
             </h2>
 
             <div className="mt-5 space-y-3">
               <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Komisi Terbesar</p>
+                <p className="text-xs text-gray-500">
+                  {ui.biggestCommission}
+                </p>
                 <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {formatCurrency(
-                    Math.max(0, ...records.map((item) => Number(item.commission_amount || 0)))
-                  )}
+                  {formatCurrency(summary.biggestCommission)}
                 </p>
               </div>
 
               <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Paid Records</p>
+                <p className="text-xs text-gray-500">{ui.paidRecords}</p>
                 <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {records.filter((item) => item.status === "paid").length} transaksi
+                  {summary.paidRecords} {isID ? "transaksi" : "transactions"}
                 </p>
               </div>
 
               <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-xs text-gray-500">Pending Records</p>
+                <p className="text-xs text-gray-500">{ui.pendingRecords}</p>
                 <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                  {
-                    records.filter((item) =>
-                      ["pending", "waiting_confirmation", "approved"].includes(item.status)
-                    ).length
-                  }{" "}
-                  transaksi
+                  {summary.pendingRecords}{" "}
+                  {isID ? "transaksi" : "transactions"}
                 </p>
               </div>
             </div>
@@ -699,18 +1038,16 @@ export default function AgentKomisiPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
                 <FileText className="h-5 w-5 text-[#1C1C1E]" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-[#1C1C1E]">
-                  Cara Pakai
-                </h2>
-              </div>
+              <h2 className="text-lg font-semibold text-[#1C1C1E]">
+                {ui.howToUse}
+              </h2>
             </div>
 
             <div className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
-              <p>1. Klik <span className="font-semibold">Tambah Komisi</span>.</p>
-              <p>2. Isi detail deal, client, rate, dan status.</p>
-              <p>3. Simpan sebagai record manual.</p>
-              <p>4. Edit status saat komisi dibayar atau berubah.</p>
+              <p>1. {ui.howTo1}</p>
+              <p>2. {ui.howTo2}</p>
+              <p>3. {ui.howTo3}</p>
+              <p>4. {ui.howTo4}</p>
             </div>
           </div>
 
@@ -719,24 +1056,22 @@ export default function AgentKomisiPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
                 <AlertCircle className="h-5 w-5 text-[#1C1C1E]" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-[#1C1C1E]">
-                  Catatan Penting
-                </h2>
-              </div>
+              <h2 className="text-lg font-semibold text-[#1C1C1E]">
+                {ui.importantNote}
+              </h2>
             </div>
 
             <div className="mt-4 space-y-3 text-sm leading-6 text-gray-600">
-              <p>Halaman ini belum terhubung ke payout otomatis TETAMO.</p>
-              <p>Semua komisi di sini adalah record manual agent.</p>
-              <p>Pembayaran masih dilakukan di luar platform.</p>
+              <p>{ui.note1}</p>
+              <p>{ui.note2}</p>
+              <p>{ui.note3}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      {isModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
           <button
             type="button"
             onClick={closeModal}
@@ -747,7 +1082,7 @@ export default function AgentKomisiPage() {
           <div className="relative z-10 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-bold text-[#1C1C1E]">
-                {editingId ? "Edit Komisi" : "Tambah Komisi"}
+                {editingId ? ui.modalEdit : ui.modalAdd}
               </h3>
 
               <button
@@ -759,10 +1094,21 @@ export default function AgentKomisiPage() {
               </button>
             </div>
 
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-xs text-gray-500">{ui.preview}</p>
+              <p className="mt-1 text-xl font-bold text-[#1C1C1E]">
+                {formatCurrency(formCommissionPreview)}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                {formatCurrency(toNumber(form.dealValue))} ×{" "}
+                {toNumber(form.commissionRate)}%
+              </p>
+            </div>
+
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Listing Code
+                  {ui.listingCode}
                 </label>
                 <input
                   type="text"
@@ -774,7 +1120,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Property Title *
+                  {ui.propertyTitle} *
                 </label>
                 <input
                   type="text"
@@ -786,7 +1132,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Client Name *
+                  {ui.clientName} *
                 </label>
                 <input
                   type="text"
@@ -798,7 +1144,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Client Phone
+                  {ui.clientPhone}
                 </label>
                 <input
                   type="text"
@@ -810,7 +1156,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Client Email
+                  {ui.clientEmail}
                 </label>
                 <input
                   type="email"
@@ -822,7 +1168,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Deal Type
+                  {ui.dealType}
                 </label>
                 <select
                   value={form.dealType}
@@ -831,16 +1177,16 @@ export default function AgentKomisiPage() {
                   }
                   className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
                 >
-                  <option value="sale">Sale</option>
-                  <option value="rent">Rent</option>
-                  <option value="renewal">Renewal</option>
-                  <option value="other">Other</option>
+                  <option value="sale">{ui.sale}</option>
+                  <option value="rent">{ui.rent}</option>
+                  <option value="renewal">{ui.renewal}</option>
+                  <option value="other">{ui.other}</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Deal Value *
+                  {ui.dealValue} *
                 </label>
                 <input
                   type="number"
@@ -852,7 +1198,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Commission Rate (%) *
+                  {ui.rate} (%) *
                 </label>
                 <input
                   type="number"
@@ -874,18 +1220,28 @@ export default function AgentKomisiPage() {
                   }
                   className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
                 >
-                  <option value="pending">Pending</option>
-                  <option value="waiting_confirmation">Waiting Confirmation</option>
-                  <option value="approved">Approved</option>
-                  <option value="paid">Paid</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="disputed">Disputed</option>
+                  <option value="pending">
+                    {statusUI("pending", lang).label}
+                  </option>
+                  <option value="waiting_confirmation">
+                    {statusUI("waiting_confirmation", lang).label}
+                  </option>
+                  <option value="approved">
+                    {statusUI("approved", lang).label}
+                  </option>
+                  <option value="paid">{statusUI("paid", lang).label}</option>
+                  <option value="cancelled">
+                    {statusUI("cancelled", lang).label}
+                  </option>
+                  <option value="disputed">
+                    {statusUI("disputed", lang).label}
+                  </option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Deal Date
+                  {ui.dealDate}
                 </label>
                 <input
                   type="date"
@@ -897,7 +1253,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Paid Date
+                  {ui.paidDate}
                 </label>
                 <input
                   type="date"
@@ -909,7 +1265,7 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Payment Method
+                  {ui.paymentMethod}
                 </label>
                 <input
                   type="text"
@@ -921,19 +1277,21 @@ export default function AgentKomisiPage() {
 
               <div>
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Payment Reference
+                  {ui.paymentReference}
                 </label>
                 <input
                   type="text"
                   value={form.paymentReference}
-                  onChange={(e) => updateForm("paymentReference", e.target.value)}
+                  onChange={(e) =>
+                    updateForm("paymentReference", e.target.value)
+                  }
                   className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
                 />
               </div>
 
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-[#1C1C1E]">
-                  Notes
+                  {ui.notes}
                 </label>
                 <textarea
                   value={form.notes}
@@ -950,7 +1308,7 @@ export default function AgentKomisiPage() {
                 onClick={closeModal}
                 className="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-[#1C1C1E] hover:bg-gray-50"
               >
-                Cancel
+                {ui.cancel}
               </button>
 
               <button
@@ -959,12 +1317,12 @@ export default function AgentKomisiPage() {
                 disabled={saving}
                 className="rounded-xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
               >
-                {saving ? "Saving..." : editingId ? "Update Komisi" : "Simpan Komisi"}
+                {saving ? ui.saving : editingId ? ui.update : ui.save}
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
-  );
+  )
 }
