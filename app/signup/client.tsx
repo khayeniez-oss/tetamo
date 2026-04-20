@@ -22,6 +22,7 @@ function normalizeRole(value: string | null): AllowedRole | null {
   if (v === "agent") return "agent";
   if (v === "developer") return "developer";
   if (v === "admin") return "admin";
+
   return null;
 }
 
@@ -73,24 +74,28 @@ function FormInput({
   placeholder,
   value,
   onChange,
+  autoComplete,
 }: {
   label: string;
   type?: string;
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
+  autoComplete?: string;
 }) {
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
         {label}
       </label>
+
       <input
         type={type}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
+        autoComplete={autoComplete}
+        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-500 focus:border-[#1C1C1E]"
       />
     </div>
   );
@@ -123,8 +128,8 @@ function RoleCard({
         disabled
           ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-70"
           : active
-            ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
-            : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
+          ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
+          : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
       ].join(" ")}
     >
       {badge ? (
@@ -156,6 +161,7 @@ export default function SignupPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const isID = lang === "id";
   const developerLicensePath = "/developer-license";
   const showFacebook = process.env.NEXT_PUBLIC_ENABLE_FACEBOOK_AUTH === "true";
 
@@ -194,12 +200,12 @@ export default function SignupPageClient() {
   const isDeveloperRole = currentRole === "developer";
 
   const roleLabel = useMemo(() => {
-    if (currentRole === "agent") return lang === "id" ? "Agen" : "Agent";
+    if (currentRole === "agent") return isID ? "Agen" : "Agent";
     if (currentRole === "developer") return "Developer";
     if (currentRole === "admin") return "Admin";
-    if (currentRole === "owner") return lang === "id" ? "Pemilik" : "Owner";
+    if (currentRole === "owner") return isID ? "Pemilik" : "Owner";
     return "";
-  }, [currentRole, lang]);
+  }, [currentRole, isID]);
 
   const ownerNextPath = next || "/pemilik";
   const agentNextPath = next || "/agentdashboard/paket";
@@ -209,19 +215,19 @@ export default function SignupPageClient() {
     currentRole === "agent"
       ? `/login?role=agent&next=${encodeURIComponent(agentNextPath)}`
       : currentRole === "owner"
-        ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
-        : currentRole === "admin"
-          ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
-          : "/login";
+      ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
+      : currentRole === "admin"
+      ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
+      : "/login";
 
   const footerLoginHref =
     currentRole && currentRole !== "developer"
       ? loginRedirect
       : next
-        ? `/login?next=${encodeURIComponent(next)}`
-        : "/login";
+      ? `/login?next=${encodeURIComponent(next)}`
+      : "/login";
 
-  const getOAuthRedirectTo = (provider: OAuthProvider) => {
+  function getOAuthRedirectTo(provider: OAuthProvider) {
     const params = new URLSearchParams();
 
     if (currentRole) params.set("role", currentRole);
@@ -234,14 +240,14 @@ export default function SignupPageClient() {
     if (next) params.set("next", next);
 
     return `${window.location.origin}/auth/callback?${params.toString()}`;
-  };
+  }
 
-  const handleOAuthSignup = async (provider: OAuthProvider) => {
+  async function handleOAuthSignup(provider: OAuthProvider) {
     if (!currentRole) return;
 
     if (isAdminSignup) {
       alert(
-        lang === "id"
+        isID
           ? "Signup Admin harus menggunakan email, password, dan admin code."
           : "Admin signup must use email, password, and admin code."
       );
@@ -283,12 +289,12 @@ export default function SignupPageClient() {
       setSocialLoading(null);
       alert(err?.message || "OAuth signup failed.");
     }
-  };
+  }
 
-  const handleSignup = async () => {
+  async function handleSignup() {
     if (!currentRole) {
       alert(
-        lang === "id"
+        isID
           ? "Silakan pilih peran terlebih dahulu."
           : "Please choose a role first."
       );
@@ -306,10 +312,15 @@ export default function SignupPageClient() {
     const trimmedAdminCode = adminCode.trim();
 
     if (!trimmedFullName || !trimmedEmail || !trimmedPassword) {
+      alert(isID ? "Mohon lengkapi semua field." : "Please complete all fields.");
+      return;
+    }
+
+    if (trimmedPassword.length < 6) {
       alert(
-        lang === "id"
-          ? "Mohon lengkapi semua field."
-          : "Please complete all fields."
+        isID
+          ? "Kata sandi minimal 6 karakter."
+          : "Password must be at least 6 characters."
       );
       return;
     }
@@ -320,7 +331,7 @@ export default function SignupPageClient() {
 
       if (!expectedAdminCode) {
         alert(
-          lang === "id"
+          isID
             ? "Admin signup code belum dikonfigurasi."
             : "Admin signup code is not configured."
         );
@@ -328,11 +339,7 @@ export default function SignupPageClient() {
       }
 
       if (trimmedAdminCode !== expectedAdminCode) {
-        alert(
-          lang === "id"
-            ? "Admin signup code tidak valid."
-            : "Invalid admin signup code."
-        );
+        alert(isID ? "Admin signup code tidak valid." : "Invalid admin signup code.");
         return;
       }
     }
@@ -411,7 +418,7 @@ export default function SignupPageClient() {
           router.push(adminNextPath);
         } else {
           alert(
-            lang === "id"
+            isID
               ? "Akun admin berhasil dibuat. Silakan login."
               : "Admin account created successfully. Please log in."
           );
@@ -427,71 +434,68 @@ export default function SignupPageClient() {
       setLoading(false);
       alert(err?.message || "Signup failed.");
     }
-  };
+  }
 
   const isBusy = loading || socialLoading !== null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-10 sm:px-6 sm:py-16">
+    <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-8 sm:px-6 sm:py-14 lg:px-8">
       <div className="w-full max-w-xl rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
         <div className="mb-7 text-center sm:mb-8">
           <h1 className="text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
-            {lang === "id" ? "Buat akun Anda" : "Create your account"}
+            {isID ? "Buat Akun TETAMO" : "Create Your TETAMO Account"}
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
-            {lang === "id"
-              ? "Pilih cara Anda ingin menggunakan Tetamo terlebih dahulu"
-              : "Choose how you want to use Tetamo first"}
+            {isID
+              ? "Pilih peran Anda untuk melanjutkan ke alur yang sesuai."
+              : "Choose your role to continue with the right flow."}
           </p>
         </div>
 
         {!currentRole ? (
           <div className="space-y-4">
             <RoleCard
-              active={false}
               icon={<UserRound className="h-5 w-5 text-[#1C1C1E]" />}
-              title={lang === "id" ? "Pemilik" : "Owner"}
+              title={isID ? "Pemilik Properti" : "Property Owner"}
               desc={
-                lang === "id"
-                  ? "Untuk pemilik properti yang ingin memilih paket, membuat listing, lalu membayar agar listing aktif."
-                  : "For property owners who want to choose a package, create a listing, and then pay to activate it."
+                isID
+                  ? "Untuk pemilik yang ingin memasang listing dan mengelola properti di TETAMO."
+                  : "For owners who want to list and manage their properties on TETAMO."
               }
               onClick={() => setSelectedRole("owner")}
             />
 
             <RoleCard
-              active={false}
               icon={<BriefcaseBusiness className="h-5 w-5 text-[#1C1C1E]" />}
-              title={lang === "id" ? "Agen" : "Agent"}
+              title={isID ? "Agen Properti" : "Property Agent"}
               desc={
-                lang === "id"
-                  ? "Untuk agen properti yang harus memilih paket dan membayar sebelum masuk dashboard agen."
-                  : "For property agents who must choose a package and pay before entering the agent dashboard."
+                isID
+                  ? "Untuk agent yang ingin memilih paket, mengelola listing, leads, jadwal viewing, dan komisi."
+                  : "For agents who want to choose a package, manage listings, leads, viewing schedules, and commissions."
               }
               onClick={() => setSelectedRole("agent")}
             />
 
             <RoleCard
-              active={false}
-              badge={lang === "id" ? "Lisensi Khusus" : "Custom License"}
+              badge="Request Quote"
               icon={<Building2 className="h-5 w-5 text-[#1C1C1E]" />}
               title="Developer"
               desc={
-                lang === "id"
-                  ? "Untuk developer yang membutuhkan license to use Tetamo dan penawaran harga khusus sesuai kebutuhan proyek."
-                  : "For developers who need a Tetamo license-to-use arrangement and custom pricing based on project requirements."
+                isID
+                  ? "Untuk developer atau project owner yang ingin meminta quotation untuk menggunakan TETAMO License."
+                  : "For developers or project owners who want to request a quotation to use the TETAMO License."
               }
               onClick={() => router.push(developerLicensePath)}
             />
 
             <p className="pt-2 text-center text-sm leading-6 text-[#6e6e73]">
-              {lang === "id" ? "Sudah punya akun?" : "Already have an account?"}{" "}
+              {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
               <Link
                 href={footerLoginHref}
                 className="font-semibold text-[#1C1C1E] underline underline-offset-4"
               >
-                {lang === "id" ? "Masuk" : "Log in"}
+                {isID ? "Masuk" : "Log in"}
               </Link>
             </p>
           </div>
@@ -500,7 +504,7 @@ export default function SignupPageClient() {
             <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-[#e5e5e7] bg-[#fafafa] px-4 py-3">
               <div>
                 <p className="text-xs text-[#6e6e73]">
-                  {lang === "id" ? "Peran terpilih" : "Selected role"}
+                  {isID ? "Peran terpilih" : "Selected role"}
                 </p>
                 <p className="text-sm font-semibold text-[#1C1C1E]">
                   {roleLabel}
@@ -514,7 +518,7 @@ export default function SignupPageClient() {
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#d2d2d7] bg-white px-3 py-2 text-xs font-medium text-[#1C1C1E] transition hover:bg-[#f8f8f8]"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  {lang === "id" ? "Ganti" : "Change"}
+                  {isID ? "Ganti" : "Change"}
                 </button>
               ) : null}
             </div>
@@ -524,57 +528,57 @@ export default function SignupPageClient() {
                 <div className="space-y-3">
                   <button
                     type="button"
-                    onClick={() => handleOAuthSignup("google")}
+                    onClick={() => void handleOAuthSignup("google")}
                     disabled={isBusy}
                     className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                   >
                     <GoogleDarkIcon />
                     <span>
                       {socialLoading === "google"
-                        ? lang === "id"
+                        ? isID
                           ? "Menghubungkan ke Google..."
                           : "Connecting to Google..."
-                        : lang === "id"
-                          ? "Daftar dengan Google"
-                          : "Sign up with Google"}
+                        : isID
+                        ? "Daftar dengan Google"
+                        : "Sign up with Google"}
                     </span>
                   </button>
 
                   {showFacebook ? (
                     <button
                       type="button"
-                      onClick={() => handleOAuthSignup("facebook")}
+                      onClick={() => void handleOAuthSignup("facebook")}
                       disabled={isBusy}
                       className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                     >
                       <FacebookDarkIcon />
                       <span>
                         {socialLoading === "facebook"
-                          ? lang === "id"
+                          ? isID
                             ? "Menghubungkan ke Facebook..."
                             : "Connecting to Facebook..."
-                          : lang === "id"
-                            ? "Daftar dengan Facebook"
-                            : "Sign up with Facebook"}
+                          : isID
+                          ? "Daftar dengan Facebook"
+                          : "Sign up with Facebook"}
                       </span>
                     </button>
                   ) : null}
 
                   <button
                     type="button"
-                    onClick={() => handleOAuthSignup("apple")}
+                    onClick={() => void handleOAuthSignup("apple")}
                     disabled={isBusy}
                     className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
                   >
                     <AppleDarkIcon />
                     <span>
                       {socialLoading === "apple"
-                        ? lang === "id"
+                        ? isID
                           ? "Menghubungkan ke Apple..."
                           : "Connecting to Apple..."
-                        : lang === "id"
-                          ? "Daftar dengan Apple"
-                          : "Sign up with Apple"}
+                        : isID
+                        ? "Daftar dengan Apple"
+                        : "Sign up with Apple"}
                     </span>
                   </button>
                 </div>
@@ -582,43 +586,46 @@ export default function SignupPageClient() {
                 <div className="my-6 flex items-center gap-3">
                   <div className="h-px flex-1 bg-[#e5e5e7]" />
                   <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6e6e73]">
-                    {lang === "id" ? "Atau" : "Or"}
+                    {isID ? "Atau" : "Or"}
                   </span>
                   <div className="h-px flex-1 bg-[#e5e5e7]" />
                 </div>
               </>
             ) : null}
 
-            <div className="space-y-4">
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSignup();
+              }}
+            >
               <FormInput
-                label={lang === "id" ? "Nama Lengkap" : "Full name"}
+                label={isID ? "Nama Lengkap" : "Full Name"}
                 placeholder={
-                  lang === "id"
-                    ? "Masukkan nama lengkap Anda"
-                    : "Enter your full name"
+                  isID ? "Masukkan nama lengkap Anda" : "Enter your full name"
                 }
                 value={fullName}
                 onChange={setFullName}
+                autoComplete="name"
               />
 
               <FormInput
                 label="Email"
                 type="email"
-                placeholder={
-                  lang === "id" ? "Masukkan email Anda" : "Enter your email"
-                }
+                placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
                 value={email}
                 onChange={setEmail}
+                autoComplete="email"
               />
 
               <FormInput
-                label={lang === "id" ? "Kata Sandi" : "Password"}
+                label={isID ? "Kata Sandi" : "Password"}
                 type="password"
-                placeholder={
-                  lang === "id" ? "Buat kata sandi" : "Create a password"
-                }
+                placeholder={isID ? "Buat kata sandi" : "Create a password"}
                 value={password}
                 onChange={setPassword}
+                autoComplete="new-password"
               />
 
               {isAdminSignup ? (
@@ -626,43 +633,43 @@ export default function SignupPageClient() {
                   label="Admin Code"
                   type="password"
                   placeholder={
-                    lang === "id"
+                    isID
                       ? "Masukkan admin signup code"
                       : "Enter admin signup code"
                   }
                   value={adminCode}
                   onChange={setAdminCode}
+                  autoComplete="off"
                 />
               ) : null}
 
               <button
-                type="button"
-                onClick={handleSignup}
+                type="submit"
                 disabled={isBusy}
                 className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 {loading && !socialLoading
-                  ? lang === "id"
+                  ? isID
                     ? "Sedang membuat akun..."
                     : "Creating account..."
-                  : lang === "id"
-                    ? "Daftar"
-                    : "Sign up"}
+                  : isID
+                  ? "Daftar"
+                  : "Sign up"}
               </button>
-            </div>
+            </form>
 
             <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
-              {lang === "id" ? "Sudah punya akun?" : "Already have an account?"}{" "}
+              {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
               <Link
                 href={footerLoginHref}
                 className="font-semibold text-[#1C1C1E] underline underline-offset-4"
               >
-                {lang === "id" ? "Masuk" : "Log in"}
+                {isID ? "Masuk" : "Log in"}
               </Link>
             </p>
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }

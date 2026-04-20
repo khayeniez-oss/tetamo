@@ -217,29 +217,6 @@ const FALLBACK_OWNER_VEHICLES: VehicleItem[] = [
     detailHref: "/vehicles/motor/ov-2",
     isFeatured: false,
   },
-  {
-    id: "ov-3",
-    category: "car",
-    title: "Hyundai Ioniq 5 Prime 2024",
-    images: [
-      "https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1486496572940-2bb2341fdbdf?auto=format&fit=crop&w=1200&q=80",
-    ],
-    price: 845000000,
-    location: "BSD City",
-    year: "2024",
-    transmission: "Automatic",
-    fuel: "Electric",
-    mileage: "6.000 km",
-    posterName: "Angelina Hartono",
-    postedByType: "owner",
-    whatsapp: "6281234567895",
-    kode: "VHC-TTM-004",
-    postedDate: "11 Apr 2026",
-    verifiedListing: true,
-    detailHref: "/vehicles/car/ov-3",
-    isFeatured: false,
-  },
 ];
 
 const FALLBACK_FEATURED_DEALERS: DealerItem[] = [

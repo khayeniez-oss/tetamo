@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,6 +21,8 @@ import {
   BadgeDollarSign,
   Bell,
   Home,
+  CheckCheck,
+  ExternalLink,
 } from "lucide-react";
 
 type ProfileData = {
@@ -32,6 +34,21 @@ type MenuItem = {
   label: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
+};
+
+type NotificationRow = {
+  id: string;
+  user_id: string | null;
+  related_user_id: string | null;
+  property_id: string | null;
+  lead_id: string | null;
+  type: string;
+  title: string;
+  body: string | null;
+  audience: string | null;
+  is_read: boolean | null;
+  priority: string | null;
+  created_at: string | null;
 };
 
 const NOTIFICATIONS_HREF = "/notifications";
@@ -65,64 +82,218 @@ function getInitials(fullName: string | null, email: string | null) {
   return source.slice(0, 2).toUpperCase();
 }
 
-function CountBadge({ count }: { count: number }) {
+function formatNotificationTime(value: string | null, lang: string) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffMinutes < 1) return lang === "id" ? "Baru saja" : "Just now";
+
+  if (diffMinutes < 60) {
+    return lang === "id"
+      ? `${diffMinutes} menit lalu`
+      : `${diffMinutes} min ago`;
+  }
+
+  if (diffHours < 24) {
+    return lang === "id" ? `${diffHours} jam lalu` : `${diffHours}h ago`;
+  }
+
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+  }).format(date);
+}
+
+function priorityDotClass(priority: string | null) {
+  if (priority === "high") return "border-red-200 bg-red-500";
+  if (priority === "low") return "border-gray-200 bg-gray-400";
+  return "border-yellow-200 bg-[#B8860B]";
+}
+
+function getNotificationHref(item: NotificationRow, role: string | null) {
+  const type = String(item.type || "").toLowerCase();
+
+  if (type.includes("lead") || type.includes("whatsapp")) {
+    if (role === "agent") return "/agentdashboard/leads";
+    if (role === "owner") return "/pemilikdashboard/leads";
+    if (role === "admin") return "/admindashboard";
+  }
+
+  if (type.includes("viewing")) {
+    if (role === "agent") return "/agentdashboard/jadwal-viewing";
+    if (role === "owner") return "/pemilikdashboard/jadwal-viewing";
+    if (role === "admin") return "/admindashboard";
+  }
+
+  if (
+    type.includes("payment") ||
+    type.includes("invoice") ||
+    type.includes("receipt") ||
+    type.includes("membership") ||
+    type.includes("package") ||
+    type.includes("billing")
+  ) {
+    if (role === "agent") return "/agentdashboard/tagihan";
+    if (role === "owner") return "/pemilikdashboard/tagihan";
+    if (role === "admin") return "/admindashboard";
+  }
+
+  if (
+    type.includes("listing") ||
+    type.includes("property") ||
+    type.includes("approval") ||
+    type.includes("approved") ||
+    type.includes("rejected")
+  ) {
+    if (role === "agent") return "/agentdashboard/listing-saya";
+    if (role === "owner") return "/pemilikdashboard/listing-saya";
+    if (role === "admin") return "/admindashboard";
+  }
+
+  if (type.includes("blog")) return "/blog";
+  if (type.includes("education")) return "/education";
+
+  return NOTIFICATIONS_HREF;
+}
+
+function NotificationBadge({ count }: { count: number }) {
   if (count <= 0) return null;
 
   return (
-    <span className="absolute -right-1 -top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#B8860B] px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-md">
+    <span className="absolute -right-1 -top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-[#B8860B] px-1 py-0.5 text-[8px] font-bold leading-none text-white shadow-md">
       {count > 99 ? "99+" : count}
     </span>
   );
 }
 
-function DesktopNotificationButton({
-  label,
-  count,
-  onClick,
+function NotificationDropdown({
+  items,
+  unreadCount,
+  lang,
+  emptyText,
+  unreadText,
+  markAllText,
+  viewAllText,
+  openText,
+  notificationsTitle,
+  onMarkAllRead,
+  onOpenNotification,
+  onViewAll,
 }: {
-  label: string;
-  count: number;
-  onClick: () => void;
+  items: NotificationRow[];
+  unreadCount: number;
+  lang: string;
+  emptyText: string;
+  unreadText: string;
+  markAllText: string;
+  viewAllText: string;
+  openText: string;
+  notificationsTitle: string;
+  onMarkAllRead: () => void;
+  onOpenNotification: (item: NotificationRow) => void;
+  onViewAll: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#1C1C1E] bg-[#1C1C1E] text-white transition hover:opacity-90 lg:h-9 lg:w-9"
-    >
-      <Bell className="h-3 w-3" />
-      <CountBadge count={count} />
-    </button>
-  );
-}
+    <div className="overflow-hidden rounded-2xl bg-white">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[#1C1C1E]">
+            {notificationsTitle}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {unreadCount > 0 ? `${unreadCount} ${unreadText}` : emptyText}
+          </p>
+        </div>
 
-function MobileNotificationButton({
-  href,
-  label,
-  count,
-  onClick,
-}: {
-  href: string;
-  label: string;
-  count: number;
-  onClick: (href: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(href)}
-      className="relative inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-[#1C1C1E] bg-[#1C1C1E] px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
-    >
-      <Bell className="h-3.5 w-3.5" />
-      <span>{label}</span>
-      {count > 0 ? (
-        <span className="inline-flex min-w-[14px] items-center justify-center rounded-full bg-[#B8860B] px-1 py-0.5 text-[8px] font-bold leading-none text-white">
-          {count > 99 ? "99+" : count}
-        </span>
-      ) : null}
-    </button>
+        {unreadCount > 0 ? (
+          <button
+            type="button"
+            onClick={onMarkAllRead}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+          >
+            <CheckCheck className="h-3.5 w-3.5" />
+            {markAllText}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="max-h-[360px] overflow-y-auto">
+        {items.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-gray-500">
+            {emptyText}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {items.map((item) => {
+              const unread = item.is_read !== true;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onOpenNotification(item)}
+                  className={[
+                    "block w-full px-4 py-3 text-left transition hover:bg-gray-50",
+                    unread ? "bg-yellow-50/50" : "bg-white",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={[
+                        "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border",
+                        priorityDotClass(item.priority),
+                      ].join(" ")}
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="line-clamp-1 text-sm font-semibold text-[#1C1C1E]">
+                          {item.title}
+                        </p>
+                        <span className="shrink-0 text-[11px] text-gray-400">
+                          {formatNotificationTime(item.created_at, lang)}
+                        </span>
+                      </div>
+
+                      {item.body ? (
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
+                          {item.body}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                          {item.type}
+                        </span>
+
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#1C1C1E]">
+                          {openText}
+                          <ExternalLink className="h-3 w-3" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="flex w-full items-center justify-center border-t border-gray-100 px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+      >
+        {viewAllText}
+      </button>
+    </div>
   );
 }
 
@@ -207,9 +378,14 @@ export default function Navbar() {
     developer: "Developer",
     agentPro: isID ? "Agen Pro" : "Agent Pro",
     signUp: isID ? "Daftar" : "Sign Up",
-    menu: isID ? "Menu" : "Menu",
+    menu: "Menu",
     quickAccess: isID ? "Akses Cepat" : "Quick Access",
     notifications: isID ? "Notifikasi" : "Notifications",
+    noNotifications: isID ? "Belum ada notifikasi." : "No notifications yet.",
+    unread: isID ? "belum dibaca" : "unread",
+    markAllRead: isID ? "Tandai semua dibaca" : "Mark all as read",
+    viewAll: isID ? "Lihat semua" : "View all",
+    open: isID ? "Buka" : "Open",
   };
 
   const propertyItems: MenuItem[] = [
@@ -222,19 +398,25 @@ export default function Navbar() {
     { label: t.forRent, href: "/properti?jenisListing=disewa", icon: Home },
   ];
 
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
   const [sessionLoading, setSessionLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
 
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [soundUnlocked, setSoundUnlocked] = useState(false);
 
   const [langOpen, setLangOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [desktopDropdownOpen, setDesktopDropdownOpen] = useState<"properties" | null>(null);
+  const [desktopDropdownOpen, setDesktopDropdownOpen] = useState<
+    "properties" | null
+  >(null);
 
   const desktopLangRef = useRef<HTMLDivElement | null>(null);
   const desktopCurrencyRef = useRef<HTMLDivElement | null>(null);
@@ -243,6 +425,8 @@ export default function Navbar() {
   const accountRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const desktopNavRef = useRef<HTMLDivElement | null>(null);
+  const notificationRef = useRef<HTMLDivElement | null>(null);
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
 
   function closeAllMenus() {
     setLangOpen(false);
@@ -250,6 +434,7 @@ export default function Navbar() {
     setAccountOpen(false);
     setMobileMenuOpen(false);
     setDesktopDropdownOpen(null);
+    setNotificationOpen(false);
   }
 
   async function loadProfileByUserId(
@@ -281,16 +466,44 @@ export default function Navbar() {
     }
   }
 
-  async function loadNavbarCounts(userId: string) {
-    try {
-      const { count } = await supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("is_read", false);
+  async function loadNotifications(userId: string | null) {
+    if (!userId) {
+      setNotifications([]);
+      setNotificationCount(0);
+      return;
+    }
 
-      setNotificationCount(count ?? 0);
+    try {
+      const [listResult, countResult] = await Promise.all([
+        supabase
+          .from("notifications")
+          .select(
+            "id, user_id, related_user_id, property_id, lead_id, type, title, body, audience, is_read, priority, created_at"
+          )
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(10),
+
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .or("is_read.eq.false,is_read.is.null"),
+      ]);
+
+      if (listResult.error) {
+        setNotifications([]);
+      } else {
+        setNotifications((listResult.data ?? []) as NotificationRow[]);
+      }
+
+      if (countResult.error) {
+        setNotificationCount(0);
+      } else {
+        setNotificationCount(countResult.count ?? 0);
+      }
     } catch {
+      setNotifications([]);
       setNotificationCount(0);
     }
   }
@@ -305,6 +518,36 @@ export default function Navbar() {
 
     router.push(href);
   }
+
+  function resetAuthState() {
+    setAuthUserId(null);
+    setAuthUserEmail(null);
+    setProfile(null);
+    setNotificationCount(0);
+    setNotifications([]);
+    setNotificationOpen(false);
+    setSessionLoading(false);
+    setProfileLoading(false);
+  }
+
+  useEffect(() => {
+    notificationAudioRef.current = new Audio("/tetamo-notification.mp3");
+    notificationAudioRef.current.volume = 0.65;
+  }, []);
+
+  useEffect(() => {
+    function unlockSound() {
+      setSoundUnlocked(true);
+    }
+
+    document.addEventListener("click", unlockSound, { once: true });
+    document.addEventListener("keydown", unlockSound, { once: true });
+
+    return () => {
+      document.removeEventListener("click", unlockSound);
+      document.removeEventListener("keydown", unlockSound);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -322,26 +565,19 @@ export default function Navbar() {
         const user = session?.user ?? null;
 
         if (!user) {
-          setAuthUserEmail(null);
-          setProfile(null);
-          setNotificationCount(0);
-          setSessionLoading(false);
-          setProfileLoading(false);
+          resetAuthState();
           return;
         }
 
+        setAuthUserId(user.id);
         setAuthUserEmail(user.email ?? null);
         setSessionLoading(false);
 
-        loadProfileByUserId(user.id, user.email ?? null);
-        loadNavbarCounts(user.id);
+        void loadProfileByUserId(user.id, user.email ?? null);
+        void loadNotifications(user.id);
       } catch {
         if (!mounted) return;
-        setAuthUserEmail(null);
-        setProfile(null);
-        setNotificationCount(0);
-        setSessionLoading(false);
-        setProfileLoading(false);
+        resetAuthState();
       }
     }
 
@@ -355,26 +591,65 @@ export default function Navbar() {
       if (!mounted) return;
 
       if (!user) {
-        setAuthUserEmail(null);
-        setProfile(null);
-        setNotificationCount(0);
-        setSessionLoading(false);
-        setProfileLoading(false);
+        resetAuthState();
         return;
       }
 
+      setAuthUserId(user.id);
       setAuthUserEmail(user.email ?? null);
       setSessionLoading(false);
 
-      loadProfileByUserId(user.id, user.email ?? null);
-      loadNavbarCounts(user.id);
+      void loadProfileByUserId(user.id, user.email ?? null);
+      void loadNotifications(user.id);
     });
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!authUserId) return;
+
+    const channel = supabase
+      .channel(`navbar-notifications-${authUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${authUserId}`,
+        },
+        (payload) => {
+          const nextItem = payload.new as NotificationRow;
+
+          setNotifications((prev) => [
+            nextItem,
+            ...prev.filter((item) => item.id !== nextItem.id),
+          ].slice(0, 10));
+
+          if (nextItem.is_read !== true) {
+            setNotificationCount((prev) => prev + 1);
+          }
+
+          if (soundUnlocked) {
+            const audio = notificationAudioRef.current;
+            if (audio) {
+              audio.currentTime = 0;
+              audio.play().catch(() => {});
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [authUserId, soundUnlocked]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -384,10 +659,11 @@ export default function Navbar() {
         desktopLangRef.current?.contains(target) ?? false;
       const insideDesktopCurrency =
         desktopCurrencyRef.current?.contains(target) ?? false;
-      const insideMobileLang =
-        mobileLangRef.current?.contains(target) ?? false;
+      const insideMobileLang = mobileLangRef.current?.contains(target) ?? false;
       const insideMobileCurrency =
         mobileCurrencyRef.current?.contains(target) ?? false;
+      const insideNotification =
+        notificationRef.current?.contains(target) ?? false;
 
       if (!insideDesktopLang && !insideMobileLang) {
         setLangOpen(false);
@@ -407,6 +683,10 @@ export default function Navbar() {
 
       if (desktopNavRef.current && !desktopNavRef.current.contains(target)) {
         setDesktopDropdownOpen(null);
+      }
+
+      if (!insideNotification) {
+        setNotificationOpen(false);
       }
     }
 
@@ -433,12 +713,67 @@ export default function Navbar() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    setNotificationCount(0);
+    resetAuthState();
     setAccountOpen(false);
     setMobileMenuOpen(false);
     setDesktopDropdownOpen(null);
     router.push("/");
     router.refresh();
+  }
+
+  async function markNotificationRead(item: NotificationRow) {
+    if (!authUserId || item.is_read === true) return;
+
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.id === item.id
+          ? { ...notification, is_read: true }
+          : notification
+      )
+    );
+
+    setNotificationCount((prev) => Math.max(0, prev - 1));
+
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", item.id)
+      .eq("user_id", authUserId);
+  }
+
+  async function markAllNotificationsRead() {
+    if (!authUserId) return;
+
+    setNotifications((prev) =>
+      prev.map((notification) => ({ ...notification, is_read: true }))
+    );
+    setNotificationCount(0);
+
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", authUserId)
+      .or("is_read.eq.false,is_read.is.null");
+  }
+
+  async function openNotification(item: NotificationRow) {
+    await markNotificationRead(item);
+    setNotificationOpen(false);
+    goToProtectedRoute(getNotificationHref(item, profile?.role ?? null));
+  }
+
+  function handleNotificationClick() {
+    setLangOpen(false);
+    setCurrencyOpen(false);
+    setAccountOpen(false);
+    setDesktopDropdownOpen(null);
+
+    if (!authUserEmail) {
+      goToProtectedRoute(NOTIFICATIONS_HREF);
+      return;
+    }
+
+    setNotificationOpen((prev) => !prev);
   }
 
   const isLoggedIn = Boolean(authUserEmail);
@@ -449,6 +784,23 @@ export default function Navbar() {
   );
   const initials = getInitials(profile?.full_name ?? null, authUserEmail);
   const dashboardHref = getDashboardHref(profile?.role ?? null);
+
+  const notificationDropdown = (
+    <NotificationDropdown
+      items={notifications}
+      unreadCount={notificationCount}
+      lang={lang}
+      emptyText={t.noNotifications}
+      unreadText={t.unread}
+      markAllText={t.markAllRead}
+      viewAllText={t.viewAll}
+      openText={t.open}
+      notificationsTitle={t.notifications}
+      onMarkAllRead={() => void markAllNotificationsRead()}
+      onOpenNotification={(item) => void openNotification(item)}
+      onViewAll={() => goToProtectedRoute(NOTIFICATIONS_HREF)}
+    />
+  );
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
@@ -516,6 +868,7 @@ export default function Navbar() {
                     setCurrencyOpen(false);
                     setAccountOpen(false);
                     setDesktopDropdownOpen(null);
+                    setNotificationOpen(false);
                   }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
                 >
@@ -567,6 +920,7 @@ export default function Navbar() {
                     setLangOpen(false);
                     setAccountOpen(false);
                     setDesktopDropdownOpen(null);
+                    setNotificationOpen(false);
                   }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
                 >
@@ -625,11 +979,24 @@ export default function Navbar() {
                 )}
               </div>
 
-              <DesktopNotificationButton
-                label={t.notifications}
-                count={notificationCount}
-                onClick={() => goToProtectedRoute(NOTIFICATIONS_HREF)}
-              />
+              <div ref={notificationRef} className="relative">
+                <button
+                  type="button"
+                  onClick={handleNotificationClick}
+                  aria-label={t.notifications}
+                  title={t.notifications}
+                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#1C1C1E] bg-[#1C1C1E] text-white transition hover:opacity-90 lg:h-9 lg:w-9"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  <NotificationBadge count={notificationCount} />
+                </button>
+
+                {notificationOpen && isLoggedIn ? (
+                  <div className="absolute right-0 top-[calc(100%+10px)] w-[360px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.16)]">
+                    {notificationDropdown}
+                  </div>
+                ) : null}
+              </div>
 
               <div ref={accountRef} className="relative">
                 <button
@@ -639,6 +1006,7 @@ export default function Navbar() {
                     setLangOpen(false);
                     setCurrencyOpen(false);
                     setDesktopDropdownOpen(null);
+                    setNotificationOpen(false);
                   }}
                   className="inline-flex h-12 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-4 text-[15px] font-semibold text-white transition hover:opacity-90 lg:h-14 lg:px-5"
                 >
@@ -767,6 +1135,7 @@ export default function Navbar() {
                   setMobileMenuOpen(false);
                   setAccountOpen(false);
                   setDesktopDropdownOpen(null);
+                  setNotificationOpen(false);
                 }}
                 className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
@@ -833,6 +1202,7 @@ export default function Navbar() {
                   setMobileMenuOpen(false);
                   setAccountOpen(false);
                   setDesktopDropdownOpen(null);
+                  setNotificationOpen(false);
                 }}
                 className="inline-flex h-10 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
               >
@@ -884,6 +1254,7 @@ export default function Navbar() {
                   setCurrencyOpen(false);
                   setAccountOpen(false);
                   setDesktopDropdownOpen(null);
+                  setNotificationOpen(false);
                 }}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90"
                 aria-label={t.menu}
@@ -962,13 +1333,29 @@ export default function Navbar() {
                             </div>
                           </div>
 
-                          <div className="mb-2 grid grid-cols-1 gap-2">
-                            <MobileNotificationButton
-                              href={NOTIFICATIONS_HREF}
-                              label={t.notifications}
-                              count={notificationCount}
-                              onClick={goToProtectedRoute}
-                            />
+                          <div ref={notificationRef} className="mb-2">
+                            <button
+                              type="button"
+                              onClick={handleNotificationClick}
+                              className="relative inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-[#1C1C1E] bg-[#1C1C1E] px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                            >
+                              <Bell className="h-3.5 w-3.5" />
+                              <span>{t.notifications}</span>
+
+                              {notificationCount > 0 ? (
+                                <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-[#B8860B] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+                                  {notificationCount > 99
+                                    ? "99+"
+                                    : notificationCount}
+                                </span>
+                              ) : null}
+                            </button>
+
+                            {notificationOpen ? (
+                              <div className="mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                                {notificationDropdown}
+                              </div>
+                            ) : null}
                           </div>
 
                           {!profileLoading ? (

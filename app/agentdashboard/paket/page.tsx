@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crown, CheckCircle2 } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Crown,
+  PackageCheck,
+  ShieldCheck,
+} from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import { AGENT_PACKAGES } from "@/app/data/pricelist";
@@ -16,6 +22,23 @@ type ProfileRow = {
   email: string | null;
 };
 
+type AgentMembershipRow = {
+  id: string;
+  user_id: string | null;
+  payment_id: string | null;
+  package_id: string | null;
+  package_name: string | null;
+  billing_cycle: string | null;
+  listing_limit: number | null;
+  status: string | null;
+  auto_renew: boolean | null;
+  starts_at: string | null;
+  expires_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
   availableBillingCycles?: BillingCycle[];
   monthlyPriceIdr?: number;
@@ -27,6 +50,48 @@ type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
 
 function formatIdr(value: number) {
   return `Rp ${value.toLocaleString("id-ID")}`;
+}
+
+function formatDate(value: string | null, lang: string) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat(lang === "id" ? "id-ID" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function isMembershipActive(membership: AgentMembershipRow | null) {
+  if (!membership) return false;
+  if (membership.status !== "active") return false;
+
+  if (!membership.expires_at) return true;
+
+  const expiresAt = new Date(membership.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) return true;
+
+  return expiresAt.getTime() >= Date.now();
+}
+
+function getMembershipListingLimit(membership: AgentMembershipRow | null) {
+  if (!membership) return 0;
+
+  const direct = Number(membership.listing_limit || 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const fromMetadata =
+    Number(membership.metadata?.listing_limit || 0) ||
+    Number(membership.metadata?.listingLimit || 0) ||
+    Number(membership.metadata?.active_listing_limit || 0) ||
+    Number(membership.metadata?.activeListingLimit || 0);
+
+  if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata;
+
+  return 0;
 }
 
 function isContactPackage(pkg: AgentPackageUI) {
@@ -68,7 +133,9 @@ function getAvailableBillingCycles(pkg: AgentPackageUI): BillingCycle[] {
   if (pkg.billingCycle === "yearly") cycles.add("yearly");
 
   if (pkg.monthlyPriceIdr && pkg.monthlyPriceIdr > 0) cycles.add("monthly");
-  if (pkg.priceIdr && pkg.priceIdr > 0) cycles.add(pkg.billingCycle || "yearly");
+  if (pkg.priceIdr && pkg.priceIdr > 0) {
+    cycles.add(pkg.billingCycle === "monthly" ? "monthly" : "yearly");
+  }
 
   if (cycles.size === 0) cycles.add("yearly");
 
@@ -104,6 +171,20 @@ function getCyclePrice(pkg: AgentPackageUI, cycle: BillingCycle) {
   return Number(pkg.priceIdr || 0);
 }
 
+function getBillingCycleLabel(cycle: string | null | undefined, lang: string) {
+  const value = String(cycle || "").toLowerCase();
+
+  if (lang === "id") {
+    if (value === "monthly") return "Bulanan";
+    if (value === "yearly") return "Tahunan";
+    return "-";
+  }
+
+  if (value === "monthly") return "Monthly";
+  if (value === "yearly") return "Yearly";
+  return "-";
+}
+
 export default function AgentPaketPage() {
   const router = useRouter();
   const { lang } = useLanguage();
@@ -112,6 +193,7 @@ export default function AgentPaketPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [memberships, setMemberships] = useState<AgentMembershipRow[]>([]);
 
   const sortedPackages = useMemo(() => {
     return ([...AGENT_PACKAGES] as AgentPackageUI[]).sort((a, b) => {
@@ -140,6 +222,14 @@ export default function AgentPaketPage() {
 
   const [selectedBillingCycle, setSelectedBillingCycle] =
     useState<BillingCycle>(() => getDefaultBillingCycle(selectedPackage));
+
+  const activeMembership = useMemo(() => {
+    return memberships.find((membership) => isMembershipActive(membership)) || null;
+  }, [memberships]);
+
+  const activeListingLimit = useMemo(() => {
+    return getMembershipListingLimit(activeMembership);
+  }, [activeMembership]);
 
   const selectedPackageIsContact = selectedPackage
     ? isContactPackage(selectedPackage)
@@ -171,7 +261,7 @@ export default function AgentPaketPage() {
   useEffect(() => {
     let ignore = false;
 
-    async function loadUser() {
+    async function loadUserAndMembership() {
       setLoadingPage(true);
       setErrorMessage("");
 
@@ -193,51 +283,90 @@ export default function AgentPaketPage() {
           return;
         }
 
-        const { data: profileRow, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, role, full_name, email")
-          .eq("id", user.id)
-          .maybeSingle();
+        const [profileRes, membershipRes] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("id, role, full_name, email")
+            .eq("id", user.id)
+            .maybeSingle(),
 
-        if (profileError) {
-          if (!ignore) {
-            setErrorMessage(
-              profileError.message ||
-                (lang === "id"
-                  ? "Gagal memuat profil."
-                  : "Failed to load profile.")
-            );
-            setLoadingPage(false);
-          }
+          supabase
+            .from("agent_memberships")
+            .select(
+              "id, user_id, payment_id, package_id, package_name, billing_cycle, listing_limit, status, auto_renew, starts_at, expires_at, metadata, created_at, updated_at"
+            )
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+        ]);
+
+        if (ignore) return;
+
+        if (profileRes.error) {
+          setErrorMessage(
+            profileRes.error.message ||
+              (lang === "id" ? "Gagal memuat profil." : "Failed to load profile.")
+          );
+          setLoadingPage(false);
           return;
         }
 
-        if (!ignore) {
-          setProfile((profileRow as ProfileRow) ?? null);
+        if (membershipRes.error) {
+          setErrorMessage(
+            membershipRes.error.message ||
+              (lang === "id"
+                ? "Gagal memuat membership."
+                : "Failed to load membership.")
+          );
           setLoadingPage(false);
+          return;
         }
+
+        const profileRow = (profileRes.data as ProfileRow) ?? null;
+        const membershipRows = (membershipRes.data || []) as AgentMembershipRow[];
+
+        setProfile(profileRow);
+        setMemberships(membershipRows);
+
+        const currentActive =
+          membershipRows.find((membership) => isMembershipActive(membership)) ||
+          null;
+
+        if (currentActive?.package_id) {
+          const matchingPackage = sortedPackages.find(
+            (pkg) => pkg.id === currentActive.package_id
+          );
+
+          if (matchingPackage) {
+            setSelectedPackageId(matchingPackage.id);
+            setSelectedBillingCycle(getDefaultBillingCycle(matchingPackage));
+          }
+        }
+
+        setLoadingPage(false);
       } catch (error: any) {
         if (!ignore) {
           setErrorMessage(
             error?.message ||
-              (lang === "id"
-                ? "Gagal memuat halaman."
-                : "Failed to load page.")
+              (lang === "id" ? "Gagal memuat halaman." : "Failed to load page.")
           );
           setLoadingPage(false);
         }
       }
     }
 
-    loadUser();
+    loadUserAndMembership();
 
     return () => {
       ignore = true;
     };
-  }, [lang]);
+  }, [lang, sortedPackages]);
 
   function getRecommendedLabel() {
     return lang === "id" ? "Rekomendasi" : "Recommended";
+  }
+
+  function getCurrentLabel() {
+    return lang === "id" ? "Paket Saat Ini" : "Current Package";
   }
 
   function getContactLabel() {
@@ -322,14 +451,6 @@ export default function AgentPaketPage() {
       : "/ year";
   }
 
-  function getBillingCycleLabel(cycle: BillingCycle) {
-    if (lang === "id") {
-      return cycle === "monthly" ? "Bulanan" : "Tahunan";
-    }
-
-    return cycle === "monthly" ? "Monthly" : "Yearly";
-  }
-
   function translateFeature(feature: string) {
     if (lang === "id") return feature;
 
@@ -377,9 +498,11 @@ export default function AgentPaketPage() {
         `Tetamo Agent ${selectedPackage.name} Inquiry`
       );
       const body = encodeURIComponent(
-        `Hello Tetamo,\n\nI am interested in the ${selectedPackage.name} agent package.\n\nName: ${
-          profile?.full_name || ""
-        }\nEmail: ${profile?.email || ""}\n\nPlease send me more details.`
+        `Hello Tetamo,\n\nI am interested in the ${
+          selectedPackage.name
+        } agent package.\n\nName: ${profile?.full_name || ""}\nEmail: ${
+          profile?.email || ""
+        }\n\nPlease send me more details.`
       );
 
       window.location.href = `mailto:inquiry@tetamo.com?subject=${subject}&body=${body}`;
@@ -410,6 +533,11 @@ export default function AgentPaketPage() {
     }
   }
 
+  const selectedPackageIsCurrent =
+    Boolean(activeMembership?.package_id) &&
+    Boolean(selectedPackage?.id) &&
+    activeMembership?.package_id === selectedPackage?.id;
+
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
@@ -420,8 +548,8 @@ export default function AgentPaketPage() {
 
           <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
             {lang === "id"
-              ? "Pilih paket agen yang sesuai dengan kebutuhan Anda. Semua paket berbasis listing aktif dan dapat diperpanjang otomatis dari dashboard."
-              : "Choose the agent package that fits your needs. All packages are based on active listings and can auto renew from the dashboard."}
+              ? "Pilih paket agen yang sesuai dengan kebutuhan Anda. Semua paket berbasis listing aktif dan dapat diperpanjang dari dashboard."
+              : "Choose the agent package that fits your needs. All packages are based on active listings and can be renewed from the dashboard."}
           </p>
 
           {profile?.full_name ? (
@@ -443,12 +571,92 @@ export default function AgentPaketPage() {
           </div>
         ) : (
           <>
+            {activeMembership ? (
+              <div className="mt-8 rounded-3xl border border-green-200 bg-green-50 p-4 shadow-sm sm:p-5 lg:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-green-700 shadow-sm">
+                      <PackageCheck className="h-6 w-6" />
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-green-800 sm:text-base">
+                        {lang === "id"
+                          ? "Membership agen aktif"
+                          : "Agent membership active"}
+                      </p>
+
+                      <h2 className="mt-1 text-lg font-bold text-[#1C1C1E] sm:text-xl">
+                        {activeMembership.package_name || "-"}
+                      </h2>
+
+                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-green-200 bg-white p-3">
+                          <p className="flex items-center gap-2 text-xs text-gray-500">
+                            <ShieldCheck className="h-4 w-4" />
+                            {lang === "id" ? "Limit Listing" : "Listing Limit"}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+                            {activeListingLimit > 0
+                              ? lang === "id"
+                                ? `${activeListingLimit} listing aktif`
+                                : `${activeListingLimit} active listings`
+                              : "-"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-green-200 bg-white p-3">
+                          <p className="text-xs text-gray-500">
+                            {lang === "id" ? "Tipe Tagihan" : "Billing Type"}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+                            {getBillingCycleLabel(activeMembership.billing_cycle, lang)}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-green-200 bg-white p-3">
+                          <p className="flex items-center gap-2 text-xs text-gray-500">
+                            <CalendarDays className="h-4 w-4" />
+                            {lang === "id" ? "Expired" : "Expiry"}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+                            {formatDate(activeMembership.expires_at, lang)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                    <button
+                      type="button"
+                      onClick={() => router.push("/agentdashboard/listing-saya")}
+                      className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 sm:w-auto"
+                    >
+                      {lang === "id" ? "Lihat Listing Saya" : "View My Listings"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push("/agentdashboard/tagihan")}
+                      className="inline-flex w-full items-center justify-center rounded-xl border border-green-300 bg-white px-5 py-3 text-sm font-semibold text-green-800 shadow-sm transition hover:bg-green-50 sm:w-auto"
+                    >
+                      {lang === "id" ? "Lihat Tagihan" : "View Billing"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5 lg:gap-6">
               {sortedPackages.map((pkg) => {
                 const checked = selectedPackageId === pkg.id;
                 const isRecommended = pkg.id === highestPaidPackageId;
                 const contactPackage = isContactPackage(pkg);
                 const listingLimit = getListingLimit(pkg);
+                const isCurrent =
+                  activeMembership?.package_id &&
+                  activeMembership.package_id === pkg.id;
 
                 return (
                   <button
@@ -462,14 +670,20 @@ export default function AgentPaketPage() {
                         : "border-gray-200 hover:border-gray-300",
                     ].join(" ")}
                   >
-                    {isRecommended ? (
-                      <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white sm:right-4 sm:top-4 sm:px-3 sm:text-xs">
-                        {getRecommendedLabel()}
-                      </div>
-                    ) : null}
+                    <div className="absolute right-3 top-3 flex flex-col items-end gap-2 sm:right-4 sm:top-4">
+                      {isCurrent ? (
+                        <div className="rounded-full bg-green-600 px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
+                          {getCurrentLabel()}
+                        </div>
+                      ) : isRecommended ? (
+                        <div className="rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
+                          {getRecommendedLabel()}
+                        </div>
+                      ) : null}
+                    </div>
 
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 pr-14 sm:pr-16">
+                      <div className="min-w-0 pr-16">
                         <div className="flex items-center gap-2">
                           <Crown className="h-4 w-4 shrink-0 text-yellow-500 sm:h-5 sm:w-5" />
                           <h3 className="truncate text-lg font-semibold text-[#1C1C1E] sm:text-xl lg:text-2xl">
@@ -566,7 +780,7 @@ export default function AgentPaketPage() {
                     : "Choose billing option"}
                 </p>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {selectedAvailableBillingCycles.map((cycle) => {
                     const checked = selectedBillingCycle === cycle;
                     const price = getCyclePrice(selectedPackage, cycle);
@@ -584,7 +798,7 @@ export default function AgentPaketPage() {
                         ].join(" ")}
                       >
                         <div className="text-sm font-semibold">
-                          {getBillingCycleLabel(cycle)}
+                          {getBillingCycleLabel(cycle, lang)}
                         </div>
                         <div className="mt-1 text-xs opacity-80">
                           {formatIdr(price)}
@@ -617,7 +831,7 @@ export default function AgentPaketPage() {
                 type="button"
                 onClick={handleContinue}
                 disabled={!selectedPackage || submitting}
-                className="rounded-xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60 sm:px-8"
+                className="w-full rounded-xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-8"
               >
                 {submitting
                   ? lang === "id"
@@ -625,12 +839,20 @@ export default function AgentPaketPage() {
                     : "Processing..."
                   : selectedPackageIsContact
                   ? getContactLabel()
+                  : selectedPackageIsCurrent
+                  ? lang === "id"
+                    ? "Perpanjang Paket"
+                    : "Renew Package"
+                  : activeMembership
+                  ? lang === "id"
+                    ? "Ubah / Upgrade Paket"
+                    : "Change / Upgrade Package"
                   : lang === "id"
                   ? "Lanjut ke Pembayaran"
                   : "Continue to Payment"}
               </button>
 
-              <p className="text-center text-xs text-gray-500 sm:text-sm">
+              <p className="max-w-3xl text-center text-xs leading-5 text-gray-500 sm:text-sm">
                 {selectedPackage
                   ? selectedPackageIsContact
                     ? lang === "id"
@@ -640,7 +862,8 @@ export default function AgentPaketPage() {
                     ? `Paket terpilih: ${
                         selectedPackage.name
                       } • ${getBillingCycleLabel(
-                        selectedBillingCycle
+                        selectedBillingCycle,
+                        lang
                       )} • ${formatIdr(selectedPrice)}${
                         selectedListingLimit > 0
                           ? ` • ${selectedListingLimit} listing aktif`
@@ -649,7 +872,8 @@ export default function AgentPaketPage() {
                     : `Selected package: ${
                         selectedPackage.name
                       } • ${getBillingCycleLabel(
-                        selectedBillingCycle
+                        selectedBillingCycle,
+                        lang
                       )} • ${formatIdr(selectedPrice)}${
                         selectedListingLimit > 0
                           ? ` • ${selectedListingLimit} active listings`

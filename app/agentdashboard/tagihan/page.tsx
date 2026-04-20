@@ -141,6 +141,13 @@ function emptyToBlank(value: unknown) {
   return v === "-" ? "" : v;
 }
 
+function sanitizePublicPaymentText(value: unknown) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider")
+    .trim();
+}
+
 function getMetaString(
   metadata: Record<string, any> | null | undefined,
   key: string
@@ -271,11 +278,16 @@ function statusUI(status: HistoryDisplayStatus, lang: string) {
   }
 }
 
-function membershipStatusUI(status: MembershipStatus, expiresAt: string | null, lang: string) {
+function membershipStatusUI(
+  status: MembershipStatus,
+  expiresAt: string | null,
+  lang: string
+) {
   const isID = lang === "id";
   const now = new Date();
   const expiry = expiresAt ? new Date(expiresAt) : null;
-  const expiredByDate = expiry && !Number.isNaN(expiry.getTime()) && expiry < now;
+  const expiredByDate =
+    expiry && !Number.isNaN(expiry.getTime()) && expiry < now;
 
   if (status === "active" && !expiredByDate) {
     return {
@@ -387,11 +399,17 @@ function getPaymentTypeLabel(row: PaymentTransactionRow, lang: string) {
   const isID = lang === "id";
   const paymentType = String(row.payment_type || "").toLowerCase();
 
-  if (paymentType === "package") return isID ? "Membership Agen" : "Agent Membership";
+  if (paymentType === "package") {
+    return isID ? "Membership Agen" : "Agent Membership";
+  }
+
   if (paymentType === "boost") return "Boost Listing";
   if (paymentType === "spotlight") return "Homepage Spotlight";
   if (paymentType === "education") return "Education";
-  if (paymentType === "listing_fee") return isID ? "Biaya Listing" : "Listing Fee";
+  if (paymentType === "listing_fee") {
+    return isID ? "Biaya Listing" : "Listing Fee";
+  }
+
   if (paymentType === "featured") return "Featured Listing";
 
   return cleanText(row.payment_type || row.product_type || "Payment");
@@ -423,6 +441,10 @@ function buildRenewHref(item: {
   return "";
 }
 
+function getPublicPaymentMethod() {
+  return "Debit / Credit Card";
+}
+
 function mapTransactionToHistoryItem(
   row: PaymentTransactionRow,
   memberships: AgentMembershipRow[],
@@ -452,12 +474,6 @@ function mapTransactionToHistoryItem(
 
   const renewHref = buildRenewHref(baseForRenew);
 
-  const method =
-    String(row.stripe_checkout_session_id || row.stripe_payment_intent_id || "")
-      .trim()
-      ? "Card via Stripe"
-      : "Stripe";
-
   const title =
     row.description ||
     getMetaString(row.metadata, "paymentTitle") ||
@@ -469,8 +485,8 @@ function mapTransactionToHistoryItem(
     paymentId: row.id,
     sortDate: row.created_at || row.updated_at || new Date().toISOString(),
 
-    title: cleanText(title),
-    packageName,
+    title: cleanText(sanitizePublicPaymentText(title)),
+    packageName: cleanText(sanitizePublicPaymentText(packageName)),
     paymentType: getPaymentTypeLabel(row, lang),
     category,
     productId,
@@ -479,7 +495,7 @@ function mapTransactionToHistoryItem(
     listingCode,
 
     amount: formatAmount(row.amount_total ?? row.amount_subtotal ?? 0, row.currency),
-    method,
+    method: getPublicPaymentMethod(),
     status,
 
     createdDate: formatDate(row.created_at, lang),
@@ -632,9 +648,7 @@ export default function AgentTagihanPage() {
 
       if (membershipsRes.error && transactionsRes.error) {
         setError(
-          isID
-            ? "Gagal memuat tagihan agen."
-            : "Failed to load agent billing."
+          isID ? "Gagal memuat tagihan agen." : "Failed to load agent billing."
         );
         setItems([]);
         setMemberships([]);
@@ -643,8 +657,7 @@ export default function AgentTagihanPage() {
       }
 
       const membershipRows = (membershipsRes.data || []) as AgentMembershipRow[];
-      const transactionRows = (transactionsRes.data ||
-        []) as PaymentTransactionRow[];
+      const transactionRows = (transactionsRes.data || []) as PaymentTransactionRow[];
 
       const historyItems = transactionRows
         .map((row) => mapTransactionToHistoryItem(row, membershipRows, lang))
@@ -684,10 +697,6 @@ export default function AgentTagihanPage() {
     return active || memberships[0] || null;
   }, [memberships]);
 
-  const latestPayment = useMemo(() => {
-    return items[0] || null;
-  }, [items]);
-
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return items;
 
@@ -725,8 +734,8 @@ export default function AgentTagihanPage() {
 
           <p className="mt-1 text-xs text-gray-500 sm:text-sm">
             {isID
-              ? "Lihat status membership, pembayaran Stripe, invoice, receipt, dan riwayat tagihan Anda di sini."
-              : "View your membership status, Stripe payments, invoices, receipts, and billing history here."}
+              ? "Lihat status membership, pembayaran, invoice, receipt, dan riwayat tagihan Anda di sini."
+              : "View your membership status, payments, invoices, receipts, and billing history here."}
           </p>
         </div>
 
@@ -740,8 +749,8 @@ export default function AgentTagihanPage() {
                 </p>
                 <p className="mt-1 leading-6">
                   {isID
-                    ? "Stripe telah menerima pembayaran Anda. Membership akan tampil aktif setelah webhook selesai memproses pembayaran."
-                    : "Stripe has received your payment. Your membership will appear active once the webhook finishes processing the payment."}
+                    ? "Pembayaran Anda telah diterima. Membership akan tampil aktif setelah sistem selesai memproses pembayaran."
+                    : "Your payment has been received. Your membership will appear active once the system finishes processing the payment."}
                 </p>
               </div>
             </div>
@@ -759,7 +768,7 @@ export default function AgentTagihanPage() {
                 <p className="mt-1 leading-6">
                   {isID
                     ? "Anda dapat melanjutkan pembayaran dari riwayat tagihan jika checkout masih tersedia."
-                    : "You can continue payment from the billing history if the checkout is still available."}
+                    : "You can continue payment from the billing history if checkout is still available."}
                 </p>
               </div>
             </div>
@@ -773,7 +782,7 @@ export default function AgentTagihanPage() {
               {isID ? "Paket Aktif" : "Active Package"}
             </div>
             <div className="mt-2 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-              {activeMembership?.package_name || "-"}
+              {sanitizePublicPaymentText(activeMembership?.package_name || "-")}
             </div>
           </div>
 
@@ -927,7 +936,7 @@ export default function AgentTagihanPage() {
                         </p>
 
                         <p>
-                          Method:{" "}
+                          {isID ? "Metode:" : "Method:"}{" "}
                           <span className="font-medium text-gray-700">
                             {item.method}
                           </span>
@@ -979,7 +988,7 @@ export default function AgentTagihanPage() {
                           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
                         >
                           <ExternalLink className="h-4 w-4" />
-                          Stripe Receipt
+                          Payment Receipt
                         </a>
                       ) : null}
 
@@ -991,7 +1000,7 @@ export default function AgentTagihanPage() {
                           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
                         >
                           <FileText className="h-4 w-4" />
-                          Stripe Invoice
+                          Payment Invoice
                         </a>
                       ) : null}
 
@@ -1003,7 +1012,7 @@ export default function AgentTagihanPage() {
                           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
                         >
                           <FileText className="h-4 w-4" />
-                          PDF
+                          Invoice PDF
                         </a>
                       ) : null}
 

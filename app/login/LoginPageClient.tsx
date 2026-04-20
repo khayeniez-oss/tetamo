@@ -56,27 +56,35 @@ function FormInput({
   placeholder,
   value,
   onChange,
+  autoComplete,
 }: {
   label: string;
   type?: string;
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
+  autoComplete?: string;
 }) {
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-[#1C1C1E]">
         {label}
       </label>
+
       <input
         type={type}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] placeholder:text-gray-500 outline-none transition focus:border-[#1C1C1E]"
+        autoComplete={autoComplete}
+        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-500 focus:border-[#1C1C1E]"
       />
     </div>
   );
+}
+
+function isSafeInternalPath(value: string) {
+  return value.startsWith("/") && !value.startsWith("//");
 }
 
 export default function LoginPageClient() {
@@ -84,6 +92,8 @@ export default function LoginPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectingRef = useRef(false);
+
+  const isID = lang === "id";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -96,7 +106,7 @@ export default function LoginPageClient() {
 
   const rawNext = searchParams.get("next") || "";
   const roleFromUrl = searchParams.get("role") || "";
-  const safeNext = rawNext.startsWith("/") ? rawNext : "";
+  const safeNext = isSafeInternalPath(rawNext) ? rawNext : "";
 
   const signupHref = useMemo(() => {
     const params = new URLSearchParams();
@@ -112,14 +122,16 @@ export default function LoginPageClient() {
     if (typeof window === "undefined") return undefined;
 
     const params = new URLSearchParams();
+
     if (roleFromUrl) params.set("role", roleFromUrl);
     if (safeNext) params.set("next", safeNext);
+
     params.set("flow", "login");
 
     return `${window.location.origin}/auth/callback?${params.toString()}`;
   }, [roleFromUrl, safeNext]);
 
-  const finishLogin = async (userId: string) => {
+  async function finishLogin(userId: string) {
     if (redirectingRef.current) return;
     redirectingRef.current = true;
 
@@ -127,18 +139,14 @@ export default function LoginPageClient() {
       .from("profiles")
       .select("role")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
     setLoading(false);
     setSocialLoading(null);
 
     if (profileError || !profile) {
       redirectingRef.current = false;
-      alert(
-        lang === "id"
-          ? "Profil pengguna tidak ditemukan."
-          : "User profile not found."
-      );
+      alert(isID ? "Profil pengguna tidak ditemukan." : "User profile not found.");
       return;
     }
 
@@ -163,12 +171,12 @@ export default function LoginPageClient() {
     }
 
     router.push(safeNext || "/");
-  };
+  }
 
   useEffect(() => {
     let mounted = true;
 
-    const checkExistingSession = async () => {
+    async function checkExistingSession() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -177,7 +185,7 @@ export default function LoginPageClient() {
 
       setLoading(true);
       await finishLogin(session.user.id);
-    };
+    }
 
     checkExistingSession();
 
@@ -194,14 +202,22 @@ export default function LoginPageClient() {
       mounted = false;
       subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, router, safeNext]);
 
-  const handleLogin = async () => {
+  async function handleLogin() {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail || !password) {
+      alert(isID ? "Masukkan email dan kata sandi." : "Enter your email and password.");
+      return;
+    }
+
     setLoading(true);
     setSocialLoading(null);
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
     });
 
@@ -215,14 +231,14 @@ export default function LoginPageClient() {
 
     if (!user) {
       setLoading(false);
-      alert(lang === "id" ? "User tidak ditemukan." : "User not found.");
+      alert(isID ? "User tidak ditemukan." : "User not found.");
       return;
     }
 
     await finishLogin(user.id);
-  };
+  }
 
-  const handleOAuthLogin = async (provider: SocialProvider) => {
+  async function handleOAuthLogin(provider: SocialProvider) {
     setLoading(false);
     setSocialLoading(provider);
 
@@ -240,79 +256,81 @@ export default function LoginPageClient() {
               : {}),
           }
         : provider === "google"
-          ? {
-              queryParams: {
-                prompt: "select_account",
-              },
-            }
-          : undefined,
+        ? {
+            queryParams: {
+              prompt: "select_account",
+            },
+          }
+        : undefined,
     });
 
     if (error) {
       setSocialLoading(null);
       alert(error.message);
     }
-  };
+  }
 
   const isBusy = loading || socialLoading !== null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-10 sm:px-6 sm:py-16">
+    <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-8 sm:px-6 sm:py-14 lg:px-8">
       <div className="w-full max-w-md rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
         <div className="mb-7 text-center sm:mb-8">
           <h1 className="text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
-            {lang === "id" ? "Selamat datang kembali" : "Welcome back"}
+            {isID ? "Selamat Datang Kembali" : "Welcome Back"}
           </h1>
+
           <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
-            {lang === "id"
-              ? "Masuk ke akun TeTamo Anda"
-              : "Log in to your TeTamo account"}
+            {isID ? "Masuk ke akun TETAMO Anda" : "Log in to your TETAMO account"}
           </p>
         </div>
 
-        <div className="space-y-4">
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleLogin();
+          }}
+        >
           <FormInput
             label="Email"
             type="email"
-            placeholder={
-              lang === "id" ? "Masukkan email Anda" : "Enter your email"
-            }
+            placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
             value={email}
             onChange={setEmail}
+            autoComplete="email"
           />
 
           <FormInput
-            label={lang === "id" ? "Kata Sandi" : "Password"}
+            label={isID ? "Kata Sandi" : "Password"}
             type="password"
             placeholder={
-              lang === "id"
-                ? "Masukkan kata sandi Anda"
-                : "Enter your password"
+              isID ? "Masukkan kata sandi Anda" : "Enter your password"
             }
             value={password}
             onChange={setPassword}
+            autoComplete="current-password"
           />
 
           <button
-            type="button"
-            onClick={handleLogin}
+            type="submit"
             disabled={isBusy}
             className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
           >
             {loading
-              ? lang === "id"
+              ? isID
                 ? "Sedang masuk..."
                 : "Logging in..."
-              : lang === "id"
-                ? "Masuk"
-                : "Log in"}
+              : isID
+              ? "Masuk"
+              : "Log in"}
           </button>
-        </div>
+        </form>
 
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-[#e5e5e7]" />
           <span className="text-xs font-medium uppercase tracking-[0.18em] text-[#8e8e93]">
-            {lang === "id" ? "atau" : "or"}
+            {isID ? "atau" : "or"}
           </span>
           <div className="h-px flex-1 bg-[#e5e5e7]" />
         </div>
@@ -320,71 +338,71 @@ export default function LoginPageClient() {
         <div className="space-y-3">
           <button
             type="button"
-            onClick={() => handleOAuthLogin("google")}
+            onClick={() => void handleOAuthLogin("google")}
             disabled={isBusy}
             className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
           >
             <GoogleIcon className="h-5 w-5 text-[#1C1C1E]" />
             <span>
               {socialLoading === "google"
-                ? lang === "id"
+                ? isID
                   ? "Menghubungkan ke Google..."
                   : "Connecting to Google..."
-                : lang === "id"
-                  ? "Lanjutkan dengan Google"
-                  : "Continue with Google"}
+                : isID
+                ? "Lanjutkan dengan Google"
+                : "Continue with Google"}
             </span>
           </button>
 
           {showFacebook ? (
             <button
               type="button"
-              onClick={() => handleOAuthLogin("facebook")}
+              onClick={() => void handleOAuthLogin("facebook")}
               disabled={isBusy}
               className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
             >
               <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
               <span>
                 {socialLoading === "facebook"
-                  ? lang === "id"
+                  ? isID
                     ? "Menghubungkan ke Facebook..."
                     : "Connecting to Facebook..."
-                  : lang === "id"
-                    ? "Lanjutkan dengan Facebook"
-                    : "Continue with Facebook"}
+                  : isID
+                  ? "Lanjutkan dengan Facebook"
+                  : "Continue with Facebook"}
               </span>
             </button>
           ) : null}
 
           <button
             type="button"
-            onClick={() => handleOAuthLogin("apple")}
+            onClick={() => void handleOAuthLogin("apple")}
             disabled={isBusy}
             className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
           >
             <AppleIcon className="h-5 w-5 text-[#1C1C1E]" />
             <span>
               {socialLoading === "apple"
-                ? lang === "id"
+                ? isID
                   ? "Menghubungkan ke Apple..."
                   : "Connecting to Apple..."
-                : lang === "id"
-                  ? "Lanjutkan dengan Apple"
-                  : "Continue with Apple"}
+                : isID
+                ? "Lanjutkan dengan Apple"
+                : "Continue with Apple"}
             </span>
           </button>
         </div>
 
         <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
-          {lang === "id" ? "Belum punya akun?" : "Don’t have an account?"}{" "}
+          {isID ? "Belum punya akun?" : "Don’t have an account?"}{" "}
           <Link
             href={signupHref}
             className="font-semibold text-[#1C1C1E] underline underline-offset-4"
           >
-            {lang === "id" ? "Daftar" : "Sign up"}
+            {isID ? "Daftar" : "Sign up"}
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }
