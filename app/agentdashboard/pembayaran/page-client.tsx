@@ -16,8 +16,6 @@ import type {
   TetamoProductType,
 } from "@/types/payment";
 
-type GatewayType = "stripe" | "xendit";
-
 type ExistingProperty = {
   id: string;
   title: string | null;
@@ -28,23 +26,45 @@ type ExistingProperty = {
   property_images: { id: string }[] | null;
 };
 
+type BillingCycle = "monthly" | "yearly";
+
 type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
-  availableBillingCycles?: Array<"monthly" | "yearly">;
+  availableBillingCycles?: BillingCycle[];
   monthlyPriceIdr?: number;
   monthlyCommitmentMonths?: number;
   monthlyBillingNote?: string;
   packageTermDays?: number;
   billingIntervalDays?: number;
   cancelStopsFutureRenewalOnly?: boolean;
+  listingLimit?: number;
+  activeListings?: number;
 };
 
 type AddOnProductUI = Exclude<ReturnType<typeof getAddOnProductById>, null>;
+
 type EducationProductUI = Extract<
   NonNullable<ReturnType<typeof getAnyProductById>>,
   { productType: "education" }
 >;
 
-type SelectedProduct = AgentPackageUI | AddOnProductUI | EducationProductUI | null;
+type SelectedProduct =
+  | AgentPackageUI
+  | AddOnProductUI
+  | EducationProductUI
+  | null;
+
+const money = (n: number) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(n);
+
+function sanitizePublicPaymentText(value: string | null | undefined) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment checkout")
+    .replace(/xendit/gi, "available payment method");
+}
 
 function normalizePaymentFlow(
   value: string,
@@ -82,7 +102,9 @@ function normalizeProductType(value?: string | null): TetamoProductType {
   return "listing";
 }
 
-function isMembershipProduct(product: SelectedProduct): product is AgentPackageUI {
+function isMembershipProduct(
+  product: SelectedProduct
+): product is AgentPackageUI {
   return Boolean(product && product.productType === "membership");
 }
 
@@ -90,22 +112,76 @@ function isAddOnProduct(product: SelectedProduct): product is AddOnProductUI {
   return Boolean(product && product.productType === "addon");
 }
 
-function isEducationProduct(product: SelectedProduct): product is EducationProductUI {
+function isEducationProduct(
+  product: SelectedProduct
+): product is EducationProductUI {
   return Boolean(product && product.productType === "education");
 }
-
-const money = (n: number) =>
-  new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(n);
 
 function finalKodeForDisplay(
   existingKode?: string | null,
   urlKode?: string | null
 ) {
   return existingKode || urlKode || "-";
+}
+
+function getListingLimit(product: SelectedProduct) {
+  if (!product || !isMembershipProduct(product)) return 0;
+
+  const direct =
+    Number(product.listingLimit || 0) || Number(product.activeListings || 0);
+
+  if (direct > 0) return direct;
+
+  const featureText = (product.features || []).join(" ");
+  const match = featureText.match(/(\d+)\s*(Listing|Listings)/i);
+
+  if (match?.[1]) return Number(match[1]);
+
+  return 0;
+}
+
+function getMembershipTotal(product: AgentPackageUI, cycle: BillingCycle) {
+  if (cycle === "monthly") {
+    if (typeof product.monthlyPriceIdr === "number") {
+      return product.monthlyPriceIdr;
+    }
+
+    if (product.billingCycle === "monthly") {
+      return product.priceIdr;
+    }
+
+    return Math.ceil(product.priceIdr / 12);
+  }
+
+  return product.priceIdr;
+}
+
+function getAvailableBillingCycles(product: AgentPackageUI): BillingCycle[] {
+  const cycles = new Set<BillingCycle>();
+
+  if (product.availableBillingCycles?.includes("monthly")) {
+    cycles.add("monthly");
+  }
+
+  if (product.availableBillingCycles?.includes("yearly")) {
+    cycles.add("yearly");
+  }
+
+  if (product.billingCycle === "monthly") cycles.add("monthly");
+  if (product.billingCycle === "yearly") cycles.add("yearly");
+
+  if (product.monthlyPriceIdr && product.monthlyPriceIdr > 0) {
+    cycles.add("monthly");
+  }
+
+  if (product.priceIdr && product.priceIdr > 0) {
+    cycles.add(product.billingCycle === "monthly" ? "monthly" : "yearly");
+  }
+
+  if (cycles.size === 0) cycles.add("yearly");
+
+  return Array.from(cycles);
 }
 
 export default function AgentPembayaranPageClient() {
@@ -123,11 +199,12 @@ export default function AgentPembayaranPageClient() {
 
   const sortedAgentPackages = useMemo(() => {
     return ([...AGENT_PACKAGES] as AgentPackageUI[]).sort(
-      (a, b) => a.priceIdr - b.priceIdr
+      (a, b) => Number(a.priceIdr || 0) - Number(b.priceIdr || 0)
     );
   }, []);
 
   const fallbackAgentPackageId = sortedAgentPackages[0]?.id ?? "";
+
   const requestedProductId =
     (productFromUrl || packageFromUrl || fallbackAgentPackageId).toLowerCase();
 
@@ -142,14 +219,14 @@ export default function AgentPembayaranPageClient() {
 
   const needsExistingProperty = isAddon;
 
-  const [selectedGateway, setSelectedGateway] =
-    useState<GatewayType>("stripe");
   const [submitting, setSubmitting] = useState(false);
 
   const [existingProperty, setExistingProperty] =
     useState<ExistingProperty | null>(null);
+
   const [loadingExistingProperty, setLoadingExistingProperty] =
     useState(needsExistingProperty);
+
   const [existingPropertyError, setExistingPropertyError] = useState("");
 
   const selectedProduct: SelectedProduct = useMemo(() => {
@@ -164,16 +241,13 @@ export default function AgentPembayaranPageClient() {
     return getAgentPackageById(requestedProductId) as AgentPackageUI | null;
   }, [isEducation, isAddon, requestedProductId]);
 
-  const [selectedBillingCycle, setSelectedBillingCycle] = useState<
-    "monthly" | "yearly"
-  >("yearly");
+  const [selectedBillingCycle, setSelectedBillingCycle] =
+    useState<BillingCycle>("yearly");
 
   useEffect(() => {
     if (!isMembershipProduct(selectedProduct)) return;
 
-    const available = selectedProduct.availableBillingCycles ?? [
-      selectedProduct.billingCycle,
-    ];
+    const available = getAvailableBillingCycles(selectedProduct);
 
     if (billingFromUrl === "monthly" && available.includes("monthly")) {
       setSelectedBillingCycle("monthly");
@@ -185,8 +259,16 @@ export default function AgentPembayaranPageClient() {
       return;
     }
 
-    if (available.includes(selectedProduct.billingCycle)) {
-      setSelectedBillingCycle(selectedProduct.billingCycle);
+    if (
+      selectedProduct.billingCycle === "monthly" &&
+      available.includes("monthly")
+    ) {
+      setSelectedBillingCycle("monthly");
+      return;
+    }
+
+    if (available.includes("yearly")) {
+      setSelectedBillingCycle("yearly");
       return;
     }
 
@@ -280,27 +362,21 @@ export default function AgentPembayaranPageClient() {
     if (!selectedProduct) return 0;
 
     if (isMembershipProduct(selectedProduct)) {
-      if (
-        selectedBillingCycle === "monthly" &&
-        typeof selectedProduct.monthlyPriceIdr === "number"
-      ) {
-        return selectedProduct.monthlyPriceIdr;
-      }
-
-      return selectedProduct.priceIdr;
+      return getMembershipTotal(selectedProduct, selectedBillingCycle);
     }
 
     return selectedProduct.priceIdr;
   }, [selectedProduct, selectedBillingCycle]);
 
+  const listingLimit = useMemo(() => {
+    return getListingLimit(selectedProduct);
+  }, [selectedProduct]);
+
   const selectedProductName = useMemo(() => {
     if (!selectedProduct) return "-";
 
     if (isMembershipProduct(selectedProduct)) {
-      if (
-        selectedBillingCycle === "monthly" &&
-        typeof selectedProduct.monthlyPriceIdr === "number"
-      ) {
+      if (selectedBillingCycle === "monthly") {
         return currentLang === "id"
           ? `${selectedProduct.name} - Tagihan Bulanan`
           : `${selectedProduct.name} - Monthly Billing`;
@@ -318,19 +394,16 @@ export default function AgentPembayaranPageClient() {
     }
 
     if (isMembershipProduct(selectedProduct)) {
-      if (
-        selectedBillingCycle === "monthly" &&
-        typeof selectedProduct.monthlyPriceIdr === "number"
-      ) {
+      if (selectedBillingCycle === "monthly") {
         return currentLang === "id"
           ? `${selectedProduct.name} - Pembayaran Bulanan`
           : `${selectedProduct.name} - Monthly Billing`;
       }
 
-      return selectedProduct.paymentTitle;
+      return sanitizePublicPaymentText(selectedProduct.paymentTitle);
     }
 
-    return selectedProduct.paymentTitle;
+    return sanitizePublicPaymentText(selectedProduct.paymentTitle);
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const resolvedPaymentDescription = useMemo(() => {
@@ -341,19 +414,16 @@ export default function AgentPembayaranPageClient() {
     }
 
     if (isMembershipProduct(selectedProduct)) {
-      if (
-        selectedBillingCycle === "monthly" &&
-        typeof selectedProduct.monthlyPriceIdr === "number"
-      ) {
+      if (selectedBillingCycle === "monthly") {
         return currentLang === "id"
-          ? `${selectedProduct.name} dibayar bulanan dengan membership aktif selama 1 tahun penuh.`
-          : `${selectedProduct.name} billed monthly with membership active for a full year.`;
+          ? `${selectedProduct.name} dibayar bulanan dengan membership aktif sesuai masa paket.`
+          : `${selectedProduct.name} is billed monthly with membership active according to the package term.`;
       }
 
-      return selectedProduct.paymentDescription;
+      return sanitizePublicPaymentText(selectedProduct.paymentDescription);
     }
 
-    return selectedProduct.paymentDescription;
+    return sanitizePublicPaymentText(selectedProduct.paymentDescription);
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const resolvedBillingNote = useMemo(() => {
@@ -366,16 +436,15 @@ export default function AgentPembayaranPageClient() {
     if (isMembershipProduct(selectedProduct)) {
       if (
         selectedBillingCycle === "monthly" &&
-        typeof selectedProduct.monthlyPriceIdr === "number" &&
         selectedProduct.monthlyBillingNote
       ) {
-        return selectedProduct.monthlyBillingNote;
+        return sanitizePublicPaymentText(selectedProduct.monthlyBillingNote);
       }
 
-      return selectedProduct.billingNote;
+      return sanitizePublicPaymentText(selectedProduct.billingNote);
     }
 
-    return selectedProduct.billingNote;
+    return sanitizePublicPaymentText(selectedProduct.billingNote);
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const resolvedDurationLabel = useMemo(() => {
@@ -388,26 +457,18 @@ export default function AgentPembayaranPageClient() {
     }
 
     if (isMembershipProduct(selectedProduct)) {
-      if (
-        selectedBillingCycle === "monthly" &&
-        typeof selectedProduct.monthlyPriceIdr === "number"
-      ) {
+      const activeDays =
+        selectedProduct.packageTermDays ?? selectedProduct.durationDays;
+
+      if (selectedBillingCycle === "monthly") {
         return currentLang === "id"
-          ? `Tagihan per 30 hari • Membership aktif ${
-              selectedProduct.packageTermDays ?? selectedProduct.durationDays
-            } hari`
-          : `Billed every 30 days • Membership active for ${
-              selectedProduct.packageTermDays ?? selectedProduct.durationDays
-            } days`;
+          ? `Ditagih per 30 hari • Membership aktif ${activeDays} hari`
+          : `Billed every 30 days • Membership active for ${activeDays} days`;
       }
 
       return currentLang === "id"
-        ? `Membership aktif ${
-            selectedProduct.packageTermDays ?? selectedProduct.durationDays
-          } hari`
-        : `Membership active for ${
-            selectedProduct.packageTermDays ?? selectedProduct.durationDays
-          } days`;
+        ? `Membership aktif ${activeDays} hari`
+        : `Membership active for ${activeDays} days`;
     }
 
     return currentLang === "id"
@@ -451,8 +512,8 @@ export default function AgentPembayaranPageClient() {
   }, [existingProperty]);
 
   const judulLabel = useMemo(() => {
-    const t = String(existingProperty?.title || "").trim();
-    return t || "-";
+    const title = String(existingProperty?.title || "").trim();
+    return title || "-";
   }, [existingProperty]);
 
   const fotoCount = useMemo(() => {
@@ -461,16 +522,23 @@ export default function AgentPembayaranPageClient() {
 
   const isReadyToPay = useMemo(() => {
     if (!selectedProduct) return false;
+    if (total <= 0) return false;
 
     if (needsExistingProperty) {
       return Boolean(existingProperty?.id) && !loadingExistingProperty;
     }
 
     return true;
-  }, [selectedProduct, needsExistingProperty, existingProperty, loadingExistingProperty]);
+  }, [
+    selectedProduct,
+    total,
+    needsExistingProperty,
+    existingProperty,
+    loadingExistingProperty,
+  ]);
 
   function translateFeature(feature: string) {
-    if (currentLang === "id") return feature;
+    if (currentLang === "id") return sanitizePublicPaymentText(feature);
 
     const map: Record<string, string> = {
       "30 Listing Aktif": "30 Active Listings",
@@ -514,7 +582,7 @@ export default function AgentPembayaranPageClient() {
       "Tidak auto renew": "No auto renew",
     };
 
-    return map[feature] ?? feature;
+    return sanitizePublicPaymentText(map[feature] ?? feature);
   }
 
   function onBack() {
@@ -572,6 +640,16 @@ export default function AgentPembayaranPageClient() {
         selectedProduct.productType
       );
 
+      const membershipTermDays = isMembershipProduct(selectedProduct)
+        ? selectedProduct.packageTermDays ?? selectedProduct.durationDays
+        : null;
+
+      const billingIntervalDays = isMembershipProduct(selectedProduct)
+        ? selectedBillingCycle === "monthly"
+          ? 30
+          : membershipTermDays ?? selectedProduct.durationDays
+        : selectedProduct.durationDays;
+
       const paymentRecord: TetamoPayment = {
         id: crypto.randomUUID(),
         userId: user.id,
@@ -579,54 +657,70 @@ export default function AgentPembayaranPageClient() {
         flow: normalizedFlow,
         productId: selectedProduct.id,
         productType: normalizedProductType,
-        listingCode:
-          isAddon ? existingProperty?.kode || kode || "" : "",
+        listingCode: isAddon ? existingProperty?.kode || kode || "" : "",
         amount: total,
         currency: "IDR",
         autoRenew: Boolean(selectedProduct.autoRenewDefault ?? true),
         status: "pending",
         paymentMethod: "card",
-        gateway: selectedGateway,
+        gateway: "stripe",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         metadata: {
           action: isEducation
             ? "education-access"
             : isAddon
-              ? "addon"
-              : "membership",
+            ? "addon"
+            : "membership",
+
           selectedBillingCycle: isMembershipProduct(selectedProduct)
             ? selectedBillingCycle
             : null,
+
+          packageId: isMembershipProduct(selectedProduct)
+            ? selectedProduct.id
+            : null,
+
           packageName: isMembershipProduct(selectedProduct)
             ? selectedProduct.name
             : null,
-          packageTermDays: isMembershipProduct(selectedProduct)
-            ? selectedProduct.packageTermDays ?? selectedProduct.durationDays
+
+          listingLimit: isMembershipProduct(selectedProduct)
+            ? listingLimit
             : null,
-          billingIntervalDays: isMembershipProduct(selectedProduct)
-            ? selectedBillingCycle === "monthly"
-              ? 30
-              : 365
-            : selectedProduct.durationDays,
+
+          activeListingLimit: isMembershipProduct(selectedProduct)
+            ? listingLimit
+            : null,
+
+          packageTermDays: membershipTermDays,
+          billingIntervalDays,
+
           monthlyPriceIdr: isMembershipProduct(selectedProduct)
             ? selectedProduct.monthlyPriceIdr ?? null
             : null,
+
           monthlyCommitmentMonths: isMembershipProduct(selectedProduct)
             ? selectedProduct.monthlyCommitmentMonths ?? null
             : null,
+
           cancelStopsFutureRenewalOnly: isMembershipProduct(selectedProduct)
             ? selectedProduct.cancelStopsFutureRenewalOnly ?? true
             : true,
+
           existingPropertyId: isAddon ? existingProperty?.id || null : null,
           existingPropertyCode: isAddon ? existingProperty?.kode || null : null,
           existingPropertyTitle: isAddon ? existingProperty?.title || null : null,
           listingType: isAddon ? existingProperty?.listing_type || null : null,
+
           productDurationDays: selectedProduct.durationDays ?? null,
           paymentTitle: resolvedPaymentTitle,
           paymentDescription: resolvedPaymentDescription,
           billingNote: resolvedBillingNote,
-        },
+
+          stripeMode: "live-ready",
+          role: "agent",
+        } as any,
       };
 
       const res = await fetch("/api/payments/create", {
@@ -656,8 +750,8 @@ export default function AgentPembayaranPageClient() {
 
       alert(
         currentLang === "id"
-          ? "Checkout URL tidak ditemukan."
-          : "Checkout URL was not found."
+          ? "Checkout pembayaran tidak ditemukan."
+          : "Payment checkout was not found."
       );
     } catch (error: any) {
       console.error("agent onPay error:", error);
@@ -671,6 +765,10 @@ export default function AgentPembayaranPageClient() {
       setSubmitting(false);
     }
   }
+
+  const availableBillingCycles = isMembershipProduct(selectedProduct)
+    ? getAvailableBillingCycles(selectedProduct)
+    : [];
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -687,14 +785,14 @@ export default function AgentPembayaranPageClient() {
           {currentLang === "id" ? "Pembayaran Agen" : "Agent Payment"}
         </h1>
 
-        <p className="mt-2 text-sm leading-6 text-gray-600">
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
           {isEducation
             ? currentLang === "id"
               ? "Tinjau Education Pass lalu lanjutkan ke pembayaran."
               : "Review the Education Pass, then continue to payment."
             : currentLang === "id"
-              ? "Tinjau paket agen atau add-on yang dipilih lalu lanjutkan ke pembayaran."
-              : "Review the selected agent package or add-on, then continue to payment."}
+            ? "Tinjau paket agen atau add-on yang dipilih lalu lanjutkan ke pembayaran."
+            : "Review the selected agent package or add-on, then continue to payment."}
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-6 lg:grid-cols-3">
@@ -705,55 +803,15 @@ export default function AgentPembayaranPageClient() {
                   ? "Ringkasan Education Pass"
                   : "Education Pass Summary"
                 : isAddon
-                  ? currentLang === "id"
-                    ? "Ringkasan Add-On"
-                    : "Add-On Summary"
-                  : currentLang === "id"
-                    ? "Ringkasan Membership Agen"
-                    : "Agent Membership Summary"}
+                ? currentLang === "id"
+                  ? "Ringkasan Add-On"
+                  : "Add-On Summary"
+                : currentLang === "id"
+                ? "Ringkasan Membership Agen"
+                : "Agent Membership Summary"}
             </h2>
 
-            {isEducation ? (
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Produk" : "Product"}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {selectedProduct?.name ?? "Education Pass"}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Akses" : "Access"}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {currentLang === "id"
-                      ? "Premium Education"
-                      : "Premium Education"}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Durasi" : "Duration"}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {resolvedDurationLabel}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Pembeli" : "Buyer"}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {currentLang === "id" ? "Agen" : "Agent"}
-                  </div>
-                </div>
-              </div>
-            ) : isAddon ? (
+            {isAddon ? (
               <>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-gray-200 p-4">
@@ -822,7 +880,13 @@ export default function AgentPembayaranPageClient() {
               <div className="mt-4 grid grid-cols-1 gap-3 sm:mt-5 sm:gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Paket" : "Package"}
+                    {isEducation
+                      ? currentLang === "id"
+                        ? "Produk"
+                        : "Product"
+                      : currentLang === "id"
+                      ? "Paket"
+                      : "Package"}
                   </div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {selectedProduct?.name ?? "-"}
@@ -840,11 +904,28 @@ export default function AgentPembayaranPageClient() {
                           ? "Bulanan"
                           : "Monthly"
                         : currentLang === "id"
-                          ? "Tahunan"
-                          : "Yearly"
+                        ? "Tahunan"
+                        : "Yearly"
                       : "-"}
                   </div>
                 </div>
+
+                {isMembershipProduct(selectedProduct) ? (
+                  <div className="rounded-2xl border border-gray-200 p-4">
+                    <div className="text-xs text-gray-500">
+                      {currentLang === "id"
+                        ? "Limit Listing Aktif"
+                        : "Active Listing Limit"}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold sm:text-base">
+                      {listingLimit > 0
+                        ? currentLang === "id"
+                          ? `${listingLimit} listing aktif`
+                          : `${listingLimit} active listings`
+                        : "-"}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">
@@ -856,9 +937,7 @@ export default function AgentPembayaranPageClient() {
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 p-4">
-                  <div className="text-xs text-gray-500">
-                    {currentLang === "id" ? "Auto Renew" : "Auto Renew"}
-                  </div>
+                  <div className="text-xs text-gray-500">Auto Renew</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {currentLang === "id"
                       ? "Aktif secara default"
@@ -871,17 +950,13 @@ export default function AgentPembayaranPageClient() {
             <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:mt-5">
               <div className="text-sm font-semibold text-blue-700 sm:text-base">
                 {currentLang === "id"
-                  ? "Checkout dibuat dari halaman ini"
-                  : "Checkout is created from this page"}
+                  ? "Checkout pembayaran aman"
+                  : "Secure payment checkout"}
               </div>
               <div className="mt-1 text-sm leading-6 text-blue-700">
-                {isEducation
-                  ? currentLang === "id"
-                    ? "Education Pass akan aktif setelah pembayaran berhasil terkonfirmasi."
-                    : "The Education Pass will become active after successful payment confirmation."
-                  : currentLang === "id"
-                    ? "Detail paket, invoice, receipt, dan status tagihan akan terlihat di halaman Tagihan setelah pembayaran dibuat."
-                    : "Package details, invoice, receipt, and billing status will appear on the Billing page after payment is created."}
+                {currentLang === "id"
+                  ? "Setelah pembayaran berhasil, sistem akan mengaktifkan paket agen dan mencatat invoice/receipt secara otomatis."
+                  : "After successful payment, the system will activate the agent package and record the invoice/receipt automatically."}
               </div>
             </div>
           </div>
@@ -904,9 +979,7 @@ export default function AgentPembayaranPageClient() {
                 </div>
 
                 <div className="mt-3 grid grid-cols-1 gap-3">
-                  {(selectedProduct.availableBillingCycles ?? [
-                    selectedProduct.billingCycle,
-                  ]).includes("yearly") ? (
+                  {availableBillingCycles.includes("yearly") ? (
                     <button
                       onClick={() => setSelectedBillingCycle("yearly")}
                       type="button"
@@ -926,9 +999,7 @@ export default function AgentPembayaranPageClient() {
                     </button>
                   ) : null}
 
-                  {(selectedProduct.availableBillingCycles ?? []).includes(
-                    "monthly"
-                  ) && typeof selectedProduct.monthlyPriceIdr === "number" ? (
+                  {availableBillingCycles.includes("monthly") ? (
                     <button
                       onClick={() => setSelectedBillingCycle("monthly")}
                       type="button"
@@ -943,7 +1014,7 @@ export default function AgentPembayaranPageClient() {
                         {currentLang === "id" ? "Bulanan" : "Monthly"}
                       </div>
                       <div className="mt-1 text-xs opacity-80">
-                        {money(selectedProduct.monthlyPriceIdr)}
+                        {money(getMembershipTotal(selectedProduct, "monthly"))}
                         {currentLang === "id"
                           ? ` / bulan • komitmen ${
                               selectedProduct.monthlyCommitmentMonths ?? 12
@@ -967,18 +1038,6 @@ export default function AgentPembayaranPageClient() {
                   {finalKodeForDisplay(existingProperty?.kode, kode)}
                 </span>
                 .
-              </p>
-            ) : null}
-
-            {isEducation ? (
-              <p className="mt-4 text-sm leading-6 text-gray-600">
-                {currentLang === "id"
-                  ? "Education Pass ini akan memberi akses premium ke video edukasi TETAMO selama "
-                  : "This Education Pass will provide premium access to TETAMO education videos for "}
-                <span className="font-semibold">
-                  {selectedProduct?.durationDays ?? 90}
-                </span>{" "}
-                {currentLang === "id" ? "hari." : "days."}
               </p>
             ) : null}
 
@@ -1009,31 +1068,14 @@ export default function AgentPembayaranPageClient() {
               </div>
             </div>
 
-            <button
-              onClick={() => setSelectedGateway("stripe")}
-              type="button"
-              className={[
-                "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                selectedGateway === "stripe"
-                  ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E]",
-              ].join(" ")}
-            >
-              Stripe
-            </button>
-
-            <button
-              onClick={() => setSelectedGateway("xendit")}
-              type="button"
-              className={[
-                "mt-3 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                selectedGateway === "xendit"
-                  ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E]",
-              ].join(" ")}
-            >
-              Xendit
-            </button>
+            <div className="mt-4 rounded-2xl border border-[#1C1C1E] bg-black px-4 py-3 text-left text-sm text-white">
+              <div className="font-semibold">Debit / Credit Card</div>
+              <div className="mt-1 text-xs opacity-80">
+                {currentLang === "id"
+                  ? "QRIS dan metode pembayaran lokal lainnya segera tersedia."
+                  : "QRIS and other local payment methods coming soon."}
+              </div>
+            </div>
 
             {selectedProduct?.features?.length ? (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4">
@@ -1084,14 +1126,14 @@ export default function AgentPembayaranPageClient() {
                   ? "Membuat Checkout..."
                   : "Creating Checkout..."
                 : currentLang === "id"
-                  ? "Bayar Sekarang"
-                  : "Pay Now"}
+                ? "Bayar Sekarang"
+                : "Pay Now"}
             </button>
 
             <p className="mt-3 text-xs leading-5 text-gray-500">
               {currentLang === "id"
-                ? "Checkout akan dibuat otomatis saat tombol ditekan."
-                : "Checkout will be created automatically when the button is pressed."}
+                ? "Checkout pembayaran akan dibuat otomatis saat tombol ditekan."
+                : "Payment checkout will be created automatically when the button is pressed."}
             </p>
           </div>
         </div>
