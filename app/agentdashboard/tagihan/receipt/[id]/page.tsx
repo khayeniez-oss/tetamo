@@ -101,6 +101,13 @@ function blankText(value: unknown) {
   return v && v !== "-" ? v : "";
 }
 
+function sanitizePublicPaymentText(value: unknown) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider")
+    .trim();
+}
+
 function getMetaString(
   metadata: Record<string, any> | null | undefined,
   key: string
@@ -296,13 +303,15 @@ function getPackageName(
   membership: AgentMembershipRow | null
 ) {
   return cleanText(
-    membership?.package_name ||
-      getMetaString(payment?.metadata, "packageName") ||
-      getMetaString(payment?.metadata, "package_name") ||
-      payment?.product_name_snapshot ||
-      payment?.plan_name ||
-      payment?.product_id ||
-      payment?.description
+    sanitizePublicPaymentText(
+      membership?.package_name ||
+        getMetaString(payment?.metadata, "packageName") ||
+        getMetaString(payment?.metadata, "package_name") ||
+        payment?.product_name_snapshot ||
+        payment?.plan_name ||
+        payment?.product_id ||
+        payment?.description
+    )
   );
 }
 
@@ -350,6 +359,11 @@ function getStartsAt(
 
 function getPaymentMethod() {
   return "Debit / Credit Card";
+}
+
+function cleanReceiptPrefix(paymentId: string | null | undefined, prefix: string) {
+  if (!paymentId) return "-";
+  return `${prefix}-${paymentId.slice(0, 8).toUpperCase()}`;
 }
 
 export default function AgentReceiptDetailPage() {
@@ -534,24 +548,35 @@ export default function AgentReceiptDetailPage() {
   }, [payment?.status, currentLang]);
 
   const receiptNumber = useMemo(() => {
-    return (
-      payment?.stripe_invoice_id ||
-      payment?.stripe_charge_id ||
-      payment?.stripe_payment_intent_id ||
-      (payment?.id ? `RCT-${payment.id.slice(0, 8).toUpperCase()}` : "-")
-    );
-  }, [payment]);
+    return cleanReceiptPrefix(payment?.id, "RCT");
+  }, [payment?.id]);
 
   const invoiceNumber = useMemo(() => {
-    return payment?.stripe_invoice_id || "-";
-  }, [payment?.stripe_invoice_id]);
+    const hasInvoice =
+      Boolean(payment?.stripe_invoice_id) ||
+      Boolean(payment?.hosted_invoice_url) ||
+      Boolean(payment?.invoice_pdf_url);
+
+    return hasInvoice ? cleanReceiptPrefix(payment?.id, "INV") : "-";
+  }, [
+    payment?.id,
+    payment?.stripe_invoice_id,
+    payment?.hosted_invoice_url,
+    payment?.invoice_pdf_url,
+  ]);
+
+  const referenceNumber = useMemo(() => {
+    return cleanReceiptPrefix(payment?.id, "PAY");
+  }, [payment?.id]);
 
   const productTitle = useMemo(() => {
-    return (
-      payment?.description ||
-      getMetaString(payment?.metadata, "paymentTitle") ||
-      getMetaString(payment?.metadata, "payment_title") ||
-      getPackageName(payment, membership)
+    return cleanText(
+      sanitizePublicPaymentText(
+        payment?.description ||
+          getMetaString(payment?.metadata, "paymentTitle") ||
+          getMetaString(payment?.metadata, "payment_title") ||
+          getPackageName(payment, membership)
+      )
     );
   }, [payment, membership]);
 
@@ -582,16 +607,6 @@ export default function AgentReceiptDetailPage() {
   const paymentMethod = useMemo(() => {
     return getPaymentMethod();
   }, []);
-
-  const referenceNumber = useMemo(() => {
-    return (
-      payment?.stripe_payment_intent_id ||
-      payment?.stripe_charge_id ||
-      payment?.stripe_checkout_session_id ||
-      payment?.id ||
-      "-"
-    );
-  }, [payment]);
 
   const customerName = useMemo(() => {
     return cleanText(payment?.customer_name || payment?.customer_email);
@@ -797,10 +812,14 @@ export default function AgentReceiptDetailPage() {
                 <div className="grid gap-4 px-4 py-4 sm:px-5 sm:py-5 md:grid-cols-[1fr_260px] md:px-6 md:py-6 lg:grid-cols-[1fr_300px]">
                   <div className="grid gap-2 text-xs leading-6 text-gray-600 sm:text-sm">
                     <p>
-                      {payment.description ||
-                        getMetaString(payment.metadata, "paymentDescription") ||
-                        getMetaString(payment.metadata, "payment_description") ||
-                        "-"}
+                      {cleanText(
+                        sanitizePublicPaymentText(
+                          payment.description ||
+                            getMetaString(payment.metadata, "paymentDescription") ||
+                            getMetaString(payment.metadata, "payment_description") ||
+                            "-"
+                        )
+                      )}
                     </p>
 
                     <div className="mt-2 grid gap-2 rounded-3xl border border-gray-200 bg-gray-50 p-4">
@@ -888,9 +907,9 @@ export default function AgentReceiptDetailPage() {
                 </div>
               </div>
 
-              {(payment.receipt_url ||
-                payment.hosted_invoice_url ||
-                payment.invoice_pdf_url) ? (
+              {payment.receipt_url ||
+              payment.hosted_invoice_url ||
+              payment.invoice_pdf_url ? (
                 <div className="mt-5 flex flex-wrap gap-2 print:hidden">
                   {payment.receipt_url ? (
                     <a
@@ -937,11 +956,15 @@ export default function AgentReceiptDetailPage() {
                   {currentLang === "id" ? "Catatan" : "Notes"}
                 </p>
                 <p className="mt-3 whitespace-pre-line text-xs leading-6 text-gray-600 sm:text-sm md:text-sm lg:text-base lg:leading-7">
-                  {getMetaString(payment.metadata, "billingNote") ||
-                    getMetaString(payment.metadata, "billing_note") ||
-                    (currentLang === "id"
-                      ? "Tidak ada catatan tambahan."
-                      : "No additional notes.")}
+                  {cleanText(
+                    sanitizePublicPaymentText(
+                      getMetaString(payment.metadata, "billingNote") ||
+                        getMetaString(payment.metadata, "billing_note") ||
+                        (currentLang === "id"
+                          ? "Tidak ada catatan tambahan."
+                          : "No additional notes.")
+                    )
+                  )}
                 </p>
               </div>
 
