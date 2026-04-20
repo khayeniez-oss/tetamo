@@ -15,13 +15,17 @@ import {
   Plus,
   Bookmark,
   Heart,
+  PackageCheck,
+  ShieldCheck,
+  Clock3,
+  AlertTriangle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAgentProfile } from "./layout";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 /* =========================
-   AGENT TYPES
+   TYPES
 ========================= */
 
 type LeadStatus = "NEW" | "CONTACTED" | "VIEWING" | "INTERESTED" | "CLOSED";
@@ -62,6 +66,8 @@ type PropertyRow = {
   created_at: string | null;
   source: string | null;
   status: string | null;
+  listing_expires_at: string | null;
+  transaction_status: string | null;
 };
 
 type PropertyImageRow = {
@@ -81,19 +87,21 @@ type LeadRow = {
   created_at: string | null;
 };
 
-type PaymentRow = {
+type AgentMembershipRow = {
   id: string;
   user_id: string | null;
-  user_type?: string | null;
-  audience?: string | null;
-  product_type?: string | null;
-  product_name?: string | null;
-  payment_title?: string | null;
-  billing_cycle?: string | null;
-  duration_days?: number | null;
-  status?: string | null;
-  created_at?: string | null;
-  metadata?: Record<string, any> | null;
+  payment_id: string | null;
+  package_id: string | null;
+  package_name: string | null;
+  billing_cycle: string | null;
+  listing_limit: number | null;
+  status: string | null;
+  auto_renew: boolean | null;
+  starts_at: string | null;
+  expires_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 /* =========================
@@ -162,7 +170,7 @@ function StatCard({
         </div>
 
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#F5F5F5] sm:h-11 sm:w-11">
-          <Icon className="h-4.5 w-4.5 text-[#1C1C1E] sm:h-5 sm:w-5" />
+          <Icon className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
         </div>
       </div>
     </div>
@@ -261,64 +269,60 @@ function pickCoverPhotos(
   });
 }
 
-function getMembershipDurationDays(row: PaymentRow) {
-  if (typeof row.duration_days === "number" && row.duration_days > 0) {
-    return row.duration_days;
-  }
+function isMembershipActive(membership: AgentMembershipRow | null) {
+  if (!membership) return false;
+  if (membership.status !== "active") return false;
 
-  const metadataDuration = row.metadata?.duration_days;
-  if (typeof metadataDuration === "number" && metadataDuration > 0) {
-    return metadataDuration;
-  }
+  if (!membership.expires_at) return true;
 
-  const cycle = String(
-    row.billing_cycle || row.metadata?.billing_cycle || ""
-  ).toLowerCase();
+  const expiresAt = new Date(membership.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) return true;
 
-  if (cycle === "monthly") return 30;
-  if (cycle === "yearly") return 365;
-
-  return null;
+  return expiresAt.getTime() >= Date.now();
 }
 
-function isMembershipStillActive(row: PaymentRow) {
-  const createdAt = row.created_at ? new Date(row.created_at) : null;
-  if (!createdAt || Number.isNaN(createdAt.getTime())) {
-    return false;
-  }
+function getMembershipNumber(
+  membership: AgentMembershipRow | null,
+  key: string
+) {
+  const direct = Number((membership as any)?.[key] || 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
 
-  const durationDays = getMembershipDurationDays(row);
+  const fromMetadata = Number(membership?.metadata?.[key] || 0);
+  if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata;
 
-  if (!durationDays) {
-    return true;
-  }
-
-  const endDate = new Date(createdAt);
-  endDate.setDate(endDate.getDate() + durationDays);
-
-  return endDate.getTime() >= Date.now();
+  return 0;
 }
 
-function getMembershipLabel(row: PaymentRow | null, lang: string) {
-  if (!row) return "";
+function getMembershipListingLimit(membership: AgentMembershipRow | null) {
+  return (
+    getMembershipNumber(membership, "listing_limit") ||
+    getMembershipNumber(membership, "listingLimit") ||
+    getMembershipNumber(membership, "active_listing_limit") ||
+    getMembershipNumber(membership, "activeListingLimit")
+  );
+}
 
-  const cycle = String(
-    row.billing_cycle || row.metadata?.billing_cycle || ""
-  ).toLowerCase();
+function getBillingCycleLabel(value: string | null | undefined, lang: string) {
+  const v = String(value || "").toLowerCase();
 
-  const productName = String(
-    row.product_name || row.payment_title || ""
-  ).trim();
+  if (v === "monthly") return lang === "id" ? "Bulanan" : "Monthly";
+  if (v === "yearly") return lang === "id" ? "Tahunan" : "Yearly";
 
-  if (cycle === "monthly") {
-    return lang === "id" ? "Bulanan" : "Monthly";
-  }
+  return "-";
+}
 
-  if (cycle === "yearly") {
-    return lang === "id" ? "Tahunan" : "Yearly";
-  }
+function isListingSlotUsed(row: PropertyRow) {
+  if (row.transaction_status === "sold") return false;
+  if (row.transaction_status === "rented") return false;
+  if (row.status === "rejected") return false;
 
-  return productName;
+  if (!row.listing_expires_at) return true;
+
+  const expiresAt = new Date(row.listing_expires_at);
+  if (Number.isNaN(expiresAt.getTime())) return true;
+
+  return expiresAt.getTime() >= Date.now();
 }
 
 /* =========================
@@ -340,93 +344,14 @@ export default function AgentDashboardPage() {
     listings: [],
   });
 
+  const [memberships, setMemberships] = useState<AgentMembershipRow[]>([]);
+  const [usedListingSlots, setUsedListingSlots] = useState(0);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [checkingMembership, setCheckingMembership] = useState(true);
-  const [hasActiveMembership, setHasActiveMembership] = useState(false);
-  const [activeMembershipLabel, setActiveMembershipLabel] = useState("");
-
   const ITEMS_PER_PAGE = 12;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function checkAgentMembership() {
-      if (!userId) {
-        if (isMounted) {
-          setHasActiveMembership(false);
-          setActiveMembershipLabel("");
-          setCheckingMembership(false);
-        }
-        return;
-      }
-
-      try {
-        setCheckingMembership(true);
-
-        const { data, error } = await supabase
-          .from("payments")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-
-        if (error) {
-          throw error;
-        }
-
-        const rows = ((data || []) as PaymentRow[]).filter((row) => {
-          const status = String(row.status || "").toLowerCase();
-          const audience = String(row.audience || row.user_type || "").toLowerCase();
-          const productType = String(row.product_type || "").toLowerCase();
-          const productName = String(
-            row.product_name || row.payment_title || ""
-          ).toLowerCase();
-
-          const isPaid =
-            status === "paid" ||
-            status === "succeeded" ||
-            status === "completed" ||
-            status === "active" ||
-            status === "success" ||
-            status === "settled";
-
-          const isAgent =
-            audience === "agent" || productName.includes("agent");
-
-          const isMembership =
-            productType === "membership" ||
-            productName.includes("membership") ||
-            productName.includes("agent");
-
-          return isPaid && isAgent && isMembership;
-        });
-
-        const activeRow = rows.find((row) => isMembershipStillActive(row)) || null;
-
-        if (!isMounted) return;
-
-        setHasActiveMembership(Boolean(activeRow));
-        setActiveMembershipLabel(getMembershipLabel(activeRow, lang));
-      } catch {
-        if (!isMounted) return;
-        setHasActiveMembership(false);
-        setActiveMembershipLabel("");
-      } finally {
-        if (isMounted) {
-          setCheckingMembership(false);
-        }
-      }
-    }
-
-    checkAgentMembership();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId, lang]);
 
   useEffect(() => {
     let isMounted = true;
@@ -434,6 +359,8 @@ export default function AgentDashboardPage() {
     async function loadDashboard() {
       if (!userId) {
         if (!loadingProfile && isMounted) {
+          setMemberships([]);
+          setUsedListingSlots(0);
           setDashboardData({
             stats: {
               totalListing: 0,
@@ -452,19 +379,33 @@ export default function AgentDashboardPage() {
         setLoadingDashboard(true);
         setErrorMessage("");
 
-        const { data: propertyRows, error: propertyError } = await supabase
-          .from("properties")
-          .select(
-            "id, user_id, kode, title, price, city, area, province, posted_date, created_at, source, status"
-          )
-          .eq("user_id", userId)
-          .eq("source", "agent")
-          .order("created_at", { ascending: false });
+        const [
+          { data: membershipRows, error: membershipError },
+          { data: propertyRows, error: propertyError },
+        ] = await Promise.all([
+          supabase
+            .from("agent_memberships")
+            .select(
+              "id, user_id, payment_id, package_id, package_name, billing_cycle, listing_limit, status, auto_renew, starts_at, expires_at, metadata, created_at, updated_at"
+            )
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false }),
 
-        if (propertyError) {
-          throw propertyError;
-        }
+          supabase
+            .from("properties")
+            .select(
+              "id, user_id, kode, title, price, city, area, province, posted_date, created_at, source, status, listing_expires_at, transaction_status"
+            )
+            .eq("user_id", userId)
+            .eq("source", "agent")
+            .or("status.is.null,status.neq.rejected")
+            .order("created_at", { ascending: false }),
+        ]);
 
+        if (membershipError) throw membershipError;
+        if (propertyError) throw propertyError;
+
+        const membershipsData = (membershipRows || []) as AgentMembershipRow[];
         const properties = (propertyRows || []) as PropertyRow[];
         const propertyIds = properties.map((item) => item.id);
 
@@ -472,25 +413,22 @@ export default function AgentDashboardPage() {
         let leads: LeadRow[] = [];
 
         if (propertyIds.length > 0) {
-          const [{ data: imageRows, error: imageError }, { data: leadRows, error: leadError }] =
-            await Promise.all([
-              supabase
-                .from("property_images")
-                .select("id, property_id, image_url, sort_order, is_cover")
-                .in("property_id", propertyIds),
-              supabase
-                .from("leads")
-                .select("id, property_id, status, lead_type, viewing_date, created_at")
-                .in("property_id", propertyIds),
-            ]);
+          const [
+            { data: imageRows, error: imageError },
+            { data: leadRows, error: leadError },
+          ] = await Promise.all([
+            supabase
+              .from("property_images")
+              .select("id, property_id, image_url, sort_order, is_cover")
+              .in("property_id", propertyIds),
+            supabase
+              .from("leads")
+              .select("id, property_id, status, lead_type, viewing_date, created_at")
+              .in("property_id", propertyIds),
+          ]);
 
-          if (imageError) {
-            throw imageError;
-          }
-
-          if (leadError) {
-            throw leadError;
-          }
+          if (imageError) throw imageError;
+          if (leadError) throw leadError;
 
           images = (imageRows || []) as PropertyImageRow[];
           leads = (leadRows || []) as LeadRow[];
@@ -509,8 +447,12 @@ export default function AgentDashboardPage() {
           (lead) => normalizeStatus(lead.status) === "interested"
         ).length;
 
+        const usedSlots = properties.filter(isListingSlotUsed).length;
+
         if (!isMounted) return;
 
+        setMemberships(membershipsData);
+        setUsedListingSlots(usedSlots);
         setDashboardData({
           stats: {
             totalListing: properties.length,
@@ -546,6 +488,28 @@ export default function AgentDashboardPage() {
     setCurrentPage(1);
   }, [searchQuery]);
 
+  const activeMembership = useMemo(() => {
+    return memberships.find((membership) => isMembershipActive(membership)) || null;
+  }, [memberships]);
+
+  const latestMembership = useMemo(() => {
+    return activeMembership || memberships[0] || null;
+  }, [activeMembership, memberships]);
+
+  const membershipListingLimit = useMemo(() => {
+    return getMembershipListingLimit(activeMembership);
+  }, [activeMembership]);
+
+  const remainingListingSlots = Math.max(
+    membershipListingLimit - usedListingSlots,
+    0
+  );
+
+  const canCreateListing =
+    Boolean(activeMembership) &&
+    membershipListingLimit > 0 &&
+    remainingListingSlots > 0;
+
   const filteredListings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return dashboardData.listings;
@@ -576,14 +540,24 @@ export default function AgentDashboardPage() {
   }, [currentPage, totalPages]);
 
   function handleCreateListing() {
-    if (checkingMembership) return;
+    if (loadingDashboard || loadingProfile) return;
 
-    if (hasActiveMembership) {
-      router.push("/agentdashboard/propertilokasi");
+    if (!activeMembership) {
+      router.push("/agentdashboard/paket");
       return;
     }
 
-    router.push("/agentdashboard/paket");
+    if (membershipListingLimit <= 0) {
+      router.push("/agentdashboard/paket");
+      return;
+    }
+
+    if (remainingListingSlots <= 0) {
+      router.push("/agentdashboard/listing-saya");
+      return;
+    }
+
+    router.push("/agentdashboard/propertilokasi");
   }
 
   if (loadingProfile || loadingDashboard) {
@@ -601,7 +575,7 @@ export default function AgentDashboardPage() {
   return (
     <main className="min-h-screen bg-[#F7F7F8]">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-        <div className="mb-5 flex flex-col gap-3 lg:mb-7 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-5 flex flex-col gap-3 lg:mb-7 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h1 className="text-base font-bold tracking-tight text-[#1C1C1E] sm:text-xl lg:text-3xl">
               {lang === "id" ? "Dashboard Agen" : "Agent Dashboard"}
@@ -613,8 +587,8 @@ export default function AgentDashboardPage() {
             </p>
           </div>
 
-          <div className="flex w-full flex-col items-start gap-2 sm:w-auto lg:items-end">
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto lg:justify-end">
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto xl:items-end">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto xl:justify-end">
               <button
                 type="button"
                 onClick={() => router.push("/agentdashboard/saved")}
@@ -636,38 +610,155 @@ export default function AgentDashboardPage() {
 
             <button
               onClick={handleCreateListing}
-              disabled={checkingMembership}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[12px] font-semibold text-white transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5 sm:text-sm"
+              className={[
+                "inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-[12px] font-semibold transition sm:w-auto sm:px-5 sm:text-sm",
+                canCreateListing
+                  ? "bg-[#1C1C1E] text-white hover:opacity-90"
+                  : "border border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50",
+              ].join(" ")}
             >
               <Plus className="h-4 w-4" />
-              {checkingMembership
+              {!activeMembership
                 ? lang === "id"
-                  ? "Memeriksa Membership..."
-                  : "Checking Membership..."
+                  ? "Pilih Paket Agen"
+                  : "Choose Agent Package"
+                : remainingListingSlots <= 0
+                ? lang === "id"
+                  ? "Limit Listing Penuh"
+                  : "Listing Limit Full"
                 : lang === "id"
                 ? "Buat Listing Baru"
                 : "Create New Listing"}
             </button>
-
-            {!checkingMembership && (
-              <p className="mt-1 text-[12px] text-gray-500 lg:text-right sm:text-[13px]">
-                {hasActiveMembership
-                  ? lang === "id"
-                    ? `Membership aktif${activeMembershipLabel ? `: ${activeMembershipLabel}` : ""}`
-                    : `Active membership${activeMembershipLabel ? `: ${activeMembershipLabel}` : ""}`
-                  : lang === "id"
-                  ? "Belum ada membership aktif"
-                  : "No active membership yet"}
-              </p>
-            )}
           </div>
         </div>
 
-        {errorMessage && (
+        {errorMessage ? (
           <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700 sm:text-[13px]">
             {errorMessage}
           </div>
-        )}
+        ) : null}
+
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:mb-7 xl:grid-cols-4">
+          <div className="rounded-[24px] border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[10px] font-medium text-gray-500 sm:text-xs">
+                  <PackageCheck className="h-4 w-4" />
+                  {lang === "id" ? "Paket Aktif" : "Active Package"}
+                </p>
+                <p className="mt-2 truncate text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                  {activeMembership?.package_name || "-"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {latestMembership
+                    ? `${getBillingCycleLabel(
+                        latestMembership.billing_cycle,
+                        lang
+                      )} • ${lang === "id" ? "Expired" : "Expiry"} ${formatDisplayDate(
+                        latestMembership.expires_at
+                      )}`
+                    : lang === "id"
+                    ? "Belum ada paket aktif"
+                    : "No active package yet"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[10px] font-medium text-gray-500 sm:text-xs">
+                  <ShieldCheck className="h-4 w-4" />
+                  {lang === "id" ? "Limit Listing" : "Listing Limit"}
+                </p>
+                <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                  {membershipListingLimit > 0
+                    ? `${usedListingSlots}/${membershipListingLimit}`
+                    : "-"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {membershipListingLimit > 0
+                    ? lang === "id"
+                      ? `${remainingListingSlots} slot tersisa`
+                      : `${remainingListingSlots} slots remaining`
+                    : lang === "id"
+                    ? "Pilih paket untuk membuka listing"
+                    : "Choose a package to unlock listings"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[10px] font-medium text-gray-500 sm:text-xs">
+                  <Clock3 className="h-4 w-4" />
+                  {lang === "id" ? "Status Membership" : "Membership Status"}
+                </p>
+                <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                  {activeMembership
+                    ? lang === "id"
+                      ? "Aktif"
+                      : "Active"
+                    : latestMembership
+                    ? lang === "id"
+                      ? "Tidak Aktif"
+                      : "Inactive"
+                    : "-"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {activeMembership?.auto_renew
+                    ? lang === "id"
+                      ? "Auto renew aktif"
+                      : "Auto renew enabled"
+                    : lang === "id"
+                    ? "Auto renew tidak aktif"
+                    : "Auto renew disabled"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-gray-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-[10px] font-medium text-gray-500 sm:text-xs">
+                  <AlertTriangle className="h-4 w-4" />
+                  {lang === "id" ? "Aksi Cepat" : "Quick Action"}
+                </p>
+                <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+                  {canCreateListing
+                    ? lang === "id"
+                      ? "Siap Listing"
+                      : "Ready to List"
+                    : !activeMembership
+                    ? lang === "id"
+                      ? "Pilih Paket"
+                      : "Choose Package"
+                    : lang === "id"
+                    ? "Limit Penuh"
+                    : "Limit Full"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {canCreateListing
+                    ? lang === "id"
+                      ? "Anda bisa membuat listing baru."
+                      : "You can create a new listing."
+                    : !activeMembership
+                    ? lang === "id"
+                      ? "Aktifkan paket untuk membuat listing."
+                      : "Activate a package to create listings."
+                    : lang === "id"
+                    ? "Kelola listing selesai atau upgrade paket."
+                    : "Manage completed listings or upgrade package."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="mb-5 grid grid-cols-2 gap-3 sm:gap-4 xl:mb-7 xl:grid-cols-4">
           <StatCard
@@ -708,7 +799,7 @@ export default function AgentDashboardPage() {
             />
           </div>
 
-          <p className="text-[12px] text-gray-500 md:text-right sm:text-sm">
+          <p className="text-[12px] text-gray-500 sm:text-sm md:text-right">
             {lang === "id"
               ? `Menampilkan ${filteredListings.length} listing`
               : `Showing ${filteredListings.length} listings`}
@@ -720,22 +811,39 @@ export default function AgentDashboardPage() {
             <h2 className="text-[15px] font-semibold text-[#1C1C1E] sm:text-lg">
               {lang === "id" ? "Belum ada listing" : "No listings yet"}
             </h2>
-            <p className="mt-2 text-[12px] leading-5 text-gray-500 sm:text-sm sm:leading-6">
-              {lang === "id"
-                ? "Buat listing pertama Anda untuk mulai menerima leads."
-                : "Create your first listing to start receiving leads."}
+
+            <p className="mx-auto mt-2 max-w-xl text-[12px] leading-5 text-gray-500 sm:text-sm sm:leading-6">
+              {canCreateListing
+                ? lang === "id"
+                  ? "Buat listing pertama Anda untuk mulai menerima leads."
+                  : "Create your first listing to start receiving leads."
+                : !activeMembership
+                ? lang === "id"
+                  ? "Aktifkan paket agen terlebih dahulu untuk mulai membuat listing."
+                  : "Activate an agent package first to start creating listings."
+                : lang === "id"
+                ? "Limit listing Anda penuh. Kelola listing selesai atau upgrade paket."
+                : "Your listing limit is full. Manage completed listings or upgrade your package."}
             </p>
 
             <button
               onClick={handleCreateListing}
-              disabled={checkingMembership}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-[12px] font-semibold text-white transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-5 sm:text-sm"
+              className={[
+                "mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-[12px] font-semibold transition sm:w-auto sm:px-5 sm:text-sm",
+                canCreateListing
+                  ? "bg-[#1C1C1E] text-white hover:opacity-90"
+                  : "border border-gray-300 bg-white text-[#1C1C1E] hover:bg-gray-50",
+              ].join(" ")}
             >
               <Plus className="h-4 w-4" />
-              {checkingMembership
+              {!activeMembership
                 ? lang === "id"
-                  ? "Memeriksa Membership..."
-                  : "Checking Membership..."
+                  ? "Pilih Paket"
+                  : "Choose Package"
+                : remainingListingSlots <= 0
+                ? lang === "id"
+                  ? "Kelola Listing"
+                  : "Manage Listings"
                 : lang === "id"
                 ? "Buat Listing"
                 : "Create Listing"}
@@ -746,6 +854,7 @@ export default function AgentDashboardPage() {
             <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
               {paginatedListings.map((listing) => {
                 const statusData = leadStatusUI(listing.leadStatus, lang);
+                const StatusIcon = statusData.Icon;
                 const coverPhoto = listing.photos?.[0] || "";
 
                 return (
@@ -776,13 +885,14 @@ export default function AgentDashboardPage() {
 
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <p className="min-w-0 truncate text-[10px] text-gray-400 sm:text-xs">
-                          {listing.kode} <span className="mx-1">•</span> {listing.postedDate}
+                          {listing.kode} <span className="mx-1">•</span>{" "}
+                          {listing.postedDate}
                         </p>
 
                         <div
                           className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${statusData.badgeClass} sm:px-3 sm:text-[11px]`}
                         >
-                          <statusData.Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                          <StatusIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                           {statusData.label}
                         </div>
                       </div>
@@ -800,7 +910,9 @@ export default function AgentDashboardPage() {
                         <button
                           onClick={() =>
                             router.push(
-                              `/agentdashboard/leads?kode=${encodeURIComponent(listing.kode)}`
+                              `/agentdashboard/leads?kode=${encodeURIComponent(
+                                listing.kode
+                              )}`
                             )
                           }
                           className="inline-flex h-10 items-center justify-center rounded-2xl border border-gray-300 bg-white px-2 text-[10px] font-medium text-gray-700 transition hover:bg-gray-100 sm:h-11 sm:text-sm"
@@ -835,7 +947,7 @@ export default function AgentDashboardPage() {
               })}
             </div>
 
-            {totalPages > 1 && (
+            {totalPages > 1 ? (
               <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
@@ -877,7 +989,7 @@ export default function AgentDashboardPage() {
                   {lang === "id" ? "Berikutnya" : "Next"}
                 </button>
               </div>
-            )}
+            ) : null}
           </>
         )}
       </div>
