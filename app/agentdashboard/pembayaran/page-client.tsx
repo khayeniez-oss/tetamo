@@ -60,10 +60,10 @@ const money = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-function sanitizePublicPaymentText(value: string | null | undefined) {
+function cleanProviderWords(value: string | null | undefined) {
   return String(value || "")
-    .replace(/stripe/gi, "secure payment checkout")
-    .replace(/xendit/gi, "available payment method");
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider");
 }
 
 function normalizePaymentFlow(
@@ -106,10 +106,6 @@ function isMembershipProduct(
   product: SelectedProduct
 ): product is AgentPackageUI {
   return Boolean(product && product.productType === "membership");
-}
-
-function isAddOnProduct(product: SelectedProduct): product is AddOnProductUI {
-  return Boolean(product && product.productType === "addon");
 }
 
 function isEducationProduct(
@@ -184,6 +180,235 @@ function getAvailableBillingCycles(product: AgentPackageUI): BillingCycle[] {
   return Array.from(cycles);
 }
 
+function getBillingCycleLabel(cycle: BillingCycle, lang: "id" | "en") {
+  if (lang === "id") return cycle === "monthly" ? "Bulanan" : "Tahunan";
+  return cycle === "monthly" ? "Monthly" : "Yearly";
+}
+
+function getProductName(
+  product: SelectedProduct,
+  cycle: BillingCycle,
+  lang: "id" | "en"
+) {
+  if (!product) return "-";
+
+  if (isMembershipProduct(product)) {
+    if (cycle === "monthly") {
+      return lang === "id"
+        ? `${product.name} - Tagihan Bulanan`
+        : `${product.name} - Monthly Billing`;
+    }
+
+    return product.name;
+  }
+
+  if (product.id === "boost-listing") {
+    return lang === "id" ? "Boost Listing" : "Boost Listing";
+  }
+
+  if (product.id === "homepage-spotlight") {
+    return lang === "id" ? "Homepage Spotlight" : "Homepage Spotlight";
+  }
+
+  if (product.id === "education-pass") {
+    return lang === "id" ? "Education Pass" : "Education Pass";
+  }
+
+  return cleanProviderWords(product.name);
+}
+
+function getPaymentTitle(
+  product: SelectedProduct,
+  cycle: BillingCycle,
+  lang: "id" | "en"
+) {
+  if (!product) return lang === "id" ? "Pembayaran Agen" : "Agent Payment";
+
+  if (isMembershipProduct(product)) {
+    return lang === "id"
+      ? `Pembayaran ${getProductName(product, cycle, lang)}`
+      : `${getProductName(product, cycle, lang)} Payment`;
+  }
+
+  if (product.id === "boost-listing") {
+    return lang === "id" ? "Pembayaran Boost Listing" : "Boost Listing Payment";
+  }
+
+  if (product.id === "homepage-spotlight") {
+    return lang === "id"
+      ? "Pembayaran Homepage Spotlight"
+      : "Homepage Spotlight Payment";
+  }
+
+  if (product.id === "education-pass") {
+    return lang === "id"
+      ? "Pembayaran Education Pass"
+      : "Education Pass Payment";
+  }
+
+  return cleanProviderWords(product.paymentTitle || product.name);
+}
+
+function getPaymentDescription(
+  product: SelectedProduct,
+  cycle: BillingCycle,
+  lang: "id" | "en",
+  listingLimit: number
+) {
+  if (!product) {
+    return lang === "id"
+      ? "Detail pembayaran akan mengikuti produk yang dipilih."
+      : "Payment details will follow the selected product.";
+  }
+
+  if (isMembershipProduct(product)) {
+    const cycleLabel = getBillingCycleLabel(cycle, lang);
+
+    if (lang === "id") {
+      return `Tinjau paket ${product.name} dengan tipe tagihan ${cycleLabel}. Paket ini mencakup ${
+        listingLimit > 0 ? `${listingLimit} listing aktif` : "akses membership agen"
+      }.`;
+    }
+
+    return `Review the ${product.name} package with ${cycleLabel} billing. This package includes ${
+      listingLimit > 0 ? `${listingLimit} active listings` : "agent membership access"
+    }.`;
+  }
+
+  if (product.id === "boost-listing") {
+    return lang === "id"
+      ? "Boost Listing membantu listing Anda tampil dengan prioritas lebih tinggi di marketplace."
+      : "Boost Listing helps your listing appear with higher priority in the marketplace.";
+  }
+
+  if (product.id === "homepage-spotlight") {
+    return lang === "id"
+      ? "Homepage Spotlight membantu listing Anda tampil di area promosi homepage Tetamo."
+      : "Homepage Spotlight helps your listing appear in Tetamo’s homepage promotion area.";
+  }
+
+  if (product.id === "education-pass") {
+    return lang === "id"
+      ? "Education Pass memberikan akses ke materi edukasi premium Tetamo selama masa aktif produk."
+      : "Education Pass gives access to Tetamo premium education materials during the active period.";
+  }
+
+  return cleanProviderWords(product.paymentDescription);
+}
+
+function getBillingNote(
+  product: SelectedProduct,
+  cycle: BillingCycle,
+  lang: "id" | "en"
+) {
+  if (!product) {
+    return lang === "id"
+      ? "Detail pembayaran akan mengikuti produk yang dipilih."
+      : "Payment details will follow the selected product.";
+  }
+
+  if (isMembershipProduct(product)) {
+    if (cycle === "monthly") {
+      const months = product.monthlyCommitmentMonths ?? 12;
+
+      return lang === "id"
+        ? `Pembayaran bulanan berlaku dengan komitmen ${months} bulan. Membership akan aktif sesuai masa paket setelah pembayaran berhasil.`
+        : `Monthly billing applies with a ${months}-month commitment. Membership will be activated according to the package term after successful payment.`;
+    }
+
+    return lang === "id"
+      ? "Membership akan aktif setelah pembayaran berhasil dan tercatat di sistem Tetamo."
+      : "Membership will be activated after successful payment and recorded in the Tetamo system.";
+  }
+
+  if (product.id === "boost-listing") {
+    return lang === "id"
+      ? "Boost akan aktif setelah pembayaran berhasil."
+      : "Boost will be activated after successful payment.";
+  }
+
+  if (product.id === "homepage-spotlight") {
+    return lang === "id"
+      ? "Spotlight akan aktif setelah pembayaran berhasil."
+      : "Spotlight will be activated after successful payment.";
+  }
+
+  if (product.id === "education-pass") {
+    return lang === "id"
+      ? "Akses edukasi akan aktif setelah pembayaran berhasil."
+      : "Education access will be activated after successful payment.";
+  }
+
+  return cleanProviderWords(product.billingNote);
+}
+
+function translateFeature(feature: string, lang: "id" | "en") {
+  const pairs = [
+    ["30 Listing Aktif", "30 Active Listings"],
+    ["100 Listing Aktif", "100 Active Listings"],
+    ["500 Listing Aktif", "500 Active Listings"],
+    ["Membership aktif selama 1 tahun", "Membership active for 1 year"],
+    ["Website Profil Agen", "Agent Profile Website"],
+    ["Integrasi Media Sosial", "Social Media Integration"],
+    ["Dashboard Leads", "Leads Dashboard"],
+    ["Jadwal Viewing", "Viewing Schedule"],
+    ["Paket & Tagihan", "Package & Billing"],
+    ["Pembayaran / Receipt", "Payment / Receipt"],
+    ["Analytics / Insights", "Analytics & Insights"],
+    ["Tracking Komisi", "Commission Tracking"],
+    ["Akses Boost & Spotlight", "Access to Boost & Spotlight"],
+    ["1 AI Avatar Video Perkenalan", "1 AI Avatar Introduction Video"],
+    [
+      "3 Listing Unggulan Gratis (90 hari masing-masing)",
+      "3 Free Featured Listings (90 days each)",
+    ],
+    ["Prioritas visibilitas listing", "Listing visibility priority"],
+    [
+      "Eligible untuk penempatan Agen Unggulan",
+      "Eligible for Featured Agent placement",
+    ],
+    [
+      "Kesempatan eksposur premium di platform",
+      "Opportunity for premium platform exposure",
+    ],
+    ["Slot Agen Unggulan terbatas (7 agen)", "Limited Featured Agent slots (7 agents)"],
+    ["Tersedia opsi bayar bulanan", "Monthly payment option available"],
+    ["Auto renew aktif secara default", "Auto renew enabled by default"],
+    ["Durasi boost 14 hari", "Boost duration 14 days"],
+    [
+      "Prioritas tampil lebih tinggi di marketplace",
+      "Higher priority placement in marketplace",
+    ],
+    ["Tersedia untuk owner dan agent", "Available for owners and agents"],
+    ["Durasi spotlight 7 hari", "Spotlight duration 7 days"],
+    ["Tampil di homepage TETAMO", "Displayed on the TETAMO homepage"],
+    [
+      "Slot terbatas (maksimal 3 listing aktif)",
+      "Limited slots (maximum 3 active listings)",
+    ],
+    [
+      "Akses premium video edukasi TETAMO",
+      "Access to TETAMO premium education videos",
+    ],
+    ["Aktif selama 90 hari", "Active for 90 days"],
+    [
+      "Berlaku untuk owner dan non-member agent",
+      "Available for owners and non-member agents",
+    ],
+    ["Tidak auto renew", "No auto renew"],
+  ];
+
+  const found = pairs.find(
+    ([idText, enText]) =>
+      feature.toLowerCase() === idText.toLowerCase() ||
+      feature.toLowerCase() === enText.toLowerCase()
+  );
+
+  if (!found) return cleanProviderWords(feature);
+
+  return cleanProviderWords(lang === "id" ? found[0] : found[1]);
+}
+
 export default function AgentPembayaranPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -220,13 +445,10 @@ export default function AgentPembayaranPageClient() {
   const needsExistingProperty = isAddon;
 
   const [submitting, setSubmitting] = useState(false);
-
   const [existingProperty, setExistingProperty] =
     useState<ExistingProperty | null>(null);
-
   const [loadingExistingProperty, setLoadingExistingProperty] =
     useState(needsExistingProperty);
-
   const [existingPropertyError, setExistingPropertyError] = useState("");
 
   const selectedProduct: SelectedProduct = useMemo(() => {
@@ -373,78 +595,24 @@ export default function AgentPembayaranPageClient() {
   }, [selectedProduct]);
 
   const selectedProductName = useMemo(() => {
-    if (!selectedProduct) return "-";
-
-    if (isMembershipProduct(selectedProduct)) {
-      if (selectedBillingCycle === "monthly") {
-        return currentLang === "id"
-          ? `${selectedProduct.name} - Tagihan Bulanan`
-          : `${selectedProduct.name} - Monthly Billing`;
-      }
-
-      return selectedProduct.name;
-    }
-
-    return selectedProduct.name;
+    return getProductName(selectedProduct, selectedBillingCycle, currentLang);
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const resolvedPaymentTitle = useMemo(() => {
-    if (!selectedProduct) {
-      return currentLang === "id" ? "Pembayaran Agen" : "Agent Payment";
-    }
-
-    if (isMembershipProduct(selectedProduct)) {
-      if (selectedBillingCycle === "monthly") {
-        return currentLang === "id"
-          ? `${selectedProduct.name} - Pembayaran Bulanan`
-          : `${selectedProduct.name} - Monthly Billing`;
-      }
-
-      return sanitizePublicPaymentText(selectedProduct.paymentTitle);
-    }
-
-    return sanitizePublicPaymentText(selectedProduct.paymentTitle);
+    return getPaymentTitle(selectedProduct, selectedBillingCycle, currentLang);
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const resolvedPaymentDescription = useMemo(() => {
-    if (!selectedProduct) {
-      return currentLang === "id"
-        ? "Detail pembayaran akan mengikuti produk yang dipilih."
-        : "Payment details will follow the selected product.";
-    }
-
-    if (isMembershipProduct(selectedProduct)) {
-      if (selectedBillingCycle === "monthly") {
-        return currentLang === "id"
-          ? `${selectedProduct.name} dibayar bulanan dengan membership aktif sesuai masa paket.`
-          : `${selectedProduct.name} is billed monthly with membership active according to the package term.`;
-      }
-
-      return sanitizePublicPaymentText(selectedProduct.paymentDescription);
-    }
-
-    return sanitizePublicPaymentText(selectedProduct.paymentDescription);
-  }, [selectedProduct, selectedBillingCycle, currentLang]);
+    return getPaymentDescription(
+      selectedProduct,
+      selectedBillingCycle,
+      currentLang,
+      listingLimit
+    );
+  }, [selectedProduct, selectedBillingCycle, currentLang, listingLimit]);
 
   const resolvedBillingNote = useMemo(() => {
-    if (!selectedProduct) {
-      return currentLang === "id"
-        ? "Detail pembayaran akan mengikuti produk yang dipilih."
-        : "Payment details will follow the selected product.";
-    }
-
-    if (isMembershipProduct(selectedProduct)) {
-      if (
-        selectedBillingCycle === "monthly" &&
-        selectedProduct.monthlyBillingNote
-      ) {
-        return sanitizePublicPaymentText(selectedProduct.monthlyBillingNote);
-      }
-
-      return sanitizePublicPaymentText(selectedProduct.billingNote);
-    }
-
-    return sanitizePublicPaymentText(selectedProduct.billingNote);
+    return getBillingNote(selectedProduct, selectedBillingCycle, currentLang);
   }, [selectedProduct, selectedBillingCycle, currentLang]);
 
   const resolvedDurationLabel = useMemo(() => {
@@ -480,7 +648,7 @@ export default function AgentPembayaranPageClient() {
     if (!selectedProduct) return null;
 
     if ("badge" in selectedProduct) {
-      return selectedProduct.badge ?? null;
+      return cleanProviderWords(selectedProduct.badge ?? "");
     }
 
     return null;
@@ -536,54 +704,6 @@ export default function AgentPembayaranPageClient() {
     existingProperty,
     loadingExistingProperty,
   ]);
-
-  function translateFeature(feature: string) {
-    if (currentLang === "id") return sanitizePublicPaymentText(feature);
-
-    const map: Record<string, string> = {
-      "30 Listing Aktif": "30 Active Listings",
-      "100 Listing Aktif": "100 Active Listings",
-      "500 Listing Aktif": "500 Active Listings",
-      "Membership aktif selama 1 tahun": "Membership active for 1 year",
-      "Website Profil Agen": "Agent Profile Website",
-      "Integrasi Media Sosial": "Social Media Integration",
-      "Dashboard Leads": "Leads Dashboard",
-      "Jadwal Viewing": "Viewing Schedule",
-      "Paket & Tagihan": "Package & Billing",
-      "Pembayaran / Receipt": "Payment / Receipt",
-      "Analytics / Insights": "Analytics & Insights",
-      "Tracking Komisi": "Commission Tracking",
-      "Akses Boost & Spotlight": "Access to Boost & Spotlight",
-      "1 AI Avatar Video Perkenalan": "1 AI Avatar Introduction Video",
-      "3 Listing Unggulan Gratis (90 hari masing-masing)":
-        "3 Free Featured Listings (90 days each)",
-      "Prioritas visibilitas listing": "Listing visibility priority",
-      "Eligible untuk penempatan Agen Unggulan":
-        "Eligible for Featured Agent placement",
-      "Kesempatan eksposur premium di platform":
-        "Opportunity for premium platform exposure",
-      "Slot Agen Unggulan terbatas (7 agen)":
-        "Limited Featured Agent slots (7 agents)",
-      "Tersedia opsi bayar bulanan": "Monthly payment option available",
-      "Auto renew aktif secara default": "Auto renew enabled by default",
-      "Durasi boost 14 hari": "Boost duration 14 days",
-      "Prioritas tampil lebih tinggi di marketplace":
-        "Higher priority placement in marketplace",
-      "Tersedia untuk owner dan agent": "Available for owners and agents",
-      "Durasi spotlight 7 hari": "Spotlight duration 7 days",
-      "Tampil di homepage TETAMO": "Displayed on the TETAMO homepage",
-      "Slot terbatas (maksimal 3 listing aktif)":
-        "Limited slots (maximum 3 active listings)",
-      "Akses premium video edukasi TETAMO":
-        "Access to TETAMO premium education videos",
-      "Aktif selama 90 hari": "Active for 90 days",
-      "Berlaku untuk owner dan non-member agent":
-        "Available for owners and non-member agents",
-      "Tidak auto renew": "No auto renew",
-    };
-
-    return sanitizePublicPaymentText(map[feature] ?? feature);
-  }
 
   function onBack() {
     if (isEducation) {
@@ -899,13 +1019,7 @@ export default function AgentPembayaranPageClient() {
                   </div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
                     {isMembershipProduct(selectedProduct)
-                      ? selectedBillingCycle === "monthly"
-                        ? currentLang === "id"
-                          ? "Bulanan"
-                          : "Monthly"
-                        : currentLang === "id"
-                        ? "Tahunan"
-                        : "Yearly"
+                      ? getBillingCycleLabel(selectedBillingCycle, currentLang)
                       : "-"}
                   </div>
                 </div>
@@ -1072,8 +1186,8 @@ export default function AgentPembayaranPageClient() {
               <div className="font-semibold">Debit / Credit Card</div>
               <div className="mt-1 text-xs opacity-80">
                 {currentLang === "id"
-                  ? "QRIS dan metode pembayaran lokal lainnya segera tersedia."
-                  : "QRIS and other local payment methods coming soon."}
+                  ? "QRIS, virtual account, transfer bank, dan metode lokal lainnya segera tersedia."
+                  : "QRIS, virtual account, bank transfer, and other local payment methods are coming soon."}
               </div>
             </div>
 
@@ -1090,7 +1204,7 @@ export default function AgentPembayaranPageClient() {
                       className="flex items-start gap-2 text-sm leading-6 text-gray-700"
                     >
                       <span className="text-green-600">✓</span>
-                      <span>{translateFeature(feature)}</span>
+                      <span>{translateFeature(feature, currentLang)}</span>
                     </li>
                   ))}
                 </ul>
@@ -1123,8 +1237,8 @@ export default function AgentPembayaranPageClient() {
             >
               {submitting
                 ? currentLang === "id"
-                  ? "Membuat Checkout..."
-                  : "Creating Checkout..."
+                  ? "Menyiapkan Pembayaran..."
+                  : "Preparing Payment..."
                 : currentLang === "id"
                 ? "Bayar Sekarang"
                 : "Pay Now"}
