@@ -1,5 +1,8 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import CarPageClient from "./CarPageClient";
+
+export const dynamic = "force-dynamic";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
@@ -33,5 +36,9 @@ export const metadata: Metadata = {
 };
 
 export default function CarPage() {
-  return <CarPageClient />;
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-white text-gray-900" />}>
+      <CarPageClient />
+    </Suspense>
+  );
 }
