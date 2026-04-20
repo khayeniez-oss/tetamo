@@ -4,13 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, ExternalLink, Printer } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 type PaymentStatus =
   | "initiated"
   | "pending"
+  | "checkout_created"
   | "succeeded"
   | "failed"
   | "expired"
@@ -21,67 +22,142 @@ type PaymentStatus =
   | "active"
   | null;
 
-type PaymentRow = {
+type PaymentTransactionRow = {
   id: string;
   user_id: string | null;
-  receipt_number: string | null;
-  billing_record_id: string | null;
-  amount: number | null;
-  amount_idr: number | null;
-  currency: string | null;
+  property_id: string | null;
+  source_role: string | null;
+  payment_type: string | null;
+  product_id: string | null;
+  product_name_snapshot: string | null;
+  product_type: string | null;
+  audience_snapshot: string | null;
   status: PaymentStatus;
-  paid_at: string | null;
-  created_at: string | null;
-  payment_method: string | null;
-  method: string | null;
-  gateway: string | null;
-  provider: string | null;
-  reference: string | null;
-  gateway_reference: string | null;
-  product_name: string | null;
-  payment_title: string | null;
-  payment_description: string | null;
-  billing_note: string | null;
-};
-
-type BillingRow = {
-  id: string;
-  user_id: string | null;
-  invoice_number: string | null;
+  currency: string | null;
+  amount_subtotal: number | null;
+  amount_discount: number | null;
+  amount_tax: number | null;
+  amount_total: number | null;
+  description: string | null;
+  plan_name: string | null;
+  duration_days: number | null;
+  property_title_snapshot: string | null;
+  property_code_snapshot: string | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
-  customer_address: string | null;
-  listing_code: string | null;
-  property_title: string | null;
-  property_city: string | null;
-  property_province: string | null;
-  description: string | null;
-  notes: string | null;
+  checkout_url: string | null;
+  checkout_expires_at: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_charge_id: string | null;
+  stripe_invoice_id: string | null;
+  receipt_url: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+  paid_at: string | null;
+  expired_at: string | null;
+  failed_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type AgentMembershipRow = {
+  id: string;
+  user_id: string | null;
+  payment_id: string | null;
+  package_id: string | null;
+  package_name: string | null;
+  billing_cycle: string | null;
+  listing_limit: number | null;
+  status: string | null;
+  auto_renew: boolean | null;
+  starts_at: string | null;
+  expires_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 function toNumber(value: number | string | null | undefined) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
+
   if (typeof value === "string") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
+
   return 0;
 }
 
-function formatAmount(
-  amount: number | null,
-  amountIdr: number | null,
-  currency: string | null
-) {
-  const code = (currency || "IDR").toUpperCase();
+function cleanText(value: unknown) {
+  const v = String(value || "").trim();
+  return v || "-";
+}
 
-  if (code === "IDR" || amountIdr !== null) {
-    const value = toNumber(amountIdr ?? amount ?? 0);
+function blankText(value: unknown) {
+  const v = String(value || "").trim();
+  return v && v !== "-" ? v : "";
+}
+
+function getMetaString(
+  metadata: Record<string, any> | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getMetaNumber(
+  metadata: Record<string, any> | null | undefined,
+  key: string
+) {
+  const value = metadata?.[key];
+
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getNestedMetaString(
+  metadata: Record<string, any> | null | undefined,
+  objectKey: string,
+  key: string
+) {
+  const obj = metadata?.[objectKey];
+
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return "";
+
+  const value = (obj as Record<string, any>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getNestedMetaNumber(
+  metadata: Record<string, any> | null | undefined,
+  objectKey: string,
+  key: string
+) {
+  const obj = metadata?.[objectKey];
+
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return 0;
+
+  const value = (obj as Record<string, any>)[key];
+
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatAmount(amount: number | null, currency: string | null) {
+  const code = String(currency || "idr").toUpperCase();
+  const value = toNumber(amount ?? 0);
+
+  if (code === "IDR") {
     return `Rp ${new Intl.NumberFormat("id-ID").format(value)}`;
   }
-
-  const value = toNumber(amount ?? amountIdr ?? 0);
 
   try {
     return new Intl.NumberFormat("en-US", {
@@ -130,6 +206,8 @@ function paymentStatusClasses(status: PaymentStatus) {
     case "settled":
     case "active":
       return "bg-green-50 text-green-700 border-green-200";
+    case "checkout_created":
+      return "bg-blue-50 text-blue-700 border-blue-200";
     case "failed":
       return "bg-red-50 text-red-700 border-red-200";
     case "expired":
@@ -151,6 +229,8 @@ function paymentStatusLabel(status: PaymentStatus, lang: "id" | "en") {
     case "settled":
     case "active":
       return lang === "id" ? "LUNAS" : "PAID";
+    case "checkout_created":
+      return lang === "id" ? "CHECKOUT DIBUAT" : "CHECKOUT CREATED";
     case "failed":
       return lang === "id" ? "GAGAL" : "FAILED";
     case "expired":
@@ -162,6 +242,114 @@ function paymentStatusLabel(status: PaymentStatus, lang: "id" | "en") {
     default:
       return lang === "id" ? "MENUNGGU" : "PENDING";
   }
+}
+
+function getBillingCycleLabel(
+  payment: PaymentTransactionRow | null,
+  membership: AgentMembershipRow | null,
+  lang: "id" | "en"
+) {
+  const direct =
+    membership?.billing_cycle ||
+    getMetaString(payment?.metadata, "selectedBillingCycle") ||
+    getMetaString(payment?.metadata, "selected_billing_cycle") ||
+    getMetaString(payment?.metadata, "billingCycle") ||
+    getMetaString(payment?.metadata, "billing_cycle");
+
+  const normalized = String(direct || "").toLowerCase();
+
+  if (normalized === "monthly") return lang === "id" ? "Bulanan" : "Monthly";
+  if (normalized === "yearly") return lang === "id" ? "Tahunan" : "Yearly";
+
+  const paymentType = String(payment?.payment_type || "").toLowerCase();
+
+  if (paymentType === "boost" || paymentType === "spotlight") return "Add-On";
+  if (paymentType === "education") return "Education";
+
+  return "-";
+}
+
+function getPaymentTypeLabel(
+  payment: PaymentTransactionRow | null,
+  lang: "id" | "en"
+) {
+  const paymentType = String(payment?.payment_type || "").toLowerCase();
+
+  if (paymentType === "package") {
+    return lang === "id" ? "Membership Agen" : "Agent Membership";
+  }
+
+  if (paymentType === "boost") return "Boost Listing";
+  if (paymentType === "spotlight") return "Homepage Spotlight";
+  if (paymentType === "education") return "Education";
+  if (paymentType === "listing_fee") {
+    return lang === "id" ? "Biaya Listing" : "Listing Fee";
+  }
+
+  if (paymentType === "featured") return "Featured Listing";
+
+  return cleanText(payment?.payment_type || payment?.product_type || "Payment");
+}
+
+function getPackageName(
+  payment: PaymentTransactionRow | null,
+  membership: AgentMembershipRow | null
+) {
+  return cleanText(
+    membership?.package_name ||
+      getMetaString(payment?.metadata, "packageName") ||
+      getMetaString(payment?.metadata, "package_name") ||
+      payment?.product_name_snapshot ||
+      payment?.plan_name ||
+      payment?.product_id ||
+      payment?.description
+  );
+}
+
+function getListingLimit(
+  payment: PaymentTransactionRow | null,
+  membership: AgentMembershipRow | null
+) {
+  const direct =
+    Number(membership?.listing_limit || 0) ||
+    getMetaNumber(payment?.metadata, "listingLimit") ||
+    getMetaNumber(payment?.metadata, "activeListingLimit") ||
+    getMetaNumber(payment?.metadata, "listing_limit") ||
+    getMetaNumber(payment?.metadata, "active_listing_limit") ||
+    getNestedMetaNumber(payment?.metadata, "activation", "listingLimit");
+
+  return direct > 0 ? direct : 0;
+}
+
+function getExpiryDate(
+  payment: PaymentTransactionRow | null,
+  membership: AgentMembershipRow | null
+) {
+  return (
+    membership?.expires_at ||
+    getNestedMetaString(payment?.metadata, "activation", "expiresAt") ||
+    getNestedMetaString(payment?.metadata, "activation", "endsAt") ||
+    getMetaString(payment?.metadata, "expires_at") ||
+    null
+  );
+}
+
+function getStartsAt(
+  payment: PaymentTransactionRow | null,
+  membership: AgentMembershipRow | null
+) {
+  return (
+    membership?.starts_at ||
+    getNestedMetaString(payment?.metadata, "activation", "startsAt") ||
+    getMetaString(payment?.metadata, "starts_at") ||
+    payment?.paid_at ||
+    payment?.created_at ||
+    null
+  );
+}
+
+function getPaymentMethod() {
+  return "Debit / Credit Card";
 }
 
 export default function AgentReceiptDetailPage() {
@@ -177,8 +365,8 @@ export default function AgentReceiptDetailPage() {
     ? paymentIdRaw
     : "";
 
-  const [payment, setPayment] = useState<PaymentRow | null>(null);
-  const [billing, setBilling] = useState<BillingRow | null>(null);
+  const [payment, setPayment] = useState<PaymentTransactionRow | null>(null);
+  const [membership, setMembership] = useState<AgentMembershipRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -215,29 +403,47 @@ export default function AgentReceiptDetailPage() {
       }
 
       const { data: paymentData, error: paymentError } = await supabase
-        .from("payments")
+        .from("payment_transactions")
         .select(
           `
             id,
             user_id,
-            receipt_number,
-            billing_record_id,
-            amount,
-            amount_idr,
-            currency,
+            property_id,
+            source_role,
+            payment_type,
+            product_id,
+            product_name_snapshot,
+            product_type,
+            audience_snapshot,
             status,
+            currency,
+            amount_subtotal,
+            amount_discount,
+            amount_tax,
+            amount_total,
+            description,
+            plan_name,
+            duration_days,
+            property_title_snapshot,
+            property_code_snapshot,
+            customer_name,
+            customer_email,
+            customer_phone,
+            checkout_url,
+            checkout_expires_at,
+            stripe_checkout_session_id,
+            stripe_payment_intent_id,
+            stripe_charge_id,
+            stripe_invoice_id,
+            receipt_url,
+            hosted_invoice_url,
+            invoice_pdf_url,
             paid_at,
+            expired_at,
+            failed_at,
+            metadata,
             created_at,
-            payment_method,
-            method,
-            gateway,
-            provider,
-            reference,
-            gateway_reference,
-            product_name,
-            payment_title,
-            payment_description,
-            billing_note
+            updated_at
           `
         )
         .eq("id", paymentId)
@@ -257,39 +463,36 @@ export default function AgentReceiptDetailPage() {
         return;
       }
 
-      setPayment(paymentData as PaymentRow);
+      const paymentRow = paymentData as PaymentTransactionRow;
+      setPayment(paymentRow);
 
-      if (paymentData.billing_record_id) {
-        const { data: billingData } = await supabase
-          .from("billing_records")
-          .select(
-            `
-              id,
-              user_id,
-              invoice_number,
-              customer_name,
-              customer_email,
-              customer_phone,
-              customer_address,
-              listing_code,
-              property_title,
-              property_city,
-              property_province,
-              description,
-              notes
-            `
-          )
-          .eq("id", paymentData.billing_record_id)
-          .eq("user_id", user.id)
-          .maybeSingle();
+      const { data: membershipData } = await supabase
+        .from("agent_memberships")
+        .select(
+          `
+            id,
+            user_id,
+            payment_id,
+            package_id,
+            package_name,
+            billing_cycle,
+            listing_limit,
+            status,
+            auto_renew,
+            starts_at,
+            expires_at,
+            metadata,
+            created_at,
+            updated_at
+          `
+        )
+        .eq("payment_id", paymentRow.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-        if (ignore) return;
+      if (ignore) return;
 
-        setBilling((billingData as BillingRow) || null);
-      } else {
-        setBilling(null);
-      }
-
+      setMembership((membershipData as AgentMembershipRow) || null);
       setLoading(false);
     }
 
@@ -302,10 +505,24 @@ export default function AgentReceiptDetailPage() {
 
   const paymentAmount = useMemo(() => {
     return formatAmount(
-      payment?.amount ?? 0,
-      payment?.amount_idr ?? null,
-      payment?.currency ?? "IDR"
+      payment?.amount_total ?? payment?.amount_subtotal ?? 0,
+      payment?.currency ?? "idr"
     );
+  }, [payment]);
+
+  const subtotalAmount = useMemo(() => {
+    return formatAmount(
+      payment?.amount_subtotal ?? payment?.amount_total ?? 0,
+      payment?.currency ?? "idr"
+    );
+  }, [payment]);
+
+  const discountAmount = useMemo(() => {
+    return formatAmount(payment?.amount_discount ?? 0, payment?.currency ?? "idr");
+  }, [payment]);
+
+  const taxAmount = useMemo(() => {
+    return formatAmount(payment?.amount_tax ?? 0, payment?.currency ?? "idr");
   }, [payment]);
 
   const statusBadgeClass = useMemo(() => {
@@ -318,31 +535,75 @@ export default function AgentReceiptDetailPage() {
 
   const receiptNumber = useMemo(() => {
     return (
-      payment?.receipt_number ||
-      billing?.invoice_number ||
-      payment?.gateway_reference ||
-      payment?.reference ||
+      payment?.stripe_invoice_id ||
+      payment?.stripe_charge_id ||
+      payment?.stripe_payment_intent_id ||
       (payment?.id ? `RCT-${payment.id.slice(0, 8).toUpperCase()}` : "-")
     );
-  }, [payment, billing]);
+  }, [payment]);
+
+  const invoiceNumber = useMemo(() => {
+    return payment?.stripe_invoice_id || "-";
+  }, [payment?.stripe_invoice_id]);
 
   const productTitle = useMemo(() => {
     return (
-      payment?.payment_title ||
-      payment?.product_name ||
-      payment?.payment_description ||
-      billing?.description ||
-      billing?.property_title ||
+      payment?.description ||
+      getMetaString(payment?.metadata, "paymentTitle") ||
+      getMetaString(payment?.metadata, "payment_title") ||
+      getPackageName(payment, membership)
+    );
+  }, [payment, membership]);
+
+  const packageName = useMemo(() => {
+    return getPackageName(payment, membership);
+  }, [payment, membership]);
+
+  const billingType = useMemo(() => {
+    return getBillingCycleLabel(payment, membership, currentLang);
+  }, [payment, membership, currentLang]);
+
+  const paymentType = useMemo(() => {
+    return getPaymentTypeLabel(payment, currentLang);
+  }, [payment, currentLang]);
+
+  const listingLimit = useMemo(() => {
+    return getListingLimit(payment, membership);
+  }, [payment, membership]);
+
+  const startsAt = useMemo(() => {
+    return getStartsAt(payment, membership);
+  }, [payment, membership]);
+
+  const expiryDate = useMemo(() => {
+    return getExpiryDate(payment, membership);
+  }, [payment, membership]);
+
+  const paymentMethod = useMemo(() => {
+    return getPaymentMethod();
+  }, []);
+
+  const referenceNumber = useMemo(() => {
+    return (
+      payment?.stripe_payment_intent_id ||
+      payment?.stripe_charge_id ||
+      payment?.stripe_checkout_session_id ||
+      payment?.id ||
       "-"
     );
-  }, [payment, billing]);
+  }, [payment]);
 
-  const productSubtitle = useMemo(() => {
-    const locationParts = [billing?.property_city, billing?.property_province].filter(
-      Boolean
-    );
-    return locationParts.length > 0 ? locationParts.join(", ") : "-";
-  }, [billing]);
+  const customerName = useMemo(() => {
+    return cleanText(payment?.customer_name || payment?.customer_email);
+  }, [payment]);
+
+  const customerEmail = useMemo(() => {
+    return cleanText(payment?.customer_email);
+  }, [payment]);
+
+  const customerPhone = useMemo(() => {
+    return cleanText(payment?.customer_phone);
+  }, [payment]);
 
   return (
     <main className="bg-[#F7F7F8] text-gray-900">
@@ -410,7 +671,7 @@ export default function AgentReceiptDetailPage() {
 
                 <div className="text-left md:text-right">
                   <p className="text-sm font-bold tracking-tight text-[#1C1C1E] sm:text-lg md:text-2xl lg:text-3xl">
-                    {currentLang === "id" ? "Receipt" : "Receipt"}
+                    Receipt
                   </p>
                   <p className="mt-1 break-words text-[11px] font-medium text-gray-500 sm:text-sm md:text-sm lg:text-base">
                     {receiptNumber}
@@ -430,16 +691,13 @@ export default function AgentReceiptDetailPage() {
                   {currentLang === "id" ? "Diterima Dari" : "Received From"}
                 </p>
                 <p className="mt-3 text-xs font-semibold text-[#1C1C1E] sm:text-sm md:text-lg lg:text-xl">
-                  {billing?.customer_name || "-"}
+                  {customerName}
                 </p>
                 <p className="mt-1 break-all text-[11px] text-gray-500 sm:text-sm md:text-sm">
-                  {billing?.customer_email || "-"}
+                  {customerEmail}
                 </p>
                 <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
-                  {billing?.customer_phone || "-"}
-                </p>
-                <p className="text-[11px] leading-5 text-gray-500 sm:text-sm sm:leading-6 md:text-sm md:leading-6">
-                  {billing?.customer_address || "-"}
+                  {customerPhone}
                 </p>
               </div>
 
@@ -466,8 +724,8 @@ export default function AgentReceiptDetailPage() {
                   <span className="text-gray-500">
                     {currentLang === "id" ? "Nomor Invoice" : "Invoice Number"}
                   </span>
-                  <span className="text-right font-medium text-[#1C1C1E]">
-                    {billing?.invoice_number || "-"}
+                  <span className="break-all text-right font-medium text-[#1C1C1E]">
+                    {invoiceNumber}
                   </span>
                 </div>
 
@@ -476,11 +734,7 @@ export default function AgentReceiptDetailPage() {
                     {currentLang === "id" ? "Metode Pembayaran" : "Payment Method"}
                   </span>
                   <span className="text-right font-medium text-[#1C1C1E]">
-                    {payment.payment_method ||
-                      payment.method ||
-                      payment.gateway ||
-                      payment.provider ||
-                      "-"}
+                    {paymentMethod}
                   </span>
                 </div>
 
@@ -489,7 +743,7 @@ export default function AgentReceiptDetailPage() {
                     {currentLang === "id" ? "Referensi" : "Reference"}
                   </span>
                   <span className="break-all text-right font-medium text-[#1C1C1E]">
-                    {payment.gateway_reference || payment.reference || "-"}
+                    {referenceNumber}
                   </span>
                 </div>
               </div>
@@ -508,18 +762,29 @@ export default function AgentReceiptDetailPage() {
                     </p>
 
                     <p className="mt-2 text-[11px] text-gray-500 sm:text-sm md:text-sm">
-                      {billing?.listing_code
-                        ? `${currentLang === "id" ? "Kode Listing" : "Listing Code"}: ${billing.listing_code}`
-                        : `${currentLang === "id" ? "Kode Listing" : "Listing Code"}: -`}
+                      Package: {packageName}
                     </p>
 
                     <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
-                      {billing?.property_title || "-"}
+                      {currentLang === "id" ? "Tipe Pembayaran" : "Payment Type"}:{" "}
+                      {paymentType}
                     </p>
 
                     <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
-                      {productSubtitle}
+                      {currentLang === "id" ? "Tipe Tagihan" : "Billing Type"}:{" "}
+                      {billingType}
                     </p>
+
+                    <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
+                      Plan Code: {cleanText(payment.product_id)}
+                    </p>
+
+                    {blankText(payment.property_code_snapshot) ? (
+                      <p className="text-[11px] text-gray-500 sm:text-sm md:text-sm">
+                        {currentLang === "id" ? "Kode Listing" : "Listing Code"}:{" "}
+                        {payment.property_code_snapshot}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="text-left md:text-right">
@@ -529,27 +794,141 @@ export default function AgentReceiptDetailPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 px-4 py-4 sm:px-5 sm:py-5 md:grid-cols-[1fr_240px] md:px-6 md:py-6 lg:grid-cols-[1fr_260px]">
-                  <div>
-                    <p className="text-xs leading-6 text-gray-500 sm:text-sm">
-                      {payment.payment_description ||
-                        billing?.description ||
+                <div className="grid gap-4 px-4 py-4 sm:px-5 sm:py-5 md:grid-cols-[1fr_260px] md:px-6 md:py-6 lg:grid-cols-[1fr_300px]">
+                  <div className="grid gap-2 text-xs leading-6 text-gray-600 sm:text-sm">
+                    <p>
+                      {payment.description ||
+                        getMetaString(payment.metadata, "paymentDescription") ||
+                        getMetaString(payment.metadata, "payment_description") ||
                         "-"}
                     </p>
+
+                    <div className="mt-2 grid gap-2 rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                      <div className="flex justify-between gap-3">
+                        <span>{currentLang === "id" ? "Mulai" : "Starts"}</span>
+                        <span className="font-medium text-[#1C1C1E]">
+                          {formatDate(startsAt, locale)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span>{currentLang === "id" ? "Expired" : "Expiry"}</span>
+                        <span className="font-medium text-[#1C1C1E]">
+                          {formatDate(expiryDate, locale)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span>
+                          {currentLang === "id" ? "Limit Listing" : "Listing Limit"}
+                        </span>
+                        <span className="font-medium text-[#1C1C1E]">
+                          {listingLimit > 0
+                            ? currentLang === "id"
+                              ? `${listingLimit} listing aktif`
+                              : `${listingLimit} active listings`
+                            : "-"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span>Auto Renew</span>
+                        <span className="font-medium text-[#1C1C1E]">
+                          {membership?.auto_renew
+                            ? currentLang === "id"
+                              ? "Aktif"
+                              : "Enabled"
+                            : currentLang === "id"
+                            ? "Tidak aktif"
+                            : "Disabled"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="rounded-3xl bg-gray-50 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[11px] font-semibold text-[#1C1C1E] sm:text-sm md:text-sm lg:text-base">
-                        {currentLang === "id" ? "Jumlah Dibayar" : "Amount Paid"}
+                      <span className="text-[11px] font-medium text-gray-500 sm:text-sm">
+                        Subtotal
                       </span>
-                      <span className="break-words text-xs font-bold text-[#1C1C1E] sm:text-sm md:text-lg lg:text-xl">
-                        {paymentAmount}
+                      <span className="break-words text-xs font-semibold text-[#1C1C1E] sm:text-sm">
+                        {subtotalAmount}
                       </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-medium text-gray-500 sm:text-sm">
+                        Discount
+                      </span>
+                      <span className="break-words text-xs font-semibold text-[#1C1C1E] sm:text-sm">
+                        {discountAmount}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-medium text-gray-500 sm:text-sm">
+                        Tax
+                      </span>
+                      <span className="break-words text-xs font-semibold text-[#1C1C1E] sm:text-sm">
+                        {taxAmount}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 border-t border-gray-200 pt-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-semibold text-[#1C1C1E] sm:text-sm md:text-sm lg:text-base">
+                          {currentLang === "id" ? "Jumlah Dibayar" : "Amount Paid"}
+                        </span>
+                        <span className="break-words text-xs font-bold text-[#1C1C1E] sm:text-sm md:text-lg lg:text-xl">
+                          {paymentAmount}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              {(payment.receipt_url ||
+                payment.hosted_invoice_url ||
+                payment.invoice_pdf_url) ? (
+                <div className="mt-5 flex flex-wrap gap-2 print:hidden">
+                  {payment.receipt_url ? (
+                    <a
+                      href={payment.receipt_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Payment Receipt
+                    </a>
+                  ) : null}
+
+                  {payment.hosted_invoice_url ? (
+                    <a
+                      href={payment.hosted_invoice_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Payment Invoice
+                    </a>
+                  ) : null}
+
+                  {payment.invoice_pdf_url ? (
+                    <a
+                      href={payment.invoice_pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 sm:px-4 sm:text-sm"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Invoice PDF
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="grid gap-5 px-4 py-5 sm:px-5 sm:py-6 md:grid-cols-2 md:px-7 md:py-7 lg:px-8 lg:py-8">
@@ -558,8 +937,8 @@ export default function AgentReceiptDetailPage() {
                   {currentLang === "id" ? "Catatan" : "Notes"}
                 </p>
                 <p className="mt-3 whitespace-pre-line text-xs leading-6 text-gray-600 sm:text-sm md:text-sm lg:text-base lg:leading-7">
-                  {payment.billing_note ||
-                    billing?.notes ||
+                  {getMetaString(payment.metadata, "billingNote") ||
+                    getMetaString(payment.metadata, "billing_note") ||
                     (currentLang === "id"
                       ? "Tidak ada catatan tambahan."
                       : "No additional notes.")}
