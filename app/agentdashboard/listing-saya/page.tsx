@@ -16,6 +16,9 @@ import {
   CirclePause,
   Star,
   ShieldCheck,
+  PackageCheck,
+  CreditCard,
+  PlusCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { notifyAdmins } from "@/lib/notifications";
@@ -83,9 +86,21 @@ type PropertyImageRow = {
   is_cover: boolean | null;
 };
 
-type LeadRow = {
+type AgentMembershipRow = {
   id: string;
-  property_id: string | null;
+  user_id: string | null;
+  payment_id: string | null;
+  package_id: string | null;
+  package_name: string | null;
+  billing_cycle: string | null;
+  listing_limit: number | null;
+  status: string | null;
+  auto_renew: boolean | null;
+  starts_at: string | null;
+  expires_at: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 /* =========================
@@ -122,6 +137,11 @@ function computeStatus(listingExpiresAt: string | null): ListingStatus {
   if (daysLeft < 0) return "KADALUWARSA";
   if (daysLeft <= 7) return "AKAN_KADALUWARSA";
   return "AKTIF";
+}
+
+function shouldCountAsUsedSlot(listing: Listing) {
+  if (listing.transactionStatus !== "available") return false;
+  return computeStatus(listing.listingExpiresAt) !== "KADALUWARSA";
 }
 
 function computeStats(listings: Listing[]) {
@@ -308,6 +328,47 @@ function mapPropertiesWithImages(
   });
 }
 
+function getMembershipNumber(
+  membership: AgentMembershipRow | null,
+  key: string
+) {
+  const direct = Number((membership as any)?.[key] || 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const fromMetadata = Number(membership?.metadata?.[key] || 0);
+  if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata;
+
+  return 0;
+}
+
+function getMembershipListingLimit(membership: AgentMembershipRow | null) {
+  return (
+    getMembershipNumber(membership, "listing_limit") ||
+    getMembershipNumber(membership, "listingLimit") ||
+    getMembershipNumber(membership, "active_listing_limit") ||
+    getMembershipNumber(membership, "activeListingLimit")
+  );
+}
+
+function isMembershipActive(membership: AgentMembershipRow | null) {
+  if (!membership) return false;
+  if (membership.status !== "active") return false;
+
+  if (!membership.expires_at) return true;
+
+  const expiresAt = new Date(membership.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) return true;
+
+  return expiresAt.getTime() >= new Date().getTime();
+}
+
+function getBillingCycleLabel(value: string | null | undefined) {
+  const v = String(value || "").toLowerCase();
+  if (v === "monthly") return "Bulanan";
+  if (v === "yearly") return "Tahunan";
+  return "-";
+}
+
 /* =========================
    PAGE
 ========================= */
@@ -316,6 +377,7 @@ export default function AgentListingSayaPage() {
   const router = useRouter();
   const { userId, loadingProfile } = useAgentProfile();
 
+  const [memberships, setMemberships] = useState<AgentMembershipRow[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
   const [loadingPage, setLoadingPage] = useState(true);
@@ -335,6 +397,7 @@ export default function AgentListingSayaPage() {
     async function loadPageData() {
       if (!userId) {
         if (isMounted) {
+          setMemberships([]);
           setListings([]);
           setTotalLeads(0);
           setLoadingPage(false);
@@ -348,9 +411,18 @@ export default function AgentListingSayaPage() {
       }
 
       const [
+        { data: membershipsData, error: membershipsError },
         { data: propertiesData, error: propertiesError },
         { count: leadsCount, error: leadsError },
       ] = await Promise.all([
+        supabase
+          .from("agent_memberships")
+          .select(
+            "id, user_id, payment_id, package_id, package_name, billing_cycle, listing_limit, status, auto_renew, starts_at, expires_at, metadata, created_at, updated_at"
+          )
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+
         supabase
           .from("properties")
           .select(
@@ -360,6 +432,7 @@ export default function AgentListingSayaPage() {
           .eq("source", "agent")
           .neq("status", "rejected")
           .order("created_at", { ascending: false }),
+
         supabase
           .from("leads")
           .select("*", { count: "exact", head: true })
@@ -368,6 +441,12 @@ export default function AgentListingSayaPage() {
       ]);
 
       if (!isMounted) return;
+
+      if (membershipsError) {
+        setErrorMessage(membershipsError.message);
+        setLoadingPage(false);
+        return;
+      }
 
       if (propertiesError) {
         setErrorMessage(propertiesError.message);
@@ -406,6 +485,7 @@ export default function AgentListingSayaPage() {
 
       const mappedListings = mapPropertiesWithImages(propertyRows, imageRows);
 
+      setMemberships((membershipsData || []) as AgentMembershipRow[]);
       setListings(mappedListings);
       setTotalLeads(leadsCount || 0);
       setLoadingPage(false);
@@ -419,6 +499,33 @@ export default function AgentListingSayaPage() {
       isMounted = false;
     };
   }, [userId, loadingProfile]);
+
+  const activeMembership = useMemo(() => {
+    const active = memberships.find((membership) => isMembershipActive(membership));
+    return active || null;
+  }, [memberships]);
+
+  const latestMembership = useMemo(() => {
+    return activeMembership || memberships[0] || null;
+  }, [activeMembership, memberships]);
+
+  const membershipListingLimit = useMemo(() => {
+    return getMembershipListingLimit(activeMembership);
+  }, [activeMembership]);
+
+  const usedListingSlots = useMemo(() => {
+    return listings.filter(shouldCountAsUsedSlot).length;
+  }, [listings]);
+
+  const remainingListingSlots = Math.max(
+    membershipListingLimit - usedListingSlots,
+    0
+  );
+
+  const canCreateListing =
+    Boolean(activeMembership) &&
+    membershipListingLimit > 0 &&
+    remainingListingSlots > 0;
 
   const computedStats = useMemo(() => {
     const stats = computeStats(listings);
@@ -451,6 +558,10 @@ export default function AgentListingSayaPage() {
     Math.ceil(filteredListings.length / ITEMS_PER_PAGE)
   );
 
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   const paginatedListings = useMemo(() => {
     const start = (page - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
@@ -461,6 +572,27 @@ export default function AgentListingSayaPage() {
     filteredListings.length === 0 ? 0 : (page - 1) * ITEMS_PER_PAGE + 1;
 
   const endItem = Math.min(page * ITEMS_PER_PAGE, filteredListings.length);
+
+  function handleCreateListing() {
+    if (!activeMembership) {
+      router.push("/agentdashboard/paket");
+      return;
+    }
+
+    if (membershipListingLimit <= 0) {
+      alert("Paket Anda belum memiliki limit listing aktif.");
+      return;
+    }
+
+    if (remainingListingSlots <= 0) {
+      alert(
+        "Limit listing aktif Anda sudah penuh. Tandai listing sebagai sold/rented atau upgrade paket untuk menambah listing."
+      );
+      return;
+    }
+
+    router.push("/agentdashboard/propertilokasi");
+  }
 
   function openAgentPayment(params: Record<string, string>) {
     const query = new URLSearchParams({
@@ -500,7 +632,7 @@ export default function AgentListingSayaPage() {
     setTogglingId(null);
   }
 
-  async function activateAddon(item: Listing, addon: "boost" | "spotlight") {
+  function activateAddon(item: Listing, addon: "boost" | "spotlight") {
     if (!userId) return;
     if (item.isPendingVerification) return;
     if (item.transactionStatus !== "available") return;
@@ -508,37 +640,12 @@ export default function AgentListingSayaPage() {
     const loadingKey = `${item.id}-${addon}`;
     setActivatingAddonId(loadingKey);
 
-    const payload =
-      addon === "boost"
-        ? { boost_active: true }
-        : { spotlight_active: true };
-
-    const { error } = await supabase
-      .from("properties")
-      .update(payload)
-      .eq("id", item.id)
-      .eq("user_id", userId);
-
-    if (error) {
-      setActivatingAddonId(null);
-      alert(error.message || "Gagal mengaktifkan add-on.");
-      return;
-    }
-
-    setListings((prev) =>
-      prev.map((listing) =>
-        listing.id === item.id
-          ? {
-              ...listing,
-              boostActive: addon === "boost" ? true : listing.boostActive,
-              spotlightActive:
-                addon === "spotlight" ? true : listing.spotlightActive,
-            }
-          : listing
-      )
-    );
-
-    setActivatingAddonId(null);
+    openAgentPayment({
+      flow: "addon",
+      product: addon === "boost" ? "boost-listing" : "homepage-spotlight",
+      kode: item.kode,
+      propertyId: item.id,
+    });
   }
 
   async function markTransaction(
@@ -611,7 +718,7 @@ export default function AgentListingSayaPage() {
 
   return (
     <div className="min-w-0">
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
             Listing Saya
@@ -621,12 +728,32 @@ export default function AgentListingSayaPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => router.push("/agentdashboard/leads")}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto sm:py-2.5"
-        >
-          + Lihat Leads
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto xl:justify-end">
+          <button
+            onClick={() => router.push("/agentdashboard/leads")}
+            className="inline-flex w-full items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-[#1C1C1E] shadow-sm hover:bg-gray-50 sm:w-auto sm:py-2.5"
+          >
+            Lihat Leads
+          </button>
+
+          <button
+            onClick={handleCreateListing}
+            disabled={isLoading}
+            className={[
+              "inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold shadow-sm transition sm:w-auto sm:py-2.5",
+              canCreateListing
+                ? "bg-[#1C1C1E] text-white hover:opacity-90"
+                : "border border-gray-300 bg-gray-100 text-gray-500 hover:bg-gray-100",
+            ].join(" ")}
+          >
+            <PlusCircle className="h-4 w-4" />
+            {!activeMembership
+              ? "Pilih Paket"
+              : remainingListingSlots <= 0
+              ? "Limit Penuh"
+              : "Tambah Listing"}
+          </button>
+        </div>
       </div>
 
       {errorMessage ? (
@@ -635,7 +762,124 @@ export default function AgentListingSayaPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm">
+            <PackageCheck className="h-4 w-4" />
+            Paket Aktif
+          </div>
+          <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            {isLoading ? "..." : activeMembership?.package_name || "-"}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {latestMembership
+              ? `${getBillingCycleLabel(latestMembership.billing_cycle)} • Expired ${formatDisplayDate(
+                  latestMembership.expires_at
+                )}`
+              : "Belum ada paket aktif"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm">
+            <ShieldCheck className="h-4 w-4" />
+            Limit Listing
+          </div>
+          <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            {isLoading
+              ? "..."
+              : membershipListingLimit > 0
+              ? `${usedListingSlots}/${membershipListingLimit}`
+              : "-"}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {isLoading
+              ? "Memuat..."
+              : membershipListingLimit > 0
+              ? `${remainingListingSlots} slot tersisa`
+              : "Pilih paket untuk membuka listing"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm">
+            <CreditCard className="h-4 w-4" />
+            Status Paket
+          </div>
+          <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            {isLoading
+              ? "..."
+              : activeMembership
+              ? "Aktif"
+              : latestMembership
+              ? "Tidak Aktif"
+              : "-"}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {activeMembership?.auto_renew ? "Auto renew aktif" : "Auto renew tidak aktif"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm">
+            <Clock3 className="h-4 w-4" />
+            Expired
+          </div>
+          <p className="mt-2 text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            {isLoading ? "..." : formatDisplayDate(activeMembership?.expires_at || null)}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {activeMembership
+              ? "Membership aktif"
+              : "Membership belum aktif / sudah expired"}
+          </p>
+        </div>
+      </div>
+
+      {!activeMembership && !isLoading ? (
+        <div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">Paket agen belum aktif.</p>
+              <p className="mt-1 leading-6">
+                Untuk membuat listing, aktifkan paket agen terlebih dahulu.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push("/agentdashboard/paket")}
+              className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white sm:w-auto"
+            >
+              Pilih Paket
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {activeMembership && remainingListingSlots <= 0 && !isLoading ? (
+        <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">Limit listing aktif sudah penuh.</p>
+              <p className="mt-1 leading-6">
+                Listing yang sudah sold/rented tidak dihitung sebagai slot aktif.
+                Tandai listing selesai atau upgrade paket untuk menambah kapasitas.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push("/agentdashboard/paket")}
+              className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white sm:w-auto"
+            >
+              Upgrade Paket
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard
           title="Total Listing"
           value={isLoading ? "..." : computedStats.totalIklan}
@@ -669,21 +913,18 @@ export default function AgentListingSayaPage() {
             setPage(1);
           }}
           placeholder="Cari seperti Google: jakarta rumah 2.5, TTM-2026, apartemen pusat..."
-          className="w-full rounded-2xl border border-gray-300 py-3 pl-12 pr-4 text-sm outline-none focus:border-[#1C1C1E] placeholder-gray-500"
+          className="w-full rounded-2xl border border-gray-300 py-3 pl-12 pr-4 text-sm outline-none placeholder-gray-500 focus:border-[#1C1C1E]"
         />
       </div>
 
       <div className="mt-8 rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-4 sm:p-6">
-          <div>
-            <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
-              Listing Saya
-            </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Daftar listing yang sedang Anda tangani beserta status dan aksi
-              cepat.
-            </p>
-          </div>
+          <h2 className="text-base font-semibold text-[#1C1C1E] sm:text-lg">
+            Listing Saya
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Daftar listing yang sedang Anda tangani beserta status dan aksi cepat.
+          </p>
         </div>
 
         <div className="divide-y divide-gray-100">
@@ -727,7 +968,7 @@ export default function AgentListingSayaPage() {
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                        <div className="h-56 w-full overflow-hidden rounded-xl bg-gray-100 sm:h-24 sm:w-36 lg:h-28 lg:w-40 shrink-0">
+                        <div className="h-56 w-full shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-24 sm:w-36 lg:h-28 lg:w-40">
                           <img
                             src={cover}
                             alt={item.title}
@@ -744,19 +985,19 @@ export default function AgentListingSayaPage() {
                               {ui.label}
                             </span>
 
-                            {item.boostActive && !isClosed && !isPending && (
+                            {item.boostActive && !isClosed && !isPending ? (
                               <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
                                 <Star className="h-3.5 w-3.5" />
                                 Boosted
                               </span>
-                            )}
+                            ) : null}
 
-                            {item.spotlightActive && !isClosed && !isPending && (
+                            {item.spotlightActive && !isClosed && !isPending ? (
                               <span className="inline-flex items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs text-purple-700">
                                 <Gem className="h-4 w-4" />
                                 Spotlight
                               </span>
-                            )}
+                            ) : null}
                           </div>
 
                           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
@@ -776,8 +1017,8 @@ export default function AgentListingSayaPage() {
                       </div>
                     </div>
 
-                    <div className="w-full xl:w-auto xl:max-w-[520px]">
-                      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                    <div className="w-full xl:w-auto xl:max-w-[540px]">
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                         <button
                           onClick={() =>
                             router.push(
@@ -792,19 +1033,19 @@ export default function AgentListingSayaPage() {
                         </button>
 
                         {!isClosed &&
-                          !isPending &&
-                          baseStatus === "AKTIF" &&
-                          !item.isPaused && (
-                            <button
-                              onClick={() => toggleJeda(item)}
-                              disabled={isToggling}
-                              className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                            >
-                              {isToggling ? "Loading..." : "Jeda"}
-                            </button>
-                          )}
+                        !isPending &&
+                        baseStatus === "AKTIF" &&
+                        !item.isPaused ? (
+                          <button
+                            onClick={() => toggleJeda(item)}
+                            disabled={isToggling}
+                            className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            {isToggling ? "Loading..." : "Jeda"}
+                          </button>
+                        ) : null}
 
-                        {!isClosed && !isPending && item.isPaused && (
+                        {!isClosed && !isPending && item.isPaused ? (
                           <button
                             onClick={() => toggleJeda(item)}
                             disabled={isToggling}
@@ -812,9 +1053,9 @@ export default function AgentListingSayaPage() {
                           >
                             {isToggling ? "Loading..." : "Aktifkan"}
                           </button>
-                        )}
+                        ) : null}
 
-                        {!isClosed && !isPending && (
+                        {!isClosed && !isPending ? (
                           <>
                             <button
                               onClick={() => markTransaction(item, "sold")}
@@ -832,48 +1073,50 @@ export default function AgentListingSayaPage() {
                               {isMarking ? "Loading..." : "Rented"}
                             </button>
                           </>
-                        )}
+                        ) : null}
 
                         {!isClosed &&
-                          !isPending &&
-                          baseStatus !== "AKTIF" &&
-                          !item.isPaused && (
-                            <button
-                              onClick={() =>
-                                openAgentPayment({
-                                  kode: item.kode,
-                                  propertyId: item.id,
-                                  action: "renew",
-                                })
-                              }
-                              className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90"
-                            >
-                              Perpanjang
-                            </button>
-                          )}
+                        !isPending &&
+                        baseStatus !== "AKTIF" &&
+                        !item.isPaused ? (
+                          <button
+                            onClick={() => router.push("/agentdashboard/paket")}
+                            className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90"
+                          >
+                            Perpanjang Paket
+                          </button>
+                        ) : null}
                       </div>
 
-                      {!isClosed && !isPending && (
-                        <div className="mt-3 flex flex-wrap items-center gap-2 xl:justify-end xl:border-l xl:border-gray-200 xl:pl-3">
+                      {!isClosed && !isPending ? (
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end xl:border-l xl:border-gray-200 xl:pl-3">
                           <button
                             onClick={() => activateAddon(item, "boost")}
                             disabled={isBoosting}
-                            className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
                           >
                             <Star className="h-4 w-4" />
-                            {isBoosting ? "Loading..." : "Boost"}
+                            {isBoosting
+                              ? "Loading..."
+                              : item.boostActive
+                              ? "Renew Boost"
+                              : "Boost"}
                           </button>
 
                           <button
                             onClick={() => activateAddon(item, "spotlight")}
                             disabled={isSpotlighting}
-                            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                           >
                             <Gem className="h-4 w-4" />
-                            {isSpotlighting ? "Loading..." : "Spotlight"}
+                            {isSpotlighting
+                              ? "Loading..."
+                              : item.spotlightActive
+                              ? "Renew Spotlight"
+                              : "Spotlight"}
                           </button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
