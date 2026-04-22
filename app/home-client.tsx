@@ -9,6 +9,7 @@ import {
   Bookmark,
   Share2,
   Star,
+  Eye,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +36,7 @@ type HomepagePropertyRow = {
   posted_date: string | null;
   created_at: string | null;
   title: string | null;
+  view_count: number | null;
   price: number | null;
   province: string | null;
   city: string | null;
@@ -85,6 +87,7 @@ type HomepageProfileRow = {
 type FeaturedProperty = {
   id: string;
   title: string;
+  viewCount: number;
   images: string[];
   price: string;
   province: string;
@@ -106,6 +109,7 @@ type FeaturedProperty = {
 type FeaturedOwnerProperty = {
   id: string;
   title: string;
+  viewCount: number;
   ownerName: string;
   ownerWhatsapp: string;
   receiverId: string;
@@ -164,6 +168,15 @@ function formatPostedDate(value?: string | null) {
     month: "short",
     year: "numeric",
   }).format(d);
+}
+
+function formatCompactNumber(value: number | null | undefined) {
+  const safeValue = Number(value ?? 0);
+
+  return new Intl.NumberFormat("en", {
+    notation: safeValue >= 1000 ? "compact" : "standard",
+    maximumFractionDigits: safeValue >= 1000 ? 1 : 0,
+  }).format(safeValue);
 }
 
 function mapFurnishing(value?: string | null) {
@@ -407,6 +420,7 @@ async function fetchHomepageProperties() {
       posted_date,
       created_at,
       title,
+      view_count,
       price,
       province,
       city,
@@ -1353,9 +1367,17 @@ Is this property still available?`
       </div>
 
       <div className="p-4 sm:p-5">
-        <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
-          {property.price}
-        </h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 text-lg font-bold text-[#1C1C1E] sm:text-xl">
+            {property.price}
+          </h3>
+
+          <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700 sm:text-xs">
+            <Eye className="h-3.5 w-3.5" />
+            <span>{formatCompactNumber(property.viewCount)}</span>
+            <span>{lang === "id" ? "Dilihat" : "Views"}</span>
+          </div>
+        </div>
 
         <h4 className="mt-2 text-[15px] font-semibold leading-6 text-[#1C1C1E] sm:text-base">
           {property.title}
@@ -1509,9 +1531,17 @@ function FeaturedOwnerPropertyCard({
       </div>
 
       <div className="p-4 sm:p-5">
-        <h3 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
-          {property.price}
-        </h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="min-w-0 text-lg font-bold text-[#1C1C1E] sm:text-xl">
+            {property.price}
+          </h3>
+
+          <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700 sm:text-xs">
+            <Eye className="h-3.5 w-3.5" />
+            <span>{formatCompactNumber(property.viewCount)}</span>
+            <span>{lang === "id" ? "Dilihat" : "Views"}</span>
+          </div>
+        </div>
 
         <h4 className="mt-2 text-[15px] font-semibold leading-6 text-[#1C1C1E] sm:text-base">
           {property.title}
@@ -1645,6 +1675,7 @@ function FeaturedPropertiesSection() {
           return {
             id: row.id,
             title: row.title ?? "-",
+            viewCount: Number(row.view_count ?? 0),
             images: buildPropertyImages(row.property_images),
             price: formatIdr(row.price ?? 0),
             province: row.province ?? row.city ?? row.area ?? "-",
@@ -1985,6 +2016,7 @@ function FeaturedOwnersSection() {
           return {
             id: row.id,
             title: row.title ?? "-",
+            viewCount: Number(row.view_count ?? 0),
             ownerName: row.contact_name || profile?.full_name || "Tetamo Owner",
             ownerWhatsapp: normalizeWhatsapp(
               row.contact_phone || profile?.phone || ""
@@ -2086,14 +2118,14 @@ export default function HomeClient() {
         <div className="mx-auto max-w-5xl">
           <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[35px] md:text-5xl lg:text-[42px]">
             {lang === "id"
-              ? "Pasang Iklan di TeTamo"
-              : "Advertise at TeTamo"}
+              ? "Iklankan Lebih Cerdas dengan TeTaMo"
+              : "Advertise Smarter with TeTaMo"}
           </h1>
 
           <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
             {lang === "id"
-              ? "PROPERTY • BUSINESS • LIFESTYLE — Transparan, Profesional, dan Fokus pada klien yang serius."
-              : "PROPERTY • BUSINESS • LIFESTYLE — Transparent, Professional, and Focused on serious clients."}
+              ? "Properti • Profesional • Transparan • Fokus pada Pembeli & Penyewa."
+              : "Property • Professional • Transparent • Buyer & Renter Focused."}
           </p>
 
           <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">

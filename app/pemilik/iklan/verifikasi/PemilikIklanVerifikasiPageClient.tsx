@@ -212,14 +212,19 @@ export default function PemilikIklanVerifikasiPageClient() {
 
       const verification = (draft?.verification || {}) as Record<string, any>;
 
-      const propertyPayload = {
+      const propertyPayload: Record<string, any> = {
         user_id: user.id,
 
         title: cleanText(draft?.title) || "",
+        title_id: cleanText((draft as any)?.title_id),
+
         listing_type: cleanText(draft?.listingType),
         property_type: cleanText(draft?.propertyType),
         price: cleanNumber(draft?.price),
+
         description: cleanText(draft?.description) || "",
+        description_id: cleanText((draft as any)?.description_id),
+
         market_type: cleanText(draft?.marketType),
 
         status: "active",
@@ -305,7 +310,7 @@ export default function PemilikIklanVerifikasiPageClient() {
 
       const { data: insertedProperty, error: propertyError } = await supabase
         .from("properties")
-        .insert(propertyPayload)
+        .insert(propertyPayload as any)
         .select("id, kode")
         .single();
 

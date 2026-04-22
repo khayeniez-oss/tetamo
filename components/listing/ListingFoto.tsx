@@ -16,7 +16,9 @@ type DraftMedia = {
   coverIndex?: number;
   video?: string;
   title?: string;
+  title_id?: string;
   description?: string;
+  description_id?: string;
   mediaFolder?: string;
   mode?: "create" | "edit";
   source?: "owner" | "agent";
@@ -133,8 +135,10 @@ export default function ListingFoto({
           uploading: "Mengupload...",
           removeAll: "Hapus semua",
           noPhotosYet: "Belum ada foto.",
-          propertyTitle: "Judul Properti",
-          description: "Deskripsi",
+          englishTitle: "Judul Properti Bahasa Inggris",
+          indonesianTitle: "Judul Properti Bahasa Indonesia",
+          englishDescription: "Deskripsi Bahasa Inggris",
+          indonesianDescription: "Deskripsi Bahasa Indonesia",
           submitForApproval: "Submit untuk Persetujuan",
           saveAndContinue: "Simpan & Lanjutkan",
           videoOptional: "Video (Opsional)",
@@ -158,9 +162,11 @@ export default function ListingFoto({
             "Gunakan file hasil export yang sudah dikompres.",
           videoGuideRawPhone:
             "Jangan upload video mentah langsung dari HP.",
-          titleRequired: "Judul properti wajib diisi.",
+          englishTitleRequired: "Judul Bahasa Inggris wajib diisi.",
+          indonesianTitleRequired: "Judul Bahasa Indonesia wajib diisi.",
           titleLimit: "Judul maksimal 150 karakter.",
-          descRequired: "Deskripsi wajib diisi.",
+          englishDescRequired: "Deskripsi Bahasa Inggris wajib diisi.",
+          indonesianDescRequired: "Deskripsi Bahasa Indonesia wajib diisi.",
           descLimit: "Deskripsi maksimal 2000 karakter.",
           coverNote: "Klik foto kecil untuk memilih cover.",
           titleGuide1: "Maksimal 150 karakter.",
@@ -181,8 +187,10 @@ export default function ListingFoto({
           uploading: "Uploading...",
           removeAll: "Remove all",
           noPhotosYet: "No photos yet.",
-          propertyTitle: "Property Title",
-          description: "Description",
+          englishTitle: "English Property Title",
+          indonesianTitle: "Indonesian Property Title",
+          englishDescription: "English Description",
+          indonesianDescription: "Indonesian Description",
           submitForApproval: "Submit for Approval",
           saveAndContinue: "Save & Continue",
           videoOptional: "Video (Optional)",
@@ -204,9 +212,11 @@ export default function ListingFoto({
           videoGuideResolution: "Use 1080p or 720p resolution.",
           videoGuideCompressed: "Use a compressed export.",
           videoGuideRawPhone: "Do not upload raw phone video.",
-          titleRequired: "Property title is required.",
+          englishTitleRequired: "English property title is required.",
+          indonesianTitleRequired: "Indonesian property title is required.",
           titleLimit: "Title must be 150 characters or less.",
-          descRequired: "Description is required.",
+          englishDescRequired: "English description is required.",
+          indonesianDescRequired: "Indonesian description is required.",
           descLimit: "Description must be 2000 characters or less.",
           coverNote: "Click a thumbnail to choose the cover image.",
           titleGuide1: "Maximum 150 characters.",
@@ -224,8 +234,12 @@ export default function ListingFoto({
   const [coverIndex, setCoverIndex] = useState<number>(initial.coverIndex ?? 0);
   const [video, setVideo] = useState<string>(initial.video ?? "");
   const [title, setTitle] = useState<string>(initial.title ?? "");
+  const [titleId, setTitleId] = useState<string>(initial.title_id ?? "");
   const [description, setDescription] = useState<string>(
     initial.description ?? ""
+  );
+  const [descriptionId, setDescriptionId] = useState<string>(
+    initial.description_id ?? ""
   );
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -245,7 +259,9 @@ export default function ListingFoto({
     setCoverIndex((draft as any)?.coverIndex ?? 0);
     setVideo((draft as any)?.video ?? "");
     setTitle((draft as any)?.title ?? "");
+    setTitleId((draft as any)?.title_id ?? "");
     setDescription((draft as any)?.description ?? "");
+    setDescriptionId((draft as any)?.description_id ?? "");
 
     hydratedRef.current = true;
   }, [draft]);
@@ -259,9 +275,20 @@ export default function ListingFoto({
       coverIndex,
       video,
       title,
+      title_id: titleId,
       description,
+      description_id: descriptionId,
     }));
-  }, [photos, coverIndex, video, title, description, setDraft]);
+  }, [
+    photos,
+    coverIndex,
+    video,
+    title,
+    titleId,
+    description,
+    descriptionId,
+    setDraft,
+  ]);
 
   useEffect(() => {
     if (photos.length === 0) {
@@ -278,10 +305,14 @@ export default function ListingFoto({
       photos.length >= MIN_PHOTOS &&
       title.trim().length > 0 &&
       title.length <= MAX_TITLE &&
+      titleId.trim().length > 0 &&
+      titleId.length <= MAX_TITLE &&
       description.trim().length > 0 &&
-      description.length <= MAX_DESC
+      description.length <= MAX_DESC &&
+      descriptionId.trim().length > 0 &&
+      descriptionId.length <= MAX_DESC
     );
-  }, [photos.length, title, description]);
+  }, [photos.length, title, titleId, description, descriptionId]);
 
   const primaryButtonLabel = shouldSubmitForApproval
     ? t.submitForApproval
@@ -289,12 +320,16 @@ export default function ListingFoto({
 
   const helperMessage = useMemo(() => {
     if (photos.length < MIN_PHOTOS) return t.minPhotos;
-    if (title.trim().length === 0) return t.titleRequired;
+    if (title.trim().length === 0) return t.englishTitleRequired;
     if (title.length > MAX_TITLE) return t.titleLimit;
-    if (description.trim().length === 0) return t.descRequired;
+    if (titleId.trim().length === 0) return t.indonesianTitleRequired;
+    if (titleId.length > MAX_TITLE) return t.titleLimit;
+    if (description.trim().length === 0) return t.englishDescRequired;
     if (description.length > MAX_DESC) return t.descLimit;
+    if (descriptionId.trim().length === 0) return t.indonesianDescRequired;
+    if (descriptionId.length > MAX_DESC) return t.descLimit;
     return "";
-  }, [photos.length, title, description, t]);
+  }, [photos.length, title, titleId, description, descriptionId, t]);
 
   async function ensureUserAndFolder() {
     const {
@@ -654,7 +689,9 @@ export default function ListingFoto({
                       htmlFor={videoInputId}
                       className={[
                         "inline-flex flex-1 items-center justify-center rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-center text-sm font-semibold",
-                        uploadingVideo ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                        uploadingVideo
+                          ? "cursor-not-allowed opacity-60"
+                          : "cursor-pointer",
                       ].join(" ")}
                       onClick={(e) => {
                         if (uploadingVideo) {
@@ -705,7 +742,7 @@ export default function ListingFoto({
 
             <div className="mt-8 border-t border-gray-100 pt-8 sm:mt-10 sm:pt-10">
               <div className="flex items-center justify-between gap-3 text-sm">
-                <label className="font-semibold">{t.propertyTitle} *</label>
+                <label className="font-semibold">{t.englishTitle} *</label>
                 <span className="shrink-0 text-gray-500">
                   {title.length}/{MAX_TITLE}
                 </span>
@@ -723,6 +760,25 @@ export default function ListingFoto({
                 maxLength={MAX_TITLE}
               />
 
+              <div className="mt-5 flex items-center justify-between gap-3 text-sm">
+                <label className="font-semibold">{t.indonesianTitle} *</label>
+                <span className="shrink-0 text-gray-500">
+                  {titleId.length}/{MAX_TITLE}
+                </span>
+              </div>
+
+              <input
+                value={titleId}
+                onChange={(e) => {
+                  const nextValue = capitalizeFirstLetter(e.target.value);
+                  if (nextValue.length <= MAX_TITLE) {
+                    setTitleId(nextValue);
+                  }
+                }}
+                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] focus:ring-0"
+                maxLength={MAX_TITLE}
+              />
+
               <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 <ul className="list-disc space-y-1 pl-5">
                   <li>{t.titleGuide1}</li>
@@ -732,7 +788,9 @@ export default function ListingFoto({
               </div>
 
               <div className="mt-6 flex items-center justify-between gap-3 text-sm">
-                <label className="font-semibold">{t.description} *</label>
+                <label className="font-semibold">
+                  {t.englishDescription} *
+                </label>
                 <span className="shrink-0 text-gray-500">
                   {description.length}/{MAX_DESC}
                 </span>
@@ -743,6 +801,26 @@ export default function ListingFoto({
                 onChange={(e) => {
                   if (e.target.value.length <= MAX_DESC) {
                     setDescription(capitalizeFirstLetter(e.target.value));
+                  }
+                }}
+                className="mt-2 min-h-[220px] w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] focus:ring-0 sm:min-h-[240px]"
+                maxLength={MAX_DESC}
+              />
+
+              <div className="mt-6 flex items-center justify-between gap-3 text-sm">
+                <label className="font-semibold">
+                  {t.indonesianDescription} *
+                </label>
+                <span className="shrink-0 text-gray-500">
+                  {descriptionId.length}/{MAX_DESC}
+                </span>
+              </div>
+
+              <textarea
+                value={descriptionId}
+                onChange={(e) => {
+                  if (e.target.value.length <= MAX_DESC) {
+                    setDescriptionId(capitalizeFirstLetter(e.target.value));
                   }
                 }}
                 className="mt-2 min-h-[220px] w-full resize-y rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] focus:ring-0 sm:min-h-[240px]"

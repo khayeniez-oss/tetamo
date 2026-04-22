@@ -298,7 +298,7 @@ export default function AgentDeskripsiFotoPage() {
 
       const coverImageUrl = photos[coverIndex] || photos[0] || null;
 
-      const insertPayload = {
+      const insertPayload: Record<string, any> = {
         user_id: user.id,
         created_by_user_id: user.id,
 
@@ -318,7 +318,10 @@ export default function AgentDeskripsiFotoPage() {
         market_type: cleanText(draft?.marketType),
 
         title: cleanText(draft?.title),
+        title_id: cleanText((draft as any)?.title_id),
+
         description: cleanText(draft?.description),
+        description_id: cleanText((draft as any)?.description_id),
 
         price: cleanNumber(draft?.price),
 
@@ -371,7 +374,7 @@ export default function AgentDeskripsiFotoPage() {
 
       const { data: insertedProperty, error: insertError } = await supabase
         .from("properties")
-        .insert(insertPayload)
+        .insert(insertPayload as any)
         .select("id, kode")
         .single();
 

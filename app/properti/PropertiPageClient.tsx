@@ -15,6 +15,7 @@ import {
   Star,
   Search,
   Share2,
+  Eye,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
@@ -51,6 +52,11 @@ type Property = {
   sortDateRaw?: string | null;
 
   title: string;
+  titleId?: string;
+  description?: string;
+  descriptionId?: string;
+  viewCount: number;
+
   priceValue: number;
   province: string;
   area: string;
@@ -82,7 +88,13 @@ type PropertyRow = {
   slug: string | null;
   kode: string | null;
   posted_date: string | null;
+
   title: string | null;
+  title_id: string | null;
+  description: string | null;
+  description_id: string | null;
+  view_count: number | null;
+
   price: number | null;
   province: string | null;
   city: string | null;
@@ -239,6 +251,14 @@ function formatPostedDate(value?: string | null) {
   }).format(d);
 }
 
+function formatCompactNumber(value: number | null | undefined) {
+  const safeValue = Number(value ?? 0);
+  return new Intl.NumberFormat("en", {
+    notation: safeValue >= 1000 ? "compact" : "standard",
+    maximumFractionDigits: safeValue >= 1000 ? 1 : 0,
+  }).format(safeValue);
+}
+
 function mapFurnishing(value?: string | null, lang?: string) {
   if (!value) return "-";
 
@@ -379,6 +399,14 @@ function getPropertyHref(property: { slug?: string; id: string }) {
   return `/properti/${property.slug || property.id}`;
 }
 
+function getLocalizedPropertyTitle(property: Property, lang: string) {
+  if (lang === "id") {
+    return property.titleId || property.title || "-";
+  }
+
+  return property.title || property.titleId || "-";
+}
+
 function FilterChip({
   href,
   active,
@@ -439,6 +467,7 @@ function PropertyCard({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const cardViewTrackedRef = useRef(false);
 
+  const displayTitle = getLocalizedPropertyTitle(p, lang);
   const displayPrice = formatPriceByCurrency(p.priceValue, currentCurrency);
   const secondaryPrice = formatSecondaryPrice(p.priceValue, currentCurrency);
 
@@ -468,7 +497,7 @@ function PropertyCard({
             property_id: p.id,
             source_page: "marketplace",
             metadata: {
-              property_title: p.title,
+              property_title: displayTitle,
               property_code: p.kode ?? null,
               listing_type: p.jenisListing,
               rental_type: p.rentalType || null,
@@ -490,7 +519,7 @@ function PropertyCard({
     return () => observer.disconnect();
   }, [
     p.id,
-    p.title,
+    displayTitle,
     p.kode,
     p.jenisListing,
     p.rentalType,
@@ -604,12 +633,14 @@ function PropertyCard({
     property: Property,
     extraMetadata: Record<string, any> = {}
   ) {
+    const propertyTitle = getLocalizedPropertyTitle(property, lang);
+
     void trackEvent({
       event_name,
       property_id: property.id,
       source_page: "marketplace",
       metadata: {
-        property_title: property.title,
+        property_title: propertyTitle,
         property_code: property.kode ?? null,
         listing_type: property.jenisListing,
         rental_type: property.rentalType || null,
@@ -653,11 +684,13 @@ function PropertyCard({
       return;
     }
 
+    const propertyTitle = getLocalizedPropertyTitle(property, lang);
+
     const message =
       lang === "id"
         ? `Halo ${property.receiverName}, saya tertarik dengan properti ini di TETAMO.
 
-Properti: ${property.title}
+Properti: ${propertyTitle}
 Kode: ${property.kode ?? "-"}
 Lokasi: ${property.area}, ${property.province}
 Harga: ${displayPrice}
@@ -665,7 +698,7 @@ Harga: ${displayPrice}
 Apakah properti ini masih tersedia?`
         : `Hello ${property.receiverName}, I'm interested in this property on TETAMO.
 
-Property: ${property.title}
+Property: ${propertyTitle}
 Code: ${property.kode ?? "-"}
 Location: ${property.area}, ${property.province}
 Price: ${displayPrice}
@@ -686,7 +719,7 @@ Is this property still available?`;
         source_page: "marketplace",
         metadata: {
           button: "whatsapp",
-          property_title: property.title,
+          property_title: propertyTitle,
           property_code: property.kode ?? null,
           listing_type: property.jenisListing,
           rental_type: property.rentalType || null,
@@ -766,7 +799,7 @@ Is this property still available?`;
           metadata: {
             lead_type: "whatsapp",
             source: "whatsapp_button",
-            property_title: property.title,
+            property_title: propertyTitle,
             property_code: property.kode ?? null,
           },
         });
@@ -782,8 +815,8 @@ Is this property still available?`;
               title: "New WhatsApp inquiry",
               body:
                 lang === "id"
-                  ? `Ada WhatsApp inquiry baru untuk "${property.title}".`
-                  : `There is a new WhatsApp inquiry for "${property.title}".`,
+                  ? `Ada WhatsApp inquiry baru untuk "${propertyTitle}".`
+                  : `There is a new WhatsApp inquiry for "${propertyTitle}".`,
               audience: "user",
               priority: "high",
             });
@@ -795,7 +828,7 @@ Is this property still available?`;
             leadId: insertedLead.id,
             type: "new_whatsapp_inquiry",
             title: "New WhatsApp inquiry",
-            body: `New WhatsApp inquiry for "${property.title}".`,
+            body: `New WhatsApp inquiry for "${propertyTitle}".`,
             priority: "high",
           });
         } catch (notifyError) {
@@ -874,7 +907,7 @@ Is this property still available?`;
         <Link href={getPropertyHref(p)} className="block">
           <img
             src={p.images[idx]}
-            alt={p.title}
+            alt={displayTitle}
             className="h-[440px] w-full object-cover sm:h-[390px] lg:h-[460px]"
           />
         </Link>
@@ -933,12 +966,22 @@ Is this property still available?`;
       </div>
 
       <div className="p-4 sm:p-5">
-        <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
-          {displayPrice}
-        </div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
+              {displayPrice}
+            </div>
 
-        <div className="mt-1 text-sm text-gray-500 sm:text-sm">
-          ≈ {secondaryPrice}
+            <div className="mt-1 text-sm text-gray-500 sm:text-sm">
+              ≈ {secondaryPrice}
+            </div>
+          </div>
+
+          <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700">
+            <Eye className="h-3.5 w-3.5" />
+            <span>{formatCompactNumber(p.viewCount)}</span>
+            <span>{lang === "id" ? "Dilihat" : "Views"}</span>
+          </div>
         </div>
 
         <div className="mt-1 text-sm text-gray-500 sm:text-sm">
@@ -947,7 +990,7 @@ Is this property still available?`;
 
         <Link href={getPropertyHref(p)} className="mt-2 block">
           <h3 className="text-sm font-semibold leading-snug text-[#1C1C1E] hover:underline sm:text-base">
-            {p.title}
+            {displayTitle}
           </h3>
         </Link>
 
@@ -1156,6 +1199,10 @@ export default function PropertiPageClient() {
           kode,
           posted_date,
           title,
+          title_id,
+          description,
+          description_id,
+          view_count,
           price,
           province,
           city,
@@ -1307,6 +1354,11 @@ export default function PropertiPageClient() {
           sortDateRaw: liveDate,
 
           title: row.title ?? "-",
+          titleId: row.title_id ?? undefined,
+          description: row.description ?? undefined,
+          descriptionId: row.description_id ?? undefined,
+          viewCount: Number(row.view_count ?? 0),
+
           priceValue: Number(row.price ?? 0),
           province: row.province ?? "-",
           area: row.city || row.area || "-",
@@ -1690,11 +1742,12 @@ export default function PropertiPageClient() {
   }
 
   async function handleShare(property: Property) {
+    const propertyTitle = getLocalizedPropertyTitle(property, lang);
     const shareUrl = `${window.location.origin}${getPropertyHref(property)}`;
     const shareText =
       lang === "id"
-        ? `Lihat properti ini di TETAMO:\n\n${property.title}\n${property.area}, ${property.province}`
-        : `Check out this property on TETAMO:\n\n${property.title}\n${property.area}, ${property.province}`;
+        ? `Lihat properti ini di TETAMO:\n\n${propertyTitle}\n${property.area}, ${property.province}`
+        : `Check out this property on TETAMO:\n\n${propertyTitle}\n${property.area}, ${property.province}`;
 
     let shareMethod = "copy_link";
 
@@ -1704,7 +1757,7 @@ export default function PropertiPageClient() {
         typeof navigator.share === "function"
       ) {
         await navigator.share({
-          title: property.title,
+          title: propertyTitle,
           text: shareText,
           url: shareUrl,
         });
