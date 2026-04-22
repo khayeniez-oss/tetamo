@@ -6,15 +6,19 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   BarChart3,
+  Bookmark,
+  Eye,
   FileCheck2,
   FileSearch,
+  Heart,
   MapPin,
+  Share2,
   ShieldCheck,
   Target,
   TrendingUp,
+  Users,
   Wallet,
   Wrench,
-  Users,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -234,6 +238,7 @@ function getSectionIcon(heading: string) {
 
   if (text.includes("goal") || text.includes("tujuan")) return Target;
   if (text.includes("location") || text.includes("lokasi")) return MapPin;
+
   if (
     text.includes("budget") ||
     text.includes("price") ||
@@ -242,6 +247,7 @@ function getSectionIcon(heading: string) {
   ) {
     return Wallet;
   }
+
   if (
     text.includes("legal") ||
     text.includes("document") ||
@@ -249,8 +255,10 @@ function getSectionIcon(heading: string) {
   ) {
     return FileCheck2;
   }
+
   if (text.includes("condition") || text.includes("kondisi")) return Wrench;
   if (text.includes("compare") || text.includes("banding")) return BarChart3;
+
   if (
     text.includes("reputation") ||
     text.includes("seller") ||
@@ -259,6 +267,7 @@ function getSectionIcon(heading: string) {
   ) {
     return ShieldCheck;
   }
+
   if (
     text.includes("long-term") ||
     text.includes("value") ||
@@ -267,9 +276,11 @@ function getSectionIcon(heading: string) {
   ) {
     return TrendingUp;
   }
+
   if (text.includes("professionals") || text.includes("profesional")) {
     return Users;
   }
+
   if (text.includes("final") || text.includes("akhir")) return FileSearch;
 
   return FileSearch;
@@ -331,6 +342,11 @@ function getTutorialTitle(
   );
 }
 
+function getCurrentUrl() {
+  if (typeof window === "undefined") return "";
+  return window.location.href;
+}
+
 export default function PublicBlogDetailPage() {
   const { lang } = useLanguage();
   const params = useParams();
@@ -347,8 +363,53 @@ export default function PublicBlogDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  const [saved, setSaved] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
   useEffect(() => {
     let ignore = false;
+
+    async function trackBlogView(blogData: BlogDetail) {
+      if (!blogData.id) return;
+
+      try {
+        const storageKey = `tetamo_blog_viewed_${blogData.id}`;
+        const now = Date.now();
+        const previous = Number(localStorage.getItem(storageKey) || "0");
+        const oneDay = 24 * 60 * 60 * 1000;
+
+        if (previous && now - previous < oneDay) return;
+
+        const currentViews = Number(blogData.view_count ?? 0);
+        const nextViews = currentViews + 1;
+
+        const { error } = await supabase
+          .from("blogs")
+          .update({ view_count: nextViews })
+          .eq("id", blogData.id);
+
+        if (error) {
+          console.error("Failed to update blog view count:", error);
+          return;
+        }
+
+        localStorage.setItem(storageKey, String(now));
+
+        if (!ignore) {
+          setBlog((prev) =>
+            prev && prev.id === blogData.id
+              ? {
+                  ...prev,
+                  view_count: nextViews,
+                }
+              : prev
+          );
+        }
+      } catch (error) {
+        console.error("Failed to track blog view:", error);
+      }
+    }
 
     async function loadBlog() {
       if (!slug) {
@@ -365,7 +426,8 @@ export default function PublicBlogDetailPage() {
         .eq("slug", slug)
         .eq("status", "published")
         .eq("access_type", "public")
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (ignore) return;
 
@@ -396,6 +458,14 @@ export default function PublicBlogDetailPage() {
       setBlog(blogData);
       setBlocks((blockData ?? []) as BlogContentBlock[]);
       setLoading(false);
+
+      const savedKey = `tetamo_blog_saved_${blogData.id}`;
+      const likedKey = `tetamo_blog_liked_${blogData.id}`;
+
+      setSaved(localStorage.getItem(savedKey) === "true");
+      setLiked(localStorage.getItem(likedKey) === "true");
+
+      trackBlogView(blogData);
     }
 
     loadBlog();
@@ -449,6 +519,47 @@ export default function PublicBlogDetailPage() {
   const firstBodyImage = useMemo(() => {
     return extractFirstBodyImage(activeContent);
   }, [activeContent]);
+
+  function toggleSave() {
+    if (!blog?.id) return;
+
+    const next = !saved;
+    setSaved(next);
+    localStorage.setItem(`tetamo_blog_saved_${blog.id}`, String(next));
+  }
+
+  function toggleLike() {
+    if (!blog?.id) return;
+
+    const next = !liked;
+    setLiked(next);
+    localStorage.setItem(`tetamo_blog_liked_${blog.id}`, String(next));
+  }
+
+  async function handleShare() {
+    const url = getCurrentUrl();
+    const title = activeTitle || "Tetamo Blog";
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title,
+          text: activeExcerpt || title,
+          url,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+
+      window.setTimeout(() => {
+        setShareCopied(false);
+      }, 1800);
+    } catch (error) {
+      console.error("Failed to share blog:", error);
+    }
+  }
 
   if (loading) {
     return (
@@ -520,9 +631,7 @@ export default function PublicBlogDetailPage() {
 
               <div className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
                 {isTutorial
-                  ? lang === "id"
-                    ? "Tutorial"
-                    : "Tutorial"
+                  ? "Tutorial"
                   : lang === "id"
                     ? "Panduan"
                     : "Guide"}
@@ -538,7 +647,65 @@ export default function PublicBlogDetailPage() {
               <span>•</span>
               <span>{formatDate(blog.published_at || blog.created_at)}</span>
               <span>•</span>
-              <span>{blog.view_count ?? 0} views</span>
+              <span className="inline-flex items-center gap-1">
+                <Eye size={14} />
+                {Number(blog.view_count ?? 0).toLocaleString()} views
+              </span>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleSave}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                  saved
+                    ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                    : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                }`}
+              >
+                <Bookmark size={16} className={saved ? "fill-current" : ""} />
+                {saved
+                  ? lang === "id"
+                    ? "Tersimpan"
+                    : "Saved"
+                  : lang === "id"
+                    ? "Simpan"
+                    : "Save"}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleLike}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                  liked
+                    ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                    : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                }`}
+              >
+                <Heart size={16} className={liked ? "fill-current" : ""} />
+                {liked
+                  ? lang === "id"
+                    ? "Disukai"
+                    : "Liked"
+                  : lang === "id"
+                    ? "Suka"
+                    : "Like"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+              >
+                <Share2 size={16} />
+                {shareCopied
+                  ? lang === "id"
+                    ? "Link disalin"
+                    : "Link copied"
+                  : lang === "id"
+                    ? "Bagikan"
+                    : "Share"}
+              </button>
             </div>
 
             {activeExcerpt ? (
@@ -634,15 +801,7 @@ export default function PublicBlogDetailPage() {
                     );
                   })}
                 </div>
-              ) : (
-                <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-                  <p className="text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
-                    {lang === "id"
-                      ? "Konten tutorial belum tersedia."
-                      : "Tutorial content is not available yet."}
-                  </p>
-                </div>
-              )
+              ) : null
             ) : (
               <>
                 {guide.intro.length > 0 ? (
@@ -698,15 +857,7 @@ export default function PublicBlogDetailPage() {
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-                    <p className="text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
-                      {lang === "id"
-                        ? "Konten belum tersedia."
-                        : "Content is not available yet."}
-                    </p>
-                  </div>
-                )}
+                ) : null}
               </>
             )}
           </div>
