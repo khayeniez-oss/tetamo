@@ -36,6 +36,24 @@ type BlogDetail = {
   created_at: string | null;
 };
 
+type BlogContentBlock = {
+  id: string;
+  blog_id: string;
+  block_type: string | null;
+  step_number: number | null;
+  heading: string | null;
+  heading_id: string | null;
+  content: string | null;
+  content_id: string | null;
+  image_url: string | null;
+  image_alt: string | null;
+  image_alt_id: string | null;
+  caption: string | null;
+  caption_id: string | null;
+  sort_order: number | null;
+  is_active: boolean | null;
+};
+
 type GuideSection = {
   heading: string;
   paragraphs: string[];
@@ -113,6 +131,10 @@ function isLiveNow(publishedAt?: string | null) {
   if (Number.isNaN(publishTime)) return false;
 
   return publishTime <= Date.now();
+}
+
+function cleanText(value?: string | null) {
+  return String(value || "").trim();
 }
 
 function contentToLines(raw?: string | null, blogTitle?: string | null) {
@@ -253,6 +275,62 @@ function getSectionIcon(heading: string) {
   return FileSearch;
 }
 
+function hasTutorialBlocks(blocks: BlogContentBlock[]) {
+  return blocks.some((block) => {
+    return Boolean(
+      cleanText(block.heading) ||
+        cleanText(block.heading_id) ||
+        cleanText(block.content) ||
+        cleanText(block.content_id) ||
+        cleanText(block.image_url)
+    );
+  });
+}
+
+function isTutorialContent(blog: BlogDetail | null, blocks: BlogContentBlock[]) {
+  const category = cleanText(blog?.category).toLowerCase();
+  const hasBlocks = hasTutorialBlocks(blocks);
+  const hasMainContent = Boolean(cleanText(blog?.content));
+  const hasMainContentId = Boolean(cleanText(blog?.content_id));
+
+  if (category === "tutorial") return true;
+  if (hasBlocks && !hasMainContent && !hasMainContentId) return true;
+
+  return false;
+}
+
+function getTutorialTitle(
+  lang: string,
+  blog: BlogDetail | null,
+  blocks: BlogContentBlock[]
+) {
+  const firstBlock = blocks.find((block) => {
+    return Boolean(
+      cleanText(block.heading) ||
+        cleanText(block.heading_id) ||
+        cleanText(block.content) ||
+        cleanText(block.content_id) ||
+        cleanText(block.image_url)
+    );
+  });
+
+  if (lang === "id") {
+    return (
+      cleanText(firstBlock?.heading_id) ||
+      cleanText(firstBlock?.heading) ||
+      cleanText(blog?.title_id) ||
+      cleanText(blog?.title)
+    );
+  }
+
+  return (
+    cleanText(firstBlock?.heading) ||
+    cleanText(firstBlock?.heading_id) ||
+    cleanText(blog?.title) ||
+    cleanText(blog?.title_id)
+  );
+}
+
 export default function PublicBlogDetailPage() {
   const { lang } = useLanguage();
   const params = useParams();
@@ -265,6 +343,7 @@ export default function PublicBlogDetailPage() {
         : "";
 
   const [blog, setBlog] = useState<BlogDetail | null>(null);
+  const [blocks, setBlocks] = useState<BlogContentBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -297,7 +376,25 @@ export default function PublicBlogDetailPage() {
         return;
       }
 
-      setBlog(data as BlogDetail);
+      const blogData = data as BlogDetail;
+
+      const { data: blockData, error: blockError } = await supabase
+        .from("blog_content_blocks")
+        .select(
+          "id, blog_id, block_type, step_number, heading, heading_id, content, content_id, image_url, image_alt, image_alt_id, caption, caption_id, sort_order, is_active"
+        )
+        .eq("blog_id", blogData.id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+
+      if (ignore) return;
+
+      if (blockError) {
+        console.error("Failed to load blog tutorial blocks:", blockError);
+      }
+
+      setBlog(blogData);
+      setBlocks((blockData ?? []) as BlogContentBlock[]);
       setLoading(false);
     }
 
@@ -308,10 +405,19 @@ export default function PublicBlogDetailPage() {
     };
   }, [slug]);
 
-  const activeTitle =
-    lang === "id"
+  const isTutorial = useMemo(() => {
+    return isTutorialContent(blog, blocks);
+  }, [blog, blocks]);
+
+  const activeTitle = useMemo(() => {
+    if (isTutorial) {
+      return getTutorialTitle(lang, blog, blocks);
+    }
+
+    return lang === "id"
       ? blog?.title_id?.trim() || blog?.title?.trim() || ""
       : blog?.title?.trim() || blog?.title_id?.trim() || "";
+  }, [isTutorial, lang, blog, blocks]);
 
   const activeExcerpt =
     lang === "id"
@@ -322,6 +428,18 @@ export default function PublicBlogDetailPage() {
     lang === "id"
       ? blog?.content_id?.trim() || blog?.content?.trim() || ""
       : blog?.content?.trim() || blog?.content_id?.trim() || "";
+
+  const activeTutorialBlocks = useMemo(() => {
+    return blocks.filter((block) => {
+      return Boolean(
+        cleanText(block.heading) ||
+          cleanText(block.heading_id) ||
+          cleanText(block.content) ||
+          cleanText(block.content_id) ||
+          cleanText(block.image_url)
+      );
+    });
+  }, [blocks]);
 
   const guide = useMemo(() => {
     const lines = contentToLines(activeContent, activeTitle);
@@ -401,7 +519,13 @@ export default function PublicBlogDetailPage() {
               ) : null}
 
               <div className="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
-                {lang === "id" ? "Panduan" : "Guide"}
+                {isTutorial
+                  ? lang === "id"
+                    ? "Tutorial"
+                    : "Tutorial"
+                  : lang === "id"
+                    ? "Panduan"
+                    : "Guide"}
               </div>
             </div>
 
@@ -423,67 +547,167 @@ export default function PublicBlogDetailPage() {
               </p>
             ) : null}
 
-            {guide.intro.length > 0 ? (
-              <div className="mt-6 rounded-3xl border border-gray-200 bg-[#FAFAF8] p-5 sm:p-6">
-                <div className="space-y-4 text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
-                  {guide.intro.map((paragraph, index) => (
-                    <p key={`intro-${index}`}>{paragraph}</p>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+            {isTutorial ? (
+              activeTutorialBlocks.length > 0 ? (
+                <div className="mt-8 space-y-6">
+                  <div className="rounded-3xl border border-gray-200 bg-[#FAFAF8] p-5 sm:p-6">
+                    <h2 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
+                      {lang === "id"
+                        ? "Panduan Langkah demi Langkah"
+                        : "Step-by-Step Tutorial"}
+                    </h2>
+                    <p className="mt-2 text-sm leading-7 text-gray-600">
+                      {lang === "id"
+                        ? "Ikuti langkah-langkah berikut untuk menyelesaikan tutorial ini."
+                        : "Follow the steps below to complete this tutorial."}
+                    </p>
+                  </div>
 
-            {firstBodyImage ? (
-              <div className="mt-6 overflow-hidden rounded-3xl border border-gray-200">
-                <img
-                  src={firstBodyImage}
-                  alt={activeTitle || "Blog image"}
-                  className="h-[220px] w-full object-cover sm:h-[300px]"
-                />
-              </div>
-            ) : null}
+                  {activeTutorialBlocks.map((block, index) => {
+                    const heading =
+                      lang === "id"
+                        ? cleanText(block.heading_id) || cleanText(block.heading)
+                        : cleanText(block.heading) || cleanText(block.heading_id);
 
-            {guide.sections.length > 0 ? (
-              <div className="mt-6 grid gap-4 sm:gap-5">
-                {guide.sections.map((section, index) => {
-                  const Icon = getSectionIcon(section.heading);
+                    const content =
+                      lang === "id"
+                        ? cleanText(block.content_id) || cleanText(block.content)
+                        : cleanText(block.content) || cleanText(block.content_id);
 
-                  return (
-                    <section
-                      key={`${section.heading}-${index}`}
-                      className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition sm:p-6"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white">
-                          <Icon size={18} />
-                        </div>
+                    const caption =
+                      lang === "id"
+                        ? cleanText(block.caption_id) || cleanText(block.caption)
+                        : cleanText(block.caption) || cleanText(block.caption_id);
 
-                        <div className="min-w-0 flex-1">
-                          <h2 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
-                            {section.heading}
-                          </h2>
+                    const altText =
+                      lang === "id"
+                        ? cleanText(block.image_alt_id) ||
+                          cleanText(block.image_alt) ||
+                          heading ||
+                          `Langkah ${index + 1}`
+                        : cleanText(block.image_alt) ||
+                          cleanText(block.image_alt_id) ||
+                          heading ||
+                          `Step ${index + 1}`;
 
-                          <div className="mt-3 space-y-4 text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
-                            {section.paragraphs.map((paragraph, pIndex) => (
-                              <p key={`${section.heading}-${pIndex}`}>
-                                {paragraph}
-                              </p>
-                            ))}
+                    return (
+                      <section
+                        key={block.id}
+                        className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                      >
+                        <div className="p-5 sm:p-6">
+                          <div className="inline-flex rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
+                            {lang === "id"
+                              ? `Langkah ${index + 1}`
+                              : `Step ${index + 1}`}
                           </div>
+
+                          {heading ? (
+                            <h2 className="mt-4 text-lg font-bold text-[#1C1C1E] sm:text-xl">
+                              {heading}
+                            </h2>
+                          ) : null}
+
+                          {content ? (
+                            <p className="mt-3 whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
+                              {content}
+                            </p>
+                          ) : null}
                         </div>
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
+
+                        {block.image_url ? (
+                          <div className="border-t border-gray-200 bg-[#FAFAF8] p-4 sm:p-5">
+                            <img
+                              src={block.image_url}
+                              alt={altText}
+                              className="w-full rounded-3xl border border-gray-200 bg-white object-cover"
+                            />
+
+                            {caption ? (
+                              <p className="mt-3 text-center text-xs leading-5 text-gray-500 sm:text-sm">
+                                {caption}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+                  <p className="text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
+                    {lang === "id"
+                      ? "Konten tutorial belum tersedia."
+                      : "Tutorial content is not available yet."}
+                  </p>
+                </div>
+              )
             ) : (
-              <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-                <p className="text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
-                  {lang === "id"
-                    ? "Konten belum tersedia."
-                    : "Content is not available yet."}
-                </p>
-              </div>
+              <>
+                {guide.intro.length > 0 ? (
+                  <div className="mt-6 rounded-3xl border border-gray-200 bg-[#FAFAF8] p-5 sm:p-6">
+                    <div className="space-y-4 text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
+                      {guide.intro.map((paragraph, index) => (
+                        <p key={`intro-${index}`}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {firstBodyImage ? (
+                  <div className="mt-6 overflow-hidden rounded-3xl border border-gray-200">
+                    <img
+                      src={firstBodyImage}
+                      alt={activeTitle || "Blog image"}
+                      className="h-[220px] w-full object-cover sm:h-[300px]"
+                    />
+                  </div>
+                ) : null}
+
+                {guide.sections.length > 0 ? (
+                  <div className="mt-6 grid gap-4 sm:gap-5">
+                    {guide.sections.map((section, index) => {
+                      const Icon = getSectionIcon(section.heading);
+
+                      return (
+                        <section
+                          key={`${section.heading}-${index}`}
+                          className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition sm:p-6"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white">
+                              <Icon size={18} />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <h2 className="text-lg font-bold text-[#1C1C1E] sm:text-xl">
+                                {section.heading}
+                              </h2>
+
+                              <div className="mt-3 space-y-4 text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
+                                {section.paragraphs.map((paragraph, pIndex) => (
+                                  <p key={`${section.heading}-${pIndex}`}>
+                                    {paragraph}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+                    <p className="text-sm leading-7 text-gray-700 sm:text-base sm:leading-8">
+                      {lang === "id"
+                        ? "Konten belum tersedia."
+                        : "Content is not available yet."}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </article>
