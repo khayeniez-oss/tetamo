@@ -3,12 +3,31 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, Eye, Save, Send, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronDown,
+  Eye,
+  Image as ImageIcon,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import TiptapBlogEditor from "@/components/blog/TiptapBlogEditor";
 
 type BlogAccessType = "public" | "paid_agent";
 type PreviewLang = "en" | "id";
+type BlogBlockType =
+  | "heading"
+  | "paragraph"
+  | "image"
+  | "gallery"
+  | "quote"
+  | "step"
+  | "button";
 
 type BlogCategory = {
   id: string;
@@ -32,6 +51,25 @@ type BlogForm = {
   publish_at: string;
 };
 
+type BlogContentBlockDraft = {
+  id: string;
+  block_type: BlogBlockType;
+  step_number: number;
+  heading: string;
+  heading_id: string;
+  content: string;
+  content_id: string;
+  image_url: string;
+  image_alt: string;
+  image_alt_id: string;
+  caption: string;
+  caption_id: string;
+  button_label: string;
+  button_label_id: string;
+  button_url: string;
+  sort_order: number;
+};
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -43,6 +81,10 @@ function slugify(value: string) {
 
 function stripHtml(value: string) {
   return value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function cleanText(value?: string | null) {
+  return String(value || "").trim();
 }
 
 function formatDateTime(value?: string | null) {
@@ -69,21 +111,73 @@ function toIsoFromDatetimeLocal(value: string) {
   return date.toISOString();
 }
 
+function createDraftId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `block-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function createBlock(stepNumber: number): BlogContentBlockDraft {
+  return {
+    id: createDraftId(),
+    block_type: "step",
+    step_number: stepNumber,
+    heading: "",
+    heading_id: "",
+    content: "",
+    content_id: "",
+    image_url: "",
+    image_alt: "",
+    image_alt_id: "",
+    caption: "",
+    caption_id: "",
+    button_label: "",
+    button_label_id: "",
+    button_url: "",
+    sort_order: stepNumber - 1,
+  };
+}
+
+function hasBlockContent(block: BlogContentBlockDraft) {
+  return Boolean(
+    cleanText(block.heading) ||
+      cleanText(block.heading_id) ||
+      cleanText(block.content) ||
+      cleanText(block.content_id) ||
+      cleanText(block.image_url) ||
+      cleanText(block.caption) ||
+      cleanText(block.caption_id) ||
+      cleanText(block.button_label) ||
+      cleanText(block.button_label_id) ||
+      cleanText(block.button_url)
+  );
+}
+
 function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${
+        props.className ?? ""
+      }`}
     />
   );
 }
 
 function SelectBase(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select
-      {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] ${props.className ?? ""}`}
-    />
+    <div className="relative">
+      <select
+        {...props}
+        className={`w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 pr-12 text-sm outline-none focus:border-[#1C1C1E] ${
+          props.className ?? ""
+        }`}
+      />
+      <ChevronDown
+        size={18}
+        className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-500"
+      />
+    </div>
   );
 }
 
@@ -91,7 +185,9 @@ function TextareaBase(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) 
   return (
     <textarea
       {...props}
-      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${props.className ?? ""}`}
+      className={`w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none placeholder-gray-400 focus:border-[#1C1C1E] ${
+        props.className ?? ""
+      }`}
     />
   );
 }
@@ -137,8 +233,10 @@ function LangPill({
 
 export default function AdminNewBlogPage() {
   const router = useRouter();
+
   const coverInputRef = useRef<HTMLInputElement | null>(null);
   const bodyImageInputRef = useRef<HTMLInputElement | null>(null);
+  const blockImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState<BlogForm>({
     title: "",
@@ -155,16 +253,27 @@ export default function AdminNewBlogPage() {
     publish_at: "",
   });
 
+  const [blocks, setBlocks] = useState<BlogContentBlockDraft[]>([
+    createBlock(1),
+  ]);
+
   const [slugTouched, setSlugTouched] = useState(false);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
   const [previewMode, setPreviewMode] = useState(false);
   const [previewLang, setPreviewLang] = useState<PreviewLang>("en");
+
   const [savingDraft, setSavingDraft] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingBodyImage, setUploadingBodyImage] = useState(false);
+  const [uploadingBlockImageId, setUploadingBlockImageId] = useState<
+    string | null
+  >(null);
+  const [targetBlockImageId, setTargetBlockImageId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (!slugTouched) {
@@ -187,7 +296,6 @@ export default function AdminNewBlogPage() {
           .from("blog_categories")
           .select("id, name, slug, sort_order")
           .eq("is_active", true)
-          .order("sort_order", { ascending: true })
           .order("name", { ascending: true }),
         supabase.auth.getUser().then(async ({ data }) => {
           const userId = data.user?.id;
@@ -229,6 +337,11 @@ export default function AdminNewBlogPage() {
     };
   }, []);
 
+  const activeBlocks = useMemo(
+    () => blocks.filter((block) => hasBlockContent(block)),
+    [blocks]
+  );
+
   const publicUrlPreview = useMemo(() => {
     return form.slug ? `/blog/${form.slug}` : "/blog/[slug]";
   }, [form.slug]);
@@ -246,6 +359,22 @@ export default function AdminNewBlogPage() {
     return new Date(publishAtIso).getTime() > Date.now();
   }, [publishAtIso]);
 
+  const articleMeta = (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
+      <span>{form.author_name || "Tetamo Editorial"}</span>
+      {form.category && (
+        <>
+          <span>•</span>
+          <span>{form.category}</span>
+        </>
+      )}
+      <span>•</span>
+      <span>
+        {form.access_type === "paid_agent" ? "Paid Agent Only" : "Public"}
+      </span>
+    </div>
+  );
+
   function updateField<K extends keyof BlogForm>(key: K, value: BlogForm[K]) {
     setForm((prev) => ({
       ...prev,
@@ -253,10 +382,69 @@ export default function AdminNewBlogPage() {
     }));
   }
 
+  function updateBlock<K extends keyof BlogContentBlockDraft>(
+    blockId: string,
+    key: K,
+    value: BlogContentBlockDraft[K]
+  ) {
+    setBlocks((prev) =>
+      prev.map((block) =>
+        block.id === blockId
+          ? {
+              ...block,
+              [key]: value,
+            }
+          : block
+      )
+    );
+  }
+
+  function addBlock() {
+    setBlocks((prev) => [...prev, createBlock(prev.length + 1)]);
+  }
+
+  function removeBlock(blockId: string) {
+    setBlocks((prev) => {
+      const next = prev.filter((block) => block.id !== blockId);
+
+      if (next.length === 0) {
+        return [createBlock(1)];
+      }
+
+      return next.map((block, index) => ({
+        ...block,
+        step_number: index + 1,
+        sort_order: index,
+      }));
+    });
+  }
+
+  function moveBlock(blockId: string, direction: "up" | "down") {
+    setBlocks((prev) => {
+      const currentIndex = prev.findIndex((block) => block.id === blockId);
+      if (currentIndex < 0) return prev;
+
+      const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      const [item] = next.splice(currentIndex, 1);
+      next.splice(nextIndex, 0, item);
+
+      return next.map((block, index) => ({
+        ...block,
+        step_number: index + 1,
+        sort_order: index,
+      }));
+    });
+  }
+
   async function uploadImageToStorage(file: File, folder: "cover" | "body") {
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const cleanSlug = form.slug || slugify(form.title) || "blog";
-    const path = `${folder}/${cleanSlug}-${Date.now()}.${ext}`;
+    const path = `${folder}/${cleanSlug}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("blog-images")
@@ -314,6 +502,47 @@ export default function AdminNewBlogPage() {
     }
   }
 
+  function openBlockImageUpload(blockId: string) {
+    setTargetBlockImageId(blockId);
+    blockImageInputRef.current?.click();
+  }
+
+  async function handleBlockImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !targetBlockImageId) return;
+
+    try {
+      setUploadingBlockImageId(targetBlockImageId);
+      const publicUrl = await uploadImageToStorage(file, "body");
+
+      setBlocks((prev) =>
+        prev.map((block) =>
+          block.id === targetBlockImageId
+            ? {
+                ...block,
+                image_url: publicUrl,
+                image_alt:
+                  block.image_alt ||
+                  block.heading ||
+                  `Step ${block.step_number} image`,
+                image_alt_id:
+                  block.image_alt_id ||
+                  block.heading_id ||
+                  `Gambar langkah ${block.step_number}`,
+              }
+            : block
+        )
+      );
+    } catch (error: any) {
+      console.error("Failed to upload tutorial image:", error);
+      alert(error?.message || "Failed to upload tutorial image.");
+    } finally {
+      setUploadingBlockImageId(null);
+      setTargetBlockImageId(null);
+      if (blockImageInputRef.current) blockImageInputRef.current.value = "";
+    }
+  }
+
   async function saveBlog(status: "draft" | "published") {
     const cleanTitle = form.title.trim();
     const cleanTitleId = form.title_id.trim();
@@ -324,6 +553,7 @@ export default function AdminNewBlogPage() {
     const cleanContentId = form.content_id.trim();
     const cleanCategory = form.category.trim();
     const cleanAuthor = form.author_name.trim() || "Tetamo Editorial";
+    const cleanBlocks = blocks.filter((block) => hasBlockContent(block));
 
     if (!cleanTitle) {
       alert("English title is required.");
@@ -340,13 +570,33 @@ export default function AdminNewBlogPage() {
       return;
     }
 
-    if (!stripHtml(cleanContent)) {
-      alert("English content is required.");
+    const hasEnglishContent =
+      Boolean(stripHtml(cleanContent)) ||
+      cleanBlocks.some(
+        (block) =>
+          cleanText(block.heading) ||
+          cleanText(block.content) ||
+          cleanText(block.image_url)
+      );
+
+    const hasIndonesianContent =
+      Boolean(stripHtml(cleanContentId)) ||
+      cleanBlocks.some(
+        (block) =>
+          cleanText(block.heading_id) ||
+          cleanText(block.content_id) ||
+          cleanText(block.image_url)
+      );
+
+    if (!hasEnglishContent) {
+      alert("English content or at least one English tutorial block is required.");
       return;
     }
 
-    if (!stripHtml(cleanContentId)) {
-      alert("Indonesian content is required.");
+    if (!hasIndonesianContent) {
+      alert(
+        "Indonesian content or at least one Indonesian tutorial block is required."
+      );
       return;
     }
 
@@ -369,6 +619,7 @@ export default function AdminNewBlogPage() {
       } = await supabase.auth.getUser();
 
       if (authError) throw authError;
+
       if (!user?.id) {
         alert("Please log in first.");
         return;
@@ -382,8 +633,8 @@ export default function AdminNewBlogPage() {
           slug: cleanSlug,
           excerpt: cleanExcerpt || null,
           excerpt_id: cleanExcerptId || null,
-          content: cleanContent,
-          content_id: cleanContentId,
+          content: cleanContent || null,
+          content_id: cleanContentId || null,
           category: cleanCategory || null,
           author_name: cleanAuthor,
           cover_image_url: form.cover_image_url || null,
@@ -397,6 +648,36 @@ export default function AdminNewBlogPage() {
         .single();
 
       if (error) throw error;
+
+      if (data?.id && cleanBlocks.length > 0) {
+        const blockRows = cleanBlocks.map((block, index) => ({
+          blog_id: data.id,
+          block_type: block.block_type,
+          step_number:
+            block.block_type === "step" ? index + 1 : block.step_number || null,
+          heading: cleanText(block.heading) || null,
+          heading_id: cleanText(block.heading_id) || null,
+          content: cleanText(block.content) || null,
+          content_id: cleanText(block.content_id) || null,
+          image_url: cleanText(block.image_url) || null,
+          image_alt: cleanText(block.image_alt) || null,
+          image_alt_id: cleanText(block.image_alt_id) || null,
+          caption: cleanText(block.caption) || null,
+          caption_id: cleanText(block.caption_id) || null,
+          gallery_urls: [],
+          button_label: cleanText(block.button_label) || null,
+          button_label_id: cleanText(block.button_label_id) || null,
+          button_url: cleanText(block.button_url) || null,
+          sort_order: index,
+          is_active: true,
+        }));
+
+        const { error: blocksError } = await supabase
+          .from("blog_content_blocks")
+          .insert(blockRows);
+
+        if (blocksError) throw blocksError;
+      }
 
       if (status === "published") {
         alert(
@@ -422,20 +703,6 @@ export default function AdminNewBlogPage() {
     }
   }
 
-  const articleMeta = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
-      <span>{form.author_name || "Tetamo Editorial"}</span>
-      {form.category && (
-        <>
-          <span>•</span>
-          <span>{form.category}</span>
-        </>
-      )}
-      <span>•</span>
-      <span>{form.access_type === "paid_agent" ? "Paid Agent Only" : "Public"}</span>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-[#F6F6F3]">
       <input
@@ -451,6 +718,14 @@ export default function AdminNewBlogPage() {
         type="file"
         accept="image/*"
         onChange={handleBodyImageUpload}
+        className="hidden"
+      />
+
+      <input
+        ref={blockImageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleBlockImageUpload}
         className="hidden"
       />
 
@@ -524,6 +799,7 @@ export default function AdminNewBlogPage() {
               >
                 English Preview
               </LangPill>
+
               <LangPill
                 active={previewLang === "id"}
                 onClick={() => setPreviewLang("id")}
@@ -534,7 +810,9 @@ export default function AdminNewBlogPage() {
 
             <div className="space-y-6">
               <div className="rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4 sm:p-5">
-                <h2 className="text-lg font-bold text-[#1C1C1E]">English Version</h2>
+                <h2 className="text-lg font-bold text-[#1C1C1E]">
+                  English Version
+                </h2>
 
                 <div className="mt-4">
                   <FieldLabel required>English Title</FieldLabel>
@@ -561,13 +839,17 @@ export default function AdminNewBlogPage() {
                 </div>
 
                 <div className="mt-6">
-                  <FieldLabel required>English Content</FieldLabel>
+                  <FieldLabel>English Main Content</FieldLabel>
                   <TiptapBlogEditor
                     content={form.content}
                     onChange={(html) => updateField("content", html)}
                     placeholder="Start writing your English blog here..."
                     onUploadImage={() => bodyImageInputRef.current?.click()}
                   />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Use this for normal blog body. Use Tutorial / Body Blocks
+                    below for step-by-step images.
+                  </p>
                 </div>
               </div>
 
@@ -598,15 +880,241 @@ export default function AdminNewBlogPage() {
                 </div>
 
                 <div className="mt-6">
-                  <FieldLabel required>Indonesian Content</FieldLabel>
+                  <FieldLabel>Indonesian Main Content</FieldLabel>
                   <TiptapBlogEditor
                     content={form.content_id}
                     onChange={(html) => updateField("content_id", html)}
                     placeholder="Mulai tulis blog Bahasa Indonesia di sini..."
                     onUploadImage={() => bodyImageInputRef.current?.click()}
                   />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Gunakan ini untuk isi blog biasa. Gunakan Tutorial / Body
+                    Blocks di bawah untuk gambar langkah demi langkah.
+                  </p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-[#1C1C1E]">
+                  Tutorial / Body Blocks
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-gray-500">
+                  Add step-by-step tutorial sections with heading, description,
+                  image, and caption.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={addBlock}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                <Plus size={16} />
+                Add Step
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-5">
+              {blocks.map((block, index) => (
+                <div
+                  key={block.id}
+                  className="rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4 sm:p-5"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-[#1C1C1E]">
+                        Step {index + 1}
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Heading + description + optional image/caption.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => moveBlock(block.id, "up")}
+                        disabled={index === 0}
+                        className="rounded-xl border border-gray-300 px-3 py-2 text-xs font-semibold text-[#1C1C1E] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Up
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => moveBlock(block.id, "down")}
+                        disabled={index === blocks.length - 1}
+                        className="rounded-xl border border-gray-300 px-3 py-2 text-xs font-semibold text-[#1C1C1E] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Down
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => removeBlock(block.id)}
+                        className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <FieldLabel>English Step Heading</FieldLabel>
+                      <InputBase
+                        value={block.heading}
+                        onChange={(e) =>
+                          updateBlock(block.id, "heading", e.target.value)
+                        }
+                        placeholder={`Step ${index + 1}: English heading`}
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>Indonesian Step Heading</FieldLabel>
+                      <InputBase
+                        value={block.heading_id}
+                        onChange={(e) =>
+                          updateBlock(block.id, "heading_id", e.target.value)
+                        }
+                        placeholder={`Langkah ${index + 1}: Judul Bahasa Indonesia`}
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>English Description</FieldLabel>
+                      <TextareaBase
+                        rows={5}
+                        value={block.content}
+                        onChange={(e) =>
+                          updateBlock(block.id, "content", e.target.value)
+                        }
+                        placeholder="Explain this step in English..."
+                        className="resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>Indonesian Description</FieldLabel>
+                      <TextareaBase
+                        rows={5}
+                        value={block.content_id}
+                        onChange={(e) =>
+                          updateBlock(block.id, "content_id", e.target.value)
+                        }
+                        placeholder="Jelaskan langkah ini dalam Bahasa Indonesia..."
+                        className="resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-3xl border border-gray-200 bg-white p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row">
+                      <div className="w-full lg:w-[280px]">
+                        {block.image_url ? (
+                          <img
+                            src={block.image_url}
+                            alt={
+                              previewLang === "id"
+                                ? block.image_alt_id || block.heading_id
+                                : block.image_alt || block.heading
+                            }
+                            className="h-[180px] w-full rounded-2xl object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-[180px] w-full items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#FAFAF8] text-center text-sm text-gray-500">
+                            No tutorial image
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openBlockImageUpload(block.id)}
+                            disabled={uploadingBlockImageId === block.id}
+                            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-3 py-2 text-xs font-semibold text-[#1C1C1E] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <ImageIcon size={14} />
+                            {uploadingBlockImageId === block.id
+                              ? "Uploading..."
+                              : "Upload Image"}
+                          </button>
+
+                          {block.image_url && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateBlock(block.id, "image_url", "");
+                                updateBlock(block.id, "image_alt", "");
+                                updateBlock(block.id, "image_alt_id", "");
+                              }}
+                              className="rounded-xl border border-gray-300 px-3 py-2 text-xs font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+                        <div>
+                          <FieldLabel>English Image Alt Text</FieldLabel>
+                          <InputBase
+                            value={block.image_alt}
+                            onChange={(e) =>
+                              updateBlock(block.id, "image_alt", e.target.value)
+                            }
+                            placeholder="Describe the image for SEO"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Indonesian Image Alt Text</FieldLabel>
+                          <InputBase
+                            value={block.image_alt_id}
+                            onChange={(e) =>
+                              updateBlock(
+                                block.id,
+                                "image_alt_id",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Deskripsi gambar untuk SEO"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>English Caption</FieldLabel>
+                          <InputBase
+                            value={block.caption}
+                            onChange={(e) =>
+                              updateBlock(block.id, "caption", e.target.value)
+                            }
+                            placeholder="Optional image caption"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Indonesian Caption</FieldLabel>
+                          <InputBase
+                            value={block.caption_id}
+                            onChange={(e) =>
+                              updateBlock(block.id, "caption_id", e.target.value)
+                            }
+                            placeholder="Caption gambar opsional"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -622,6 +1130,7 @@ export default function AdminNewBlogPage() {
                   >
                     EN
                   </LangPill>
+
                   <LangPill
                     active={previewLang === "id"}
                     onClick={() => setPreviewLang("id")}
@@ -668,9 +1177,80 @@ export default function AdminNewBlogPage() {
                     dangerouslySetInnerHTML={{
                       __html:
                         previewContent ||
-                        "<p style='color:#9ca3af;'>No content yet.</p>",
+                        "<p style='color:#9ca3af;'>No main content yet.</p>",
                     }}
                   />
+
+                  {activeBlocks.length > 0 && (
+                    <div className="mt-10 space-y-6">
+                      <h3 className="text-xl font-bold text-[#1C1C1E]">
+                        {previewLang === "id"
+                          ? "Panduan Langkah demi Langkah"
+                          : "Step-by-Step Guide"}
+                      </h3>
+
+                      {activeBlocks.map((block, index) => {
+                        const blockHeading =
+                          previewLang === "id"
+                            ? block.heading_id || block.heading
+                            : block.heading || block.heading_id;
+
+                        const blockContent =
+                          previewLang === "id"
+                            ? block.content_id || block.content
+                            : block.content || block.content_id;
+
+                        const blockCaption =
+                          previewLang === "id"
+                            ? block.caption_id || block.caption
+                            : block.caption || block.caption_id;
+
+                        const blockAlt =
+                          previewLang === "id"
+                            ? block.image_alt_id || blockHeading
+                            : block.image_alt || blockHeading;
+
+                        return (
+                          <div
+                            key={block.id}
+                            className="rounded-3xl border border-gray-200 bg-[#FAFAF8] p-4 sm:p-5"
+                          >
+                            <div className="inline-flex rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
+                              Step {index + 1}
+                            </div>
+
+                            {blockHeading && (
+                              <h4 className="mt-4 text-lg font-bold text-[#1C1C1E]">
+                                {blockHeading}
+                              </h4>
+                            )}
+
+                            {blockContent && (
+                              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-gray-700">
+                                {blockContent}
+                              </p>
+                            )}
+
+                            {block.image_url && (
+                              <div className="mt-4">
+                                <img
+                                  src={block.image_url}
+                                  alt={blockAlt || `Step ${index + 1}`}
+                                  className="w-full rounded-3xl border border-gray-200 object-cover"
+                                />
+
+                                {blockCaption && (
+                                  <p className="mt-2 text-center text-xs text-gray-500">
+                                    {blockCaption}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -679,7 +1259,9 @@ export default function AdminNewBlogPage() {
 
         <aside className="space-y-6">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">Publish Settings</h2>
+            <h2 className="text-lg font-bold text-[#1C1C1E]">
+              Publish Settings
+            </h2>
 
             <div className="mt-5 space-y-5">
               <div>
@@ -719,8 +1301,11 @@ export default function AdminNewBlogPage() {
                   disabled={loadingCategories}
                 >
                   <option value="">
-                    {loadingCategories ? "Loading categories..." : "Select category"}
+                    {loadingCategories
+                      ? "Loading categories..."
+                      : "Select category"}
                   </option>
+
                   {categories.map((category) => (
                     <option key={category.id} value={category.name}>
                       {category.name}
@@ -751,13 +1336,18 @@ export default function AdminNewBlogPage() {
                   className="appearance-none"
                 />
                 <p className="mt-2 text-xs text-gray-500">
-                  Leave blank to publish immediately. Set a future date to schedule this blog.
+                  Leave blank to publish immediately. Set a future date to
+                  schedule this blog.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-[#FAFAF8] p-4 text-sm text-gray-600">
                 <div className="flex items-start gap-3">
-                  <CalendarDays size={18} className="mt-0.5 shrink-0 text-[#1C1C1E]" />
+                  <CalendarDays
+                    size={18}
+                    className="mt-0.5 shrink-0 text-[#1C1C1E]"
+                  />
+
                   <div>
                     <p className="font-semibold text-[#1C1C1E]">
                       {form.publish_at
@@ -766,11 +1356,14 @@ export default function AdminNewBlogPage() {
                           : "Immediate publish"
                         : "Immediate publish"}
                     </p>
+
                     <p className="mt-1 leading-6">
                       {form.publish_at
                         ? publishAtIso
                           ? isScheduled
-                            ? `This blog will go live on ${formatDateTime(publishAtIso)}.`
+                            ? `This blog will go live on ${formatDateTime(
+                                publishAtIso
+                              )}.`
                             : `This blog will publish immediately using ${formatDateTime(
                                 publishAtIso
                               )}.`
@@ -779,6 +1372,13 @@ export default function AdminNewBlogPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                <p className="font-semibold">Tutorial Blocks</p>
+                <p className="mt-1 leading-6">
+                  Active blocks ready to save: {activeBlocks.length}
+                </p>
               </div>
             </div>
           </div>
