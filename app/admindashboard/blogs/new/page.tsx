@@ -153,6 +153,46 @@ function hasBlockContent(block: BlogContentBlockDraft) {
   );
 }
 
+function getFirstActiveBlock(blocks: BlogContentBlockDraft[]) {
+  return blocks.find((block) => hasBlockContent(block)) || null;
+}
+
+function getEnglishFallbackTitle(form: BlogForm, blocks: BlogContentBlockDraft[]) {
+  const firstBlock = getFirstActiveBlock(blocks);
+
+  return (
+    cleanText(form.title) ||
+    cleanText(firstBlock?.heading) ||
+    cleanText(firstBlock?.heading_id) ||
+    cleanText(form.title_id)
+  );
+}
+
+function getIndonesianFallbackTitle(
+  form: BlogForm,
+  blocks: BlogContentBlockDraft[]
+) {
+  const firstBlock = getFirstActiveBlock(blocks);
+
+  return (
+    cleanText(form.title_id) ||
+    cleanText(firstBlock?.heading_id) ||
+    cleanText(firstBlock?.heading) ||
+    cleanText(form.title)
+  );
+}
+
+function getSlugSource(form: BlogForm, blocks: BlogContentBlockDraft[]) {
+  const firstBlock = getFirstActiveBlock(blocks);
+
+  return (
+    cleanText(form.title) ||
+    cleanText(form.title_id) ||
+    cleanText(firstBlock?.heading) ||
+    cleanText(firstBlock?.heading_id)
+  );
+}
+
 function InputBase(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
@@ -276,13 +316,20 @@ export default function AdminNewBlogPage() {
   );
 
   useEffect(() => {
-    if (!slugTouched) {
-      setForm((prev) => ({
+    if (slugTouched) return;
+
+    const source = getSlugSource(form, blocks);
+    const nextSlug = slugify(source);
+
+    setForm((prev) => {
+      if (prev.slug === nextSlug) return prev;
+
+      return {
         ...prev,
-        slug: slugify(prev.title),
-      }));
-    }
-  }, [form.title, slugTouched]);
+        slug: nextSlug,
+      };
+    });
+  }, [form.title, form.title_id, blocks, slugTouched]);
 
   useEffect(() => {
     let ignore = false;
@@ -346,7 +393,11 @@ export default function AdminNewBlogPage() {
     return form.slug ? `/blog/${form.slug}` : "/blog/[slug]";
   }, [form.slug]);
 
-  const previewTitle = previewLang === "id" ? form.title_id : form.title;
+  const previewTitle =
+    previewLang === "id"
+      ? getIndonesianFallbackTitle(form, blocks)
+      : getEnglishFallbackTitle(form, blocks);
+
   const previewExcerpt = previewLang === "id" ? form.excerpt_id : form.excerpt;
   const previewContent = previewLang === "id" ? form.content_id : form.content;
 
@@ -441,7 +492,7 @@ export default function AdminNewBlogPage() {
 
   async function uploadImageToStorage(file: File, folder: "cover" | "body") {
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const cleanSlug = form.slug || slugify(form.title) || "blog";
+    const cleanSlug = form.slug || slugify(getSlugSource(form, blocks)) || "blog";
     const path = `${folder}/${cleanSlug}-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}.${ext}`;
@@ -544,31 +595,18 @@ export default function AdminNewBlogPage() {
   }
 
   async function saveBlog(status: "draft" | "published") {
-    const cleanTitle = form.title.trim();
-    const cleanTitleId = form.title_id.trim();
-    const cleanSlug = slugify(form.slug || form.title);
+    const cleanBlocks = blocks.filter((block) => hasBlockContent(block));
+
+    const finalTitle = getEnglishFallbackTitle(form, cleanBlocks);
+    const finalTitleId = getIndonesianFallbackTitle(form, cleanBlocks);
+    const finalSlug = slugify(form.slug || getSlugSource(form, cleanBlocks));
+
     const cleanExcerpt = form.excerpt.trim();
     const cleanExcerptId = form.excerpt_id.trim();
     const cleanContent = form.content.trim();
     const cleanContentId = form.content_id.trim();
     const cleanCategory = form.category.trim();
     const cleanAuthor = form.author_name.trim() || "Tetamo Editorial";
-    const cleanBlocks = blocks.filter((block) => hasBlockContent(block));
-
-    if (!cleanTitle) {
-      alert("English title is required.");
-      return;
-    }
-
-    if (!cleanTitleId) {
-      alert("Indonesian title is required.");
-      return;
-    }
-
-    if (!cleanSlug) {
-      alert("Slug is required.");
-      return;
-    }
 
     const hasEnglishContent =
       Boolean(stripHtml(cleanContent)) ||
@@ -588,14 +626,33 @@ export default function AdminNewBlogPage() {
           cleanText(block.image_url)
       );
 
+    if (!finalTitle) {
+      alert("Add an English blog title or the first English tutorial heading.");
+      return;
+    }
+
+    if (!finalTitleId) {
+      alert(
+        "Add an Indonesian blog title or the first Indonesian tutorial heading."
+      );
+      return;
+    }
+
+    if (!finalSlug) {
+      alert("Slug is required. Add a blog title or tutorial heading first.");
+      return;
+    }
+
     if (!hasEnglishContent) {
-      alert("English content or at least one English tutorial block is required.");
+      alert(
+        "Add English main content or at least one English tutorial step with heading, description, or image."
+      );
       return;
     }
 
     if (!hasIndonesianContent) {
       alert(
-        "Indonesian content or at least one Indonesian tutorial block is required."
+        "Add Indonesian main content or at least one Indonesian tutorial step with heading, description, or image."
       );
       return;
     }
@@ -628,9 +685,9 @@ export default function AdminNewBlogPage() {
       const { data, error } = await supabase
         .from("blogs")
         .insert({
-          title: cleanTitle,
-          title_id: cleanTitleId,
-          slug: cleanSlug,
+          title: finalTitle,
+          title_id: finalTitleId,
+          slug: finalSlug,
           excerpt: cleanExcerpt || null,
           excerpt_id: cleanExcerptId || null,
           content: cleanContent || null,
@@ -742,10 +799,10 @@ export default function AdminNewBlogPage() {
 
             <div className="min-w-0">
               <h1 className="truncate text-xl font-bold text-[#1C1C1E] sm:text-2xl">
-                New Blog
+                New Blog / Tutorial
               </h1>
               <p className="text-xs text-gray-500 sm:text-sm">
-                Create English and Indonesian blog content for Tetamo.
+                Create a normal blog or a step-by-step tutorial for Tetamo.
               </p>
             </div>
           </div>
@@ -815,12 +872,12 @@ export default function AdminNewBlogPage() {
                 </h2>
 
                 <div className="mt-4">
-                  <FieldLabel required>English Title</FieldLabel>
+                  <FieldLabel>English Blog Title</FieldLabel>
                   <input
                     type="text"
                     value={form.title}
                     onChange={(e) => updateField("title", e.target.value)}
-                    placeholder="Add English title"
+                    placeholder="Optional if this is a tutorial. First tutorial heading can become the title."
                     className="w-full border-0 bg-transparent p-0 text-3xl font-bold text-[#1C1C1E] outline-none placeholder:text-gray-300 sm:text-4xl"
                   />
                 </div>
@@ -843,13 +900,9 @@ export default function AdminNewBlogPage() {
                   <TiptapBlogEditor
                     content={form.content}
                     onChange={(html) => updateField("content", html)}
-                    placeholder="Start writing your English blog here..."
+                    placeholder="Use this for normal blog content. For tutorial-only, you can leave this empty and use the tutorial steps below."
                     onUploadImage={() => bodyImageInputRef.current?.click()}
                   />
-                  <p className="mt-2 text-xs text-gray-500">
-                    Use this for normal blog body. Use Tutorial / Body Blocks
-                    below for step-by-step images.
-                  </p>
                 </div>
               </div>
 
@@ -859,12 +912,12 @@ export default function AdminNewBlogPage() {
                 </h2>
 
                 <div className="mt-4">
-                  <FieldLabel required>Indonesian Title</FieldLabel>
+                  <FieldLabel>Indonesian Blog Title</FieldLabel>
                   <InputBase
                     type="text"
                     value={form.title_id}
                     onChange={(e) => updateField("title_id", e.target.value)}
-                    placeholder="Tambah judul Bahasa Indonesia"
+                    placeholder="Opsional jika ini tutorial. Judul langkah pertama bisa menjadi judul."
                   />
                 </div>
 
@@ -884,13 +937,9 @@ export default function AdminNewBlogPage() {
                   <TiptapBlogEditor
                     content={form.content_id}
                     onChange={(html) => updateField("content_id", html)}
-                    placeholder="Mulai tulis blog Bahasa Indonesia di sini..."
+                    placeholder="Untuk blog biasa. Untuk tutorial saja, boleh kosong dan gunakan langkah tutorial di bawah."
                     onUploadImage={() => bodyImageInputRef.current?.click()}
                   />
-                  <p className="mt-2 text-xs text-gray-500">
-                    Gunakan ini untuk isi blog biasa. Gunakan Tutorial / Body
-                    Blocks di bawah untuk gambar langkah demi langkah.
-                  </p>
                 </div>
               </div>
             </div>
@@ -903,8 +952,8 @@ export default function AdminNewBlogPage() {
                   Tutorial / Body Blocks
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-gray-500">
-                  Add step-by-step tutorial sections with heading, description,
-                  image, and caption.
+                  For tutorial-only posts, the first step heading can become the
+                  blog title and slug automatically.
                 </p>
               </div>
 
@@ -1161,7 +1210,7 @@ export default function AdminNewBlogPage() {
                   )}
 
                   <h2 className="text-3xl font-bold leading-tight text-[#1C1C1E]">
-                    {previewTitle || "Untitled blog"}
+                    {previewTitle || "Untitled blog / tutorial"}
                   </h2>
 
                   <div className="mt-4">{articleMeta}</div>
@@ -1265,7 +1314,7 @@ export default function AdminNewBlogPage() {
 
             <div className="mt-5 space-y-5">
               <div>
-                <FieldLabel required>Slug</FieldLabel>
+                <FieldLabel>Slug</FieldLabel>
                 <InputBase
                   type="text"
                   value={form.slug}
@@ -1273,7 +1322,7 @@ export default function AdminNewBlogPage() {
                     setSlugTouched(true);
                     updateField("slug", slugify(e.target.value));
                   }}
-                  placeholder="blog-slug"
+                  placeholder="Auto from blog title or tutorial heading"
                 />
                 <p className="mt-2 text-xs text-gray-500">
                   Public URL:{" "}
@@ -1294,7 +1343,7 @@ export default function AdminNewBlogPage() {
               </div>
 
               <div>
-                <FieldLabel required>Category</FieldLabel>
+                <FieldLabel>Category</FieldLabel>
                 <SelectBase
                   value={form.category}
                   onChange={(e) => updateField("category", e.target.value)}
