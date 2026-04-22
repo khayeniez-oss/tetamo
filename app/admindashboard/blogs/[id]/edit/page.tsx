@@ -290,7 +290,7 @@ function inferMode(
   const hasMainContent = Boolean(stripHtml(content || ""));
   const hasMainContentId = Boolean(stripHtml(contentId || ""));
 
-  if (category === "tutorial") return "tutorial";
+  if (hasBlocks && category === "tutorial") return "tutorial";
   if (hasBlocks && !hasMainContent && !hasMainContentId) return "tutorial";
 
   return "blog";
@@ -428,7 +428,6 @@ export default function AdminEditBlogPage() {
   const [deleting, setDeleting] = useState(false);
 
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [uploadingBodyImage, setUploadingBodyImage] = useState(false);
   const [uploadingBlockImageId, setUploadingBlockImageId] = useState<
     string | null
   >(null);
@@ -458,7 +457,8 @@ export default function AdminEditBlogPage() {
       const [blogRes, categoriesRes, blocksRes] = await Promise.all([
         supabase
           .from("blogs")
-          .select(`
+          .select(
+            `
             id,
             title,
             title_id,
@@ -476,9 +476,11 @@ export default function AdminEditBlogPage() {
             updated_at,
             published_at,
             view_count
-          `)
+          `
+          )
           .eq("id", blogId)
-          .single(),
+          .limit(1)
+          .maybeSingle(),
         supabase
           .from("blog_categories")
           .select("id, name, slug, sort_order")
@@ -486,7 +488,8 @@ export default function AdminEditBlogPage() {
           .order("name", { ascending: true }),
         supabase
           .from("blog_content_blocks")
-          .select(`
+          .select(
+            `
             id,
             blog_id,
             block_type,
@@ -505,7 +508,8 @@ export default function AdminEditBlogPage() {
             button_url,
             sort_order,
             is_active
-          `)
+          `
+          )
           .eq("blog_id", blogId)
           .order("sort_order", { ascending: true }),
       ]);
@@ -554,7 +558,7 @@ export default function AdminEditBlogPage() {
         publish_at: toDatetimeLocalValue(data.published_at),
       });
 
-      setSlugTouched(Boolean(data.slug));
+      setSlugTouched(false);
       setCategoryTouched(Boolean(data.category));
 
       setCreatedAt(data.created_at ?? null);
@@ -694,6 +698,7 @@ export default function AdminEditBlogPage() {
     setSlugTouched(false);
 
     if (nextMode === "tutorial") {
+      setCategoryTouched(false);
       setForm((prev) => ({
         ...prev,
         content: "",
@@ -790,7 +795,6 @@ export default function AdminEditBlogPage() {
     if (!file) return;
 
     try {
-      setUploadingBodyImage(true);
       const publicUrl = await uploadImageToStorage(file, "body");
 
       setForm((prev) => ({
@@ -802,7 +806,6 @@ export default function AdminEditBlogPage() {
       console.error("Failed to upload body image:", error);
       alert(error?.message || "Failed to upload body image.");
     } finally {
-      setUploadingBodyImage(false);
       if (bodyImageInputRef.current) bodyImageInputRef.current.value = "";
     }
   }
@@ -957,9 +960,10 @@ export default function AdminEditBlogPage() {
     }
 
     if (nextStatus === "draft") setSavingDraft(true);
-    if (nextStatus === "published" && form.status === "draft") setPublishing(true);
-    if (nextStatus === "draft" && form.status === "published") setUnpublishing(true);
-    if (nextStatus === "published" && form.status === "published") setPublishing(true);
+    if (nextStatus === "published") setPublishing(true);
+    if (nextStatus === "draft" && form.status === "published") {
+      setUnpublishing(true);
+    }
 
     try {
       const {
@@ -979,7 +983,7 @@ export default function AdminEditBlogPage() {
           ? publishAtIso || new Date().toISOString()
           : null;
 
-      const { data, error } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("blogs")
         .update({
           title: finalTitle,
@@ -998,10 +1002,11 @@ export default function AdminEditBlogPage() {
           updated_by: user.id,
         })
         .eq("id", blogId)
-        .select("updated_at, published_at, status")
-        .single();
+        .select("updated_at, published_at, status");
 
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      const updatedRow = Array.isArray(updatedRows) ? updatedRows[0] : null;
 
       const { error: deleteBlocksError } = await supabase
         .from("blog_content_blocks")
@@ -1050,11 +1055,11 @@ export default function AdminEditBlogPage() {
         publish_at: toDatetimeLocalValue(nextPublishedAt),
       }));
 
-      setUpdatedAt(data?.updated_at ?? new Date().toISOString());
-      setPublishedAt(data?.published_at ?? nextPublishedAt);
+      setUpdatedAt(updatedRow?.updated_at ?? new Date().toISOString());
+      setPublishedAt(updatedRow?.published_at ?? nextPublishedAt);
 
       if (nextStatus === "published") {
-        const resolved = data?.published_at ?? nextPublishedAt;
+        const resolved = updatedRow?.published_at ?? nextPublishedAt;
         const future = resolved
           ? new Date(resolved).getTime() > Date.now()
           : false;
@@ -2010,5 +2015,5 @@ export default function AdminEditBlogPage() {
         </aside>
       </div>
     </div>
-  )
+  );
 }
