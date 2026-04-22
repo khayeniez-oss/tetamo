@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import {
+  Bookmark,
+  Eye,
+  Heart,
+  Search,
+  Share2,
+} from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 
@@ -62,6 +68,11 @@ function isLiveNow(publishedAt?: string | null) {
   return publishTime <= Date.now();
 }
 
+function getBlogUrl(slug: string) {
+  if (typeof window === "undefined") return `/blog/${slug}`;
+  return `${window.location.origin}/blog/${slug}`;
+}
+
 /* =========================
 PAGE
 ========================= */
@@ -72,6 +83,10 @@ export default function PublicBlogPage() {
   const [blogs, setBlogs] = useState<PublicBlog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [savedBlogs, setSavedBlogs] = useState<Record<string, boolean>>({});
+  const [likedBlogs, setLikedBlogs] = useState<Record<string, boolean>>({});
+  const [shareCopiedId, setShareCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -107,6 +122,7 @@ export default function PublicBlogPage() {
           setBlogs([]);
           setLoading(false);
         }
+
         return;
       }
 
@@ -116,6 +132,19 @@ export default function PublicBlogPage() {
 
       if (!ignore) {
         setBlogs(liveBlogs);
+
+        const savedState: Record<string, boolean> = {};
+        const likedState: Record<string, boolean> = {};
+
+        liveBlogs.forEach((blog) => {
+          savedState[blog.id] =
+            localStorage.getItem(`tetamo_blog_saved_${blog.id}`) === "true";
+          likedState[blog.id] =
+            localStorage.getItem(`tetamo_blog_liked_${blog.id}`) === "true";
+        });
+
+        setSavedBlogs(savedState);
+        setLikedBlogs(likedState);
         setLoading(false);
       }
     }
@@ -155,6 +184,67 @@ export default function PublicBlogPage() {
       return words.every((word) => searchable.includes(word));
     });
   }, [blogs, searchQuery, lang]);
+
+  function toggleSave(blogId: string) {
+    setSavedBlogs((prev) => {
+      const nextValue = !prev[blogId];
+
+      localStorage.setItem(
+        `tetamo_blog_saved_${blogId}`,
+        String(nextValue)
+      );
+
+      return {
+        ...prev,
+        [blogId]: nextValue,
+      };
+    });
+  }
+
+  function toggleLike(blogId: string) {
+    setLikedBlogs((prev) => {
+      const nextValue = !prev[blogId];
+
+      localStorage.setItem(
+        `tetamo_blog_liked_${blogId}`,
+        String(nextValue)
+      );
+
+      return {
+        ...prev,
+        [blogId]: nextValue,
+      };
+    });
+  }
+
+  async function handleShare(blog: PublicBlog, activeTitle: string) {
+    const url = getBlogUrl(blog.slug);
+    const title = activeTitle || "Tetamo Blog";
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({
+          title,
+          text:
+            lang === "id"
+              ? "Baca artikel ini di Tetamo."
+              : "Read this article on Tetamo.",
+          url,
+        });
+
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      setShareCopiedId(blog.id);
+
+      window.setTimeout(() => {
+        setShareCopiedId(null);
+      }, 1800);
+    } catch (error) {
+      console.error("Failed to share blog:", error);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#FAFAF8]">
@@ -232,6 +322,10 @@ export default function PublicBlogPage() {
                     ? blog.excerpt_id?.trim() || blog.excerpt?.trim() || ""
                     : blog.excerpt?.trim() || blog.excerpt_id?.trim() || "";
 
+                const isSaved = Boolean(savedBlogs[blog.id]);
+                const isLiked = Boolean(likedBlogs[blog.id]);
+                const isCopied = shareCopiedId === blog.id;
+
                 return (
                   <article
                     key={blog.id}
@@ -257,19 +351,24 @@ export default function PublicBlogPage() {
                           </div>
                         )}
                       </div>
+                    </Link>
 
-                      <div className="p-5 sm:p-6">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                          <span>{blog.author_name || "Tetamo Editorial"}</span>
-                          <span>•</span>
-                          <span>
-                            {formatBlogDate(blog.published_at || blog.created_at)}
-                          </span>
-                          <span>•</span>
-                          <span>{blog.view_count ?? 0} views</span>
-                        </div>
+                    <div className="p-5 sm:p-6">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                        <span>{blog.author_name || "Tetamo Editorial"}</span>
+                        <span>•</span>
+                        <span>
+                          {formatBlogDate(blog.published_at || blog.created_at)}
+                        </span>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Eye size={13} />
+                          {Number(blog.view_count ?? 0).toLocaleString()} views
+                        </span>
+                      </div>
 
-                        <h2 className="mt-3 line-clamp-2 text-lg font-bold leading-7 text-[#1C1C1E]">
+                      <Link href={`/blog/${blog.slug}`} className="block">
+                        <h2 className="mt-3 line-clamp-2 text-lg font-bold leading-7 text-[#1C1C1E] hover:opacity-80">
                           {activeTitle}
                         </h2>
 
@@ -279,12 +378,76 @@ export default function PublicBlogPage() {
                               ? "Klik untuk membaca artikel lengkap."
                               : "Click to read the full article.")}
                         </p>
+                      </Link>
 
-                        <div className="mt-5 inline-flex items-center text-sm font-semibold text-[#1C1C1E]">
-                          {lang === "id" ? "Baca Selengkapnya" : "Read More"}
-                        </div>
+                      <div className="mt-5 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleSave(blog.id)}
+                          className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
+                            isSaved
+                              ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                              : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                          }`}
+                        >
+                          <Bookmark
+                            size={14}
+                            className={isSaved ? "fill-current" : ""}
+                          />
+                          {isSaved
+                            ? lang === "id"
+                              ? "Tersimpan"
+                              : "Saved"
+                            : lang === "id"
+                              ? "Simpan"
+                              : "Save"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleLike(blog.id)}
+                          className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
+                            isLiked
+                              ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                              : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                          }`}
+                        >
+                          <Heart
+                            size={14}
+                            className={isLiked ? "fill-current" : ""}
+                          />
+                          {isLiked
+                            ? lang === "id"
+                              ? "Disukai"
+                              : "Liked"
+                            : lang === "id"
+                              ? "Suka"
+                              : "Like"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleShare(blog, activeTitle)}
+                          className="inline-flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                        >
+                          <Share2 size={14} />
+                          {isCopied
+                            ? lang === "id"
+                              ? "Disalin"
+                              : "Copied"
+                            : lang === "id"
+                              ? "Bagikan"
+                              : "Share"}
+                        </button>
                       </div>
-                    </Link>
+
+                      <Link
+                        href={`/blog/${blog.slug}`}
+                        className="mt-5 inline-flex items-center text-sm font-semibold text-[#1C1C1E] hover:opacity-80"
+                      >
+                        {lang === "id" ? "Baca Selengkapnya" : "Read More"}
+                      </Link>
+                    </div>
                   </article>
                 );
               })}
