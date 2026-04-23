@@ -128,8 +128,8 @@ function RoleCard({
         disabled
           ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-70"
           : active
-          ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
-          : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
+            ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
+            : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
       ].join(" ")}
     >
       {badge ? (
@@ -184,10 +184,8 @@ export default function SignupPageClient() {
   );
 
   useEffect(() => {
-    if (initialRole && initialRole !== selectedRole) {
-      setSelectedRole(initialRole);
-    }
-  }, [initialRole, selectedRole]);
+    setSelectedRole(initialRole);
+  }, [initialRole]);
 
   useEffect(() => {
     if (selectedRole === "developer") {
@@ -215,17 +213,17 @@ export default function SignupPageClient() {
     currentRole === "agent"
       ? `/login?role=agent&next=${encodeURIComponent(agentNextPath)}`
       : currentRole === "owner"
-      ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
-      : currentRole === "admin"
-      ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
-      : "/login";
+        ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
+        : currentRole === "admin"
+          ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
+          : "/login";
 
   const footerLoginHref =
     currentRole && currentRole !== "developer"
       ? loginRedirect
       : next
-      ? `/login?next=${encodeURIComponent(next)}`
-      : "/login";
+        ? `/login?next=${encodeURIComponent(next)}`
+        : "/login";
 
   function getOAuthRedirectTo(provider: OAuthProvider) {
     const params = new URLSearchParams();
@@ -339,7 +337,9 @@ export default function SignupPageClient() {
       }
 
       if (trimmedAdminCode !== expectedAdminCode) {
-        alert(isID ? "Admin signup code tidak valid." : "Invalid admin signup code.");
+        alert(
+          isID ? "Admin signup code tidak valid." : "Invalid admin signup code."
+        );
         return;
       }
     }
@@ -539,8 +539,8 @@ export default function SignupPageClient() {
                           ? "Menghubungkan ke Google..."
                           : "Connecting to Google..."
                         : isID
-                        ? "Daftar dengan Google"
-                        : "Sign up with Google"}
+                          ? "Daftar dengan Google"
+                          : "Sign up with Google"}
                     </span>
                   </button>
 
@@ -558,8 +558,8 @@ export default function SignupPageClient() {
                             ? "Menghubungkan ke Facebook..."
                             : "Connecting to Facebook..."
                           : isID
-                          ? "Daftar dengan Facebook"
-                          : "Sign up with Facebook"}
+                            ? "Daftar dengan Facebook"
+                            : "Sign up with Facebook"}
                       </span>
                     </button>
                   ) : null}
@@ -577,8 +577,8 @@ export default function SignupPageClient() {
                           ? "Menghubungkan ke Apple..."
                           : "Connecting to Apple..."
                         : isID
-                        ? "Daftar dengan Apple"
-                        : "Sign up with Apple"}
+                          ? "Daftar dengan Apple"
+                          : "Sign up with Apple"}
                     </span>
                   </button>
                 </div>
@@ -653,8 +653,8 @@ export default function SignupPageClient() {
                     ? "Sedang membuat akun..."
                     : "Creating account..."
                   : isID
-                  ? "Daftar"
-                  : "Sign up"}
+                    ? "Daftar"
+                    : "Sign up"}
               </button>
             </form>
 
