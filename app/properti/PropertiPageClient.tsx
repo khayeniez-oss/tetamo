@@ -1132,15 +1132,19 @@ Is this property still available?`;
   );
 }
 
-export default function PropertiPageClient() {
+export default function PropertiPageClient({
+  initialProperties = [],
+}: {
+  initialProperties?: Property[];
+}) {
   const { lang } = useLanguage();
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   const jenisListing = sp.get("jenisListing");
 
-  const [all, setAll] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [all, setAll] = useState<Property[]>(initialProperties);
+const [loading, setLoading] = useState(initialProperties.length === 0);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
