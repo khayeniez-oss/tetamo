@@ -92,7 +92,7 @@ export default function Page() {
 
       const coverImageUrl = photos[coverIndex] || photos[0] || null;
 
-      const updatePayload = {
+      const updatePayload: Record<string, any> = {
         source: "owner",
 
         listing_type: cleanText(draft?.listingType),
@@ -101,7 +101,10 @@ export default function Page() {
         market_type: cleanText(draft?.marketType),
 
         title: cleanText(draft?.title),
+        title_id: cleanText((draft as any)?.title_id),
+
         description: cleanText(draft?.description),
+        description_id: cleanText((draft as any)?.description_id),
 
         price: cleanNumber(draft?.price),
 
@@ -159,7 +162,7 @@ export default function Page() {
 
       const { error: updateError } = await supabase
         .from("properties")
-        .update(updatePayload)
+        .update(updatePayload as any)
         .eq("id", property.id)
         .eq("user_id", user.id);
 

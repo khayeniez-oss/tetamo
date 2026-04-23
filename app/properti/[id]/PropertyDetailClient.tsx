@@ -32,6 +32,7 @@ import {
   Star,
   Clock,
   Share2,
+  Eye,
 } from "lucide-react";
 
 type RentalType = "monthly" | "yearly" | "";
@@ -64,7 +65,10 @@ type PropertyRow = {
   slug: string | null;
   kode: string | null;
   posted_date: string | null;
+
   title: string | null;
+  title_id: string | null;
+
   price: number | null;
   province: string | null;
   city: string | null;
@@ -75,8 +79,13 @@ type PropertyRow = {
   furnishing: string | null;
   certificate: string | null;
   market_type: string | null;
+
   description: string | null;
+  description_id: string | null;
   description_en: string | null;
+
+  view_count: number | null;
+
   facilities: Record<string, boolean> | null;
   nearby: Record<string, boolean> | null;
   listing_type: string | null;
@@ -113,7 +122,10 @@ type PropertyItem = {
   jenisListing: "dijual" | "disewa";
   rentalType: RentalType;
   propertyType: string;
+
   title: string;
+  titleId: string;
+
   price: string;
   priceValue: number;
   province: string;
@@ -121,8 +133,13 @@ type PropertyItem = {
   furnished: string;
   certificate: string;
   marketType: string;
+
   description: string;
+  descriptionId: string;
   descriptionEn: string;
+
+  viewCount: number;
+
   agency: string;
   agentName: string;
   images: string[];
@@ -253,6 +270,14 @@ function formatPostedDate(value?: string | null) {
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) return "";
   return new Intl.NumberFormat("id-ID").format(value);
+}
+
+function formatCompactNumber(value: number | null | undefined) {
+  const safeValue = Number(value ?? 0);
+  return new Intl.NumberFormat("en", {
+    notation: safeValue >= 1000 ? "compact" : "standard",
+    maximumFractionDigits: safeValue >= 1000 ? 1 : 0,
+  }).format(safeValue);
 }
 
 function toNumberOrNull(value: unknown) {
@@ -535,9 +560,25 @@ function formatUnitPrice(
   return `${formatPriceByCurrency(value, currency)} / ${suffix}`;
 }
 
-
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getOrCreateVisitorHash() {
+  if (typeof window === "undefined") return "";
+
+  const key = "tetamo_property_visitor_id";
+  const existing = window.localStorage.getItem(key);
+
+  if (existing) return existing;
+
+  const next =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `visitor-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  window.localStorage.setItem(key, next);
+  return next;
 }
 
 function getStructuredDescription(raw?: string | null, lang?: string) {
@@ -959,33 +1000,52 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         rawParking === "yes" ||
         rawParking === "true";
 
+      const localizedTitle =
+        lang === "id"
+          ? toStringOrEmpty(row.title_id) || toStringOrEmpty(row.title) || "-"
+          : toStringOrEmpty(row.title) || toStringOrEmpty(row.title_id) || "-";
+
+      const localizedDescription =
+        lang === "id"
+          ? toStringOrEmpty(row.description_id) ||
+            toStringOrEmpty(row.description) ||
+            "-"
+          : toStringOrEmpty(row.description) ||
+            toStringOrEmpty(row.description_id) ||
+            "-";
+
       const mapped: PropertyItem = {
         id: row.id,
         slug: row.slug ?? undefined,
         jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
         rentalType: normalizeRentalType(row.rental_type),
         propertyType: row.property_type || "",
-        title: row.title ?? "-",
+
+        title: localizedTitle,
+        titleId: toStringOrEmpty(row.title_id),
+
         price: formatIdr(row.price ?? 0),
         priceValue: Number(row.price ?? 0),
         province: row.province ?? "-",
         area: row.city || row.area || "-",
-        furnished: mapFurnishing(
-          row.furnishing ?? row.furnished,
-          lang
-        ),
+        furnished: mapFurnishing(row.furnishing ?? row.furnished, lang),
         certificate: toStringOrEmpty(row.certificate ?? row.sertifikat) || "-",
         marketType: toStringOrEmpty(row.market_type ?? row.marketType),
-        description: row.description || "-",
+
+        description: localizedDescription,
+        descriptionId: toStringOrEmpty(row.description_id),
         descriptionEn: row.description_en || "",
+
+        viewCount: Number(row.view_count ?? 0),
+
         agency:
           row.contact_agency ||
           posterProfile?.agency ||
           (postedByType === "agent"
             ? "Tetamo Agent"
             : postedByType === "developer"
-            ? "Developer"
-            : "Owner"),
+              ? "Developer"
+              : "Owner"),
         agentName:
           row.contact_name ||
           contactProfile?.full_name ||
@@ -1078,7 +1138,9 @@ export default function PropertyDetailClient({ id }: { id: string }) {
           row.ownership_type ?? row.jenis_kepemilikan ?? row.ownership
         ),
         landType: toStringOrEmpty(row.land_type ?? row.jenis_tanah),
-        zoningType: toStringOrEmpty(row.zoning_type ?? row.jenis_zoning ?? row.zoning),
+        zoningType: toStringOrEmpty(
+          row.zoning_type ?? row.jenis_zoning ?? row.zoning
+        ),
         unitFloorValue: toNumberOrNull(
           row.unit_floor ?? row.floor_level ?? row.lantai_unit
         ),
@@ -1122,38 +1184,82 @@ export default function PropertyDetailClient({ id }: { id: string }) {
     };
   }, [id, lang]);
 
-  useEffect(() => {
-    if (!property?.id) return;
-    if (trackedDetailViewRef.current === property.id) return;
+useEffect(() => {
+  if (!property?.id) return;
 
-    trackedDetailViewRef.current = property.id;
+  const propertyId = property.id;
+  const propertyTitle = property.title;
+  const propertyCode = property.kodeListing ?? null;
+  const listingType = property.jenisListing;
+  const rentalType = property.rentalType || null;
+  const propertyType = property.propertyType;
+  const postedByType = property.postedByType;
+  const propertyArea = property.area;
+  const propertyProvince = property.province;
+
+  if (trackedDetailViewRef.current === propertyId) return;
+
+  trackedDetailViewRef.current = propertyId;
+
+  async function trackDetailView() {
+    try {
+      const visitorHash = getOrCreateVisitorHash();
+
+      const { data, error } = await (supabase as any).rpc(
+        "track_property_view",
+        {
+          p_property_id: propertyId,
+          p_visitor_hash: visitorHash,
+        }
+      );
+
+      if (!error && typeof data === "number") {
+        setProperty((prev) =>
+          prev && prev.id === propertyId
+            ? {
+                ...prev,
+                viewCount: Number(data),
+              }
+            : prev
+        );
+      }
+
+      if (error) {
+        console.error("Failed to track property view count:", error);
+      }
+    } catch (error) {
+      console.error("Failed to call property view RPC:", error);
+    }
 
     void trackEvent({
       event_name: "property_detail_view",
-      property_id: property.id,
+      property_id: propertyId,
       source_page: "property_detail",
       metadata: {
-        property_title: property.title,
-        property_code: property.kodeListing ?? null,
-        listing_type: property.jenisListing,
-        rental_type: property.rentalType || null,
-        property_type: property.propertyType,
-        posted_by_type: property.postedByType,
-        area: property.area,
-        province: property.province,
+        property_title: propertyTitle,
+        property_code: propertyCode,
+        listing_type: listingType,
+        rental_type: rentalType,
+        property_type: propertyType,
+        posted_by_type: postedByType,
+        area: propertyArea,
+        province: propertyProvince,
       },
     });
-  }, [
-    property?.id,
-    property?.title,
-    property?.kodeListing,
-    property?.jenisListing,
-    property?.rentalType,
-    property?.propertyType,
-    property?.postedByType,
-    property?.area,
-    property?.province,
-  ]);
+  }
+
+  void trackDetailView();
+}, [
+  property?.id,
+  property?.title,
+  property?.kodeListing,
+  property?.jenisListing,
+  property?.rentalType,
+  property?.propertyType,
+  property?.postedByType,
+  property?.area,
+  property?.province,
+]);
 
   useEffect(() => {
     let ignore = false;
@@ -1981,8 +2087,8 @@ Is this property still available?`;
           value: property.parkingValue
             ? formatNumber(property.parkingValue)
             : lang === "id"
-            ? "Tersedia"
-            : "Available",
+              ? "Tersedia"
+              : "Available",
           icon: CarFront,
         }
       : null,
@@ -2252,14 +2358,14 @@ Is this property still available?`;
     .filter(([, value]) => Boolean(value))
     .map(([key]) => nearbyLabels[key] ?? key);
 
+  const activeTitle = property.title;
 
   const activeDescription =
-    lang === "en" && property.descriptionEn
-      ? property.descriptionEn
-      : property.description;
+    lang === "id"
+      ? property.descriptionId || property.description
+      : property.description || property.descriptionId;
 
   const structuredDescription = getStructuredDescription(activeDescription, lang);
-
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -2313,7 +2419,7 @@ Is this property still available?`;
             <div className="relative overflow-hidden rounded-[24px]">
               <img
                 src={property.images[idx]}
-                alt={property.title}
+                alt={activeTitle}
                 className="h-[520px] w-full object-cover sm:h-[580px] lg:h-[640px]"
               />
 
@@ -2328,8 +2434,8 @@ Is this property still available?`;
                       ? "Dijual"
                       : "For Sale"
                     : lang === "id"
-                    ? "Disewa"
-                    : "For Rent"}
+                      ? "Disewa"
+                      : "For Rent"}
                 </span>
 
                 {property.jenisListing === "disewa" && property.rentalType ? (
@@ -2370,8 +2476,16 @@ Is this property still available?`;
           </div>
 
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
-              {displayPrice}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
+                {displayPrice}
+              </div>
+
+              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700 sm:text-xs">
+                <Eye className="h-3.5 w-3.5" />
+                <span>{formatCompactNumber(property.viewCount)}</span>
+                <span>{lang === "id" ? "Dilihat" : "Views"}</span>
+              </div>
             </div>
 
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 sm:text-[15px]">
@@ -2410,7 +2524,7 @@ Is this property still available?`;
             </div>
 
             <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:text-2xl">
-              {property.title}
+              {activeTitle}
             </h1>
 
             <div className="mt-2 text-sm text-gray-600 sm:text-[15px]">
@@ -2437,8 +2551,8 @@ Is this property still available?`;
                     {property.postedByType === "owner"
                       ? "Owner"
                       : property.postedByType === "developer"
-                      ? "Developer"
-                      : "Agent"}
+                        ? "Developer"
+                        : "Agent"}
                   </div>
 
                   <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
@@ -2621,8 +2735,14 @@ Is this property still available?`;
               ) : null}
 
               {structuredDescription.detailHeading ? (
-                <div className={structuredDescription.intro.length > 0 ? "mt-6" : ""}>
-                  <p className="font-bold">{structuredDescription.detailHeading}</p>
+                <div
+                  className={
+                    structuredDescription.intro.length > 0 ? "mt-6" : ""
+                  }
+                >
+                  <p className="font-bold">
+                    {structuredDescription.detailHeading}
+                  </p>
 
                   {structuredDescription.detailItems.length > 0 ? (
                     <ul className="mt-3 list-disc space-y-1 pl-5">
@@ -2829,4 +2949,4 @@ Is this property still available?`;
       </div>
     </main>
   );
-}                                                     
+}

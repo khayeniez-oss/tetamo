@@ -357,8 +357,8 @@ export default function Navbar() {
 
   const t = {
     brandTagline: isID
-      ? "PROPERTI • BISNIS • GAYA HIDUP"
-      : "PROPERTY • BUSINESS • LIFESTYLE",
+      ? "PROPERTI • MARKETPLACE"
+      : "PROPERTY • MARKETPLACE ",
 
     properties: isID ? "Properti" : "Properties",
     allProperties: isID ? "Semua Properti" : "All Properties",

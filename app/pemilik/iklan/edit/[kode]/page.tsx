@@ -37,9 +37,14 @@ export default function PemilikIklanEditPage() {
         return;
       }
 
+      const hasBilingualDraftFields =
+        (draft as any)?.title_id !== undefined &&
+        (draft as any)?.description_id !== undefined;
+
       if (
         draft?.mode === "edit" &&
         draft?.kode === kode &&
+        hasBilingualDraftFields &&
         (draft?.title !== undefined ||
           draft?.address !== undefined ||
           draft?.photos !== undefined)
@@ -117,15 +122,15 @@ export default function PemilikIklanEditPage() {
         images.findIndex((img) => Boolean(img.is_cover))
       );
 
-      const nextDraft: PemilikListingDraft = {
+      const nextDraft: PemilikListingDraft & Record<string, any> = {
         listingType: property.listing_type ?? "",
         rentalType: property.rental_type ?? "",
         plan:
           property.plan_id === "featured"
             ? "featured"
             : property.plan_id === "basic"
-            ? "basic"
-            : undefined,
+              ? "basic"
+              : undefined,
         mode: "edit",
         source: "owner",
         kode: property.kode ?? kode,
@@ -147,54 +152,54 @@ export default function PemilikIklanEditPage() {
           property.lt !== null && property.lt !== undefined
             ? String(property.lt)
             : property.land_size !== null && property.land_size !== undefined
-            ? String(property.land_size)
-            : "",
+              ? String(property.land_size)
+              : "",
         lb:
           property.lb !== null && property.lb !== undefined
             ? String(property.lb)
             : property.building_size !== null &&
-              property.building_size !== undefined
-            ? String(property.building_size)
-            : "",
+                property.building_size !== undefined
+              ? String(property.building_size)
+              : "",
         bed:
           property.bed !== null && property.bed !== undefined
             ? String(property.bed)
             : property.bedrooms !== null && property.bedrooms !== undefined
-            ? String(property.bedrooms)
-            : "",
+              ? String(property.bedrooms)
+              : "",
         bath:
           property.bath !== null && property.bath !== undefined
             ? String(property.bath)
             : property.bathrooms !== null && property.bathrooms !== undefined
-            ? String(property.bathrooms)
-            : "",
+              ? String(property.bathrooms)
+              : "",
         maid:
           property.maid !== null && property.maid !== undefined
             ? String(property.maid)
             : property.maid_bedrooms !== null &&
-              property.maid_bedrooms !== undefined
-            ? String(property.maid_bedrooms)
-            : "",
+                property.maid_bedrooms !== undefined
+              ? String(property.maid_bedrooms)
+              : "",
         furnishing: property.furnishing ?? "",
         garage:
           property.garage !== null && property.garage !== undefined
             ? String(property.garage)
             : property.garages !== null && property.garages !== undefined
-            ? String(property.garages)
-            : "",
+              ? String(property.garages)
+              : "",
         floor:
           property.floor !== null && property.floor !== undefined
             ? String(property.floor)
             : property.floors !== null && property.floors !== undefined
-            ? String(property.floors)
-            : "",
+              ? String(property.floors)
+              : "",
 
         listrik:
           property.listrik !== null && property.listrik !== undefined
             ? String(property.listrik)
             : property.electricity !== null && property.electricity !== undefined
-            ? String(property.electricity)
-            : "",
+              ? String(property.electricity)
+              : "",
         jenisAir: property.jenis_air ?? property.water_type ?? "",
 
         sertifikat: property.sertifikat ?? property.certificate ?? "",
@@ -204,7 +209,9 @@ export default function PemilikIklanEditPage() {
           property.jenis_kepemilikan ?? property.ownership_type ?? "",
 
         title: property.title ?? "",
+        title_id: (property as any).title_id ?? "",
         description: property.description ?? "",
+        description_id: (property as any).description_id ?? "",
 
         verification: property.verification_status
           ? {

@@ -35,6 +35,9 @@ export default function AgentEditDeskripsiFotoPage() {
   const [saving, setSaving] = useState(false);
   const [pageError, setPageError] = useState("");
 
+  const draftTitleId = (draft as any)?.title_id;
+  const draftDescriptionId = (draft as any)?.description_id;
+
   const kode = useMemo(() => {
     const raw = params?.kode;
     if (Array.isArray(raw)) return decodeURIComponent(raw[0] || "");
@@ -55,7 +58,9 @@ export default function AgentEditDeskripsiFotoPage() {
       const alreadyLoaded =
         draft?.mode === "edit" &&
         draft?.source === "agent" &&
-        draft?.kode === kode;
+        draft?.kode === kode &&
+        draftTitleId !== undefined &&
+        draftDescriptionId !== undefined;
 
       if (alreadyLoaded) {
         if (!isMounted) return;
@@ -132,7 +137,9 @@ export default function AgentEditDeskripsiFotoPage() {
           marketType: property.market_type ?? "",
 
           title: property.title ?? "",
+          title_id: (property as any).title_id ?? "",
           description: property.description ?? "",
+          description_id: (property as any).description_id ?? "",
 
           price: toInputValue(property.price),
 
@@ -184,7 +191,15 @@ export default function AgentEditDeskripsiFotoPage() {
     return () => {
       isMounted = false;
     };
-  }, [kode, draft?.kode, draft?.mode, draft?.source, setDraft]);
+  }, [
+    kode,
+    draft?.kode,
+    draft?.mode,
+    draft?.source,
+    draftTitleId,
+    draftDescriptionId,
+    setDraft,
+  ]);
 
   function handleBack() {
     router.push(
@@ -242,14 +257,17 @@ export default function AgentEditDeskripsiFotoPage() {
 
       const coverImageUrl = photos[coverIndex] || photos[0] || null;
 
-      const updatePayload = {
+      const updatePayload: Record<string, any> = {
         listing_type: cleanText(draft?.listingType),
         rental_type: cleanText(draft?.rentalType),
         property_type: cleanText(draft?.propertyType),
         market_type: cleanText(draft?.marketType),
 
         title: cleanText(draft?.title),
+        title_id: cleanText((draft as any)?.title_id),
+
         description: cleanText(draft?.description),
+        description_id: cleanText((draft as any)?.description_id),
 
         price: cleanNumber(draft?.price),
 
@@ -296,7 +314,7 @@ export default function AgentEditDeskripsiFotoPage() {
 
       const { error: updateError } = await supabase
         .from("properties")
-        .update(updatePayload)
+        .update(updatePayload as any)
         .eq("id", property.id)
         .eq("user_id", user.id)
         .eq("source", "agent");
