@@ -717,7 +717,15 @@ function getStructuredDescription(raw?: string | null, lang?: string) {
   };
 }
 
-export default function PropertyDetailClient({ id }: { id: string }) {
+export default function PropertyDetailClient({
+  id,
+  initialProperty = null,
+  initialOrderedProperties = [],
+}: {
+  id: string;
+  initialProperty?: PropertyItem | null;
+  initialOrderedProperties?: OrderedPropertyRef[];
+}) {
   const { lang } = useLanguage();
   const { currency } = useCurrency();
   const currentCurrency: SupportedCurrency =
@@ -731,11 +739,11 @@ export default function PropertyDetailClient({ id }: { id: string }) {
   const [selectedTime, setSelectedTime] = useState("");
   const [idx, setIdx] = useState(0);
 
-  const [property, setProperty] = useState<PropertyItem | null>(null);
-  const [orderedProperties, setOrderedProperties] = useState<
-    OrderedPropertyRef[]
-  >([]);
-  const [loading, setLoading] = useState(true);
+  const [property, setProperty] = useState<PropertyItem | null>(initialProperty);
+const [orderedProperties, setOrderedProperties] = useState<
+  OrderedPropertyRef[]
+>(initialOrderedProperties);
+const [loading, setLoading] = useState(!initialProperty);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
 
@@ -793,7 +801,9 @@ export default function PropertyDetailClient({ id }: { id: string }) {
         return;
       }
 
-      setLoading(true);
+      if (!(property && property.id === id)) {
+  setLoading(true);
+}
 
       const [
         { data: propertyData, error: propertyError },
