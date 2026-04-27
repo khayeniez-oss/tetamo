@@ -22,6 +22,25 @@ type DraftMedia = {
   mediaFolder?: string;
   mode?: "create" | "edit";
   source?: "owner" | "agent";
+  aiGeneratedOnce?: boolean;
+};
+
+type AiPropertyContent = {
+  englishTitle?: string;
+  indonesianTitle?: string;
+  englishDescription?: string;
+  indonesianDescription?: string;
+  seoTitle?: string;
+  seoMetaDescription?: string;
+  socialCaption?: string;
+  whatsappInquiryMessage?: string;
+};
+
+type AiPropertyResponse = {
+  success?: boolean;
+  data?: AiPropertyContent;
+  error?: string;
+  detail?: string;
 };
 
 const MAX_PHOTOS = 30;
@@ -106,6 +125,83 @@ function getSafeVideoExtension(file: File) {
   return "mp4";
 }
 
+function normalizeDraftValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item: unknown) => normalizeDraftValue(item))
+      .filter((item: string) => item.length > 0)
+      .join(", ");
+  }
+
+  if (typeof value === "object") {
+    const objectValue = value as {
+      name?: unknown;
+      label?: unknown;
+      title?: unknown;
+      value?: unknown;
+    };
+
+    if (typeof objectValue.name === "string") return objectValue.name;
+    if (typeof objectValue.label === "string") return objectValue.label;
+    if (typeof objectValue.title === "string") return objectValue.title;
+    if (typeof objectValue.value === "string") return objectValue.value;
+
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+function getDraftText(draft: any, keys: string[]) {
+  for (const key of keys) {
+    const value = normalizeDraftValue(draft?.[key]);
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function getDraftLocation(draft: any) {
+  const directLocation = getDraftText(draft, [
+    "location",
+    "address",
+    "alamat",
+    "propertyLocation",
+    "fullLocation",
+  ]);
+
+  if (directLocation) return directLocation;
+
+  const area = getDraftText(draft, [
+    "area",
+    "district",
+    "kecamatan",
+    "neighborhood",
+    "subdistrict",
+  ]);
+
+  const city = getDraftText(draft, ["city", "kota", "regency", "kabupaten"]);
+  const province = getDraftText(draft, ["province", "provinsi"]);
+
+  return [area, city, province].filter(Boolean).join(", ");
+}
+
+function getDraftFeatures(draft: any) {
+  const values = [
+    getDraftText(draft, ["features", "facilities", "amenities"]),
+    getDraftText(draft, ["otherFacilities", "additionalFacilities"]),
+    getDraftText(draft, ["propertyFeatures", "highlights"]),
+  ].filter(Boolean);
+
+  return Array.from(new Set(values)).join(", ");
+}
+
+function limitText(value: string, limit: number) {
+  return value.trim().slice(0, limit);
+}
+
 export default function ListingFoto({
   draft,
   setDraft,
@@ -177,6 +273,20 @@ export default function ListingFoto({
           descGuide3: "Jelaskan poin penting properti dengan jelas.",
           uploadPhotoHint:
             "Boleh upload screenshot, foto HP, JPG, PNG, WEBP, HEIC, atau HEIF.",
+          aiBoxTitle: "Buat judul & deskripsi dengan AI",
+          aiBoxSubtitle:
+            "AI akan menggunakan detail properti yang sudah Anda isi sebelumnya.",
+          aiButton: "✨ Generate dengan AI",
+          aiGenerating: "Membuat...",
+          aiUsedShort: "AI Sudah Digunakan",
+          aiNote:
+            "AI hanya dapat digunakan satu kali per listing untuk penggunaan yang adil.",
+          aiNeedDetails:
+            "Lengkapi detail properti terlebih dahulu sebelum menggunakan AI.",
+          aiFailed: "AI gagal membuat deskripsi. Silakan coba lagi.",
+          aiOverwriteConfirm:
+            "Konten judul/deskripsi yang sudah ada akan diganti oleh hasil AI. Lanjutkan?",
+          aiAlreadyGenerated: "AI sudah digunakan 1x untuk listing ini.",
         }
       : {
           back: "Back",
@@ -228,6 +338,20 @@ export default function ListingFoto({
           descGuide3: "Explain the key property points clearly.",
           uploadPhotoHint:
             "You can upload screenshots, phone photos, JPG, PNG, WEBP, HEIC, or HEIF.",
+          aiBoxTitle: "Create title & description with AI",
+          aiBoxSubtitle:
+            "AI will use the property details you filled earlier.",
+          aiButton: "✨ Generate with AI",
+          aiGenerating: "Generating...",
+          aiUsedShort: "AI Used",
+          aiNote:
+            "AI can only be used once per listing to control fair usage.",
+          aiNeedDetails:
+            "Please complete the property details first before using AI.",
+          aiFailed: "AI failed to generate the description. Please try again.",
+          aiOverwriteConfirm:
+            "Existing title/description content will be replaced by the AI result. Continue?",
+          aiAlreadyGenerated: "AI has already been used 1x for this listing.",
         };
 
   const [photos, setPhotos] = useState<string[]>(initial.photos ?? []);
@@ -243,6 +367,11 @@ export default function ListingFoto({
   );
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiGeneratedOnce, setAiGeneratedOnce] = useState<boolean>(
+    Boolean(initial.aiGeneratedOnce)
+  );
 
   const hydratedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -262,6 +391,7 @@ export default function ListingFoto({
     setTitleId((draft as any)?.title_id ?? "");
     setDescription((draft as any)?.description ?? "");
     setDescriptionId((draft as any)?.description_id ?? "");
+    setAiGeneratedOnce(Boolean((draft as any)?.aiGeneratedOnce));
 
     hydratedRef.current = true;
   }, [draft]);
@@ -278,6 +408,7 @@ export default function ListingFoto({
       title_id: titleId,
       description,
       description_id: descriptionId,
+      aiGeneratedOnce,
     }));
   }, [
     photos,
@@ -287,6 +418,7 @@ export default function ListingFoto({
     titleId,
     description,
     descriptionId,
+    aiGeneratedOnce,
     setDraft,
   ]);
 
@@ -330,6 +462,221 @@ export default function ListingFoto({
     if (descriptionId.length > MAX_DESC) return t.descLimit;
     return "";
   }, [photos.length, title, titleId, description, descriptionId, t]);
+
+  function buildAiPayload() {
+    const propertyType = getDraftText(draft, [
+      "propertyType",
+      "property_type",
+      "jenisProperti",
+      "type",
+      "category",
+      "kategori",
+    ]);
+
+    const location = getDraftLocation(draft);
+
+    const price = getDraftText(draft, [
+      "price",
+      "priceIdr",
+      "harga",
+      "hargaIdr",
+      "salePrice",
+      "rentPrice",
+      "yearlyPrice",
+      "monthlyPrice",
+      "auctionPrice",
+    ]);
+
+    const bedrooms = getDraftText(draft, [
+      "bedrooms",
+      "bedroom",
+      "kamarTidur",
+      "bedroomCount",
+    ]);
+
+    const bathrooms = getDraftText(draft, [
+      "bathrooms",
+      "bathroom",
+      "kamarMandi",
+      "bathroomCount",
+    ]);
+
+    const landSize = getDraftText(draft, [
+      "landSize",
+      "land_size",
+      "luasTanah",
+      "landArea",
+    ]);
+
+    const buildingSize = getDraftText(draft, [
+      "buildingSize",
+      "building_size",
+      "luasBangunan",
+      "buildingArea",
+    ]);
+
+    const furnishing = getDraftText(draft, [
+      "furnishing",
+      "furnished",
+      "furnish",
+      "furniture",
+    ]);
+
+    const features = getDraftFeatures(draft);
+
+    const purpose = getDraftText(draft, [
+      "purpose",
+      "listingType",
+      "transactionType",
+      "listingPurpose",
+      "status",
+    ]);
+
+    const rentalType = getDraftText(draft, [
+      "rentalType",
+      "rental_type",
+      "rentType",
+      "sewaType",
+    ]);
+
+    const ownershipTitle = getDraftText(draft, [
+      "ownershipTitle",
+      "ownership_title",
+      "certificate",
+      "sertifikat",
+      "titleType",
+    ]);
+
+    const nearbyPlaces = getDraftText(draft, [
+      "nearbyPlaces",
+      "nearby",
+      "nearbyLocation",
+      "surroundings",
+    ]);
+
+    return {
+      propertyType,
+      location,
+      price,
+      bedrooms,
+      bathrooms,
+      landSize,
+      buildingSize,
+      furnishing,
+      features,
+      purpose,
+      rentalType,
+      ownershipTitle,
+      nearbyPlaces,
+    };
+  }
+
+  async function generateWithAi() {
+    if (generatingAi) return;
+
+    if (aiGeneratedOnce) {
+      alert(t.aiAlreadyGenerated);
+      return;
+    }
+
+    const aiPayload = buildAiPayload();
+
+    const hasBasicDetails =
+      aiPayload.propertyType ||
+      aiPayload.location ||
+      aiPayload.price ||
+      aiPayload.features ||
+      aiPayload.bedrooms ||
+      aiPayload.bathrooms ||
+      aiPayload.landSize ||
+      aiPayload.buildingSize;
+
+    if (!hasBasicDetails) {
+      alert(t.aiNeedDetails);
+      return;
+    }
+
+    const hasExistingContent =
+      title.trim() ||
+      titleId.trim() ||
+      description.trim() ||
+      descriptionId.trim();
+
+    if (hasExistingContent && !window.confirm(t.aiOverwriteConfirm)) {
+      return;
+    }
+
+    try {
+      setGeneratingAi(true);
+      setAiError("");
+
+      const response = await fetch("/api/ai/property-description", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(aiPayload),
+      });
+
+      const result = (await response.json()) as AiPropertyResponse;
+
+      if (!response.ok || !result.success || !result.data) {
+        throw new Error(result.detail || result.error || t.aiFailed);
+      }
+
+      const generated = result.data;
+
+      const nextTitle = generated.englishTitle
+        ? capitalizeFirstLetter(limitText(generated.englishTitle, MAX_TITLE))
+        : title;
+
+      const nextTitleId = generated.indonesianTitle
+        ? capitalizeFirstLetter(limitText(generated.indonesianTitle, MAX_TITLE))
+        : titleId;
+
+      const nextDescription = generated.englishDescription
+        ? capitalizeFirstLetter(
+            limitText(generated.englishDescription, MAX_DESC)
+          )
+        : description;
+
+      const nextDescriptionId = generated.indonesianDescription
+        ? capitalizeFirstLetter(
+            limitText(generated.indonesianDescription, MAX_DESC)
+          )
+        : descriptionId;
+
+      setTitle(nextTitle);
+      setTitleId(nextTitleId);
+      setDescription(nextDescription);
+      setDescriptionId(nextDescriptionId);
+      setAiGeneratedOnce(true);
+
+      setDraft((p: any) => ({
+        ...(p || {}),
+        title: nextTitle,
+        title_id: nextTitleId,
+        description: nextDescription,
+        description_id: nextDescriptionId,
+        aiGeneratedOnce: true,
+        ai_seo_title: generated.seoTitle || p?.ai_seo_title || "",
+        ai_seo_meta_description:
+          generated.seoMetaDescription || p?.ai_seo_meta_description || "",
+        ai_social_caption: generated.socialCaption || p?.ai_social_caption || "",
+        ai_whatsapp_inquiry_message:
+          generated.whatsappInquiryMessage ||
+          p?.ai_whatsapp_inquiry_message ||
+          "",
+      }));
+    } catch (error: any) {
+      console.error("Generate AI listing content error:", error);
+      const message = error?.message || t.aiFailed;
+      setAiError(message);
+      alert(message);
+    } finally {
+      setGeneratingAi(false);
+    }
+  }
 
   async function ensureUserAndFolder() {
     const {
@@ -534,7 +881,7 @@ export default function ListingFoto({
   }
 
   function handleNext() {
-    if (!canContinue || uploadingPhotos || uploadingVideo) return;
+    if (!canContinue || uploadingPhotos || uploadingVideo || generatingAi) return;
     onNext();
   }
 
@@ -741,6 +1088,43 @@ export default function ListingFoto({
             </div>
 
             <div className="mt-8 border-t border-gray-100 pt-8 sm:mt-10 sm:pt-10">
+              <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                      {t.aiBoxTitle}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-600 sm:text-sm">
+                      {t.aiBoxSubtitle}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={generateWithAi}
+                    disabled={generatingAi || aiGeneratedOnce}
+                    className={[
+                      "inline-flex shrink-0 items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                      generatingAi || aiGeneratedOnce
+                        ? "cursor-not-allowed bg-gray-200 text-gray-500"
+                        : "bg-[#1C1C1E] text-white hover:opacity-90",
+                    ].join(" ")}
+                    type="button"
+                  >
+                    {aiGeneratedOnce
+                      ? t.aiUsedShort
+                      : generatingAi
+                        ? t.aiGenerating
+                        : t.aiButton}
+                  </button>
+                </div>
+
+                {aiError ? (
+  <p className="mt-3 text-xs leading-5 text-red-600">
+    {aiError}
+  </p>
+) : null}
+              </div>
+
               <div className="flex items-center justify-between gap-3 text-sm">
                 <label className="font-semibold">{t.englishTitle} *</label>
                 <span className="shrink-0 text-gray-500">
@@ -843,10 +1227,18 @@ export default function ListingFoto({
 
               <button
                 onClick={handleNext}
-                disabled={!canContinue || uploadingPhotos || uploadingVideo}
+                disabled={
+                  !canContinue ||
+                  uploadingPhotos ||
+                  uploadingVideo ||
+                  generatingAi
+                }
                 className={[
                   "mt-6 w-full rounded-2xl py-3.5 text-sm font-semibold transition sm:mt-8 sm:py-4 sm:text-base",
-                  canContinue && !uploadingPhotos && !uploadingVideo
+                  canContinue &&
+                  !uploadingPhotos &&
+                  !uploadingVideo &&
+                  !generatingAi
                     ? "bg-[#1C1C1E] text-white hover:opacity-90"
                     : "cursor-not-allowed bg-gray-200 text-gray-500",
                 ].join(" ")}
