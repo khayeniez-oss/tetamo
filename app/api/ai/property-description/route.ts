@@ -1,11 +1,17 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
 
 type PropertyDescriptionRequest = {
   propertyType?: string;
@@ -48,12 +54,53 @@ function cleanJsonText(value: string) {
   return cleaned;
 }
 
+function getBearerToken(req: Request) {
+  const authHeader = req.headers.get("authorization") || "";
+
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return "";
+  }
+
+  return authHeader.slice(7).trim();
+}
+
 export async function POST(req: Request) {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: "OPENAI_API_KEY is missing." },
         { status: 500 }
+      );
+    }
+
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      return NextResponse.json(
+        { error: "Supabase server environment variables are missing." },
+        { status: 500 }
+      );
+    }
+
+    const token = getBearerToken(req);
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized. Login is required." },
+        { status: 401 }
+      );
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseAdmin.auth.getUser(token);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized. Invalid session." },
+        { status: 401 }
       );
     }
 
@@ -148,6 +195,7 @@ Return this exact JSON structure:
 
     return NextResponse.json({
       success: true,
+      userId: user.id,
       data: result,
     });
   } catch (error: unknown) {
