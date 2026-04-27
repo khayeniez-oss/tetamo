@@ -610,13 +610,24 @@ export default function ListingFoto({
       setGeneratingAi(true);
       setAiError("");
 
-      const response = await fetch("/api/ai/property-description", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(aiPayload),
-      });
+      const {
+  data: { session },
+} = await supabase.auth.getSession();
+
+if (!session?.access_token) {
+  alert(lang === "id" ? "Silakan login kembali." : "Please log in again.");
+  setGeneratingAi(false);
+  return;
+}
+
+const response = await fetch("/api/ai/property-description", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.access_token}`,
+  },
+  body: JSON.stringify(aiPayload),
+});
 
       const result = (await response.json()) as AiPropertyResponse;
 
