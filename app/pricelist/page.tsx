@@ -1,8 +1,10 @@
+// app/pricelist/page.tsx
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/app/context/LanguageContext";
-import { OWNER_PACKAGES, AGENT_PACKAGES } from "@/app/data/pricelist";
+import { OWNER_PACKAGES, AGENT_PACKAGES } from "../data/pricelist";
 
 type PackageLike =
   | (typeof OWNER_PACKAGES)[number]
@@ -92,7 +94,8 @@ function getFeaturedDays(pkg: PackageLike) {
 
 function isRecommendedOwner(pkg: PackageLike, index: number) {
   const item = pkg as any;
-  const key = `${item.id ?? ""} ${item.name ?? ""} ${item.nameEn ?? ""}`.toLowerCase();
+  const key =
+    `${item.id ?? ""} ${item.name ?? ""} ${item.nameEn ?? ""}`.toLowerCase();
 
   if (item.isFeatured) return true;
   if (key.includes("featured")) return true;
@@ -102,38 +105,81 @@ function isRecommendedOwner(pkg: PackageLike, index: number) {
 
 function isRecommendedAgent(pkg: PackageLike, index: number) {
   const item = pkg as any;
-  const key = `${item.id ?? ""} ${item.name ?? ""} ${item.nameEn ?? ""}`.toLowerCase();
+  const key =
+    `${item.id ?? ""} ${item.name ?? ""} ${item.nameEn ?? ""}`.toLowerCase();
 
-  if (key.includes("silver")) return true;
+  if (key.includes("gold")) return true;
   if (key.includes("popular")) return true;
+  if (key.includes("recommended")) return true;
 
   return index === Math.min(1, AGENT_PACKAGES.length - 1);
 }
 
-function SectionHeader({
-  title,
-  subtitle,
-  accent,
+function SectionLabel({
+  children,
+  tone,
 }: {
-  title: string;
-  subtitle: string;
-  accent: "amber" | "emerald";
+  children: ReactNode;
+  tone: "amber" | "emerald";
 }) {
-  const accentClasses =
-    accent === "amber"
-      ? "from-amber-500/20 to-orange-500/20 border-amber-200"
-      : "from-emerald-500/20 to-cyan-500/20 border-emerald-200";
+  const className =
+    tone === "amber"
+      ? "border-amber-200 bg-gradient-to-r from-amber-100 via-orange-50 to-white text-amber-900"
+      : "border-emerald-200 bg-gradient-to-r from-emerald-100 via-cyan-50 to-white text-emerald-900";
 
   return (
-    <div className="mb-8">
-      <div
-        className={`inline-flex items-center rounded-full border bg-gradient-to-r px-4 py-1.5 text-xs font-semibold text-[#1C1C1E] ${accentClasses}`}
-      >
+    <span
+      className={`inline-flex rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SectionHeader({
+  id,
+  title,
+  subtitle,
+  tone,
+}: {
+  id: string;
+  title: string;
+  subtitle: string;
+  tone: "amber" | "emerald";
+}) {
+  return (
+    <div id={id} className="scroll-mt-28">
+      <SectionLabel tone={tone}>{title}</SectionLabel>
+      <h2 className="mt-4 text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl lg:text-[34px]">
         {title}
-      </div>
+      </h2>
       <p className="mt-3 max-w-3xl text-sm leading-7 text-[#5C5C62] sm:text-base">
         {subtitle}
       </p>
+    </div>
+  );
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-[11px] font-medium text-[#374151] sm:text-xs">
+      {children}
+    </span>
+  );
+}
+
+function FeatureList({ items }: { items: string[] }) {
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div
+          key={item}
+          className="flex items-start gap-3 text-sm leading-6 text-[#4B5563]"
+        >
+          <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#111827]" />
+          <span>{item}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -157,66 +203,61 @@ function PackageCard({
   const featuredDays = getFeaturedDays(pkg);
   const price = formatIdr(item.priceIdr ?? 0);
   const duration = getDurationText(pkg, isID);
+  const features = isID ? item.features ?? [] : item.featuresEn ?? item.features ?? [];
+  const monthlyBillingNote = isID
+    ? item.monthlyBillingNote
+    : item.monthlyBillingNoteEn ?? item.monthlyBillingNote;
+
+  const cardBorder = recommended
+    ? audience === "owner"
+      ? "border-amber-300"
+      : "border-emerald-300"
+    : "border-[#E5E7EB]";
+
+  const cardShadow = recommended
+    ? audience === "owner"
+      ? "shadow-[0_24px_60px_rgba(245,158,11,0.14)]"
+      : "shadow-[0_24px_60px_rgba(16,185,129,0.14)]"
+    : "shadow-[0_18px_40px_rgba(17,24,39,0.06)]";
 
   const topGlow = recommended
     ? audience === "owner"
-      ? "from-amber-500/20 via-orange-500/10 to-white"
-      : "from-emerald-500/20 via-cyan-500/10 to-white"
+      ? "from-amber-100 via-orange-50 to-white"
+      : "from-emerald-100 via-cyan-50 to-white"
     : "from-white to-white";
-
-  const borderClass = recommended
-    ? audience === "owner"
-      ? "border-amber-300 shadow-[0_20px_60px_rgba(245,158,11,0.16)]"
-      : "border-emerald-300 shadow-[0_20px_60px_rgba(16,185,129,0.16)]"
-    : "border-[#E7E7EA] shadow-[0_18px_40px_rgba(16,24,40,0.06)]";
-
-  const buttonClass = recommended
-    ? audience === "owner"
-      ? "bg-[#1C1C1E] text-white hover:bg-black"
-      : "bg-[#1C1C1E] text-white hover:bg-black"
-    : "bg-white text-[#1C1C1E] border border-[#D8D8DD] hover:bg-[#F8F8FA]";
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-[30px] border bg-white p-6 transition-all duration-300 hover:-translate-y-1 sm:p-7 ${borderClass}`}
+      className={`relative overflow-hidden rounded-[28px] border bg-white p-5 transition-all duration-300 hover:-translate-y-1 sm:p-6 ${cardBorder} ${cardShadow}`}
     >
-      <div
-        className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${topGlow}`}
-      />
+      <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${topGlow}`} />
 
       <div className="relative">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            {badge ? (
-              <span className="rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
-                {badge}
-              </span>
-            ) : null}
-
+            {badge ? <Pill>{badge}</Pill> : null}
             {recommended ? (
-              <span className="rounded-full bg-gradient-to-r from-[#F59E0B] to-[#10B981] px-3 py-1 text-xs font-semibold text-white">
+              <span className="inline-flex rounded-full bg-gradient-to-r from-[#F59E0B] to-[#10B981] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
                 {isID ? "Rekomendasi" : "Recommended"}
               </span>
             ) : null}
           </div>
 
-          <span className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-medium text-[#6B7280]">
-            {duration}
-          </span>
+          <Pill>{duration}</Pill>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-5">
           <h3 className="text-2xl font-bold tracking-tight text-[#111827]">
             {name}
           </h3>
 
-          <div className="mt-4 flex items-end gap-2">
-            <span className="text-3xl font-extrabold tracking-tight text-[#111827]">
+          <div className="mt-4">
+            <div className="text-3xl font-extrabold tracking-tight text-[#111827] sm:text-[34px]">
               {price}
-            </span>
+            </div>
           </div>
 
-          <p className="mt-4 min-h-[72px] text-sm leading-7 text-[#5B5B63]">
+          <p className="mt-4 text-sm leading-7 text-[#5C5C62]">
             {description ||
               (isID
                 ? "Paket premium untuk membantu Anda tampil lebih profesional di Tetamo."
@@ -226,23 +267,23 @@ function PackageCard({
 
         <div className="mt-6 grid gap-3">
           <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-[#7A7A85]">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
               {isID ? "Cocok untuk" : "Best for"}
             </div>
             <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
               {audience === "owner"
                 ? isID
-                  ? "Pemilik properti yang ingin listing dengan lebih menarik"
-                  : "Property owners who want stronger listing visibility"
+                  ? "Pemilik properti yang ingin listing lebih menarik"
+                  : "Owners who want stronger listing visibility"
                 : isID
-                ? "Agen yang ingin mengelola listing secara profesional"
-                : "Agents who want to manage listings more professionally"}
+                ? "Agen yang ingin berkembang lebih profesional"
+                : "Agents who want to grow more professionally"}
             </div>
           </div>
 
           {listingCount !== null ? (
             <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-[#7A7A85]">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
                 {audience === "owner"
                   ? isID
                     ? "Jumlah listing"
@@ -252,45 +293,48 @@ function PackageCard({
                   : "Active listings"}
               </div>
               <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
-                {listingCount}{" "}
-                {isID ? "listing" : "listing"}
+                {listingCount} {isID ? "listing" : "listing"}
               </div>
             </div>
           ) : null}
 
           {featuredDays ? (
             <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-[#7A7A85]">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
                 {isID ? "Exposure tambahan" : "Extra exposure"}
               </div>
               <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
                 {isID
-                  ? `Featured exposure hingga ${featuredDays} hari`
-                  : `Featured exposure up to ${featuredDays} days`}
+                  ? `Featured hingga ${featuredDays} hari`
+                  : `Featured up to ${featuredDays} days`}
               </div>
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-[#7A7A85]">
-              {isID ? "Pembayaran" : "Payment"}
+          {monthlyBillingNote ? (
+            <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
+                {isID ? "Opsi pembayaran" : "Payment option"}
+              </div>
+              <div className="mt-1 text-sm font-medium leading-6 text-[#1C1C1E]">
+                {monthlyBillingNote}
+              </div>
             </div>
-            <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
-              {item.renewable
-                ? isID
-                  ? "Dapat diperpanjang"
-                  : "Renewable"
-                : isID
-                ? "Sekali bayar"
-                : "One-time payment"}
-            </div>
-          </div>
+          ) : null}
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6">
+          <FeatureList items={features} />
+        </div>
+
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/signup"
-            className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${buttonClass}`}
+            className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+              recommended
+                ? "bg-[#111827] text-white hover:bg-black"
+                : "border border-[#D8D8DD] bg-white text-[#111827] hover:bg-[#F8F8FA]"
+            }`}
           >
             {audience === "owner"
               ? isID
@@ -303,7 +347,7 @@ function PackageCard({
 
           <Link
             href="/faq"
-            className="inline-flex w-full items-center justify-center rounded-2xl border border-[#D9D9DE] bg-white px-5 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA]"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-[#D8D8DD] bg-white px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA]"
           >
             {isID ? "Lihat FAQ" : "View FAQ"}
           </Link>
@@ -318,56 +362,56 @@ export default function PriceListPage() {
   const isID = lang === "id";
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_30%,#F8FCFB_100%)]">
-      <section className="mx-auto max-w-7xl px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-12">
-        <div className="overflow-hidden rounded-[36px] border border-[#ECE8DD] bg-white shadow-[0_30px_80px_rgba(17,24,39,0.08)]">
-          <div className="relative overflow-hidden px-6 py-10 sm:px-8 sm:py-12 lg:px-12 lg:py-14">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_32%,#F8FCFB_100%)]">
+      <section className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pb-20 lg:pt-10">
+        <div className="overflow-hidden rounded-[32px] border border-[#ECE8DD] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)]">
+          <div className="relative overflow-hidden px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_35%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_35%),linear-gradient(to_bottom,rgba(255,255,255,0.96),rgba(255,255,255,1))]" />
 
-            <div className="relative grid items-center gap-8 lg:grid-cols-[1.25fr_0.75fr]">
+            <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
               <div>
-                <span className="inline-flex rounded-full border border-[#E5E7EB] bg-white/90 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">
-                  {isID ? "Tetamo Pricelist" : "Tetamo Pricelist"}
+                <span className="inline-flex rounded-full border border-[#E5E7EB] bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] sm:text-xs">
+                  Tetamo Pricelist
                 </span>
 
-                <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-[#111827] sm:text-5xl">
+                <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-[#111827] sm:text-4xl lg:text-5xl">
                   {isID
-                    ? "Pilih paket terbaik untuk listing properti Anda"
-                    : "Choose the best package for your property listings"}
+                    ? "Pilih paket terbaik untuk kebutuhan listing Anda"
+                    : "Choose the best package for your listing needs"}
                 </h1>
 
-                <p className="mt-5 max-w-2xl text-base leading-8 text-[#5B5B63] sm:text-lg">
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-[#5B5B63] sm:text-base lg:text-lg">
                   {isID
                     ? "Dirancang untuk pemilik dan agen yang ingin tampil lebih profesional, lebih menarik, dan lebih siap mendapatkan leads di Tetamo."
                     : "Designed for owners and agents who want a more professional, more attractive presence and a better chance to generate leads on Tetamo."}
                 </p>
 
-                <div className="mt-7 flex flex-wrap gap-3">
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <a
                     href="#owner-packages"
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white transition hover:bg-black"
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#111827] px-5 py-3 text-sm font-semibold text-white transition hover:bg-black"
                   >
                     {isID ? "Lihat Paket Pemilik" : "View Owner Packages"}
                   </a>
 
                   <a
                     href="#agent-packages"
-                    className="inline-flex items-center justify-center rounded-2xl border border-[#D8D8DD] bg-white px-5 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA]"
+                    className="inline-flex items-center justify-center rounded-2xl border border-[#D8D8DD] bg-white px-5 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA]"
                   >
                     {isID ? "Lihat Paket Agen" : "View Agent Packages"}
                   </a>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-3">
+                <div className="mt-6 flex flex-wrap gap-2.5">
                   {[
                     isID ? "Harga jelas" : "Clear pricing",
-                    isID ? "Pilihan untuk pemilik & agen" : "Options for owners & agents",
-                    isID ? "Tampilan lebih premium" : "More premium presentation",
-                    isID ? "Lebih menarik untuk leads" : "More inviting for leads",
+                    isID ? "Lebih menarik" : "More inviting",
+                    isID ? "Cocok untuk pemilik & agen" : "For owners & agents",
+                    isID ? "Lebih siap dapat leads" : "Lead-ready",
                   ].map((item) => (
                     <span
                       key={item}
-                      className="rounded-full border border-[#E5E7EB] bg-white px-4 py-2 text-xs font-medium text-[#4B5563] sm:text-sm"
+                      className="rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-[11px] font-medium text-[#4B5563] sm:text-xs"
                     >
                       {item}
                     </span>
@@ -375,32 +419,36 @@ export default function PriceListPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4">
-                <div className="rounded-[28px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-6 shadow-[0_18px_50px_rgba(245,158,11,0.12)]">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-[26px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-[0_18px_50px_rgba(245,158,11,0.10)]">
                   <div className="text-sm font-semibold text-[#92400E]">
-                    {isID ? "Rekomendasi untuk Pemilik" : "Recommended for Owners"}
+                    {isID ? "Rekomendasi Pemilik" : "Owner Recommendation"}
                   </div>
-                  <div className="mt-2 text-2xl font-bold text-[#111827]">
-                    {isID ? "Pilih paket yang paling menonjol" : "Choose the package with stronger visibility"}
+                  <div className="mt-2 text-xl font-bold text-[#111827] sm:text-2xl">
+                    {isID
+                      ? "Pilih paket dengan visibilitas lebih kuat"
+                      : "Choose stronger visibility for your listing"}
                   </div>
                   <p className="mt-2 text-sm leading-7 text-[#6B7280]">
                     {isID
-                      ? "Jika Anda ingin listing terlihat lebih menonjol, pilih paket dengan exposure yang lebih kuat."
-                      : "If you want your listing to stand out more, choose the package with stronger exposure."}
+                      ? "Jika Anda ingin unit terlihat lebih menonjol, pilih paket dengan exposure yang lebih tinggi."
+                      : "If you want your unit to stand out more, choose the package with stronger exposure."}
                   </p>
                 </div>
 
-                <div className="rounded-[28px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-6 shadow-[0_18px_50px_rgba(16,185,129,0.12)]">
+                <div className="rounded-[26px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-[0_18px_50px_rgba(16,185,129,0.10)]">
                   <div className="text-sm font-semibold text-[#065F46]">
-                    {isID ? "Rekomendasi untuk Agen" : "Recommended for Agents"}
+                    {isID ? "Rekomendasi Agen" : "Agent Recommendation"}
                   </div>
-                  <div className="mt-2 text-2xl font-bold text-[#111827]">
-                    {isID ? "Pilih paket yang seimbang" : "Pick the most balanced package"}
+                  <div className="mt-2 text-xl font-bold text-[#111827] sm:text-2xl">
+                    {isID
+                      ? "Mulai dari paket yang paling seimbang"
+                      : "Start from the most balanced plan"}
                   </div>
                   <p className="mt-2 text-sm leading-7 text-[#6B7280]">
                     {isID
-                      ? "Untuk agen, paket yang seimbang biasanya paling ideal untuk mulai tumbuh dan tetap efisien."
-                      : "For agents, a balanced package is usually the best way to grow while staying efficient."}
+                      ? "Untuk agen, paket yang seimbang biasanya paling ideal untuk tumbuh dengan stabil."
+                      : "For agents, a balanced package is usually the most practical way to grow steadily."}
                   </p>
                 </div>
               </div>
@@ -408,18 +456,19 @@ export default function PriceListPage() {
           </div>
         </div>
 
-        <section id="owner-packages" className="mt-14">
+        <section id="owner-packages" className="mt-12 sm:mt-14">
           <SectionHeader
-            accent="amber"
+            id="owner-packages"
+            tone="amber"
             title={isID ? "Paket Pemilik" : "Owner Packages"}
             subtitle={
               isID
-                ? "Pilih paket yang sesuai untuk mengiklankan properti Anda dengan lebih profesional dan menarik perhatian pembeli atau penyewa."
-                : "Choose the package that fits your needs to advertise your property more professionally and attract buyers or renters."
+                ? "Pilih paket yang sesuai untuk mengiklankan properti Anda dengan lebih profesional dan lebih menarik perhatian pembeli atau penyewa."
+                : "Choose the right package to advertise your property more professionally and attract more buyer or renter attention."
             }
           />
 
-          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-2">
             {OWNER_PACKAGES.map((pkg, index) => (
               <PackageCard
                 key={(pkg as any).id ?? index}
@@ -432,9 +481,10 @@ export default function PriceListPage() {
           </div>
         </section>
 
-        <section id="agent-packages" className="mt-16">
+        <section id="agent-packages" className="mt-14 sm:mt-16">
           <SectionHeader
-            accent="emerald"
+            id="agent-packages"
+            tone="emerald"
             title={isID ? "Paket Agen" : "Agent Packages"}
             subtitle={
               isID
@@ -443,7 +493,7 @@ export default function PriceListPage() {
             }
           />
 
-          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {AGENT_PACKAGES.map((pkg, index) => (
               <PackageCard
                 key={(pkg as any).id ?? index}
@@ -456,13 +506,13 @@ export default function PriceListPage() {
           </div>
         </section>
 
-        <section className="mt-16">
-          <div className="overflow-hidden rounded-[32px] border border-[#E6E8EC] bg-gradient-to-r from-[#111827] via-[#1F2937] to-[#0F172A] p-8 text-white shadow-[0_24px_60px_rgba(17,24,39,0.22)] sm:p-10">
+        <section className="mt-14 sm:mt-16">
+          <div className="overflow-hidden rounded-[30px] border border-[#E6E8EC] bg-gradient-to-r from-[#111827] via-[#1F2937] to-[#0F172A] p-6 text-white shadow-[0_24px_60px_rgba(17,24,39,0.22)] sm:p-8 lg:p-10">
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
               <div>
-                <h2 className="text-3xl font-black tracking-tight sm:text-4xl">
+                <h2 className="text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl">
                   {isID
-                    ? "Masih bingung mau pilih yang mana?"
+                    ? "Masih bingung mau pilih paket yang mana?"
                     : "Still not sure which package to choose?"}
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
