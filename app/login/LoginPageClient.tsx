@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
@@ -77,8 +78,49 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
-        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-500 focus:border-[#1C1C1E]"
+        className="w-full rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-[#8E8E93] focus:border-[#1C1C1E] focus:ring-4 focus:ring-black/5"
       />
+    </div>
+  );
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex rounded-full border border-[#D8D8DD] bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] shadow-sm">
+      {children}
+    </span>
+  );
+}
+
+function InfoCard({
+  eyebrow,
+  title,
+  description,
+  tone,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  tone: "amber" | "emerald";
+}) {
+  const cardClass =
+    tone === "amber"
+      ? "border-[#F2D67A] bg-[linear-gradient(180deg,#FFFDF6_0%,#FFFFFF_100%)]"
+      : "border-[#9EECCF] bg-[linear-gradient(180deg,#F5FFFB_0%,#FFFFFF_100%)]";
+
+  const eyebrowClass = tone === "amber" ? "text-[#B45309]" : "text-[#047857]";
+
+  return (
+    <div className={`rounded-[28px] border p-4 sm:p-6 ${cardClass}`}>
+      <p className={`text-xs font-semibold sm:text-sm ${eyebrowClass}`}>
+        {eyebrow}
+      </p>
+      <h3 className="mt-2 text-lg font-bold leading-tight text-[#111827] sm:mt-3 sm:text-2xl lg:text-[30px]">
+        {title}
+      </h3>
+      <p className="mt-3 text-xs leading-6 text-[#6B7280] sm:mt-4 sm:text-sm sm:leading-7 lg:text-base">
+        {description}
+      </p>
     </div>
   );
 }
@@ -273,135 +315,204 @@ export default function LoginPageClient() {
   const isBusy = loading || socialLoading !== null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-8 sm:px-6 sm:py-14 lg:px-8">
-      <div className="w-full max-w-md rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
-        <div className="mb-7 text-center sm:mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
-            {isID ? "Selamat Datang Kembali" : "Welcome Back"}
-          </h1>
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
+        <section className="overflow-hidden rounded-[32px] border border-[#ECE8DD] bg-[linear-gradient(135deg,#FFF7EA_0%,#F3FFF9_100%)] shadow-[0_24px_60px_rgba(17,24,39,0.07)]">
+          <div className="px-5 py-7 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+            <Pill>{isID ? "Tetamo Login" : "Tetamo Login"}</Pill>
 
-          <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
-            {isID ? "Masuk ke akun TETAMO Anda" : "Log in to your TETAMO account"}
-          </p>
-        </div>
+            <div className="mt-5 max-w-3xl">
+              <h1 className="text-[32px] font-black leading-[1.08] tracking-[-0.03em] text-[#0F172A] sm:text-[42px] lg:text-[56px]">
+                {isID
+                  ? "Masuk kembali ke akun Tetamo Anda"
+                  : "Log back into your Tetamo account"}
+              </h1>
 
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleLogin();
-          }}
-        >
-          <FormInput
-            label="Email"
-            type="email"
-            placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
-            value={email}
-            onChange={setEmail}
-            autoComplete="email"
-          />
+              <p className="mt-4 max-w-3xl text-base leading-8 text-[#5F6368] sm:text-lg">
+                {isID
+                  ? "Lanjutkan ke dashboard Anda untuk mengelola listing, leads, viewing, dan aktivitas akun."
+                  : "Continue to your dashboard to manage listings, leads, viewings, and account activity."}
+              </p>
+            </div>
 
-          <FormInput
-            label={isID ? "Kata Sandi" : "Password"}
-            type="password"
-            placeholder={
-              isID ? "Masukkan kata sandi Anda" : "Enter your password"
-            }
-            value={password}
-            onChange={setPassword}
-            autoComplete="current-password"
-          />
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 sm:gap-4">
+              <InfoCard
+                eyebrow={isID ? "Akses Cepat" : "Quick Access"}
+                title={
+                  isID
+                    ? "Masuk dan lanjutkan pekerjaan Anda"
+                    : "Log in and continue your work"
+                }
+                description={
+                  isID
+                    ? "Masuk untuk kembali ke dashboard Anda dengan alur yang cepat dan jelas."
+                    : "Log in to return to your dashboard with a clear and simple flow."
+                }
+                tone="amber"
+              />
 
-          <button
-            type="submit"
-            disabled={isBusy}
-            className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-          >
-            {loading
-              ? isID
-                ? "Sedang masuk..."
-                : "Logging in..."
-              : isID
-              ? "Masuk"
-              : "Log in"}
-          </button>
-        </form>
+              <InfoCard
+                eyebrow={isID ? "Akses Dashboard" : "Dashboard Access"}
+                title={
+                  isID
+                    ? "Kelola listing dan akun Anda"
+                    : "Manage your listings and account"
+                }
+                description={
+                  isID
+                    ? "Cocok untuk pemilik, agen, admin, dan pengguna yang sudah memiliki akun Tetamo."
+                    : "Best for owners, agents, admins, and existing Tetamo account holders."
+                }
+                tone="emerald"
+              />
+            </div>
+          </div>
+        </section>
 
-        <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-[#e5e5e7]" />
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-[#8e8e93]">
-            {isID ? "atau" : "or"}
-          </span>
-          <div className="h-px flex-1 bg-[#e5e5e7]" />
-        </div>
+        <section className="overflow-hidden rounded-[32px] border border-[#E7E7EA] bg-white shadow-[0_24px_60px_rgba(17,24,39,0.07)]">
+          <div className="px-5 py-6 sm:px-8 sm:py-8">
+            <div className="mb-7 text-center sm:mb-8">
+              <h2 className="text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl">
+                {isID ? "Selamat Datang Kembali" : "Welcome Back"}
+              </h2>
 
-        <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => void handleOAuthLogin("google")}
-            disabled={isBusy}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
-          >
-            <GoogleIcon className="h-5 w-5 text-[#1C1C1E]" />
-            <span>
-              {socialLoading === "google"
-                ? isID
-                  ? "Menghubungkan ke Google..."
-                  : "Connecting to Google..."
-                : isID
-                ? "Lanjutkan dengan Google"
-                : "Continue with Google"}
-            </span>
-          </button>
+              <p className="mt-2 text-sm leading-6 text-[#6E6E73]">
+                {isID ? "Masuk ke akun TETAMO Anda" : "Log in to your TETAMO account"}
+              </p>
+            </div>
 
-          {showFacebook ? (
-            <button
-              type="button"
-              onClick={() => void handleOAuthLogin("facebook")}
-              disabled={isBusy}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleLogin();
+              }}
             >
-              <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
-              <span>
-                {socialLoading === "facebook"
+              <FormInput
+                label="Email"
+                type="email"
+                placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
+                value={email}
+                onChange={setEmail}
+                autoComplete="email"
+              />
+
+              <FormInput
+                label={isID ? "Kata Sandi" : "Password"}
+                type="password"
+                placeholder={
+                  isID ? "Masukkan kata sandi Anda" : "Enter your password"
+                }
+                value={password}
+                onChange={setPassword}
+                autoComplete="current-password"
+              />
+
+              <button
+                type="submit"
+                disabled={isBusy}
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
+              >
+                {loading
                   ? isID
-                    ? "Menghubungkan ke Facebook..."
-                    : "Connecting to Facebook..."
+                    ? "Sedang masuk..."
+                    : "Logging in..."
                   : isID
-                  ? "Lanjutkan dengan Facebook"
-                  : "Continue with Facebook"}
+                  ? "Masuk"
+                  : "Log in"}
+              </button>
+            </form>
+
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-[#E5E5E7]" />
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-[#8E8E93]">
+                {isID ? "atau" : "or"}
               </span>
-            </button>
-          ) : null}
+              <div className="h-px flex-1 bg-[#E5E5E7]" />
+            </div>
 
-          <button
-            type="button"
-            onClick={() => void handleOAuthLogin("apple")}
-            disabled={isBusy}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:border-[#1C1C1E] disabled:opacity-60"
-          >
-            <AppleIcon className="h-5 w-5 text-[#1C1C1E]" />
-            <span>
-              {socialLoading === "apple"
-                ? isID
-                  ? "Menghubungkan ke Apple..."
-                  : "Connecting to Apple..."
-                : isID
-                ? "Lanjutkan dengan Apple"
-                : "Continue with Apple"}
-            </span>
-          </button>
-        </div>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => void handleOAuthLogin("google")}
+                disabled={isBusy}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+              >
+                <GoogleIcon className="h-5 w-5 text-[#1C1C1E]" />
+                <span>
+                  {socialLoading === "google"
+                    ? isID
+                      ? "Menghubungkan ke Google..."
+                      : "Connecting to Google..."
+                    : isID
+                    ? "Lanjutkan dengan Google"
+                    : "Continue with Google"}
+                </span>
+              </button>
 
-        <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
-          {isID ? "Belum punya akun?" : "Don’t have an account?"}{" "}
-          <Link
-            href={signupHref}
-            className="font-semibold text-[#1C1C1E] underline underline-offset-4"
-          >
-            {isID ? "Daftar" : "Sign up"}
-          </Link>
-        </p>
+              {showFacebook ? (
+                <button
+                  type="button"
+                  onClick={() => void handleOAuthLogin("facebook")}
+                  disabled={isBusy}
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+                >
+                  <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
+                  <span>
+                    {socialLoading === "facebook"
+                      ? isID
+                        ? "Menghubungkan ke Facebook..."
+                        : "Connecting to Facebook..."
+                      : isID
+                      ? "Lanjutkan dengan Facebook"
+                      : "Continue with Facebook"}
+                  </span>
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void handleOAuthLogin("apple")}
+                disabled={isBusy}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+              >
+                <AppleIcon className="h-5 w-5 text-[#1C1C1E]" />
+                <span>
+                  {socialLoading === "apple"
+                    ? isID
+                      ? "Menghubungkan ke Apple..."
+                      : "Connecting to Apple..."
+                    : isID
+                    ? "Lanjutkan dengan Apple"
+                    : "Continue with Apple"}
+                </span>
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-[24px] border border-[#ECECF1] bg-[#FAFAFB] p-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl border border-white bg-white p-2 shadow-sm">
+                  <KeyRound className="h-4 w-4 text-[#111827]" />
+                </div>
+                <div className="text-sm leading-6 text-[#6E6E73]">
+                  {isID
+                    ? "Belum punya akun? Daftar dulu untuk mulai menggunakan Tetamo."
+                    : "Do not have an account yet? Sign up first to start using Tetamo."}
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-6 text-center text-sm leading-6 text-[#6E6E73]">
+              {isID ? "Belum punya akun?" : "Don’t have an account?"}{" "}
+              <Link
+                href={signupHref}
+                className="font-semibold text-[#111827] underline underline-offset-4"
+              >
+                {isID ? "Daftar" : "Sign up"}
+              </Link>
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   );
