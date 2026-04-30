@@ -327,7 +327,8 @@ export default function FloatingWhatsApp() {
 
       const nextGuestSessionId = String(data.guest_session_id || "");
       const nextMessages = (data.messages ?? []) as SupportMessage[];
-      const nextConversation = (data.conversation ?? null) as SupportConversation | null;
+      const nextConversation = (data.conversation ??
+        null) as SupportConversation | null;
 
       if (nextGuestSessionId) {
         setGuestSessionId(nextGuestSessionId);
@@ -460,51 +461,72 @@ export default function FloatingWhatsApp() {
   return (
     <>
       {open ? (
-        <div className="fixed bottom-24 right-5 z-[70] w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-[28px] border border-[#e5e5e7] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-          <div className="flex items-start justify-between gap-3 border-b border-[#e5e5e7] bg-[#1C1C1E] px-4 py-4 text-white">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                <p className="text-sm font-semibold">Scorpio Assist</p>
-              </div>
-
-              <p className="mt-1 text-xs leading-5 text-white/80">
-                {isID
-                  ? "AI support untuk pertanyaan umum properti dan platform Tetamo."
-                  : "AI support for general Tetamo property and platform questions."}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
-              aria-label={isID ? "Tutup chat" : "Close chat"}
-            >
-              <X className="h-4 w-4" />
-            </button>
+        <div className="fixed bottom-24 right-4 z-[70] w-[calc(100vw-2rem)] max-w-[410px] overflow-hidden rounded-[30px] border border-white/20 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(250,250,250,0.96)_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:right-5">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute -left-10 top-8 h-28 w-28 rounded-full bg-amber-300/20 blur-3xl" />
+            <div className="absolute -right-8 top-20 h-32 w-32 rounded-full bg-emerald-300/20 blur-3xl" />
+            <div className="absolute bottom-20 left-10 h-24 w-24 rounded-full bg-white/40 blur-2xl" />
           </div>
 
-          <div className="border-b border-[#e5e5e7] bg-[#fafafa] px-4 py-3">
-            <p className="text-xs font-medium text-[#6e6e73]">
-              {isID ? "Jam support Tetamo Agent" : "Tetamo Agent support hours"}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-[#8e8e93]">
-              {supportHours}
-            </p>
+          <div className="relative border-b border-white/10 bg-[linear-gradient(135deg,#0F172A_0%,#1F2937_55%,#111827_100%)] px-4 py-4 text-white">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 shadow-[0_0_24px_rgba(251,191,36,0.22)] backdrop-blur">
+                    <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.24),transparent_65%)]" />
+                    <Sparkles className="relative z-10 h-5 w-5 text-amber-300" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold tracking-[0.01em]">
+                      Scorpio Assist
+                    </p>
+                    <p className="mt-0.5 text-xs text-white/70">
+                      {isID
+                        ? "AI support untuk Tetamo"
+                        : "AI support for Tetamo"}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-white/80">
+                  {isID
+                    ? "Tanya tentang listing properti, paket, proses signup, dan cara kerja Tetamo."
+                    : "Ask about property listing, packages, signup flow, and how Tetamo works."}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/10 transition hover:bg-white/20"
+                aria-label={isID ? "Tutup chat" : "Close chat"}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 px-3 py-2.5 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                {isID ? "Jam support Tetamo Agent" : "Tetamo Agent support hours"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-white/90">
+                {supportHours}
+              </p>
+            </div>
           </div>
 
           {waitingForAgent ? (
-            <div className="border-b border-[#e5e5e7] bg-[#fff8e7] px-4 py-3 text-sm font-medium text-[#8a6b00]">
+            <div className="relative border-b border-amber-200 bg-[linear-gradient(90deg,#FFF7E0_0%,#FFFBEF_100%)] px-4 py-3 text-sm font-medium text-amber-800">
               {isID
                 ? "Menunggu Tetamo Agent bergabung..."
                 : "Waiting for Tetamo Agent to join..."}
             </div>
           ) : null}
 
-          <div className="max-h-[360px] min-h-[300px] space-y-3 overflow-y-auto bg-white px-4 py-4">
+          <div className="relative max-h-[380px] min-h-[320px] space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(255,255,255,0.76)_0%,rgba(250,250,250,0.92)_100%)] px-4 py-4">
             {loadingMessages && messages.length === 0 ? (
-              <div className="flex h-[220px] items-center justify-center text-sm text-[#6e6e73]">
+              <div className="flex h-[220px] items-center justify-center text-sm text-[#6E6E73]">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {isID ? "Memuat chat..." : "Loading chat..."}
               </div>
@@ -518,20 +540,31 @@ export default function FloatingWhatsApp() {
                     key={message.id}
                     className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                   >
-                    <div className="max-w-[85%]">
+                    <div className="max-w-[86%]">
                       <div
                         className={[
-                          "rounded-2xl px-4 py-3 text-sm leading-6",
+                          "rounded-[22px] px-4 py-3 text-sm leading-6 shadow-sm",
                           isUser
-                            ? "bg-[#1C1C1E] text-white"
-                            : "border border-[#e5e5e7] bg-[#fafafa] text-[#1C1C1E]",
+                            ? "bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_10px_30px_rgba(17,24,39,0.25)]"
+                            : "border border-[#ECECEF] bg-white/95 text-[#1C1C1E]",
                         ].join(" ")}
                       >
+                        {!isUser ? (
+                          <div className="mb-2 flex items-center gap-2">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-50">
+                              <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+                            </div>
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8E8E93]">
+                              Scorpio Assist
+                            </span>
+                          </div>
+                        ) : null}
+
                         <p className="whitespace-pre-line">{message.message_text}</p>
                       </div>
 
                       <div
-                        className={`mt-1 text-[11px] text-[#8e8e93] ${
+                        className={`mt-1 px-1 text-[11px] text-[#8E8E93] ${
                           isUser ? "text-right" : "text-left"
                         }`}
                       >
@@ -545,12 +578,12 @@ export default function FloatingWhatsApp() {
                           type="button"
                           onClick={() => void handleHandoff()}
                           disabled={handoffLoading}
-                          className="mt-2 flex items-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-2.5 text-xs font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                          className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,#FFF9EC_0%,#FFFFFF_100%)] px-4 py-2.5 text-xs font-semibold text-[#1C1C1E] shadow-sm transition hover:opacity-95 disabled:opacity-60"
                         >
                           {handoffLoading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <Headphones className="h-4 w-4" />
+                            <Headphones className="h-4 w-4 text-amber-600" />
                           )}
                           {message.suggested_action_label ||
                             (isID
@@ -565,17 +598,26 @@ export default function FloatingWhatsApp() {
             ) : (
               <>
                 <div className="flex justify-start">
-                  <div className="max-w-[88%] rounded-2xl border border-[#e5e5e7] bg-[#fafafa] px-4 py-3 text-sm leading-6 text-[#1C1C1E]">
+                  <div className="max-w-[90%] rounded-[22px] border border-[#ECECEF] bg-white/95 px-4 py-3 text-sm leading-6 text-[#1C1C1E] shadow-sm">
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-50">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+                      </div>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8E8E93]">
+                        Scorpio Assist
+                      </span>
+                    </div>
+
                     <p>
                       {isID
-                        ? "Halo, saya Scorpio Assist. Anda bisa tanya tentang cara pasang properti, paket, atau cara kerja Tetamo."
-                        : "Hi, I’m Scorpio Assist. You can ask me about listing property, packages, or how Tetamo works."}
+                        ? "Halo, saya Scorpio Assist. Anda bisa tanya tentang cara pasang properti, paket, proses signup, atau cara kerja Tetamo."
+                        : "Hi, I’m Scorpio Assist. You can ask me about listing property, packages, signup flow, or how Tetamo works."}
                     </p>
                   </div>
                 </div>
 
                 <div className="pt-1">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-[#8e8e93]">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8E8E93]">
                     {isID ? "Coba tanya" : "Try asking"}
                   </p>
 
@@ -585,7 +627,7 @@ export default function FloatingWhatsApp() {
                         key={question}
                         type="button"
                         onClick={() => handleStarterQuestion(question)}
-                        className="rounded-full border border-[#d2d2d7] bg-white px-3 py-2 text-xs font-medium text-[#1C1C1E] transition hover:bg-[#f8f8f8]"
+                        className="rounded-full border border-[#E6E6EB] bg-white px-3 py-2 text-xs font-medium text-[#1C1C1E] shadow-sm transition hover:bg-[#FAFAFA]"
                       >
                         {question}
                       </button>
@@ -596,14 +638,14 @@ export default function FloatingWhatsApp() {
             )}
 
             {authPrompt ? (
-              <div className="rounded-2xl border border-[#e5e5e7] bg-[#fafafa] p-4">
+              <div className="rounded-[24px] border border-[#ECECEF] bg-[linear-gradient(180deg,#FFFFFF_0%,#FAFAFA_100%)] p-4 shadow-sm">
                 <p className="text-sm font-semibold text-[#1C1C1E]">
                   {isID
                     ? "Login untuk chat dengan Tetamo Agent"
                     : "Log in to chat with Tetamo Agent"}
                 </p>
 
-                <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+                <p className="mt-2 text-sm leading-6 text-[#6E6E73]">
                   {isID
                     ? "Untuk diteruskan ke Tetamo Agent, silakan login atau daftar terlebih dahulu."
                     : "To continue with Tetamo Agent, please log in or sign up first."}
@@ -612,7 +654,7 @@ export default function FloatingWhatsApp() {
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Link
                     href="/login"
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(17,24,39,0.22)] transition hover:opacity-95"
                   >
                     <LogIn className="h-4 w-4" />
                     {isID ? "Login" : "Log in"}
@@ -620,7 +662,7 @@ export default function FloatingWhatsApp() {
 
                   <Link
                     href="/signup"
-                    className="flex items-center justify-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8]"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-[#FAFAFA]"
                   >
                     <UserPlus className="h-4 w-4" />
                     {isID ? "Daftar" : "Sign up"}
@@ -633,12 +675,12 @@ export default function FloatingWhatsApp() {
           </div>
 
           {error ? (
-            <div className="border-t border-[#e5e5e7] bg-red-50 px-4 py-3 text-sm text-red-600">
+            <div className="relative border-t border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
               {error}
             </div>
           ) : null}
 
-          <div className="border-t border-[#e5e5e7] bg-white p-4">
+          <div className="relative border-t border-[#ECECEF] bg-white/95 p-4 backdrop-blur">
             <div className="flex items-end gap-2">
               <textarea
                 rows={1}
@@ -649,14 +691,14 @@ export default function FloatingWhatsApp() {
                     ? "Tulis pertanyaan Anda..."
                     : "Write your question..."
                 }
-                className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none placeholder:text-[#8e8e93] focus:border-[#1C1C1E]"
+                className="max-h-28 min-h-[50px] flex-1 resize-none rounded-[22px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none placeholder:text-[#8E8E93] focus:border-[#111827] focus:ring-4 focus:ring-black/5"
               />
 
               <button
                 type="button"
                 onClick={() => void handleSendMessage()}
                 disabled={sending || !input.trim()}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90 disabled:opacity-60"
+                className="inline-flex h-[50px] w-[50px] items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_12px_28px_rgba(17,24,39,0.25)] transition hover:scale-[1.02] hover:opacity-95 disabled:opacity-60"
                 aria-label={isID ? "Kirim pesan" : "Send message"}
               >
                 {sending ? (
@@ -671,21 +713,21 @@ export default function FloatingWhatsApp() {
               <button
                 type="button"
                 onClick={() => void handleHandoff()}
-                disabled={handoffLoading || waitingForAgent}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                disabled={handoffLoading || waitingForAgent || loadingConversation}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-amber-200 bg-[linear-gradient(180deg,#FFF8E8_0%,#FFFFFF_100%)] px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:opacity-95 disabled:opacity-60"
               >
-                {handoffLoading ? (
+                {handoffLoading || loadingConversation ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Headphones className="h-4 w-4" />
+                  <Headphones className="h-4 w-4 text-amber-600" />
                 )}
                 {isID ? "Chat dengan Tetamo Agent" : "Chat with Tetamo Agent"}
               </button>
 
-              <p className="text-[11px] leading-5 text-[#8e8e93]">
+              <p className="text-[11px] leading-5 text-[#8E8E93]">
                 {isID
-                  ? "Scorpio Assist terbuka untuk semua pengguna. Login hanya diperlukan untuk Tetamo Agent, riwayat chat tersimpan, dan bantuan khusus akun."
-                  : "Scorpio Assist is open to all users. Login is only required for Tetamo Agent, saved chat history, and account-specific help."}
+                  ? "Scorpio Assist terbuka untuk semua pengguna. Login hanya diperlukan untuk bantuan Tetamo Agent, riwayat chat tersimpan, dan bantuan khusus akun."
+                  : "Scorpio Assist is open to all users. Login is only required for Tetamo Agent support, saved chat history, and account-specific help."}
               </p>
             </div>
           </div>
@@ -697,10 +739,14 @@ export default function FloatingWhatsApp() {
         onClick={() => setOpen((prev) => !prev)}
         aria-label={isID ? "Buka Scorpio Assist" : "Open Scorpio Assist"}
         title={isID ? "Buka Scorpio Assist" : "Open Scorpio Assist"}
-        className="fixed bottom-5 right-5 z-[60] inline-flex h-14 items-center gap-2 rounded-full border border-white/20 bg-[#1C1C1E] px-4 pr-5 text-white shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition hover:scale-105 hover:opacity-95"
+        className="fixed bottom-5 right-4 z-[60] inline-flex h-14 items-center gap-2.5 rounded-full border border-white/20 bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 pr-5 text-white shadow-[0_16px_40px_rgba(0,0,0,0.28)] transition hover:scale-[1.02] hover:opacity-95 sm:right-5"
       >
-        <Sparkles className="h-5 w-5 shrink-0" />
-        <span className="whitespace-nowrap text-sm font-semibold">
+        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+          <span className="absolute inset-0 rounded-full bg-amber-300/20 blur-md" />
+          <Sparkles className="relative z-10 h-4.5 w-4.5 text-amber-300" />
+        </span>
+
+        <span className="whitespace-nowrap text-sm font-semibold tracking-[0.01em]">
           Scorpio Assist
         </span>
       </button>

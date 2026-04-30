@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -200,7 +206,7 @@ function NotificationDropdown({
   onViewAll: () => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl bg-white">
+    <div className="overflow-hidden rounded-[26px] bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[#1C1C1E]">
@@ -215,7 +221,7 @@ function NotificationDropdown({
           <button
             type="button"
             onClick={onMarkAllRead}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-[#1C1C1E] transition hover:bg-gray-50"
           >
             <CheckCheck className="h-3.5 w-3.5" />
             {markAllText}
@@ -324,24 +330,31 @@ function DesktopDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-[calc(100%+12px)] min-w-[240px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
-          {items.map((item) => {
-            const Icon = item.icon;
+        <div className="absolute left-0 top-[calc(100%+12px)] min-w-[260px] overflow-hidden rounded-[26px] border border-[#E9E9EE] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.14)]">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute -left-8 top-0 h-24 w-24 rounded-full bg-amber-200/20 blur-2xl" />
+            <div className="absolute right-0 top-10 h-24 w-24 rounded-full bg-emerald-200/20 blur-2xl" />
+          </div>
 
-            return (
-              <Link
-                key={`${label}-${item.href}`}
-                href={item.href}
-                onClick={onNavigate}
-                className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
-              >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-[#FAFAFA] text-[#1C1C1E]">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          <div className="relative p-2">
+            {items.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={`${label}-${item.href}`}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-[#FAFAFA]"
+                >
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#1C1C1E] shadow-sm">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -358,7 +371,7 @@ export default function Navbar() {
   const t = {
     brandTagline: isID
       ? "PROPERTI • MARKETPLACE"
-      : "PROPERTY • MARKETPLACE ",
+      : "PROPERTY • MARKETPLACE",
 
     properties: isID ? "Properti" : "Properties",
     allProperties: isID ? "Semua Properti" : "All Properties",
@@ -803,22 +816,24 @@ export default function Navbar() {
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 md:py-4">
+    <header className="sticky top-0 z-50 border-b border-white/40 bg-[rgba(255,255,255,0.88)] backdrop-blur-xl">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-full bg-[linear-gradient(90deg,rgba(245,158,11,0.06)_0%,rgba(255,255,255,0.3)_35%,rgba(16,185,129,0.06)_100%)]" />
+
+      <div className="relative mx-auto max-w-7xl px-4 py-3 sm:px-6 md:py-4">
         <div className="flex items-center justify-between gap-3">
           <Link
             href="/"
             onClick={closeAllMenus}
             className="flex min-w-0 max-w-[calc(100%-132px)] items-center gap-3 sm:max-w-none sm:gap-4"
           >
-            <div className="relative h-12 w-12 shrink-0 sm:h-14 sm:w-14 md:h-16 md:w-16">
+            <div className="relative h-12 w-12 shrink-0 rounded-2xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.06)] backdrop-blur sm:h-14 sm:w-14 md:h-16 md:w-16">
               <Image
                 src="/tetamo-logo-transparent1.png"
                 alt="TeTamo logo"
                 fill
                 priority
                 sizes="64px"
-                className="object-contain"
+                className="object-contain p-1"
               />
             </div>
 
@@ -827,7 +842,7 @@ export default function Navbar() {
                 TeTaMo
               </span>
 
-              <span className="hidden text-[11px] font-medium uppercase tracking-[0.06em] text-[#6B7280] md:block">
+              <span className="hidden text-[11px] font-medium uppercase tracking-[0.08em] text-[#6B7280] md:block">
                 {t.brandTagline}
               </span>
             </div>
@@ -870,7 +885,7 @@ export default function Navbar() {
                     setDesktopDropdownOpen(null);
                     setNotificationOpen(false);
                   }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white/90 px-3.5 text-[13px] font-medium text-[#1C1C1E] shadow-sm transition hover:bg-white"
                 >
                   <Globe className="h-3.5 w-3.5" />
                   <span>{lang.toUpperCase()}</span>
@@ -878,7 +893,7 @@ export default function Navbar() {
                 </button>
 
                 {langOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                     <button
                       type="button"
                       onClick={() => {
@@ -922,7 +937,7 @@ export default function Navbar() {
                     setDesktopDropdownOpen(null);
                     setNotificationOpen(false);
                   }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-[13px] font-medium text-[#1C1C1E] transition hover:bg-gray-50 lg:h-10 lg:px-3.5 lg:text-[13px]"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white/90 px-3.5 text-[13px] font-medium text-[#1C1C1E] shadow-sm transition hover:bg-white"
                 >
                   <BadgeDollarSign className="h-3.5 w-3.5" />
                   <span>{currency}</span>
@@ -930,7 +945,7 @@ export default function Navbar() {
                 </button>
 
                 {currencyOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                     <button
                       type="button"
                       onClick={() => {
@@ -985,14 +1000,14 @@ export default function Navbar() {
                   onClick={handleNotificationClick}
                   aria-label={t.notifications}
                   title={t.notifications}
-                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#1C1C1E] bg-[#1C1C1E] text-white transition hover:opacity-90 lg:h-9 lg:w-9"
+                  className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#111827] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_12px_30px_rgba(17,24,39,0.2)] transition hover:opacity-95"
                 >
-                  <Bell className="h-3.5 w-3.5" />
+                  <Bell className="h-4 w-4" />
                   <NotificationBadge count={notificationCount} />
                 </button>
 
                 {notificationOpen && isLoggedIn ? (
-                  <div className="absolute right-0 top-[calc(100%+10px)] w-[360px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.16)]">
+                  <div className="absolute right-0 top-[calc(100%+10px)] w-[360px] overflow-hidden rounded-[26px] border border-gray-200 bg-white shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
                     {notificationDropdown}
                   </div>
                 ) : null}
@@ -1008,7 +1023,7 @@ export default function Navbar() {
                     setDesktopDropdownOpen(null);
                     setNotificationOpen(false);
                   }}
-                  className="inline-flex h-12 items-center gap-3 rounded-2xl bg-[#1C1C1E] px-4 text-[15px] font-semibold text-white transition hover:opacity-90 lg:h-14 lg:px-5"
+                  className="inline-flex h-12 items-center gap-3 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 text-[15px] font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.22)] transition hover:opacity-95 lg:h-14 lg:px-5"
                 >
                   {isLoggedIn ? (
                     <>
@@ -1029,7 +1044,7 @@ export default function Navbar() {
                 </button>
 
                 {accountOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-[26px] border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                     {sessionLoading ? (
                       <div className="px-4 py-3 text-sm text-gray-500">
                         {t.loading}
@@ -1137,14 +1152,14 @@ export default function Navbar() {
                   setDesktopDropdownOpen(null);
                   setNotificationOpen(false);
                 }}
-                className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                className="inline-flex h-11 items-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
               >
                 <BadgeDollarSign className="h-4 w-4" />
                 <span>{currency}</span>
               </button>
 
               {currencyOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                   <button
                     type="button"
                     onClick={() => {
@@ -1204,14 +1219,14 @@ export default function Navbar() {
                   setDesktopDropdownOpen(null);
                   setNotificationOpen(false);
                 }}
-                className="inline-flex h-10 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                className="inline-flex h-11 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
               >
                 <Globe className="h-4 w-4" />
                 <span>{lang.toUpperCase()}</span>
               </button>
 
               {langOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
                   <button
                     type="button"
                     onClick={() => {
@@ -1256,7 +1271,7 @@ export default function Navbar() {
                   setDesktopDropdownOpen(null);
                   setNotificationOpen(false);
                 }}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1C1C1E] text-white transition hover:opacity-90"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_14px_34px_rgba(17,24,39,0.22)] transition hover:opacity-95"
                 aria-label={t.menu}
               >
                 {mobileMenuOpen ? (
@@ -1267,11 +1282,16 @@ export default function Navbar() {
               </button>
 
               {mobileMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,380px)] overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.14)]">
-                  <div className="p-3">
+                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,390px)] overflow-hidden rounded-[32px] border border-[#E7E7EA] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFBFC_100%)] shadow-[0_28px_70px_rgba(0,0,0,0.16)]">
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                    <div className="absolute -left-10 top-4 h-28 w-28 rounded-full bg-amber-200/20 blur-3xl" />
+                    <div className="absolute -right-10 top-16 h-28 w-28 rounded-full bg-emerald-200/20 blur-3xl" />
+                  </div>
+
+                  <div className="relative p-3">
                     <div className="space-y-3">
-                      <div className="rounded-[26px] border border-gray-200 bg-[#fafafa] p-3">
-                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                      <div className="rounded-[26px] border border-gray-200 bg-[linear-gradient(180deg,#FAFAFB_0%,#FFFFFF_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
                           {t.properties}
                         </div>
                         <div className="grid grid-cols-3 gap-2">
@@ -1283,7 +1303,7 @@ export default function Navbar() {
                                 key={item.href}
                                 href={item.href}
                                 onClick={closeAllMenus}
-                                className="rounded-2xl border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                                className="rounded-[22px] border border-gray-200 bg-white px-3 py-4 text-center text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
                               >
                                 <div className="flex flex-col items-center gap-2">
                                   <Icon className="h-4 w-4" />
@@ -1299,7 +1319,7 @@ export default function Navbar() {
                         <Link
                           href="/pembeli"
                           onClick={closeAllMenus}
-                          className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                          className="rounded-[20px] border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
                         >
                           {t.buyers}
                         </Link>
@@ -1307,20 +1327,20 @@ export default function Navbar() {
                         <Link
                           href="/career"
                           onClick={closeAllMenus}
-                          className="rounded-2xl border border-gray-200 bg-[#fafafa] px-3 py-2.5 text-center text-sm font-medium text-[#1C1C1E] transition hover:bg-gray-50"
+                          className="rounded-[20px] border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
                         >
                           {t.career}
                         </Link>
                       </div>
                     </div>
 
-                    <div className="mt-3 rounded-[26px] border border-gray-200 bg-gradient-to-b from-[#fafafa] to-white p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <div className="mt-3 rounded-[26px] border border-gray-200 bg-[linear-gradient(180deg,#FAFAFB_0%,#FFFFFF_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                       {sessionLoading ? (
                         <div className="text-sm text-gray-500">{t.loading}</div>
                       ) : isLoggedIn ? (
                         <>
                           <div className="mb-3 flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1C1C1E] text-xs font-bold text-white">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-xs font-bold text-white shadow-sm">
                               {initials}
                             </div>
                             <div className="min-w-0">
@@ -1337,9 +1357,9 @@ export default function Navbar() {
                             <button
                               type="button"
                               onClick={handleNotificationClick}
-                              className="relative inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-[#1C1C1E] bg-[#1C1C1E] px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                              className="relative inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-3 py-3 text-center text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.2)] transition hover:opacity-95"
                             >
-                              <Bell className="h-3.5 w-3.5" />
+                              <Bell className="h-4 w-4" />
                               <span>{t.notifications}</span>
 
                               {notificationCount > 0 ? (
@@ -1352,7 +1372,7 @@ export default function Navbar() {
                             </button>
 
                             {notificationOpen ? (
-                              <div className="mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                              <div className="mt-2 overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-lg">
                                 {notificationDropdown}
                               </div>
                             ) : null}
@@ -1362,13 +1382,13 @@ export default function Navbar() {
                             <Link
                               href={dashboardHref}
                               onClick={closeAllMenus}
-                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                              className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.2)] transition hover:opacity-95"
                             >
                               <LayoutDashboard className="h-4 w-4" />
                               {t.dashboard}
                             </Link>
                           ) : (
-                            <div className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500">
+                            <div className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-gray-200 px-4 py-3 text-sm font-medium text-gray-500">
                               <LayoutDashboard className="h-4 w-4" />
                               {t.loadingDashboard}
                             </div>
@@ -1377,7 +1397,7 @@ export default function Navbar() {
                           <button
                             type="button"
                             onClick={handleLogout}
-                            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[20px] border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                           >
                             <LogOut className="h-4 w-4" />
                             {t.logout}
@@ -1385,7 +1405,7 @@ export default function Navbar() {
                         </>
                       ) : (
                         <>
-                          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
                             {t.quickAccess}
                           </div>
 
@@ -1393,7 +1413,7 @@ export default function Navbar() {
                             <Link
                               href="/login"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-3 py-3 text-center text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.2)] transition hover:opacity-95"
                             >
                               <User className="h-4 w-4" />
                               {t.login}
@@ -1402,7 +1422,7 @@ export default function Navbar() {
                             <Link
                               href="/signup?role=agent&next=/agentdashboard/paket"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
                             >
                               <BriefcaseBusiness className="h-4 w-4" />
                               {t.agentPro}
@@ -1411,7 +1431,7 @@ export default function Navbar() {
                             <Link
                               href="/signup?role=developer"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
                             >
                               <Building2 className="h-4 w-4" />
                               {t.developer}
@@ -1420,7 +1440,7 @@ export default function Navbar() {
                             <Link
                               href="/login?role=admin"
                               onClick={closeAllMenus}
-                              className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 py-2.5 text-center text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
                             >
                               <Shield className="h-4 w-4" />
                               Admin
@@ -1430,7 +1450,7 @@ export default function Navbar() {
                           <Link
                             href="/signup"
                             onClick={closeAllMenus}
-                            className="mt-2.5 inline-flex w-full items-center justify-center rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] shadow-[0_12px_30px_-16px_rgba(234,179,8,0.75)] transition hover:brightness-[1.02]"
+                            className="mt-2.5 inline-flex w-full items-center justify-center rounded-[20px] border border-yellow-300 bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-300 px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-[0_14px_34px_-18px_rgba(234,179,8,0.9)] transition hover:brightness-[1.02]"
                           >
                             {t.signUp}
                           </Link>
