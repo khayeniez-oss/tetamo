@@ -8,6 +8,7 @@ import {
   UserRound,
   BriefcaseBusiness,
   ArrowLeft,
+  ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
@@ -68,6 +69,14 @@ function AppleDarkIcon() {
   );
 }
 
+function Tag({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex rounded-full border border-white/60 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B7280] backdrop-blur">
+      {children}
+    </span>
+  );
+}
+
 function FormInput({
   label,
   type = "text",
@@ -95,7 +104,7 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
-        className="w-full rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-gray-500 focus:border-[#1C1C1E]"
+        className="w-full rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-[#8E8E93] focus:border-[#1C1C1E] focus:ring-4 focus:ring-black/5"
       />
     </div>
   );
@@ -108,6 +117,7 @@ function RoleCard({
   title,
   desc,
   badge,
+  tone,
   onClick,
 }: {
   active?: boolean;
@@ -116,20 +126,31 @@ function RoleCard({
   title: string;
   desc: string;
   badge?: string;
+  tone: "amber" | "emerald" | "slate";
   onClick?: () => void;
 }) {
+  const toneClasses =
+    tone === "amber"
+      ? active
+        ? "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-[0_16px_40px_rgba(245,158,11,0.12)]"
+        : "border-[#E7E7EA] bg-gradient-to-br from-amber-50/70 via-white to-orange-50/40 hover:border-amber-200 hover:shadow-[0_14px_30px_rgba(245,158,11,0.08)]"
+      : tone === "emerald"
+      ? active
+        ? "border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 shadow-[0_16px_40px_rgba(16,185,129,0.12)]"
+        : "border-[#E7E7EA] bg-gradient-to-br from-emerald-50/70 via-white to-cyan-50/40 hover:border-emerald-200 hover:shadow-[0_14px_30px_rgba(16,185,129,0.08)]"
+      : active
+      ? "border-slate-300 bg-gradient-to-br from-slate-50 via-white to-gray-50 shadow-[0_16px_40px_rgba(100,116,139,0.10)]"
+      : "border-[#E7E7EA] bg-gradient-to-br from-slate-50/70 via-white to-gray-50/40 hover:border-slate-200 hover:shadow-[0_14px_30px_rgba(100,116,139,0.08)]";
+
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       className={[
-        "relative w-full rounded-3xl border p-4 text-left transition sm:p-5",
-        disabled
-          ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-70"
-          : active
-            ? "border-[#1C1C1E] bg-white shadow-sm ring-1 ring-[#1C1C1E]"
-            : "border-[#e5e5e7] bg-white hover:border-gray-300 hover:shadow-sm",
+        "relative w-full rounded-[28px] border p-4 text-left transition sm:p-5",
+        disabled ? "cursor-not-allowed opacity-70" : "",
+        toneClasses,
       ].join(" ")}
     >
       {badge ? (
@@ -139,7 +160,7 @@ function RoleCard({
       ) : null}
 
       <div className="flex items-start gap-3">
-        <div className="rounded-2xl border border-[#e5e5e7] bg-[#f8f8f8] p-2.5">
+        <div className="rounded-2xl border border-white/70 bg-white/90 p-2.5 shadow-sm">
           {icon}
         </div>
 
@@ -147,7 +168,7 @@ function RoleCard({
           <div className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
             {title}
           </div>
-          <div className="mt-1 text-xs leading-6 text-[#6e6e73] sm:text-sm">
+          <div className="mt-1 text-xs leading-6 text-[#6E6E73] sm:text-sm">
             {desc}
           </div>
         </div>
@@ -213,17 +234,17 @@ export default function SignupPageClient() {
     currentRole === "agent"
       ? `/login?role=agent&next=${encodeURIComponent(agentNextPath)}`
       : currentRole === "owner"
-        ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
-        : currentRole === "admin"
-          ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
-          : "/login";
+      ? `/login?role=owner&next=${encodeURIComponent(ownerNextPath)}`
+      : currentRole === "admin"
+      ? `/login?role=admin&next=${encodeURIComponent(adminNextPath)}`
+      : "/login";
 
   const footerLoginHref =
     currentRole && currentRole !== "developer"
       ? loginRedirect
       : next
-        ? `/login?next=${encodeURIComponent(next)}`
-        : "/login";
+      ? `/login?next=${encodeURIComponent(next)}`
+      : "/login";
 
   function getOAuthRedirectTo(provider: OAuthProvider) {
     const params = new URLSearchParams();
@@ -439,236 +460,333 @@ export default function SignupPageClient() {
   const isBusy = loading || socialLoading !== null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4 py-8 sm:px-6 sm:py-14 lg:px-8">
-      <div className="w-full max-w-xl rounded-[28px] border border-[#e5e5e7] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] sm:rounded-[32px] sm:p-8">
-        <div className="mb-7 text-center sm:mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1C1C1E] sm:text-3xl">
-            {isID ? "Buat Akun TETAMO" : "Create Your TETAMO Account"}
-          </h1>
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_32%,#F8FCFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
+        <section className="overflow-hidden rounded-[32px] border border-[#ECE8DD] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)]">
+          <div className="relative h-full overflow-hidden px-5 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_35%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_35%),linear-gradient(to_bottom,rgba(255,255,255,0.96),rgba(255,255,255,1))]" />
 
-          <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
-            {isID
-              ? "Pilih peran Anda untuk melanjutkan ke alur yang sesuai."
-              : "Choose your role to continue with the right flow."}
-          </p>
-        </div>
-
-        {!currentRole ? (
-          <div className="space-y-4">
-            <RoleCard
-              icon={<UserRound className="h-5 w-5 text-[#1C1C1E]" />}
-              title={isID ? "Pemilik Properti" : "Property Owner"}
-              desc={
-                isID
-                  ? "Untuk pemilik yang ingin memasang listing dan mengelola properti di TETAMO."
-                  : "For owners who want to list and manage their properties on TETAMO."
-              }
-              onClick={() => setSelectedRole("owner")}
-            />
-
-            <RoleCard
-              icon={<BriefcaseBusiness className="h-5 w-5 text-[#1C1C1E]" />}
-              title={isID ? "Agen Properti" : "Property Agent"}
-              desc={
-                isID
-                  ? "Untuk agent yang ingin memilih paket, mengelola listing, leads, jadwal viewing, dan komisi."
-                  : "For agents who want to choose a package, manage listings, leads, viewing schedules, and commissions."
-              }
-              onClick={() => setSelectedRole("agent")}
-            />
-
-            <RoleCard
-              badge="Request Quote"
-              icon={<Building2 className="h-5 w-5 text-[#1C1C1E]" />}
-              title="Developer"
-              desc={
-                isID
-                  ? "Untuk developer atau project owner yang ingin meminta quotation untuk menggunakan TETAMO License."
-                  : "For developers or project owners who want to request a quotation to use the TETAMO License."
-              }
-              onClick={() => router.push(developerLicensePath)}
-            />
-
-            <p className="pt-2 text-center text-sm leading-6 text-[#6e6e73]">
-              {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
-              <Link
-                href={footerLoginHref}
-                className="font-semibold text-[#1C1C1E] underline underline-offset-4"
-              >
-                {isID ? "Masuk" : "Log in"}
-              </Link>
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-[#e5e5e7] bg-[#fafafa] px-4 py-3">
-              <div>
-                <p className="text-xs text-[#6e6e73]">
-                  {isID ? "Peran terpilih" : "Selected role"}
-                </p>
-                <p className="text-sm font-semibold text-[#1C1C1E]">
-                  {roleLabel}
-                </p>
+            <div className="relative">
+              <div className="flex flex-wrap gap-2">
+                <Tag>{isID ? "Tetamo Signup" : "Tetamo Signup"}</Tag>
+                <Tag>{isID ? "Premium Access" : "Premium Access"}</Tag>
               </div>
 
-              {currentRole !== "admin" ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole(null)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#d2d2d7] bg-white px-3 py-2 text-xs font-medium text-[#1C1C1E] transition hover:bg-[#f8f8f8]"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  {isID ? "Ganti" : "Change"}
-                </button>
-              ) : null}
+              <h1 className="mt-5 max-w-xl text-3xl font-black tracking-tight text-[#111827] sm:text-4xl lg:text-5xl">
+                {isID
+                  ? "Masuk ke Tetamo dengan tampilan yang lebih profesional"
+                  : "Join Tetamo with a more premium and professional start"}
+              </h1>
+
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#5B5B63] sm:text-base lg:text-lg">
+                {isID
+                  ? "Pilih peran Anda dan lanjutkan ke alur yang sesuai untuk pemilik, agen, developer, atau admin."
+                  : "Choose your role and continue to the right flow for owners, agents, developers, or admins."}
+              </p>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[26px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-[0_18px_50px_rgba(245,158,11,0.10)]">
+                  <div className="text-sm font-semibold text-[#92400E]">
+                    {isID ? "Untuk Pemilik" : "For Owners"}
+                  </div>
+                  <div className="mt-2 text-xl font-bold text-[#111827]">
+                    {isID
+                      ? "Mulai listing properti Anda"
+                      : "Start listing your property"}
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-[#6B7280]">
+                    {isID
+                      ? "Cocok untuk pemilik yang ingin tampil lebih menarik dan siap mendapatkan leads."
+                      : "Best for owners who want a more attractive listing presence and better lead potential."}
+                  </p>
+                </div>
+
+                <div className="rounded-[26px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-[0_18px_50px_rgba(16,185,129,0.10)]">
+                  <div className="text-sm font-semibold text-[#065F46]">
+                    {isID ? "Untuk Agen" : "For Agents"}
+                  </div>
+                  <div className="mt-2 text-xl font-bold text-[#111827]">
+                    {isID
+                      ? "Bangun profil dan kelola listing"
+                      : "Build your profile and manage listings"}
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-[#6B7280]">
+                    {isID
+                      ? "Ideal untuk agen yang ingin mengelola listing, viewing, leads, dan branding dalam satu alur."
+                      : "Ideal for agents who want to manage listings, viewings, leads, and branding in one flow."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-2.5">
+                {[
+                  isID ? "Lebih premium" : "More premium",
+                  isID ? "Lebih profesional" : "More professional",
+                  isID ? "Mudah di mobile" : "Mobile friendly",
+                  isID ? "Alur lebih jelas" : "Clearer flow",
+                ].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-[11px] font-medium text-[#4B5563] sm:text-xs"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-[32px] border border-[#E7E7EA] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)]">
+          <div className="px-5 py-6 sm:px-8 sm:py-8">
+            <div className="mb-7 text-center sm:mb-8">
+              <h2 className="text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl">
+                {isID ? "Buat Akun TETAMO" : "Create Your TETAMO Account"}
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-[#6E6E73]">
+                {isID
+                  ? "Pilih peran Anda untuk melanjutkan ke alur yang sesuai."
+                  : "Choose your role to continue with the right flow."}
+              </p>
             </div>
 
-            {!isAdminSignup ? (
-              <>
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => void handleOAuthSignup("google")}
-                    disabled={isBusy}
-                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
-                  >
-                    <GoogleDarkIcon />
-                    <span>
-                      {socialLoading === "google"
-                        ? isID
-                          ? "Menghubungkan ke Google..."
-                          : "Connecting to Google..."
-                        : isID
-                          ? "Daftar dengan Google"
-                          : "Sign up with Google"}
-                    </span>
-                  </button>
+            {!currentRole ? (
+              <div className="space-y-4">
+                <RoleCard
+                  tone="amber"
+                  icon={<UserRound className="h-5 w-5 text-[#1C1C1E]" />}
+                  title={isID ? "Pemilik Properti" : "Property Owner"}
+                  desc={
+                    isID
+                      ? "Untuk pemilik yang ingin memasang listing dan mengelola properti di TETAMO."
+                      : "For owners who want to list and manage their properties on TETAMO."
+                  }
+                  onClick={() => setSelectedRole("owner")}
+                />
 
-                  {showFacebook ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleOAuthSignup("facebook")}
-                      disabled={isBusy}
-                      className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
-                    >
-                      <FacebookDarkIcon />
-                      <span>
-                        {socialLoading === "facebook"
-                          ? isID
-                            ? "Menghubungkan ke Facebook..."
-                            : "Connecting to Facebook..."
-                          : isID
-                            ? "Daftar dengan Facebook"
-                            : "Sign up with Facebook"}
+                <RoleCard
+                  tone="emerald"
+                  icon={
+                    <BriefcaseBusiness className="h-5 w-5 text-[#1C1C1E]" />
+                  }
+                  title={isID ? "Agen Properti" : "Property Agent"}
+                  desc={
+                    isID
+                      ? "Untuk agent yang ingin memilih paket, mengelola listing, leads, jadwal viewing, dan komisi."
+                      : "For agents who want to choose a package, manage listings, leads, viewing schedules, and commissions."
+                  }
+                  onClick={() => setSelectedRole("agent")}
+                />
+
+                <RoleCard
+                  tone="slate"
+                  badge="Request Quote"
+                  icon={<Building2 className="h-5 w-5 text-[#1C1C1E]" />}
+                  title="Developer"
+                  desc={
+                    isID
+                      ? "Untuk developer atau project owner yang ingin meminta quotation untuk menggunakan TETAMO License."
+                      : "For developers or project owners who want to request a quotation to use the TETAMO License."
+                  }
+                  onClick={() => router.push(developerLicensePath)}
+                />
+
+                <p className="pt-2 text-center text-sm leading-6 text-[#6E6E73]">
+                  {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
+                  <Link
+                    href={footerLoginHref}
+                    className="font-semibold text-[#111827] underline underline-offset-4"
+                  >
+                    {isID ? "Masuk" : "Log in"}
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6 rounded-[24px] border border-[#E8E8EC] bg-gradient-to-r from-[#FAFAFB] to-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-[#6E6E73]">
+                        {isID ? "Peran terpilih" : "Selected role"}
+                      </p>
+                      <p className="text-sm font-semibold text-[#111827]">
+                        {roleLabel}
+                      </p>
+                    </div>
+
+                    {currentRole !== "admin" ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRole(null)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#D8D8DD] bg-white px-3 py-2 text-xs font-medium text-[#111827] transition hover:bg-[#F8F8FA]"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        {isID ? "Ganti" : "Change"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {!isAdminSignup ? (
+                  <>
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => void handleOAuthSignup("google")}
+                        disabled={isBusy}
+                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+                      >
+                        <GoogleDarkIcon />
+                        <span>
+                          {socialLoading === "google"
+                            ? isID
+                              ? "Menghubungkan ke Google..."
+                              : "Connecting to Google..."
+                            : isID
+                            ? "Daftar dengan Google"
+                            : "Sign up with Google"}
+                        </span>
+                      </button>
+
+                      {showFacebook ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleOAuthSignup("facebook")}
+                          disabled={isBusy}
+                          className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+                        >
+                          <FacebookDarkIcon />
+                          <span>
+                            {socialLoading === "facebook"
+                              ? isID
+                                ? "Menghubungkan ke Facebook..."
+                                : "Connecting to Facebook..."
+                              : isID
+                              ? "Daftar dengan Facebook"
+                              : "Sign up with Facebook"}
+                          </span>
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => void handleOAuthSignup("apple")}
+                        disabled={isBusy}
+                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+                      >
+                        <AppleDarkIcon />
+                        <span>
+                          {socialLoading === "apple"
+                            ? isID
+                              ? "Menghubungkan ke Apple..."
+                              : "Connecting to Apple..."
+                            : isID
+                            ? "Daftar dengan Apple"
+                            : "Sign up with Apple"}
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="my-6 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-[#E5E5E7]" />
+                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6E6E73]">
+                        {isID ? "Atau" : "Or"}
                       </span>
-                    </button>
+                      <div className="h-px flex-1 bg-[#E5E5E7]" />
+                    </div>
+                  </>
+                ) : null}
+
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleSignup();
+                  }}
+                >
+                  <FormInput
+                    label={isID ? "Nama Lengkap" : "Full Name"}
+                    placeholder={
+                      isID
+                        ? "Masukkan nama lengkap Anda"
+                        : "Enter your full name"
+                    }
+                    value={fullName}
+                    onChange={setFullName}
+                    autoComplete="name"
+                  />
+
+                  <FormInput
+                    label="Email"
+                    type="email"
+                    placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
+                    value={email}
+                    onChange={setEmail}
+                    autoComplete="email"
+                  />
+
+                  <FormInput
+                    label={isID ? "Kata Sandi" : "Password"}
+                    type="password"
+                    placeholder={isID ? "Buat kata sandi" : "Create a password"}
+                    value={password}
+                    onChange={setPassword}
+                    autoComplete="new-password"
+                  />
+
+                  {isAdminSignup ? (
+                    <div className="rounded-[24px] border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-emerald-700" />
+                        <p className="text-sm font-semibold text-[#111827]">
+                          Admin Access
+                        </p>
+                      </div>
+
+                      <FormInput
+                        label="Admin Code"
+                        type="password"
+                        placeholder={
+                          isID
+                            ? "Masukkan admin signup code"
+                            : "Enter admin signup code"
+                        }
+                        value={adminCode}
+                        onChange={setAdminCode}
+                        autoComplete="off"
+                      />
+                    </div>
                   ) : null}
 
                   <button
-                    type="button"
-                    onClick={() => void handleOAuthSignup("apple")}
+                    type="submit"
                     disabled={isBusy}
-                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#f8f8f8] disabled:opacity-60"
+                    className="w-full rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
                   >
-                    <AppleDarkIcon />
-                    <span>
-                      {socialLoading === "apple"
-                        ? isID
-                          ? "Menghubungkan ke Apple..."
-                          : "Connecting to Apple..."
-                        : isID
-                          ? "Daftar dengan Apple"
-                          : "Sign up with Apple"}
-                    </span>
+                    {loading && !socialLoading
+                      ? isID
+                        ? "Sedang membuat akun..."
+                        : "Creating account..."
+                      : isID
+                      ? "Daftar"
+                      : "Sign up"}
                   </button>
-                </div>
+                </form>
 
-                <div className="my-6 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-[#e5e5e7]" />
-                  <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6e6e73]">
-                    {isID ? "Atau" : "Or"}
-                  </span>
-                  <div className="h-px flex-1 bg-[#e5e5e7]" />
-                </div>
+                <p className="mt-6 text-center text-sm leading-6 text-[#6E6E73]">
+                  {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
+                  <Link
+                    href={footerLoginHref}
+                    className="font-semibold text-[#111827] underline underline-offset-4"
+                  >
+                    {isID ? "Masuk" : "Log in"}
+                  </Link>
+                </p>
               </>
-            ) : null}
-
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleSignup();
-              }}
-            >
-              <FormInput
-                label={isID ? "Nama Lengkap" : "Full Name"}
-                placeholder={
-                  isID ? "Masukkan nama lengkap Anda" : "Enter your full name"
-                }
-                value={fullName}
-                onChange={setFullName}
-                autoComplete="name"
-              />
-
-              <FormInput
-                label="Email"
-                type="email"
-                placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
-                value={email}
-                onChange={setEmail}
-                autoComplete="email"
-              />
-
-              <FormInput
-                label={isID ? "Kata Sandi" : "Password"}
-                type="password"
-                placeholder={isID ? "Buat kata sandi" : "Create a password"}
-                value={password}
-                onChange={setPassword}
-                autoComplete="new-password"
-              />
-
-              {isAdminSignup ? (
-                <FormInput
-                  label="Admin Code"
-                  type="password"
-                  placeholder={
-                    isID
-                      ? "Masukkan admin signup code"
-                      : "Enter admin signup code"
-                  }
-                  value={adminCode}
-                  onChange={setAdminCode}
-                  autoComplete="off"
-                />
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={isBusy}
-                className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-              >
-                {loading && !socialLoading
-                  ? isID
-                    ? "Sedang membuat akun..."
-                    : "Creating account..."
-                  : isID
-                    ? "Daftar"
-                    : "Sign up"}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm leading-6 text-[#6e6e73]">
-              {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
-              <Link
-                href={footerLoginHref}
-                className="font-semibold text-[#1C1C1E] underline underline-offset-4"
-              >
-                {isID ? "Masuk" : "Log in"}
-              </Link>
-            </p>
-          </>
-        )}
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
