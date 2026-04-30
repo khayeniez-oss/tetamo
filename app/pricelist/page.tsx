@@ -1,161 +1,184 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronRight, Sparkles } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
-import { OWNER_PACKAGES, AGENT_PACKAGES } from "@/app/data/pricelist";
+import { OWNER_PACKAGES, AGENT_PACKAGES } from "../data/pricelist";
 
-type PackageItem = {
-  id: string;
-  name?: string;
-  nameEn?: string;
-  description?: string;
-  descriptionEn?: string;
-  paymentDescription?: string;
-  paymentDescriptionEn?: string;
-  badge?: string;
-  badgeEn?: string;
-  billingNote?: string;
-  billingNoteEn?: string;
-  audience?: "owner" | "agent" | string;
-  productType?: string;
-  priceIdr?: number;
-  durationDays?: number;
-  maxListings?: number;
-  renewable?: boolean;
-  autoRenewDefault?: boolean;
-  isFeatured?: boolean;
-  featuredDurationDays?: number;
-  downgradeToBasicAfterFeatured?: boolean;
-};
+type PackageLike =
+  | (typeof OWNER_PACKAGES)[number]
+  | (typeof AGENT_PACKAGES)[number];
 
-function formatIdr(value?: number) {
-  if (!value || Number.isNaN(value)) return "Rp 0";
+function formatIdr(value?: number | null) {
+  const safeValue = Number(value ?? 0);
+
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(safeValue);
 }
 
-function getText(
-  isID: boolean,
-  idText?: string,
-  enText?: string,
-  fallback = ""
-) {
-  if (isID) return idText || enText || fallback;
-  return enText || idText || fallback;
+function getPackageName(pkg: PackageLike, isID: boolean) {
+  const item = pkg as any;
+  return isID ? item.name ?? item.nameEn ?? "" : item.nameEn ?? item.name ?? "";
 }
 
-function getDescription(pkg: PackageItem, isID: boolean) {
+function getPackageBadge(pkg: PackageLike, isID: boolean) {
+  const item = pkg as any;
+  return isID
+    ? item.badge ?? item.badgeEn ?? ""
+    : item.badgeEn ?? item.badge ?? "";
+}
+
+function getPackageDescription(pkg: PackageLike, isID: boolean) {
+  const item = pkg as any;
+
+  return isID
+    ? item.paymentDescription ??
+        item.description ??
+        item.paymentDescriptionEn ??
+        item.descriptionEn ??
+        ""
+    : item.paymentDescriptionEn ??
+        item.descriptionEn ??
+        item.paymentDescription ??
+        item.description ??
+        "";
+}
+
+function getDurationText(pkg: PackageLike, isID: boolean) {
+  const item = pkg as any;
+  const billingCycle = String(item.billingCycle ?? "").toLowerCase();
+  const days = Number(item.durationDays ?? 0);
+
+  if (billingCycle === "monthly") return isID ? "Bulanan" : "Monthly";
+  if (billingCycle === "yearly") return isID ? "Tahunan" : "Yearly";
+
+  if (!days || Number.isNaN(days)) return isID ? "Sesuai paket" : "Per package";
+
+  if (days % 365 === 0) {
+    const years = days / 365;
+    return isID
+      ? `${years} Tahun`
+      : `${years} Year${years > 1 ? "s" : ""}`;
+  }
+
+  if (days % 30 === 0) {
+    const months = days / 30;
+    return isID
+      ? `${months} Bulan`
+      : `${months} Month${months > 1 ? "s" : ""}`;
+  }
+
+  return isID ? `${days} Hari` : `${days} Days`;
+}
+
+function getListingCount(pkg: PackageLike) {
+  const item = pkg as any;
+
   return (
-    getText(
-      isID,
-      pkg.paymentDescription,
-      pkg.paymentDescriptionEn,
-      ""
-    ) ||
-    getText(isID, pkg.description, pkg.descriptionEn, "")
+    item.maxListings ??
+    item.listingLimit ??
+    item.activeListingLimit ??
+    item.maxActiveListings ??
+    null
   );
 }
 
-function getBadge(pkg: PackageItem, isID: boolean) {
-  return getText(isID, pkg.badge, pkg.badgeEn, "");
+function getFeaturedDays(pkg: PackageLike) {
+  const item = pkg as any;
+  return item.featuredDurationDays ?? null;
 }
 
-function durationLabel(days?: number, isID?: boolean) {
-  if (!days) return isID ? "Durasi fleksibel" : "Flexible duration";
-  if (days === 30) return isID ? "30 hari" : "30 days";
-  if (days === 365) return isID ? "1 tahun" : "1 year";
-  return isID ? `${days} hari` : `${days} days`;
+function isRecommendedOwner(pkg: PackageLike, index: number) {
+  const item = pkg as any;
+  const key =
+    `${item.id ?? ""} ${item.name ?? ""} ${item.nameEn ?? ""}`.toLowerCase();
+
+  if (item.isFeatured) return true;
+  if (key.includes("featured")) return true;
+
+  return index === Math.min(1, OWNER_PACKAGES.length - 1);
 }
 
-function listingLabel(count?: number, isID?: boolean) {
-  if (!count) return isID ? "Sesuai paket" : "Based on package";
-  return isID ? `${count} listing aktif` : `${count} active listings`;
+function isRecommendedAgent(pkg: PackageLike, index: number) {
+  const item = pkg as any;
+  const key =
+    `${item.id ?? ""} ${item.name ?? ""} ${item.nameEn ?? ""}`.toLowerCase();
+
+  if (key.includes("gold")) return true;
+  if (key.includes("popular")) return true;
+  if (key.includes("recommended")) return true;
+
+  return index === Math.min(1, AGENT_PACKAGES.length - 1);
 }
 
-function SectionPill({ children }: { children: ReactNode }) {
+function SectionLabel({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: "amber" | "emerald";
+}) {
+  const className =
+    tone === "amber"
+      ? "border-amber-200 bg-gradient-to-r from-amber-100 via-orange-50 to-white text-amber-900"
+      : "border-emerald-200 bg-gradient-to-r from-emerald-100 via-cyan-50 to-white text-emerald-900";
+
   return (
-    <span className="inline-flex items-center rounded-full border border-[#D9D9DE] bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] shadow-sm">
+    <span
+      className={`inline-flex rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] ${className}`}
+    >
       {children}
     </span>
   );
 }
 
-function ToggleButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "w-full rounded-2xl border px-3 py-3 text-center text-sm font-semibold transition sm:px-4 sm:py-4 sm:text-base",
-        active
-          ? "border-[#0F172A] bg-[#0F172A] text-white shadow-[0_16px_32px_rgba(15,23,42,0.16)]"
-          : "border-[#D9D9DE] bg-white text-[#111827] hover:bg-[#FAFAFB]",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
-
-function InfoCard({
-  eyebrow,
+function SectionHeader({
+  id,
   title,
-  description,
-  tone = "amber",
+  subtitle,
+  tone,
 }: {
-  eyebrow: string;
+  id: string;
   title: string;
-  description: string;
-  tone?: "amber" | "emerald";
+  subtitle: string;
+  tone: "amber" | "emerald";
 }) {
-  const toneClass =
-    tone === "amber"
-      ? "border-[#F2D67A] bg-[linear-gradient(180deg,#FFFDF6_0%,#FFFFFF_100%)]"
-      : "border-[#9EECCF] bg-[linear-gradient(180deg,#F5FFFB_0%,#FFFFFF_100%)]";
-
-  const eyebrowClass = tone === "amber" ? "text-[#B45309]" : "text-[#047857]";
-
   return (
-    <div
-      className={`rounded-[28px] border p-5 sm:p-6 ${toneClass}`}
-    >
-      <p className={`text-sm font-semibold ${eyebrowClass}`}>{eyebrow}</p>
-      <h3 className="mt-3 text-2xl font-bold leading-tight text-[#111827] sm:text-3xl">
+    <div id={id} className="scroll-mt-28">
+      <SectionLabel tone={tone}>{title}</SectionLabel>
+      <h2 className="mt-4 text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl lg:text-[34px]">
         {title}
-      </h3>
-      <p className="mt-4 text-sm leading-7 text-[#6B7280] sm:text-base">
-        {description}
+      </h2>
+      <p className="mt-3 max-w-3xl text-sm leading-7 text-[#5C5C62] sm:text-base">
+        {subtitle}
       </p>
     </div>
   );
 }
 
-function FeatureRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Pill({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[#ECECF1] py-3 last:border-b-0">
-      <span className="text-sm text-[#6B7280]">{label}</span>
-      <span className="text-right text-sm font-semibold text-[#111827]">
-        {value}
-      </span>
+    <span className="inline-flex rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-[11px] font-medium text-[#374151] sm:text-xs">
+      {children}
+    </span>
+  );
+}
+
+function FeatureList({ items }: { items: string[] }) {
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div
+          key={item}
+          className="flex items-start gap-3 text-sm leading-6 text-[#4B5563]"
+        >
+          <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#111827]" />
+          <span>{item}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -163,266 +186,344 @@ function FeatureRow({
 function PackageCard({
   pkg,
   isID,
-  type,
+  recommended,
+  audience,
 }: {
-  pkg: PackageItem;
+  pkg: PackageLike;
   isID: boolean;
-  type: "owner" | "agent";
+  recommended: boolean;
+  audience: "owner" | "agent";
 }) {
-  const name = getText(isID, pkg.name, pkg.nameEn, "Package");
-  const desc = getDescription(pkg, isID);
-  const badge = getBadge(pkg, isID);
-  const billingNote = getText(
-    isID,
-    pkg.billingNote,
-    pkg.billingNoteEn,
-    ""
-  );
+  const item = pkg as any;
+  const name = getPackageName(pkg, isID);
+  const badge = getPackageBadge(pkg, isID);
+  const description = getPackageDescription(pkg, isID);
+  const listingCount = getListingCount(pkg);
+  const featuredDays = getFeaturedDays(pkg);
+  const price = formatIdr(item.priceIdr ?? 0);
+  const duration = getDurationText(pkg, isID);
+  const features = isID ? item.features ?? [] : item.featuresEn ?? item.features ?? [];
+  const monthlyBillingNote = isID
+    ? item.monthlyBillingNote
+    : item.monthlyBillingNoteEn ?? item.monthlyBillingNote;
 
-  const primaryHref =
-    type === "owner" ? "/signup?role=owner" : "/signup?role=agent";
+  const cardBorder = recommended
+    ? audience === "owner"
+      ? "border-amber-300"
+      : "border-emerald-300"
+    : "border-[#E5E7EB]";
 
-  const primaryLabel =
-    type === "owner"
-      ? isID
-        ? "Pilih Paket Owner"
-        : "Choose Owner Package"
-      : isID
-      ? "Pilih Paket Agent"
-      : "Choose Agent Package";
+  const cardShadow = recommended
+    ? audience === "owner"
+      ? "shadow-[0_24px_60px_rgba(245,158,11,0.14)]"
+      : "shadow-[0_24px_60px_rgba(16,185,129,0.14)]"
+    : "shadow-[0_18px_40px_rgba(17,24,39,0.06)]";
+
+  const topGlow = recommended
+    ? audience === "owner"
+      ? "from-amber-100 via-orange-50 to-white"
+      : "from-emerald-100 via-cyan-50 to-white"
+    : "from-white to-white";
 
   return (
-    <div className="flex h-full flex-col rounded-[28px] border border-[#E8E8ED] bg-white p-5 shadow-[0_16px_40px_rgba(17,24,39,0.06)] sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          {badge ? (
-            <div className="mb-3 inline-flex rounded-full border border-[#E7E7EA] bg-[#F8F8FA] px-3 py-1 text-xs font-semibold text-[#4B5563]">
-              {badge}
-            </div>
-          ) : null}
+    <div
+      className={`relative overflow-hidden rounded-[28px] border bg-white p-5 transition-all duration-300 hover:-translate-y-1 sm:p-6 ${cardBorder} ${cardShadow}`}
+    >
+      <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${topGlow}`} />
 
-          <h3 className="text-xl font-bold text-[#111827] sm:text-2xl">
+      <div className="relative">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {badge ? <Pill>{badge}</Pill> : null}
+            {recommended ? (
+              <span className="inline-flex rounded-full bg-gradient-to-r from-[#F59E0B] to-[#10B981] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                {isID ? "Rekomendasi" : "Recommended"}
+              </span>
+            ) : null}
+          </div>
+
+          <Pill>{duration}</Pill>
+        </div>
+
+        <div className="mt-5">
+          <h3 className="text-2xl font-bold tracking-tight text-[#111827]">
             {name}
           </h3>
 
-          {desc ? (
-            <p className="mt-3 text-sm leading-7 text-[#6B7280] sm:text-base">
-              {desc}
-            </p>
+          <div className="mt-4">
+            <div className="text-3xl font-extrabold tracking-tight text-[#111827] sm:text-[34px]">
+              {price}
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm leading-7 text-[#5C5C62]">
+            {description ||
+              (isID
+                ? "Paket premium untuk membantu Anda tampil lebih profesional di Tetamo."
+                : "A premium package to help you present your listings more professionally on Tetamo.")}
+          </p>
+        </div>
+
+        <div className="mt-6 grid gap-3">
+          <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
+              {isID ? "Cocok untuk" : "Best for"}
+            </div>
+            <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
+              {audience === "owner"
+                ? isID
+                  ? "Pemilik properti yang ingin listing lebih menarik"
+                  : "Owners who want stronger listing visibility"
+                : isID
+                ? "Agen yang ingin berkembang lebih profesional"
+                : "Agents who want to grow more professionally"}
+            </div>
+          </div>
+
+          {listingCount !== null ? (
+            <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
+                {audience === "owner"
+                  ? isID
+                    ? "Jumlah listing"
+                    : "Listing quantity"
+                  : isID
+                  ? "Listing aktif"
+                  : "Active listings"}
+              </div>
+              <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
+                {listingCount} {isID ? "listing" : "listing"}
+              </div>
+            </div>
+          ) : null}
+
+          {featuredDays ? (
+            <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
+                {isID ? "Exposure tambahan" : "Extra exposure"}
+              </div>
+              <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
+                {isID
+                  ? `Featured hingga ${featuredDays} hari`
+                  : `Featured up to ${featuredDays} days`}
+              </div>
+            </div>
+          ) : null}
+
+          {monthlyBillingNote ? (
+            <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
+                {isID ? "Opsi pembayaran" : "Payment option"}
+              </div>
+              <div className="mt-1 text-sm font-medium leading-6 text-[#1C1C1E]">
+                {monthlyBillingNote}
+              </div>
+            </div>
           ) : null}
         </div>
-      </div>
 
-      <div className="mt-6 rounded-[22px] border border-[#EFEFF3] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_100%)] p-4">
-        <div className="text-xs font-medium uppercase tracking-[0.14em] text-[#8A8A93]">
-          {isID ? "Harga Paket" : "Package Price"}
+        <div className="mt-6">
+          <FeatureList items={features} />
         </div>
-        <div className="mt-2 text-3xl font-black tracking-tight text-[#0F172A] sm:text-4xl">
-          {formatIdr(pkg.priceIdr)}
+
+        <div className="mt-7 grid grid-cols-2 gap-3">
+          <Link
+            href="/signup"
+            className={`inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-center text-sm font-semibold transition ${
+              recommended
+                ? "bg-[#111827] text-white hover:bg-black"
+                : "border border-[#D8D8DD] bg-white text-[#111827] hover:bg-[#F8F8FA]"
+            }`}
+          >
+            {audience === "owner"
+              ? isID
+                ? "Mulai sebagai Pemilik"
+                : "Start as Owner"
+              : isID
+              ? "Mulai sebagai Agen"
+              : "Start as Agent"}
+          </Link>
+
+          <Link
+            href="/faq"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-center text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA]"
+          >
+            {isID ? "Lihat FAQ" : "View FAQ"}
+          </Link>
         </div>
-        {billingNote ? (
-          <p className="mt-2 text-sm text-[#6B7280]">{billingNote}</p>
-        ) : null}
-      </div>
-
-      <div className="mt-6 rounded-[22px] border border-[#ECECF1] bg-[#FCFCFD] px-4">
-        <FeatureRow
-          label={isID ? "Durasi" : "Duration"}
-          value={durationLabel(pkg.durationDays, isID)}
-        />
-        <FeatureRow
-          label={isID ? "Kapasitas" : "Capacity"}
-          value={listingLabel(pkg.maxListings, isID)}
-        />
-        <FeatureRow
-          label={isID ? "Renewal" : "Renewal"}
-          value={
-            pkg.renewable
-              ? isID
-                ? "Tersedia"
-                : "Available"
-              : isID
-              ? "Tidak"
-              : "No"
-          }
-        />
-        {pkg.isFeatured ? (
-          <FeatureRow
-            label={isID ? "Featured" : "Featured"}
-            value={
-              pkg.featuredDurationDays
-                ? isID
-                  ? `${pkg.featuredDurationDays} hari`
-                  : `${pkg.featuredDurationDays} days`
-                : isID
-                ? "Ya"
-                : "Yes"
-            }
-          />
-        ) : null}
-      </div>
-
-      <ul className="mt-6 space-y-3">
-        <li className="flex items-start gap-3 text-sm text-[#374151]">
-          <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#10B981]" />
-          <span>
-            {type === "owner"
-              ? isID
-                ? "Cocok untuk pemilik yang ingin memasarkan propertinya dengan lebih baik."
-                : "Suitable for owners who want to market their property more effectively."
-              : isID
-              ? "Cocok untuk agent yang ingin mengelola listing dan lead lebih profesional."
-              : "Suitable for agents who want to manage listings and leads more professionally."}
-          </span>
-        </li>
-
-        <li className="flex items-start gap-3 text-sm text-[#374151]">
-          <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#10B981]" />
-          <span>
-            {type === "owner"
-              ? isID
-                ? "Dirancang untuk meningkatkan visibilitas listing."
-                : "Designed to improve your listing visibility."
-              : isID
-              ? "Dirancang untuk mendukung pertumbuhan listing aktif."
-              : "Designed to support active listing growth."}
-          </span>
-        </li>
-      </ul>
-
-      <div className="mt-8 grid gap-3 sm:grid-cols-2">
-        <Link
-          href={primaryHref}
-          className="inline-flex items-center justify-center rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-black"
-        >
-          {primaryLabel}
-        </Link>
-
-        <Link
-          href={type === "owner" ? "/signup?role=owner" : "/signup?role=agent"}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#DADAE0] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#FAFAFB]"
-        >
-          {isID ? "Mulai Sekarang" : "Get Started"}
-          <ChevronRight className="h-4 w-4" />
-        </Link>
       </div>
     </div>
   );
 }
 
-export default function PricelistPage() {
+export default function PriceListPage() {
   const { lang } = useLanguage();
   const isID = lang === "id";
-  const [activeTab, setActiveTab] = useState<"owner" | "agent">("owner");
-
-  const ownerPackages = OWNER_PACKAGES as PackageItem[];
-  const agentPackages = AGENT_PACKAGES as PackageItem[];
-
-  const activePackages = useMemo(() => {
-    return activeTab === "owner" ? ownerPackages : agentPackages;
-  }, [activeTab, ownerPackages, agentPackages]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)] pb-28 pt-6 sm:pt-8">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-[32px] border border-[#E9E5DA] bg-[linear-gradient(135deg,#FFF7EA_0%,#F3FFF9_100%)] shadow-[0_24px_60px_rgba(17,24,39,0.07)]">
-          <div className="px-5 py-7 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
-            <SectionPill>
-              {isID ? "Tetamo Pricelist" : "Tetamo Pricelist"}
-            </SectionPill>
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_32%,#F8FCFB_100%)]">
+      <section className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pb-20 lg:pt-10">
+        <div className="overflow-hidden rounded-[32px] border border-[#ECE8DD] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)]">
+          <div className="relative overflow-hidden px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_35%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_35%),linear-gradient(to_bottom,rgba(255,255,255,0.96),rgba(255,255,255,1))]" />
 
-            <div className="mt-5 max-w-4xl">
-              <h1 className="text-[32px] font-black leading-[1.08] tracking-[-0.03em] text-[#0F172A] sm:text-[42px] lg:text-[56px]">
-                {isID
-                  ? "Pilih paket terbaik untuk kebutuhan listing Anda"
-                  : "Choose the best package for your listing needs"}
-              </h1>
+            <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+              <div>
+                <span className="inline-flex rounded-full border border-[#E5E7EB] bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] sm:text-xs">
+                  Tetamo Pricelist
+                </span>
 
-              <p className="mt-4 max-w-3xl text-base leading-8 text-[#5F6368] sm:text-lg">
-                {isID
-                  ? "Dirancang untuk pemilik dan agent yang ingin tampil lebih profesional, lebih menarik, dan memiliki peluang lebih baik untuk mendapatkan lead di Tetamo."
-                  : "Designed for owners and agents who want a more professional, more attractive presence and a better chance to generate leads on Tetamo."}
-              </p>
-            </div>
+                <h1 className="mt-5 max-w-3xl text-[28px] font-black leading-[1.08] tracking-tight text-[#111827] sm:text-4xl lg:text-5xl">
+                  {isID
+                    ? "Pilih paket terbaik untuk kebutuhan listing Anda"
+                    : "Choose the best package for your listing needs"}
+                </h1>
 
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:max-w-xl">
-              <ToggleButton
-                active={activeTab === "owner"}
-                onClick={() => setActiveTab("owner")}
-              >
-                {isID ? "Paket Owner" : "View Owner Packages"}
-              </ToggleButton>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-[#5B5B63] sm:text-base lg:text-lg">
+                  {isID
+                    ? "Dirancang untuk pemilik dan agen yang ingin tampil lebih profesional, lebih menarik, dan lebih siap mendapatkan leads di Tetamo."
+                    : "Designed for owners and agents who want a more professional, more attractive presence and a better chance to generate leads on Tetamo."}
+                </p>
 
-              <ToggleButton
-                active={activeTab === "agent"}
-                onClick={() => setActiveTab("agent")}
-              >
-                {isID ? "Paket Agent" : "View Agent Packages"}
-              </ToggleButton>
+                <div className="mt-6 grid max-w-xl grid-cols-2 gap-3">
+                  <a
+                    href="#owner-packages"
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#111827] px-3 py-3 text-center text-[13px] font-semibold text-white transition hover:bg-black sm:px-5 sm:text-sm"
+                  >
+                    {isID ? "Lihat Paket Pemilik" : "View Owner Packages"}
+                  </a>
+
+                  <a
+                    href="#agent-packages"
+                    className="inline-flex items-center justify-center rounded-2xl border border-[#D8D8DD] bg-white px-3 py-3 text-center text-[13px] font-semibold text-[#111827] transition hover:bg-[#F8F8FA] sm:px-5 sm:text-sm"
+                  >
+                    {isID ? "Lihat Paket Agen" : "View Agent Packages"}
+                  </a>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-[26px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-[0_18px_50px_rgba(245,158,11,0.10)]">
+                  <div className="text-sm font-semibold text-[#92400E]">
+                    {isID ? "Rekomendasi Pemilik" : "Owner Recommendation"}
+                  </div>
+                  <div className="mt-2 text-xl font-bold text-[#111827] sm:text-2xl">
+                    {isID
+                      ? "Pilih paket dengan visibilitas lebih kuat"
+                      : "Choose stronger visibility for your listing"}
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-[#6B7280]">
+                    {isID
+                      ? "Jika Anda ingin unit terlihat lebih menonjol, pilih paket dengan exposure yang lebih tinggi."
+                      : "If you want your unit to stand out more, choose the package with stronger exposure."}
+                  </p>
+                </div>
+
+                <div className="rounded-[26px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-[0_18px_50px_rgba(16,185,129,0.10)]">
+                  <div className="text-sm font-semibold text-[#065F46]">
+                    {isID ? "Rekomendasi Agen" : "Agent Recommendation"}
+                  </div>
+                  <div className="mt-2 text-xl font-bold text-[#111827] sm:text-2xl">
+                    {isID
+                      ? "Mulai dari paket yang paling seimbang"
+                      : "Start from the most balanced plan"}
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-[#6B7280]">
+                    {isID
+                      ? "Untuk agen, paket yang seimbang biasanya paling ideal untuk tumbuh dengan stabil."
+                      : "For agents, a balanced package is usually the most practical way to grow steadily."}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section className="mt-8 sm:mt-10">
-          {activeTab === "owner" ? (
-            <InfoCard
-              eyebrow={isID ? "Rekomendasi Owner" : "Owner Recommendation"}
-              title={
-                isID
-                  ? "Pilih visibilitas yang lebih kuat untuk listing Anda"
-                  : "Choose stronger visibility for your listing"
-              }
-              description={
-                isID
-                  ? "Jika Anda ingin unit Anda lebih menonjol, pilih paket yang memberi exposure lebih kuat."
-                  : "If you want your unit to stand out more, choose the package with stronger exposure."
-              }
-              tone="amber"
-            />
-          ) : (
-            <InfoCard
-              eyebrow={isID ? "Rekomendasi Agent" : "Agent Recommendation"}
-              title={
-                isID
-                  ? "Mulai dari paket yang paling seimbang"
-                  : "Start from the most balanced plan"
-              }
-              description={
-                isID
-                  ? "Untuk agent, paket yang seimbang biasanya menjadi cara paling praktis untuk bertumbuh secara stabil."
-                  : "For agents, a balanced package is usually the most practical way to grow steadily."
-              }
-              tone="emerald"
-            />
-          )}
-        </section>
+        <section id="owner-packages" className="mt-12 sm:mt-14">
+          <SectionHeader
+            id="owner-packages"
+            tone="amber"
+            title={isID ? "Paket Pemilik" : "Owner Packages"}
+            subtitle={
+              isID
+                ? "Pilih paket yang sesuai untuk mengiklankan properti Anda dengan lebih profesional dan lebih menarik perhatian pembeli atau penyewa."
+                : "Choose the right package to advertise your property more professionally and attract more buyer or renter attention."
+            }
+          />
 
-        <section className="mt-8 sm:mt-10">
-          <div className="mb-5 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-[#111827]" />
-            <h2 className="text-2xl font-bold text-[#111827] sm:text-3xl">
-              {activeTab === "owner"
-                ? isID
-                  ? "Paket Owner"
-                  : "Owner Packages"
-                : isID
-                ? "Paket Agent"
-                : "Agent Packages"}
-            </h2>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {activePackages.map((pkg) => (
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-2">
+            {OWNER_PACKAGES.map((pkg, index) => (
               <PackageCard
-                key={pkg.id}
+                key={(pkg as any).id ?? index}
                 pkg={pkg}
                 isID={isID}
-                type={activeTab}
+                recommended={isRecommendedOwner(pkg, index)}
+                audience="owner"
               />
             ))}
           </div>
         </section>
-      </div>
+
+        <section id="agent-packages" className="mt-14 sm:mt-16">
+          <SectionHeader
+            id="agent-packages"
+            tone="emerald"
+            title={isID ? "Paket Agen" : "Agent Packages"}
+            subtitle={
+              isID
+                ? "Paket agen dirancang untuk membantu Anda mengelola listing secara lebih serius, tampil lebih profesional, dan berkembang bersama Tetamo."
+                : "Agent packages are designed to help you manage listings more seriously, look more professional, and grow with Tetamo."
+            }
+          />
+
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {AGENT_PACKAGES.map((pkg, index) => (
+              <PackageCard
+                key={(pkg as any).id ?? index}
+                pkg={pkg}
+                isID={isID}
+                recommended={isRecommendedAgent(pkg, index)}
+                audience="agent"
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-14 sm:mt-16">
+          <div className="overflow-hidden rounded-[30px] border border-[#E6E8EC] bg-gradient-to-r from-[#111827] via-[#1F2937] to-[#0F172A] p-6 text-white shadow-[0_24px_60px_rgba(17,24,39,0.22)] sm:p-8 lg:p-10">
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl">
+                  {isID
+                    ? "Masih bingung mau pilih paket yang mana?"
+                    : "Still not sure which package to choose?"}
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/80 sm:text-base">
+                  {isID
+                    ? "Lihat FAQ Tetamo untuk memahami alur listing, perbedaan pemilik dan agen, serta proses setelah sign up."
+                    : "Check Tetamo FAQ to understand the listing flow, the difference between owner and agent, and what happens after sign up."}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:max-w-md lg:justify-self-end">
+                <Link
+                  href="/faq"
+                  className="inline-flex items-center justify-center rounded-2xl bg-white px-4 py-3 text-center text-sm font-semibold text-[#111827] transition hover:bg-[#F4F4F5]"
+                >
+                  {isID ? "Buka FAQ" : "Open FAQ"}
+                </Link>
+
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-white/15"
+                >
+                  {isID ? "Mulai" : "Get Started"}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
     </main>
   );
 }
