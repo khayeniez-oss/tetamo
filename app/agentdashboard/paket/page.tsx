@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   Sparkles,
   ArrowRight,
-  Clock3,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -188,6 +187,122 @@ function getBillingCycleLabel(cycle: string | null | undefined, lang: string) {
   return "-";
 }
 
+function translateFeature(feature: string, lang: string) {
+  if (lang === "id") return feature;
+
+  const map: Record<string, string> = {
+    "30 Listing Aktif": "30 Active Listings",
+    "100 Listing Aktif": "100 Active Listings",
+    "500 Listing Aktif": "500 Active Listings",
+    "Membership aktif selama 1 tahun": "Membership active for 1 year",
+    "Website Profil Agen": "Agent Profile Website",
+    "Integrasi Media Sosial": "Social Media Integration",
+    "Dashboard Leads": "Leads Dashboard",
+    "Jadwal Viewing": "Viewing Schedule",
+    "Paket & Tagihan": "Packages & Billing",
+    "Pembayaran / Receipt": "Payments / Receipt",
+    "Analytics / Insights": "Analytics / Insights",
+    "Tracking Komisi": "Commission Tracking",
+    "Akses Boost & Spotlight": "Access to Boost & Spotlight",
+    "1 AI Avatar Video Perkenalan": "1 AI Avatar Introduction Video",
+    "3 Listing Unggulan Gratis (90 hari masing-masing)":
+      "3 Free Featured Listings (90 days each)",
+    "Prioritas visibilitas listing": "Listing visibility priority",
+    "Eligible untuk penempatan Agen Unggulan":
+      "Eligible for Featured Agent placement",
+    "Kesempatan eksposur premium di platform":
+      "Opportunity for premium platform exposure",
+    "Slot Agen Unggulan terbatas (7 agen)":
+      "Limited Featured Agent slots (7 agents)",
+    "Tersedia opsi bayar bulanan": "Monthly payment option available",
+    "Auto renew aktif secara default": "Auto renew enabled by default",
+  };
+
+  return map[feature] ?? feature;
+}
+
+function getPackageIntro(packageName: string, lang: string) {
+  const name = packageName.toLowerCase();
+
+  if (lang === "id") {
+    if (name.includes("starter")) {
+      return "Untuk agen yang ingin mulai listing aktif dengan biaya bulanan yang ringan.";
+    }
+
+    if (name.includes("silver")) {
+      return "Untuk agen yang ingin tampil profesional dengan kapasitas listing lebih besar.";
+    }
+
+    if (name.includes("gold")) {
+      return "Untuk agen aktif dan agensi kecil yang ingin kapasitas listing lebih kuat dan lebih menonjol.";
+    }
+
+    if (name.includes("platinum")) {
+      return "Untuk agensi besar atau kebutuhan volume listing khusus.";
+    }
+
+    return "Pilih paket agen yang paling sesuai dengan kebutuhan bisnis Anda.";
+  }
+
+  if (name.includes("starter")) {
+    return "For agents who want to start with active listings and a simple monthly plan.";
+  }
+
+  if (name.includes("silver")) {
+    return "For agents who want a professional start with a larger listing capacity.";
+  }
+
+  if (name.includes("gold")) {
+    return "For active agents and small agencies who want stronger capacity and better visibility.";
+  }
+
+  if (name.includes("platinum")) {
+    return "For larger agencies or custom listing volume needs.";
+  }
+
+  return "Choose the package that best fits your business needs.";
+}
+
+function getBillingLabel(pkg: AgentPackageUI, lang: string) {
+  if (isContactPackage(pkg)) {
+    return lang === "id" ? "Hubungi Kami" : "Contact Us";
+  }
+
+  const available = getAvailableBillingCycles(pkg);
+  const hasMonthly = available.includes("monthly");
+  const hasYearly = available.includes("yearly");
+
+  if (lang === "id") {
+    if (hasMonthly && hasYearly) return "Tahunan • Opsi bayar bulanan tersedia";
+    if (hasMonthly) return "Bulanan";
+    return "Tahunan";
+  }
+
+  if (hasMonthly && hasYearly) return "Yearly • Monthly option available";
+  if (hasMonthly) return "Monthly";
+  return "Yearly";
+}
+
+function getPriceSuffix(pkg: AgentPackageUI, lang: string) {
+  if (isContactPackage(pkg)) return "";
+
+  return lang === "id"
+    ? pkg.billingCycle === "monthly"
+      ? "/ bulan"
+      : "/ tahun"
+    : pkg.billingCycle === "monthly"
+    ? "/ month"
+    : "/ year";
+}
+
+function getRecommendedPackageId(packages: AgentPackageUI[]) {
+  const goldPackage = packages.find((pkg) =>
+    String(pkg.name || "").toLowerCase().includes("gold")
+  );
+
+  return goldPackage?.id ?? "";
+}
+
 export default function AgentPaketPage() {
   const router = useRouter();
   const { lang } = useLanguage();
@@ -206,18 +321,20 @@ export default function AgentPaketPage() {
       if (aContact && !bContact) return 1;
       if (!aContact && bContact) return -1;
 
-      return Number(a.priceIdr || 0) - Number(b.priceIdr || 0);
+      return getListingLimit(a) - getListingLimit(b);
     });
   }, []);
 
-  const highestPaidPackageId =
-    [...sortedPackages]
-      .filter((pkg) => !isContactPackage(pkg))
-      .sort((a, b) => Number(b.priceIdr || 0) - Number(a.priceIdr || 0))[0]
-      ?.id ?? "";
+  const recommendedPackageId = useMemo(() => {
+    return getRecommendedPackageId(sortedPackages);
+  }, [sortedPackages]);
+
+  const initialSelectedPackageId = useMemo(() => {
+    return recommendedPackageId || sortedPackages[0]?.id || "";
+  }, [recommendedPackageId, sortedPackages]);
 
   const [selectedPackageId, setSelectedPackageId] = useState(
-    sortedPackages[0]?.id ?? ""
+    initialSelectedPackageId
   );
 
   const selectedPackage =
@@ -343,6 +460,8 @@ export default function AgentPaketPage() {
             setSelectedPackageId(matchingPackage.id);
             setSelectedBillingCycle(getDefaultBillingCycle(matchingPackage));
           }
+        } else {
+          setSelectedPackageId(initialSelectedPackageId);
         }
 
         setLoadingPage(false);
@@ -362,136 +481,7 @@ export default function AgentPaketPage() {
     return () => {
       ignore = true;
     };
-  }, [lang, sortedPackages]);
-
-  function getRecommendedLabel() {
-    return lang === "id" ? "Rekomendasi" : "Recommended";
-  }
-
-  function getCurrentLabel() {
-    return lang === "id" ? "Paket Saat Ini" : "Current Package";
-  }
-
-  function getContactLabel() {
-    return lang === "id" ? "Hubungi Kami" : "Contact Us";
-  }
-
-  function getPackageIntro(packageName: string) {
-    const name = packageName.toLowerCase();
-
-    if (lang === "id") {
-      if (name.includes("starter")) {
-        return "Untuk agen yang ingin mulai listing aktif dengan biaya bulanan yang ringan.";
-      }
-
-      if (name.includes("silver")) {
-        return "Untuk agen yang ingin tampil profesional dengan kapasitas listing lebih besar.";
-      }
-
-      if (name.includes("gold")) {
-        return "Untuk agen aktif dan agensi kecil yang ingin kapasitas listing lebih kuat.";
-      }
-
-      if (name.includes("platinum")) {
-        return "Untuk agensi besar atau kebutuhan volume listing khusus.";
-      }
-
-      return "Pilih paket agen yang paling sesuai dengan kebutuhan bisnis Anda.";
-    }
-
-    if (name.includes("starter")) {
-      return "For agents who want to start with active listings and a simple monthly plan.";
-    }
-
-    if (name.includes("silver")) {
-      return "For agents who want a professional start with a larger listing capacity.";
-    }
-
-    if (name.includes("gold")) {
-      return "For active agents and small agencies that need stronger listing capacity.";
-    }
-
-    if (name.includes("platinum")) {
-      return "For larger agencies or custom listing volume needs.";
-    }
-
-    return "Choose the package that best fits your business needs.";
-  }
-
-  function getBillingLabel(pkg: AgentPackageUI) {
-    if (isContactPackage(pkg)) return getContactLabel();
-
-    const available = getAvailableBillingCycles(pkg);
-    const hasMonthly = available.includes("monthly");
-    const hasYearly = available.includes("yearly");
-
-    if (lang === "id") {
-      if (hasMonthly && hasYearly) {
-        return "Tahunan • Opsi bayar bulanan tersedia";
-      }
-
-      if (hasMonthly) return "Bulanan";
-      return "Tahunan";
-    }
-
-    if (hasMonthly && hasYearly) {
-      return "Yearly • Monthly option available";
-    }
-
-    if (hasMonthly) return "Monthly";
-    return "Yearly";
-  }
-
-  function getPriceSuffix(pkg: AgentPackageUI) {
-    if (isContactPackage(pkg)) return "";
-
-    return lang === "id"
-      ? pkg.billingCycle === "monthly"
-        ? "/ bulan"
-        : "/ tahun"
-      : pkg.billingCycle === "monthly"
-      ? "/ month"
-      : "/ year";
-  }
-
-  function translateFeature(feature: string) {
-    if (lang === "id") return feature;
-
-    const map: Record<string, string> = {
-      "30 Listing Aktif": "30 Active Listings",
-      "100 Listing Aktif": "100 Active Listings",
-      "500 Listing Aktif": "500 Active Listings",
-      "Membership aktif selama 1 tahun": "Membership active for 1 year",
-      "Website Profil Agen": "Agent Profile Website",
-      "Integrasi Media Sosial": "Social Media Integration",
-      "Dashboard Leads": "Leads Dashboard",
-      "Jadwal Viewing": "Viewing Schedule",
-      "Paket & Tagihan": "Packages & Billing",
-      "Pembayaran / Receipt": "Payments / Receipt",
-      "Analytics / Insights": "Analytics / Insights",
-      "Tracking Komisi": "Commission Tracking",
-      "Akses Boost & Spotlight": "Access to Boost & Spotlight",
-      "1 AI Avatar Video Perkenalan": "1 AI Avatar Introduction Video",
-      "3 Listing Unggulan Gratis (90 hari masing-masing)":
-        "3 Free Featured Listings (90 days each)",
-      "Prioritas visibilitas listing": "Listing visibility priority",
-      "Eligible untuk penempatan Agen Unggulan":
-        "Eligible for Featured Agent placement",
-      "Kesempatan eksposur premium di platform":
-        "Opportunity for premium platform exposure",
-      "Slot Agen Unggulan terbatas (7 agen)":
-        "Limited Featured Agent slots (7 agents)",
-      "Tersedia opsi bayar bulanan": "Monthly payment option available",
-      "Auto renew aktif secara default": "Auto renew enabled by default",
-    };
-
-    return map[feature] ?? feature;
-  }
-
-  function handleSelectPackage(pkg: AgentPackageUI) {
-    setSelectedPackageId(pkg.id);
-    setSelectedBillingCycle(getDefaultBillingCycle(pkg));
-  }
+  }, [lang, sortedPackages, initialSelectedPackageId]);
 
   async function handleContinue() {
     if (!selectedPackage || submitting) return;
@@ -524,7 +514,6 @@ export default function AgentPaketPage() {
         )}&flow=agent-membership`
       );
     } catch (error: any) {
-      console.error("Agent package continue error:", error);
       setErrorMessage(
         error?.message ||
           (lang === "id"
@@ -542,26 +531,26 @@ export default function AgentPaketPage() {
     activeMembership?.package_id === selectedPackage?.id;
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)]">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
-        <div className="overflow-hidden rounded-[32px] border border-[#E9E5DA] bg-white shadow-[0_24px_60px_rgba(17,24,39,0.06)]">
-          <div className="relative px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_30%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_28%),linear-gradient(to_bottom,rgba(255,255,255,0.98),rgba(255,255,255,1))]" />
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_42%,#F7FCFA_100%)]">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+        <div className="overflow-hidden rounded-[30px] border border-[#E9E5DA] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <div className="relative px-4 py-7 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.10),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.08),transparent_24%),linear-gradient(to_bottom,rgba(255,255,255,0.98),rgba(255,255,255,1))]" />
 
             <div className="relative text-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#E8E8EC] bg-white px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B7280] shadow-sm">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#E8E8EC] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B7280] shadow-sm">
                 <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                 {lang === "id" ? "Agent Package" : "Agent Package"}
               </div>
 
-              <h1 className="mt-4 text-2xl font-black tracking-tight text-[#111827] sm:text-3xl lg:text-5xl">
+              <h1 className="mt-4 text-2xl font-black tracking-tight text-[#111827] sm:text-3xl lg:text-4xl">
                 {lang === "id" ? "Pilih Paket Agen" : "Choose Agent Package"}
               </h1>
 
               <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
                 {lang === "id"
-                  ? "Pilih paket agen yang sesuai dengan kebutuhan Anda. Semua paket berbasis listing aktif dan dapat diperpanjang dari dashboard."
-                  : "Choose the agent package that fits your needs. All packages are based on active listings and can be renewed from the dashboard."}
+                  ? "Pilih paket agen yang sesuai dengan kebutuhan Anda. Paket Gold menjadi pilihan rekomendasi untuk pertumbuhan yang lebih seimbang."
+                  : "Choose the agent package that fits your needs. Gold is the recommended package for more balanced growth."}
               </p>
 
               {profile?.full_name ? (
@@ -576,17 +565,17 @@ export default function AgentPaketPage() {
         </div>
 
         {loadingPage ? (
-          <div className="mt-8 rounded-[28px] border border-[#E7E7EA] bg-white p-5 text-center text-sm text-gray-500 shadow-[0_12px_36px_rgba(15,23,42,0.05)] sm:mt-10 sm:p-8">
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 text-center text-sm text-gray-500 shadow-sm sm:mt-8 sm:p-8">
             {lang === "id" ? "Memuat..." : "Loading..."}
           </div>
         ) : errorMessage ? (
-          <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mt-10 sm:p-6">
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mt-8 sm:p-6">
             {errorMessage}
           </div>
         ) : (
           <>
             {activeMembership ? (
-              <div className="mt-8 overflow-hidden rounded-[30px] border border-emerald-200 bg-[linear-gradient(180deg,#F3FFF8_0%,#FFFFFF_100%)] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)] sm:p-5 lg:p-6">
+              <div className="mt-6 rounded-[28px] border border-emerald-200 bg-[linear-gradient(180deg,#F3FFF8_0%,#FFFFFF_100%)] p-4 shadow-sm sm:mt-8 sm:p-5 lg:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-white text-emerald-700 shadow-sm">
@@ -600,7 +589,7 @@ export default function AgentPaketPage() {
                           : "Agent membership active"}
                       </p>
 
-                      <h2 className="mt-1 text-lg font-bold text-[#111827] sm:text-xl">
+                      <h2 className="mt-1 text-lg font-bold text-[#1C1C1E] sm:text-xl">
                         {activeMembership.package_name || "-"}
                       </h2>
 
@@ -610,7 +599,7 @@ export default function AgentPaketPage() {
                             <ShieldCheck className="h-4 w-4" />
                             {lang === "id" ? "Limit Listing" : "Listing Limit"}
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#111827]">
+                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
                             {activeListingLimit > 0
                               ? lang === "id"
                                 ? `${activeListingLimit} listing aktif`
@@ -623,7 +612,7 @@ export default function AgentPaketPage() {
                           <p className="text-xs text-gray-500">
                             {lang === "id" ? "Tipe Tagihan" : "Billing Type"}
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#111827]">
+                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
                             {getBillingCycleLabel(activeMembership.billing_cycle, lang)}
                           </p>
                         </div>
@@ -633,7 +622,7 @@ export default function AgentPaketPage() {
                             <CalendarDays className="h-4 w-4" />
                             {lang === "id" ? "Expired" : "Expiry"}
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#111827]">
+                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
                             {formatDate(activeMembership.expires_at, lang)}
                           </p>
                         </div>
@@ -645,7 +634,7 @@ export default function AgentPaketPage() {
                     <button
                       type="button"
                       onClick={() => router.push("/agentdashboard/listing-saya")}
-                      className="inline-flex w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 sm:w-auto"
+                      className="inline-flex w-full items-center justify-center rounded-xl bg-[#111827] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 sm:w-auto"
                     >
                       {lang === "id" ? "Lihat Listing Saya" : "View My Listings"}
                     </button>
@@ -662,98 +651,127 @@ export default function AgentPaketPage() {
               </div>
             ) : null}
 
-            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 md:gap-5 lg:gap-6">
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-4 lg:gap-5">
               {sortedPackages.map((pkg) => {
                 const checked = selectedPackageId === pkg.id;
-                const isRecommended = pkg.id === highestPaidPackageId;
+                const isRecommended = pkg.id === recommendedPackageId;
                 const contactPackage = isContactPackage(pkg);
                 const listingLimit = getListingLimit(pkg);
                 const isCurrent =
                   activeMembership?.package_id &&
                   activeMembership.package_id === pkg.id;
+                const isGold = String(pkg.name || "")
+                  .toLowerCase()
+                  .includes("gold");
 
-                const cardTone = isCurrent
-                  ? "border-emerald-300 shadow-[0_20px_50px_rgba(16,185,129,0.12)]"
-                  : checked
-                  ? "border-[#111827] shadow-[0_20px_50px_rgba(17,24,39,0.12)]"
-                  : "border-[#E7E7EA] shadow-[0_14px_40px_rgba(15,23,42,0.05)] hover:border-gray-300";
+                const baseCardClass = checked
+                  ? "border-[#111827] ring-1 ring-[#111827]"
+                  : "border-gray-200 hover:border-gray-300";
+
+                const goldCardClass = isGold
+                  ? "bg-[linear-gradient(180deg,#FFF9E8_0%,#FFFFFF_100%)] border-amber-300 shadow-[0_24px_60px_rgba(245,158,11,0.18)] md:-translate-y-2"
+                  : "bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)]";
 
                 return (
                   <button
                     key={pkg.id}
                     type="button"
-                    onClick={() => handleSelectPackage(pkg)}
-                    className={`relative flex h-full flex-col overflow-hidden rounded-[30px] border bg-white p-4 text-left transition-all sm:p-5 lg:p-6 ${cardTone}`}
+                    onClick={() => {
+                      setSelectedPackageId(pkg.id);
+                      setSelectedBillingCycle(getDefaultBillingCycle(pkg));
+                    }}
+                    className={[
+                      "relative flex h-full flex-col overflow-hidden rounded-[28px] border p-4 text-left transition sm:p-5",
+                      baseCardClass,
+                      goldCardClass,
+                    ].join(" ")}
                   >
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.08),transparent_28%)]" />
-
-                    <div className="absolute right-3 top-3 flex flex-col items-end gap-2 sm:right-4 sm:top-4">
-                      {isCurrent ? (
-                        <div className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
-                          {getCurrentLabel()}
-                        </div>
-                      ) : isRecommended ? (
-                        <div className="rounded-full bg-[#111827] px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
-                          {getRecommendedLabel()}
-                        </div>
-                      ) : null}
-                    </div>
+                    {isGold ? (
+                      <>
+                        <div className="pointer-events-none absolute -left-10 top-0 h-32 w-32 rounded-full bg-amber-300/30 blur-3xl" />
+                        <div className="pointer-events-none absolute -right-8 bottom-10 h-28 w-28 rounded-full bg-yellow-200/30 blur-3xl" />
+                      </>
+                    ) : null}
 
                     <div className="relative flex items-start justify-between gap-3">
-                      <div className="min-w-0 pr-16">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <Crown className="h-4 w-4 shrink-0 text-yellow-500 sm:h-5 sm:w-5" />
-                          <h3 className="truncate text-lg font-bold text-[#111827] sm:text-xl lg:text-2xl">
+                          <Crown
+                            className={`h-4 w-4 shrink-0 ${
+                              isGold ? "text-amber-500" : "text-yellow-500"
+                            }`}
+                          />
+                          <h3 className="text-xl font-semibold leading-tight text-[#1C1C1E] sm:text-2xl">
                             {pkg.name}
                           </h3>
                         </div>
 
-                        <p className="mt-2 text-xs font-medium text-gray-500 sm:text-sm">
-                          {getBillingLabel(pkg)}
+                        <p className="mt-1.5 text-xs font-medium text-gray-500 sm:text-sm">
+                          {getBillingLabel(pkg, lang)}
                         </p>
 
                         {listingLimit > 0 ? (
-                          <p className="mt-2 text-xs font-semibold text-[#111827] sm:text-sm">
+                          <p className="mt-2 text-sm font-semibold leading-6 text-[#1C1C1E] sm:text-base">
                             {lang === "id"
                               ? `${listingLimit} listing aktif`
                               : `${listingLimit} active listings`}
                           </p>
                         ) : null}
-
-                        <p className="mt-3 text-xs leading-6 text-gray-600 sm:text-sm sm:leading-7">
-                          {getPackageIntro(pkg.name)}
-                        </p>
                       </div>
 
-                      <div
-                        className={[
-                          "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition sm:h-6 sm:w-6",
-                          checked
-                            ? "border-[#111827] bg-[#111827]"
-                            : "border-gray-400 bg-white",
-                        ].join(" ")}
-                      >
-                        {checked ? (
-                          <span className="h-2 w-2 rounded-full bg-white" />
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <div
+                          className={[
+                            "flex h-5 w-5 items-center justify-center rounded-full border-2 transition sm:h-6 sm:w-6",
+                            checked
+                              ? "border-[#111827] bg-[#111827]"
+                              : "border-gray-400 bg-white",
+                          ].join(" ")}
+                        >
+                          {checked ? (
+                            <span className="h-2 w-2 rounded-full bg-white" />
+                          ) : null}
+                        </div>
+
+                        {isCurrent ? (
+                          <div className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-[11px]">
+                            {lang === "id"
+                              ? "Paket Saat Ini"
+                              : "Current Package"}
+                          </div>
+                        ) : isRecommended ? (
+                          <div className="rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-[0_8px_24px_rgba(245,158,11,0.3)] sm:px-3 sm:text-[11px]">
+                            {lang === "id" ? "Rekomendasi" : "Recommended"}
+                          </div>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="relative mt-5">
-                      <div className="text-2xl font-black tracking-tight text-[#111827] sm:text-3xl lg:text-4xl">
+                    <p className="relative mt-3 text-xs leading-5 text-gray-600 sm:text-sm sm:leading-6">
+                      {getPackageIntro(pkg.name, lang)}
+                    </p>
+
+                    <div className="relative mt-4">
+                      <div
+                        className={`text-[30px] font-bold leading-none tracking-tight sm:text-[36px] ${
+                          isGold ? "text-amber-700" : "text-[#111827]"
+                        }`}
+                      >
                         {contactPackage
-                          ? getContactLabel()
+                          ? lang === "id"
+                            ? "Hubungi Kami"
+                            : "Contact Us"
                           : formatIdr(pkg.priceIdr)}
                       </div>
 
                       {!contactPackage ? (
-                        <div className="mt-1 text-xs text-gray-600 sm:text-sm lg:text-base">
-                          {getPriceSuffix(pkg)}
+                        <div className="mt-1 text-sm text-gray-600 sm:text-base">
+                          {getPriceSuffix(pkg, lang)}
                         </div>
                       ) : null}
 
                       {!contactPackage && pkg.monthlyPriceIdr ? (
-                        <p className="mt-3 text-xs leading-6 text-gray-500 sm:text-sm sm:leading-6">
+                        <p className="mt-2 text-xs leading-5 text-gray-500 sm:text-sm sm:leading-6">
                           {lang === "id"
                             ? `Atau Rp ${pkg.monthlyPriceIdr.toLocaleString(
                                 "id-ID"
@@ -769,15 +787,16 @@ export default function AgentPaketPage() {
                       ) : null}
                     </div>
 
-                    <ul className="relative mt-5 flex-1 space-y-3 text-gray-700">
+                    <ul className="relative mt-4 flex-1 space-y-2.5 text-gray-700">
                       {pkg.features.map((feature, idx) => (
-                        <li
-                          key={idx}
-                          className="flex items-start gap-2.5 sm:gap-3"
-                        >
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 sm:h-5 sm:w-5" />
-                          <span className="text-xs leading-6 sm:text-sm sm:leading-7 lg:text-[15px]">
-                            {translateFeature(feature)}
+                        <li key={idx} className="flex items-start gap-2.5">
+                          <CheckCircle2
+                            className={`mt-0.5 h-4 w-4 shrink-0 sm:h-4.5 sm:w-4.5 ${
+                              isGold ? "text-amber-600" : "text-green-600"
+                            }`}
+                          />
+                          <span className="text-xs leading-5 sm:text-sm sm:leading-6">
+                            {translateFeature(feature, lang)}
                           </span>
                         </li>
                       ))}
@@ -790,8 +809,8 @@ export default function AgentPaketPage() {
             {selectedPackage &&
             !selectedPackageIsContact &&
             selectedAvailableBillingCycles.length > 1 ? (
-              <div className="mx-auto mt-6 max-w-xl rounded-[30px] border border-[#E7E7EA] bg-white p-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)] sm:p-5">
-                <p className="text-center text-sm font-semibold text-[#111827]">
+              <div className="mx-auto mt-6 max-w-xl rounded-[28px] border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+                <p className="text-center text-sm font-semibold text-[#1C1C1E]">
                   {lang === "id"
                     ? "Pilih cara pembayaran"
                     : "Choose billing option"}
@@ -810,8 +829,8 @@ export default function AgentPaketPage() {
                         className={[
                           "rounded-2xl border px-4 py-3 text-center transition",
                           checked
-                            ? "border-[#111827] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white"
-                            : "border-gray-200 bg-white text-[#111827] hover:bg-gray-50",
+                            ? "border-[#111827] bg-[#111827] text-white"
+                            : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
                         ].join(" ")}
                       >
                         <div className="text-sm font-semibold">
@@ -831,31 +850,24 @@ export default function AgentPaketPage() {
                     );
                   })}
                 </div>
-
-                {selectedBillingCycle === "monthly" &&
-                selectedPackage.monthlyCommitmentMonths ? (
-                  <p className="mt-3 text-center text-xs leading-5 text-gray-500">
-                    {lang === "id"
-                      ? `Pembayaran bulanan berlaku dengan komitmen ${selectedPackage.monthlyCommitmentMonths} bulan.`
-                      : `Monthly billing applies with a ${selectedPackage.monthlyCommitmentMonths}-month commitment.`}
-                  </p>
-                ) : null}
               </div>
             ) : null}
 
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:gap-4">
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:gap-4">
               <button
                 type="button"
                 onClick={handleContinue}
                 disabled={!selectedPackage || submitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.18)] transition hover:opacity-95 disabled:opacity-60 sm:w-auto sm:px-8"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-60 sm:w-auto sm:px-8"
               >
                 {submitting
                   ? lang === "id"
                     ? "Memproses..."
                     : "Processing..."
                   : selectedPackageIsContact
-                  ? getContactLabel()
+                  ? lang === "id"
+                    ? "Hubungi Kami"
+                    : "Contact Us"
                   : selectedPackageIsCurrent
                   ? lang === "id"
                     ? "Perpanjang Paket"
