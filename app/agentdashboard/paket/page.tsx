@@ -8,6 +8,9 @@ import {
   Crown,
   PackageCheck,
   ShieldCheck,
+  Sparkles,
+  ArrowRight,
+  Clock3,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
@@ -539,30 +542,41 @@ export default function AgentPaketPage() {
     activeMembership?.package_id === selectedPackage?.id;
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)]">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#1C1C1E] sm:text-3xl lg:text-4xl">
-            {lang === "id" ? "Pilih Paket Agen" : "Choose Agent Package"}
-          </h1>
+        <div className="overflow-hidden rounded-[32px] border border-[#E9E5DA] bg-white shadow-[0_24px_60px_rgba(17,24,39,0.06)]">
+          <div className="relative px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.12),transparent_30%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_28%),linear-gradient(to_bottom,rgba(255,255,255,0.98),rgba(255,255,255,1))]" />
 
-          <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
-            {lang === "id"
-              ? "Pilih paket agen yang sesuai dengan kebutuhan Anda. Semua paket berbasis listing aktif dan dapat diperpanjang dari dashboard."
-              : "Choose the agent package that fits your needs. All packages are based on active listings and can be renewed from the dashboard."}
-          </p>
+            <div className="relative text-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#E8E8EC] bg-white px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B7280] shadow-sm">
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                {lang === "id" ? "Agent Package" : "Agent Package"}
+              </div>
 
-          {profile?.full_name ? (
-            <p className="mt-3 text-xs text-gray-500 sm:text-sm">
-              {lang === "id"
-                ? `Login sebagai ${profile.full_name}`
-                : `Logged in as ${profile.full_name}`}
-            </p>
-          ) : null}
+              <h1 className="mt-4 text-2xl font-black tracking-tight text-[#111827] sm:text-3xl lg:text-5xl">
+                {lang === "id" ? "Pilih Paket Agen" : "Choose Agent Package"}
+              </h1>
+
+              <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base sm:leading-7">
+                {lang === "id"
+                  ? "Pilih paket agen yang sesuai dengan kebutuhan Anda. Semua paket berbasis listing aktif dan dapat diperpanjang dari dashboard."
+                  : "Choose the agent package that fits your needs. All packages are based on active listings and can be renewed from the dashboard."}
+              </p>
+
+              {profile?.full_name ? (
+                <p className="mt-3 text-xs text-gray-500 sm:text-sm">
+                  {lang === "id"
+                    ? `Login sebagai ${profile.full_name}`
+                    : `Logged in as ${profile.full_name}`}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {loadingPage ? (
-          <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 text-center text-sm text-gray-500 shadow-sm sm:mt-10 sm:p-8">
+          <div className="mt-8 rounded-[28px] border border-[#E7E7EA] bg-white p-5 text-center text-sm text-gray-500 shadow-[0_12px_36px_rgba(15,23,42,0.05)] sm:mt-10 sm:p-8">
             {lang === "id" ? "Memuat..." : "Loading..."}
           </div>
         ) : errorMessage ? (
@@ -572,31 +586,31 @@ export default function AgentPaketPage() {
         ) : (
           <>
             {activeMembership ? (
-              <div className="mt-8 rounded-3xl border border-green-200 bg-green-50 p-4 shadow-sm sm:p-5 lg:p-6">
+              <div className="mt-8 overflow-hidden rounded-[30px] border border-emerald-200 bg-[linear-gradient(180deg,#F3FFF8_0%,#FFFFFF_100%)] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)] sm:p-5 lg:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-green-700 shadow-sm">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-white text-emerald-700 shadow-sm">
                       <PackageCheck className="h-6 w-6" />
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-green-800 sm:text-base">
+                      <p className="text-sm font-semibold text-emerald-800 sm:text-base">
                         {lang === "id"
                           ? "Membership agen aktif"
                           : "Agent membership active"}
                       </p>
 
-                      <h2 className="mt-1 text-lg font-bold text-[#1C1C1E] sm:text-xl">
+                      <h2 className="mt-1 text-lg font-bold text-[#111827] sm:text-xl">
                         {activeMembership.package_name || "-"}
                       </h2>
 
                       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <div className="rounded-2xl border border-green-200 bg-white p-3">
+                        <div className="rounded-2xl border border-emerald-200 bg-white p-3">
                           <p className="flex items-center gap-2 text-xs text-gray-500">
                             <ShieldCheck className="h-4 w-4" />
                             {lang === "id" ? "Limit Listing" : "Listing Limit"}
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+                          <p className="mt-1 text-sm font-semibold text-[#111827]">
                             {activeListingLimit > 0
                               ? lang === "id"
                                 ? `${activeListingLimit} listing aktif`
@@ -605,21 +619,21 @@ export default function AgentPaketPage() {
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-green-200 bg-white p-3">
+                        <div className="rounded-2xl border border-emerald-200 bg-white p-3">
                           <p className="text-xs text-gray-500">
                             {lang === "id" ? "Tipe Tagihan" : "Billing Type"}
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+                          <p className="mt-1 text-sm font-semibold text-[#111827]">
                             {getBillingCycleLabel(activeMembership.billing_cycle, lang)}
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-green-200 bg-white p-3">
+                        <div className="rounded-2xl border border-emerald-200 bg-white p-3">
                           <p className="flex items-center gap-2 text-xs text-gray-500">
                             <CalendarDays className="h-4 w-4" />
                             {lang === "id" ? "Expired" : "Expiry"}
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+                          <p className="mt-1 text-sm font-semibold text-[#111827]">
                             {formatDate(activeMembership.expires_at, lang)}
                           </p>
                         </div>
@@ -631,7 +645,7 @@ export default function AgentPaketPage() {
                     <button
                       type="button"
                       onClick={() => router.push("/agentdashboard/listing-saya")}
-                      className="inline-flex w-full items-center justify-center rounded-xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 sm:w-auto"
+                      className="inline-flex w-full items-center justify-center rounded-xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 sm:w-auto"
                     >
                       {lang === "id" ? "Lihat Listing Saya" : "View My Listings"}
                     </button>
@@ -639,7 +653,7 @@ export default function AgentPaketPage() {
                     <button
                       type="button"
                       onClick={() => router.push("/agentdashboard/tagihan")}
-                      className="inline-flex w-full items-center justify-center rounded-xl border border-green-300 bg-white px-5 py-3 text-sm font-semibold text-green-800 shadow-sm transition hover:bg-green-50 sm:w-auto"
+                      className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-300 bg-white px-5 py-3 text-sm font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50 sm:w-auto"
                     >
                       {lang === "id" ? "Lihat Tagihan" : "View Billing"}
                     </button>
@@ -648,7 +662,7 @@ export default function AgentPaketPage() {
               </div>
             ) : null}
 
-            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5 lg:gap-6">
+            <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 md:gap-5 lg:gap-6">
               {sortedPackages.map((pkg) => {
                 const checked = selectedPackageId === pkg.id;
                 const isRecommended = pkg.id === highestPaidPackageId;
@@ -658,35 +672,38 @@ export default function AgentPaketPage() {
                   activeMembership?.package_id &&
                   activeMembership.package_id === pkg.id;
 
+                const cardTone = isCurrent
+                  ? "border-emerald-300 shadow-[0_20px_50px_rgba(16,185,129,0.12)]"
+                  : checked
+                  ? "border-[#111827] shadow-[0_20px_50px_rgba(17,24,39,0.12)]"
+                  : "border-[#E7E7EA] shadow-[0_14px_40px_rgba(15,23,42,0.05)] hover:border-gray-300";
+
                 return (
                   <button
                     key={pkg.id}
                     type="button"
                     onClick={() => handleSelectPackage(pkg)}
-                    className={[
-                      "relative flex h-full flex-col rounded-3xl border bg-white p-4 text-left shadow-sm transition sm:p-5 lg:p-6",
-                      checked
-                        ? "border-[#1C1C1E] ring-1 ring-[#1C1C1E]"
-                        : "border-gray-200 hover:border-gray-300",
-                    ].join(" ")}
+                    className={`relative flex h-full flex-col overflow-hidden rounded-[30px] border bg-white p-4 text-left transition-all sm:p-5 lg:p-6 ${cardTone}`}
                   >
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.10),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.08),transparent_28%)]" />
+
                     <div className="absolute right-3 top-3 flex flex-col items-end gap-2 sm:right-4 sm:top-4">
                       {isCurrent ? (
-                        <div className="rounded-full bg-green-600 px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
+                        <div className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
                           {getCurrentLabel()}
                         </div>
                       ) : isRecommended ? (
-                        <div className="rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
+                        <div className="rounded-full bg-[#111827] px-2.5 py-1 text-[10px] font-semibold text-white sm:px-3 sm:text-xs">
                           {getRecommendedLabel()}
                         </div>
                       ) : null}
                     </div>
 
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="relative flex items-start justify-between gap-3">
                       <div className="min-w-0 pr-16">
                         <div className="flex items-center gap-2">
                           <Crown className="h-4 w-4 shrink-0 text-yellow-500 sm:h-5 sm:w-5" />
-                          <h3 className="truncate text-lg font-semibold text-[#1C1C1E] sm:text-xl lg:text-2xl">
+                          <h3 className="truncate text-lg font-bold text-[#111827] sm:text-xl lg:text-2xl">
                             {pkg.name}
                           </h3>
                         </div>
@@ -696,7 +713,7 @@ export default function AgentPaketPage() {
                         </p>
 
                         {listingLimit > 0 ? (
-                          <p className="mt-2 text-xs font-semibold text-[#1C1C1E] sm:text-sm">
+                          <p className="mt-2 text-xs font-semibold text-[#111827] sm:text-sm">
                             {lang === "id"
                               ? `${listingLimit} listing aktif`
                               : `${listingLimit} active listings`}
@@ -712,7 +729,7 @@ export default function AgentPaketPage() {
                         className={[
                           "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition sm:h-6 sm:w-6",
                           checked
-                            ? "border-[#1C1C1E] bg-[#1C1C1E]"
+                            ? "border-[#111827] bg-[#111827]"
                             : "border-gray-400 bg-white",
                         ].join(" ")}
                       >
@@ -722,8 +739,8 @@ export default function AgentPaketPage() {
                       </div>
                     </div>
 
-                    <div className="mt-5">
-                      <div className="text-2xl font-bold tracking-tight text-[#1C1C1E] sm:text-3xl lg:text-4xl">
+                    <div className="relative mt-5">
+                      <div className="text-2xl font-black tracking-tight text-[#111827] sm:text-3xl lg:text-4xl">
                         {contactPackage
                           ? getContactLabel()
                           : formatIdr(pkg.priceIdr)}
@@ -752,7 +769,7 @@ export default function AgentPaketPage() {
                       ) : null}
                     </div>
 
-                    <ul className="mt-5 flex-1 space-y-3 text-gray-700">
+                    <ul className="relative mt-5 flex-1 space-y-3 text-gray-700">
                       {pkg.features.map((feature, idx) => (
                         <li
                           key={idx}
@@ -773,8 +790,8 @@ export default function AgentPaketPage() {
             {selectedPackage &&
             !selectedPackageIsContact &&
             selectedAvailableBillingCycles.length > 1 ? (
-              <div className="mx-auto mt-6 max-w-xl rounded-3xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-                <p className="text-center text-sm font-semibold text-[#1C1C1E]">
+              <div className="mx-auto mt-6 max-w-xl rounded-[30px] border border-[#E7E7EA] bg-white p-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)] sm:p-5">
+                <p className="text-center text-sm font-semibold text-[#111827]">
                   {lang === "id"
                     ? "Pilih cara pembayaran"
                     : "Choose billing option"}
@@ -793,8 +810,8 @@ export default function AgentPaketPage() {
                         className={[
                           "rounded-2xl border px-4 py-3 text-center transition",
                           checked
-                            ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                            : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50",
+                            ? "border-[#111827] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white"
+                            : "border-gray-200 bg-white text-[#111827] hover:bg-gray-50",
                         ].join(" ")}
                       >
                         <div className="text-sm font-semibold">
@@ -831,7 +848,7 @@ export default function AgentPaketPage() {
                 type="button"
                 onClick={handleContinue}
                 disabled={!selectedPackage || submitting}
-                className="w-full rounded-xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60 sm:w-auto sm:px-8"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.18)] transition hover:opacity-95 disabled:opacity-60 sm:w-auto sm:px-8"
               >
                 {submitting
                   ? lang === "id"
@@ -850,6 +867,7 @@ export default function AgentPaketPage() {
                   : lang === "id"
                   ? "Lanjut ke Pembayaran"
                   : "Continue to Payment"}
+                <ArrowRight className="h-4 w-4" />
               </button>
 
               <p className="max-w-3xl text-center text-xs leading-5 text-gray-500 sm:text-sm">
