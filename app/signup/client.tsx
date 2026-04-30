@@ -8,7 +8,6 @@ import {
   UserRound,
   BriefcaseBusiness,
   ArrowLeft,
-  ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
@@ -69,9 +68,9 @@ function AppleDarkIcon() {
   );
 }
 
-function Tag({ children }: { children: ReactNode }) {
+function Pill({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex rounded-full border border-white/60 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B7280] backdrop-blur">
+    <span className="inline-flex rounded-full border border-[#D8D8DD] bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] shadow-sm">
       {children}
     </span>
   );
@@ -177,6 +176,37 @@ function RoleCard({
   );
 }
 
+function InfoCard({
+  eyebrow,
+  title,
+  description,
+  tone,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  tone: "amber" | "emerald";
+}) {
+  const cardClass =
+    tone === "amber"
+      ? "border-[#F2D67A] bg-[linear-gradient(180deg,#FFFDF6_0%,#FFFFFF_100%)]"
+      : "border-[#9EECCF] bg-[linear-gradient(180deg,#F5FFFB_0%,#FFFFFF_100%)]";
+
+  const eyebrowClass = tone === "amber" ? "text-[#B45309]" : "text-[#047857]";
+
+  return (
+    <div className={`rounded-[28px] border p-5 sm:p-6 ${cardClass}`}>
+      <p className={`text-sm font-semibold ${eyebrowClass}`}>{eyebrow}</p>
+      <h3 className="mt-3 text-2xl font-bold leading-tight text-[#111827] sm:text-[32px]">
+        {title}
+      </h3>
+      <p className="mt-4 text-sm leading-7 text-[#6B7280] sm:text-base">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export default function SignupPageClient() {
   const { lang } = useLanguage();
   const router = useRouter();
@@ -212,7 +242,7 @@ export default function SignupPageClient() {
     if (selectedRole === "developer") {
       router.replace(developerLicensePath);
     }
-  }, [selectedRole, router]);
+  }, [selectedRole, router, developerLicensePath]);
 
   const currentRole = selectedRole;
   const isAdminSignup = currentRole === "admin";
@@ -460,84 +490,61 @@ export default function SignupPageClient() {
   const isBusy = loading || socialLoading !== null;
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_32%,#F8FCFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <div className="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
-        <section className="overflow-hidden rounded-[32px] border border-[#ECE8DD] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)]">
-          <div className="relative h-full overflow-hidden px-5 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_35%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_35%),linear-gradient(to_bottom,rgba(255,255,255,0.96),rgba(255,255,255,1))]" />
+        <section className="overflow-hidden rounded-[32px] border border-[#ECE8DD] bg-[linear-gradient(135deg,#FFF7EA_0%,#F3FFF9_100%)] shadow-[0_24px_60px_rgba(17,24,39,0.07)]">
+          <div className="px-5 py-7 sm:px-8 sm:py-10 lg:px-12 lg:py-12">
+            <Pill>{isID ? "Tetamo Signup" : "Tetamo Signup"}</Pill>
 
-            <div className="relative">
-              <div className="flex flex-wrap gap-2">
-                <Tag>{isID ? "Tetamo Signup" : "Tetamo Signup"}</Tag>
-                <Tag>{isID ? "Premium Access" : "Premium Access"}</Tag>
-              </div>
-
-              <h1 className="mt-5 max-w-xl text-3xl font-black tracking-tight text-[#111827] sm:text-4xl lg:text-5xl">
+            <div className="mt-5 max-w-3xl">
+              <h1 className="text-[32px] font-black leading-[1.08] tracking-[-0.03em] text-[#0F172A] sm:text-[42px] lg:text-[56px]">
                 {isID
-                  ? "Masuk ke Tetamo dengan tampilan yang lebih profesional"
+                  ? "Mulai akun Tetamo Anda dengan tampilan yang lebih profesional"
                   : "Join Tetamo with a more premium and professional start"}
               </h1>
 
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#5B5B63] sm:text-base lg:text-lg">
+              <p className="mt-4 max-w-3xl text-base leading-8 text-[#5F6368] sm:text-lg">
                 {isID
                   ? "Pilih peran Anda dan lanjutkan ke alur yang sesuai untuk pemilik, agen, developer, atau admin."
                   : "Choose your role and continue to the right flow for owners, agents, developers, or admins."}
               </p>
+            </div>
 
-              <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-[26px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-[0_18px_50px_rgba(245,158,11,0.10)]">
-                  <div className="text-sm font-semibold text-[#92400E]">
-                    {isID ? "Untuk Pemilik" : "For Owners"}
-                  </div>
-                  <div className="mt-2 text-xl font-bold text-[#111827]">
-                    {isID
-                      ? "Mulai listing properti Anda"
-                      : "Start listing your property"}
-                  </div>
-                  <p className="mt-2 text-sm leading-7 text-[#6B7280]">
-                    {isID
-                      ? "Cocok untuk pemilik yang ingin tampil lebih menarik dan siap mendapatkan leads."
-                      : "Best for owners who want a more attractive listing presence and better lead potential."}
-                  </p>
-                </div>
+            <div className="mt-8 grid grid-cols-2 gap-4">
+              <InfoCard
+                eyebrow={isID ? "Untuk Pemilik" : "For Owners"}
+                title={
+                  isID
+                    ? "Mulai listing properti Anda"
+                    : "Start listing your property"
+                }
+                description={
+                  isID
+                    ? "Cocok untuk pemilik yang ingin tampilan listing lebih menarik dan peluang lead yang lebih baik."
+                    : "Best for owners who want a more attractive listing presence and better lead potential."
+                }
+                tone="amber"
+              />
 
-                <div className="rounded-[26px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-[0_18px_50px_rgba(16,185,129,0.10)]">
-                  <div className="text-sm font-semibold text-[#065F46]">
-                    {isID ? "Untuk Agen" : "For Agents"}
-                  </div>
-                  <div className="mt-2 text-xl font-bold text-[#111827]">
-                    {isID
-                      ? "Bangun profil dan kelola listing"
-                      : "Build your profile and manage listings"}
-                  </div>
-                  <p className="mt-2 text-sm leading-7 text-[#6B7280]">
-                    {isID
-                      ? "Ideal untuk agen yang ingin mengelola listing, viewing, leads, dan branding dalam satu alur."
-                      : "Ideal for agents who want to manage listings, viewings, leads, and branding in one flow."}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8 flex flex-wrap gap-2.5">
-                {[
-                  isID ? "Lebih premium" : "More premium",
-                  isID ? "Lebih profesional" : "More professional",
-                  isID ? "Mudah di mobile" : "Mobile friendly",
-                  isID ? "Alur lebih jelas" : "Clearer flow",
-                ].map((item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-[#E5E7EB] bg-white px-3.5 py-2 text-[11px] font-medium text-[#4B5563] sm:text-xs"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
+              <InfoCard
+                eyebrow={isID ? "Untuk Agent" : "For Agents"}
+                title={
+                  isID
+                    ? "Bangun profil dan kelola listing"
+                    : "Build your profile and manage listings"
+                }
+                description={
+                  isID
+                    ? "Ideal untuk agent yang ingin mengelola listing, leads, viewing, dan branding dalam satu alur."
+                    : "Ideal for agents who want to manage listings, leads, viewing, and branding in one flow."
+                }
+                tone="emerald"
+              />
             </div>
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[32px] border border-[#E7E7EA] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)]">
+        <section className="overflow-hidden rounded-[32px] border border-[#E7E7EA] bg-white shadow-[0_24px_60px_rgba(17,24,39,0.07)]">
           <div className="px-5 py-6 sm:px-8 sm:py-8">
             <div className="mb-7 text-center sm:mb-8">
               <h2 className="text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl">
@@ -736,27 +743,18 @@ export default function SignupPageClient() {
                   />
 
                   {isAdminSignup ? (
-                    <div className="rounded-[24px] border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-emerald-700" />
-                        <p className="text-sm font-semibold text-[#111827]">
-                          Admin Access
-                        </p>
-                      </div>
-
-                      <FormInput
-                        label="Admin Code"
-                        type="password"
-                        placeholder={
-                          isID
-                            ? "Masukkan admin signup code"
-                            : "Enter admin signup code"
-                        }
-                        value={adminCode}
-                        onChange={setAdminCode}
-                        autoComplete="off"
-                      />
-                    </div>
+                    <FormInput
+                      label="Admin Code"
+                      type="password"
+                      placeholder={
+                        isID
+                          ? "Masukkan admin signup code"
+                          : "Enter admin signup code"
+                      }
+                      value={adminCode}
+                      onChange={setAdminCode}
+                      autoComplete="off"
+                    />
                   ) : null}
 
                   <button
