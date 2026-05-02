@@ -157,6 +157,26 @@ function normalizeEducationVideo(row: any): EducationVideo {
   };
 }
 
+function getStatusPillClass(status: "draft" | "published" | "scheduled") {
+  if (status === "draft") {
+    return "bg-gray-100 text-gray-700";
+  }
+
+  if (status === "scheduled") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  return "bg-emerald-100 text-emerald-700";
+}
+
+function getAccessPillClass(access: EducationAccessType) {
+  if (access === "paid_agent") {
+    return "bg-red-100 text-red-700";
+  }
+
+  return "bg-blue-100 text-blue-700";
+}
+
 export default function AdminEducationPage() {
   const { lang } = useLanguage();
 
@@ -399,11 +419,11 @@ export default function AdminEducationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F6F6F3]">
-      <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#F7F7F4_0%,#F4F4F1_100%)]">
+      <div className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-[#1C1C1E]">
+            <h1 className="truncate text-2xl font-bold tracking-tight text-[#1C1C1E]">
               {ui.title}
             </h1>
             <p className="mt-1 text-sm text-gray-500">{ui.subtitle}</p>
@@ -411,7 +431,7 @@ export default function AdminEducationPage() {
 
           <Link
             href="/admindashboard/education/new"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(28,28,30,0.14)] transition hover:opacity-90"
           >
             <Plus size={16} />
             {ui.createNew}
@@ -420,38 +440,38 @@ export default function AdminEducationPage() {
       </div>
 
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <p className="text-sm text-gray-500">{ui.totalVideos}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#1C1C1E]">
               {stats.total}
             </p>
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <p className="text-sm text-gray-500">{ui.liveNow}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#1C1C1E]">
               {stats.live}
             </p>
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <p className="text-sm text-gray-500">{ui.scheduledCount}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#1C1C1E]">
               {stats.scheduled}
             </p>
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <p className="text-sm text-gray-500">{ui.drafts}</p>
-            <p className="mt-2 text-2xl font-bold text-[#1C1C1E]">
+            <p className="mt-2 text-2xl font-bold tracking-tight text-[#1C1C1E]">
               {stats.drafts}
             </p>
           </div>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,0.6fr))]">
+        <div className="mt-6 rounded-[30px] border border-gray-200 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:p-6">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,0.55fr))]">
             <div className="relative">
               <Search
                 size={18}
@@ -498,15 +518,15 @@ export default function AdminEducationPage() {
         </div>
 
         {loading ? (
-          <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+          <div className="mt-6 rounded-[30px] border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             {ui.loading}
           </div>
         ) : filteredVideos.length === 0 ? (
-          <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+          <div className="mt-6 rounded-[30px] border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             {videos.length === 0 ? ui.noVideos : ui.noResults}
           </div>
         ) : (
-          <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-5 2xl:grid-cols-2">
             {filteredVideos.map((video) => {
               const effectiveStatus = getEffectiveStatus(video);
               const Icon = getTypeIcon(video.content_type);
@@ -528,45 +548,41 @@ export default function AdminEducationPage() {
               return (
                 <article
                   key={video.id}
-                  className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                  className="overflow-hidden rounded-[30px] border border-gray-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)]"
                 >
-                  <div className="flex flex-col md:flex-row">
-                    <div className="w-full shrink-0 md:w-[280px]">
-                      <div className="flex h-[280px] w-full items-center justify-center bg-[#F3F4F6] p-3 md:h-full md:min-h-[320px]">
-                        {video.thumbnail_url ? (
-                          <img
-                            src={video.thumbnail_url}
-                            alt={activeTitle}
-                            className="max-h-full max-w-full rounded-2xl object-contain"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#1C1C1E] text-4xl font-bold text-white">
-                            {getInitials(activeTitle)}
-                          </div>
-                        )}
+                  <div className="grid grid-cols-1 gap-0 sm:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
+                    <div className="border-b border-gray-100 bg-[#F5F5F2] p-4 sm:border-b-0 sm:border-r">
+                      <div className="mx-auto max-w-[210px]">
+                        <div className="aspect-[4/5] overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm">
+                          {video.thumbnail_url ? (
+                            <img
+                              src={video.thumbnail_url}
+                              alt={activeTitle}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-[#1C1C1E] text-3xl font-bold text-white">
+                              {getInitials(activeTitle)}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="min-w-0 flex-1 p-5 sm:p-6">
+                    <div className="min-w-0 p-5 sm:p-6">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            effectiveStatus === "draft"
-                              ? "bg-gray-100 text-gray-700"
-                              : effectiveStatus === "scheduled"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-emerald-100 text-emerald-700"
-                          }`}
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusPillClass(
+                            effectiveStatus
+                          )}`}
                         >
                           {getStatusLabel(effectiveStatus)}
                         </span>
 
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
-                            video.access_type === "paid_agent"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getAccessPillClass(
+                            video.access_type
+                          )}`}
                         >
                           {video.access_type === "paid_agent" ? (
                             <Lock size={12} />
@@ -592,7 +608,7 @@ export default function AdminEducationPage() {
                         ) : null}
                       </div>
 
-                      <h2 className="mt-4 line-clamp-2 text-xl font-bold leading-8 text-[#1C1C1E]">
+                      <h2 className="mt-4 line-clamp-2 text-2xl font-bold leading-tight tracking-tight text-[#1C1C1E]">
                         {activeTitle || "Untitled"}
                       </h2>
 
@@ -600,40 +616,50 @@ export default function AdminEducationPage() {
                         {activeDescription || ui.notSet}
                       </p>
 
-                      <div className="mt-5 grid grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-2">
+                      <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">
-                            {ui.category}:
-                          </span>{" "}
-                          {video.education_categories?.name || ui.notSet}
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            {ui.category}
+                          </div>
+                          <div className="mt-1 font-medium text-[#1C1C1E]">
+                            {video.education_categories?.name || ui.notSet}
+                          </div>
                         </div>
 
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">
-                            {ui.speaker}:
-                          </span>{" "}
-                          {video.speaker_name || ui.notSet}
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            {ui.speaker}
+                          </div>
+                          <div className="mt-1 font-medium text-[#1C1C1E]">
+                            {video.speaker_name || ui.notSet}
+                          </div>
                         </div>
 
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">
-                            {ui.duration}:
-                          </span>{" "}
-                          {formatDuration(video.duration_seconds)}
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            {ui.duration}
+                          </div>
+                          <div className="mt-1 font-medium text-[#1C1C1E]">
+                            {formatDuration(video.duration_seconds)}
+                          </div>
                         </div>
 
                         <div>
-                          <span className="font-semibold text-[#1C1C1E]">
-                            {ui.publishAt}:
-                          </span>{" "}
-                          {formatDateTime(video.published_at)}
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            {ui.publishAt}
+                          </div>
+                          <div className="mt-1 font-medium text-[#1C1C1E]">
+                            {formatDateTime(video.published_at)}
+                          </div>
                         </div>
 
                         <div className="sm:col-span-2">
-                          <span className="font-semibold text-[#1C1C1E]">
-                            {ui.updatedAt}:
-                          </span>{" "}
-                          {formatDateTime(video.updated_at)}
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                            {ui.updatedAt}
+                          </div>
+                          <div className="mt-1 font-medium text-[#1C1C1E]">
+                            {formatDateTime(video.updated_at)}
+                          </div>
                         </div>
                       </div>
 
@@ -646,7 +672,7 @@ export default function AdminEducationPage() {
                       <div className="mt-6 flex flex-wrap gap-3">
                         <Link
                           href={`/admindashboard/education/${video.id}/edit`}
-                          className="inline-flex items-center justify-center rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                          className="inline-flex items-center justify-center rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                         >
                           {ui.edit}
                         </Link>
@@ -655,7 +681,7 @@ export default function AdminEducationPage() {
                           <Link
                             href={`/education/${video.slug}`}
                             target="_blank"
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                           >
                             <Eye size={15} />
                             {ui.viewPublic}
