@@ -60,6 +60,11 @@ type EducationForm = {
   publish_at: string;
 };
 
+type AdminProfileCheck = {
+  id: string;
+  role: string | null;
+};
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -379,6 +384,12 @@ export default function AdminNewEducationPage() {
       indonesianPreview: lang === "id" ? "Preview Indonesia" : "Indonesian Preview",
       sourcePath: lang === "id" ? "Path Video" : "Video Path",
       notSet: lang === "id" ? "Belum diatur" : "Not set",
+      adminOnly:
+        lang === "id"
+          ? "Hanya admin yang dapat upload video education."
+          : "Only admin can upload education videos.",
+      authLoading:
+        lang === "id" ? "Memeriksa sesi admin..." : "Checking admin session...",
     }),
     [lang]
   );
@@ -417,6 +428,9 @@ export default function AdminNewEducationPage() {
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
 
+  const [adminReady, setAdminReady] = useState(false);
+  const [adminUserId, setAdminUserId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!slugTouched) {
       setForm((prev) => ({
@@ -452,6 +466,31 @@ export default function AdminNewEducationPage() {
     }
 
     loadCategories();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function verifyAdminSessionOnLoad() {
+      try {
+        const userId = await ensureAdminAccess();
+        if (!ignore) {
+          setAdminUserId(userId);
+          setAdminReady(true);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setAdminUserId(null);
+          setAdminReady(false);
+        }
+      }
+    }
+
+    verifyAdminSessionOnLoad();
 
     return () => {
       ignore = true;
@@ -523,7 +562,49 @@ export default function AdminNewEducationPage() {
     }));
   }
 
+  async function ensureAdminAccess() {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) throw sessionError;
+
+    if (!session?.access_token) {
+      const refreshed = await supabase.auth.refreshSession();
+      if (refreshed.error) throw refreshed.error;
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) throw authError;
+    if (!user?.id) {
+      throw new Error("Please log in first.");
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+
+    const adminProfile = profile as AdminProfileCheck | null;
+
+    if (!adminProfile || adminProfile.role !== "admin") {
+      throw new Error(ui.adminOnly);
+    }
+
+    return user.id;
+  }
+
   async function uploadThumbnail(file: File) {
+    await ensureAdminAccess();
+
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const cleanSlug = form.slug || slugify(form.title) || "education";
     const path = `thumb/${cleanSlug}-${Date.now()}.${ext}`;
@@ -532,7 +613,8 @@ export default function AdminNewEducationPage() {
       .from("education-thumbnails")
       .upload(path, file, {
         cacheControl: "3600",
-        upsert: true,
+        upsert: false,
+        contentType: file.type || "image/jpeg",
       });
 
     if (uploadError) throw uploadError;
@@ -545,16 +627,20 @@ export default function AdminNewEducationPage() {
   }
 
   async function uploadVideo(file: File) {
+    await ensureAdminAccess();
+
     const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
     const cleanSlug = form.slug || slugify(form.title) || "education";
-    const safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-_]+/g, "-");
-    const path = `video/${cleanSlug}-${Date.now()}-${safeName || `video.${ext}`}`;
+    const safeName =
+      file.name.toLowerCase().replace(/[^a-z0-9.\-_]+/g, "-") || `video.${ext}`;
+    const path = `video/${cleanSlug}-${Date.now()}-${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("education-videos")
       .upload(path, file, {
         cacheControl: "3600",
-        upsert: true,
+        upsert: false,
+        contentType: file.type || "video/mp4",
       });
 
     if (uploadError) throw uploadError;
@@ -676,16 +762,9 @@ export default function AdminNewEducationPage() {
     status === "draft" ? setSavingDraft(true) : setPublishing(true);
 
     try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (authError) throw authError;
-      if (!user?.id) {
-        alert("Please log in first.");
-        return;
-      }
+      const userId = await ensureAdminAccess();
+      setAdminUserId(userId);
+      setAdminReady(true);
 
       const { data, error } = await supabase
         .from("education_videos")
@@ -710,8 +789,8 @@ export default function AdminNewEducationPage() {
           published_at: resolvedPublishedAt,
           is_featured: form.is_featured,
           sort_order: Number.isNaN(cleanSortOrder) ? 0 : cleanSortOrder,
-          created_by: user.id,
-          updated_by: user.id,
+          created_by: userId,
+          updated_by: userId,
         })
         .select("id")
         .single();
@@ -781,6 +860,12 @@ export default function AdminNewEducationPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {!adminReady ? (
+              <div className="rounded-xl border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-500">
+                {ui.authLoading}
+              </div>
+            ) : null}
+
             <button
               type="button"
               onClick={() => setPreviewMode((prev) => !prev)}
@@ -812,8 +897,8 @@ export default function AdminNewEducationPage() {
                   ? ui.scheduling
                   : ui.publishing
                 : isScheduled
-                  ? ui.schedule
-                  : ui.publish}
+                ? ui.schedule
+                : ui.publish}
             </button>
           </div>
         </div>
@@ -1197,8 +1282,8 @@ export default function AdminNewEducationPage() {
                       {uploadingVideo
                         ? ui.uploading
                         : form.video_storage_path
-                          ? ui.replaceVideo
-                          : ui.uploadVideo}
+                        ? ui.replaceVideo
+                        : ui.uploadVideo}
                     </button>
 
                     {form.video_storage_path ? (
