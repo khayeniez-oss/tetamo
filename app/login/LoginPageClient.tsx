@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
@@ -58,6 +58,7 @@ function FormInput({
   value,
   onChange,
   autoComplete,
+  rightSlot,
 }: {
   label: string;
   type?: string;
@@ -65,6 +66,7 @@ function FormInput({
   value: string;
   onChange: (value: string) => void;
   autoComplete?: string;
+  rightSlot?: ReactNode;
 }) {
   return (
     <div>
@@ -72,14 +74,24 @@ function FormInput({
         {label}
       </label>
 
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        autoComplete={autoComplete}
-        className="w-full rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-[#8E8E93] focus:border-[#1C1C1E] focus:ring-4 focus:ring-black/5"
-      />
+      <div className="relative">
+        <input
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          className={`w-full rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-[#8E8E93] focus:border-[#1C1C1E] focus:ring-4 focus:ring-black/5 ${
+            rightSlot ? "pr-12" : ""
+          }`}
+        />
+
+        {rightSlot ? (
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+            {rightSlot}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -139,6 +151,7 @@ export default function LoginPageClient() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
     null
@@ -399,13 +412,44 @@ export default function LoginPageClient() {
 
               <FormInput
                 label={isID ? "Kata Sandi" : "Password"}
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder={
                   isID ? "Masukkan kata sandi Anda" : "Enter your password"
                 }
                 value={password}
                 onChange={setPassword}
                 autoComplete="current-password"
+                rightSlot={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6E6E73] transition hover:bg-gray-100 hover:text-[#1C1C1E]"
+                    aria-label={
+                      showPassword
+                        ? isID
+                          ? "Sembunyikan kata sandi"
+                          : "Hide password"
+                        : isID
+                        ? "Tampilkan kata sandi"
+                        : "Show password"
+                    }
+                    title={
+                      showPassword
+                        ? isID
+                          ? "Sembunyikan"
+                          : "Hide"
+                        : isID
+                        ? "Tampilkan"
+                        : "Show"
+                    }
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                }
               />
 
               <button
