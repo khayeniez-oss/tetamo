@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff, KeyRound } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
@@ -152,6 +152,7 @@ export default function LoginPageClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
     null
@@ -172,6 +173,16 @@ export default function LoginPageClient() {
     const query = params.toString();
     return query ? `/signup?${query}` : "/signup";
   }, [roleFromUrl, safeNext]);
+
+  const forgotPasswordHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    const trimmedEmail = email.trim().toLowerCase();
+    if (trimmedEmail) params.set("email", trimmedEmail);
+
+    const query = params.toString();
+    return query ? `/forgot-password?${query}` : "/forgot-password";
+  }, [email]);
 
   const oauthRedirectTo = useMemo(() => {
     if (typeof window === "undefined") return undefined;
@@ -201,7 +212,9 @@ export default function LoginPageClient() {
 
     if (profileError || !profile) {
       redirectingRef.current = false;
-      alert(isID ? "Profil pengguna tidak ditemukan." : "User profile not found.");
+      setLoginError(
+        isID ? "Profil pengguna tidak ditemukan." : "User profile not found."
+      );
       return;
     }
 
@@ -262,9 +275,14 @@ export default function LoginPageClient() {
 
   async function handleLogin() {
     const trimmedEmail = email.trim().toLowerCase();
+    setLoginError("");
 
     if (!trimmedEmail || !password) {
-      alert(isID ? "Masukkan email dan kata sandi." : "Enter your email and password.");
+      setLoginError(
+        isID
+          ? "Masukkan email dan kata sandi."
+          : "Enter your email and password."
+      );
       return;
     }
 
@@ -278,7 +296,11 @@ export default function LoginPageClient() {
 
     if (error) {
       setLoading(false);
-      alert(error.message);
+      setLoginError(
+        isID
+          ? "Email atau kata sandi salah. Jika lupa kata sandi, gunakan reset password di bawah."
+          : "Wrong email or password. If you forgot your password, use reset password below."
+      );
       return;
     }
 
@@ -286,7 +308,7 @@ export default function LoginPageClient() {
 
     if (!user) {
       setLoading(false);
-      alert(isID ? "User tidak ditemukan." : "User not found.");
+      setLoginError(isID ? "User tidak ditemukan." : "User not found.");
       return;
     }
 
@@ -294,6 +316,7 @@ export default function LoginPageClient() {
   }
 
   async function handleOAuthLogin(provider: SocialProvider) {
+    setLoginError("");
     setLoading(false);
     setSocialLoading(provider);
 
@@ -321,7 +344,7 @@ export default function LoginPageClient() {
 
     if (error) {
       setSocialLoading(null);
-      alert(error.message);
+      setLoginError(error.message);
     }
   }
 
@@ -390,9 +413,30 @@ export default function LoginPageClient() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-[#6E6E73]">
-                {isID ? "Masuk ke akun TETAMO Anda" : "Log in to your TETAMO account"}
+                {isID
+                  ? "Masuk ke akun TETAMO Anda"
+                  : "Log in to your TETAMO account"}
               </p>
             </div>
+
+            {loginError ? (
+              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div className="text-sm leading-6 text-red-700">
+                    <p>{loginError}</p>
+                    <Link
+                      href={forgotPasswordHref}
+                      className="mt-1 inline-flex font-semibold underline underline-offset-4"
+                    >
+                      {isID
+                        ? "Lupa kata sandi? Reset di sini."
+                        : "Forgot password? Reset it here."}
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <form
               className="space-y-4"
@@ -406,51 +450,68 @@ export default function LoginPageClient() {
                 type="email"
                 placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
                 value={email}
-                onChange={setEmail}
+                onChange={(value) => {
+                  setEmail(value);
+                  setLoginError("");
+                }}
                 autoComplete="email"
               />
 
-              <FormInput
-                label={isID ? "Kata Sandi" : "Password"}
-                type={showPassword ? "text" : "password"}
-                placeholder={
-                  isID ? "Masukkan kata sandi Anda" : "Enter your password"
-                }
-                value={password}
-                onChange={setPassword}
-                autoComplete="current-password"
-                rightSlot={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6E6E73] transition hover:bg-gray-100 hover:text-[#1C1C1E]"
-                    aria-label={
-                      showPassword
-                        ? isID
-                          ? "Sembunyikan kata sandi"
-                          : "Hide password"
-                        : isID
-                        ? "Tampilkan kata sandi"
-                        : "Show password"
-                    }
-                    title={
-                      showPassword
-                        ? isID
-                          ? "Sembunyikan"
-                          : "Hide"
-                        : isID
-                        ? "Tampilkan"
-                        : "Show"
-                    }
+              <div>
+                <FormInput
+                  label={isID ? "Kata Sandi" : "Password"}
+                  type={showPassword ? "text" : "password"}
+                  placeholder={
+                    isID ? "Masukkan kata sandi Anda" : "Enter your password"
+                  }
+                  value={password}
+                  onChange={(value) => {
+                    setPassword(value);
+                    setLoginError("");
+                  }}
+                  autoComplete="current-password"
+                  rightSlot={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#6E6E73] transition hover:bg-gray-100 hover:text-[#1C1C1E]"
+                      aria-label={
+                        showPassword
+                          ? isID
+                            ? "Sembunyikan kata sandi"
+                            : "Hide password"
+                          : isID
+                          ? "Tampilkan kata sandi"
+                          : "Show password"
+                      }
+                      title={
+                        showPassword
+                          ? isID
+                            ? "Sembunyikan"
+                            : "Hide"
+                          : isID
+                          ? "Tampilkan"
+                          : "Show"
+                      }
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  }
+                />
+
+                <div className="mt-2 flex justify-end">
+                  <Link
+                    href={forgotPasswordHref}
+                    className="text-sm font-semibold text-[#111827] underline underline-offset-4 transition hover:text-black"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                }
-              />
+                    {isID ? "Lupa kata sandi?" : "Forgot password?"}
+                  </Link>
+                </div>
+              </div>
 
               <button
                 type="submit"
