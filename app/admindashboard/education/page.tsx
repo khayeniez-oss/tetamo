@@ -526,7 +526,7 @@ export default function AdminEducationPage() {
             {videos.length === 0 ? ui.noVideos : ui.noResults}
           </div>
         ) : (
-          <div className="mt-6 grid grid-cols-1 gap-5 2xl:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
             {filteredVideos.map((video) => {
               const effectiveStatus = getEffectiveStatus(video);
               const Icon = getTypeIcon(video.content_type);
@@ -548,146 +548,142 @@ export default function AdminEducationPage() {
               return (
                 <article
                   key={video.id}
-                  className="overflow-hidden rounded-[30px] border border-gray-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)]"
+                  className="flex h-full flex-col overflow-hidden rounded-[30px] border border-gray-200 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.05)]"
                 >
-                  <div className="grid grid-cols-1 gap-0 sm:grid-cols-[180px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
-                    <div className="border-b border-gray-100 bg-[#F5F5F2] p-4 sm:border-b-0 sm:border-r">
-                      <div className="mx-auto max-w-[210px]">
-                        <div className="aspect-[4/5] overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm">
-                          {video.thumbnail_url ? (
-                            <img
-                              src={video.thumbnail_url}
-                              alt={activeTitle}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-[#1C1C1E] text-3xl font-bold text-white">
-                              {getInitials(activeTitle)}
-                            </div>
-                          )}
-                        </div>
+                  <div className="relative flex h-[240px] items-center justify-center overflow-hidden border-b border-gray-100 bg-[#F5F5F2] sm:h-[280px]">
+                    {video.thumbnail_url ? (
+                      <img
+                        src={video.thumbnail_url}
+                        alt={activeTitle || "Education video"}
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-[#1C1C1E] text-4xl font-bold text-white">
+                        {getInitials(activeTitle)}
                       </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-1 flex-col p-5 sm:p-6">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusPillClass(
+                          effectiveStatus
+                        )}`}
+                      >
+                        {getStatusLabel(effectiveStatus)}
+                      </span>
+
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getAccessPillClass(
+                          video.access_type
+                        )}`}
+                      >
+                        {video.access_type === "paid_agent" ? (
+                          <Lock size={12} />
+                        ) : null}
+                        {getAccessLabel(video.access_type)}
+                      </span>
+
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
+                        <Icon size={13} />
+                        {getTypeLabel(video.content_type)}
+                      </span>
+
+                      {video.is_featured ? (
+                        <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
+                          {ui.featured}
+                        </div>
+                      ) : null}
+
+                      {!video.education_categories?.name ? (
+                        <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                          {ui.missingCategory}
+                        </div>
+                      ) : null}
                     </div>
 
-                    <div className="min-w-0 p-5 sm:p-6">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusPillClass(
-                            effectiveStatus
-                          )}`}
-                        >
-                          {getStatusLabel(effectiveStatus)}
-                        </span>
-
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${getAccessPillClass(
-                            video.access_type
-                          )}`}
-                        >
-                          {video.access_type === "paid_agent" ? (
-                            <Lock size={12} />
-                          ) : null}
-                          {getAccessLabel(video.access_type)}
-                        </span>
-
-                        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-[#1C1C1E]">
-                          <Icon size={13} />
-                          {getTypeLabel(video.content_type)}
-                        </span>
-
-                        {video.is_featured ? (
-                          <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-xs font-semibold text-white">
-                            {ui.featured}
-                          </div>
-                        ) : null}
-
-                        {!video.education_categories?.name ? (
-                          <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                            {ui.missingCategory}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <h2 className="mt-4 line-clamp-2 text-2xl font-bold leading-tight tracking-tight text-[#1C1C1E]">
+                    <div className="mt-4">
+                      <h2 className="line-clamp-2 text-xl font-bold leading-tight tracking-tight text-[#1C1C1E] sm:text-2xl">
                         {activeTitle || "Untitled"}
                       </h2>
 
                       <p className="mt-3 line-clamp-3 text-sm leading-7 text-gray-600">
                         {activeDescription || ui.notSet}
                       </p>
+                    </div>
 
-                      <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
-                            {ui.category}
-                          </div>
-                          <div className="mt-1 font-medium text-[#1C1C1E]">
-                            {video.education_categories?.name || ui.notSet}
-                          </div>
+                    <div className="mt-5 grid grid-cols-1 gap-3 rounded-[24px] border border-gray-100 bg-[#FAFAF8] p-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                          {ui.category}
                         </div>
-
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
-                            {ui.speaker}
-                          </div>
-                          <div className="mt-1 font-medium text-[#1C1C1E]">
-                            {video.speaker_name || ui.notSet}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
-                            {ui.duration}
-                          </div>
-                          <div className="mt-1 font-medium text-[#1C1C1E]">
-                            {formatDuration(video.duration_seconds)}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
-                            {ui.publishAt}
-                          </div>
-                          <div className="mt-1 font-medium text-[#1C1C1E]">
-                            {formatDateTime(video.published_at)}
-                          </div>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
-                            {ui.updatedAt}
-                          </div>
-                          <div className="mt-1 font-medium text-[#1C1C1E]">
-                            {formatDateTime(video.updated_at)}
-                          </div>
+                        <div className="mt-1 line-clamp-1 font-medium text-[#1C1C1E]">
+                          {video.education_categories?.name || ui.notSet}
                         </div>
                       </div>
 
-                      {video.access_type === "paid_agent" ? (
-                        <p className="mt-4 text-xs leading-6 text-gray-500">
-                          {ui.premiumHelper}
-                        </p>
-                      ) : null}
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                          {ui.speaker}
+                        </div>
+                        <div className="mt-1 line-clamp-1 font-medium text-[#1C1C1E]">
+                          {video.speaker_name || ui.notSet}
+                        </div>
+                      </div>
 
-                      <div className="mt-6 flex flex-wrap gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                          {ui.duration}
+                        </div>
+                        <div className="mt-1 font-medium text-[#1C1C1E]">
+                          {formatDuration(video.duration_seconds)}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                          {ui.publishAt}
+                        </div>
+                        <div className="mt-1 font-medium text-[#1C1C1E]">
+                          {formatDateTime(video.published_at)}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400">
+                          {ui.updatedAt}
+                        </div>
+                        <div className="mt-1 font-medium text-[#1C1C1E]">
+                          {formatDateTime(video.updated_at)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {video.access_type === "paid_agent" ? (
+                      <p className="mt-4 text-xs leading-6 text-gray-500">
+                        {ui.premiumHelper}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-auto flex flex-wrap gap-3 pt-6">
+                      <Link
+                        href={`/admindashboard/education/${video.id}/edit`}
+                        className="inline-flex items-center justify-center rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                      >
+                        {ui.edit}
+                      </Link>
+
+                      {effectiveStatus !== "draft" ? (
                         <Link
-                          href={`/admindashboard/education/${video.id}/edit`}
-                          className="inline-flex items-center justify-center rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                          href={`/education/${video.slug}`}
+                          target="_blank"
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
                         >
-                          {ui.edit}
+                          <Eye size={15} />
+                          {ui.viewPublic}
                         </Link>
-
-                        {effectiveStatus !== "draft" ? (
-                          <Link
-                            href={`/education/${video.slug}`}
-                            target="_blank"
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
-                          >
-                            <Eye size={15} />
-                            {ui.viewPublic}
-                          </Link>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
                   </div>
                 </article>
