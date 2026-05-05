@@ -219,7 +219,9 @@ function PackageCard({
   const featuredDays = getFeaturedDays(pkg);
   const price = formatIdr(item.priceIdr ?? 0);
   const duration = getDurationText(pkg, isID);
-  const features = isID ? item.features ?? [] : item.featuresEn ?? item.features ?? [];
+  const features = isID
+    ? item.features ?? []
+    : item.featuresEn ?? item.features ?? [];
   const monthlyBillingNote = isID
     ? item.monthlyBillingNote
     : item.monthlyBillingNoteEn ?? item.monthlyBillingNote;
@@ -310,7 +312,7 @@ function PackageCard({
                   : "Active listings"}
               </div>
               <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
-                {listingCount} {isID ? "listing" : "listing"}
+                {listingCount} listing
               </div>
             </div>
           ) : null}
@@ -355,11 +357,11 @@ function PackageCard({
           >
             {audience === "owner"
               ? isID
-                ? "Mulai sebagai Pemilik"
-                : "Start as Owner"
+                ? "Pasang Listing sebagai Pemilik"
+                : "List as Owner"
               : isID
-              ? "Mulai sebagai Agen"
-              : "Start as Agent"}
+              ? "Pasang Listing sebagai Agen"
+              : "List as Agent"}
           </Link>
 
           <Link
@@ -443,13 +445,13 @@ export default function PriceListPage() {
                   </div>
                   <div className="mt-2 text-xl font-bold text-[#111827] sm:text-2xl">
                     {isID
-                      ? "Mulai dari paket yang paling seimbang"
-                      : "Start from the most balanced plan"}
+                      ? "Pilih paket agen yang paling seimbang"
+                      : "Choose the most balanced agent plan"}
                   </div>
                   <p className="mt-2 text-sm leading-7 text-[#6B7280]">
                     {isID
-                      ? "Untuk agen, paket yang seimbang biasanya paling ideal untuk tumbuh dengan stabil."
-                      : "For agents, a balanced package is usually the most practical way to grow steadily."}
+                      ? "Untuk agen, paket yang seimbang biasanya paling ideal untuk listing lebih konsisten dan profesional."
+                      : "For agents, a balanced package is usually the most practical way to list more consistently and professionally."}
                   </p>
                 </div>
               </div>
@@ -535,7 +537,7 @@ export default function PriceListPage() {
                   href="/signup"
                   className="inline-flex items-center justify-center rounded-2xl border border-white/30 bg-white/10 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-white/15"
                 >
-                  {isID ? "Mulai" : "Get Started"}
+                  {isID ? "Pasang Listing" : "List Now"}
                 </Link>
               </div>
             </div>
