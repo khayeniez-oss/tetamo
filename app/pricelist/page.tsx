@@ -285,21 +285,6 @@ function PackageCard({
         </div>
 
         <div className="mt-6 grid gap-3">
-          <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
-              {isID ? "Cocok untuk" : "Best for"}
-            </div>
-            <div className="mt-1 text-sm font-medium text-[#1C1C1E]">
-              {audience === "owner"
-                ? isID
-                  ? "Pemilik properti yang ingin listing lebih menarik"
-                  : "Owners who want stronger listing visibility"
-                : isID
-                ? "Agen yang ingin berkembang lebih profesional"
-                : "Agents who want to grow more professionally"}
-            </div>
-          </div>
-
           {listingCount !== null ? (
             <div className="rounded-2xl border border-[#ECECF1] bg-[#FAFAFB] px-4 py-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-[#7A7A85]">
