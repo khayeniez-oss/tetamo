@@ -67,40 +67,38 @@ export default function PemilikPage() {
     },
   ];
 
-  const translateFeature = (feature: string) => {
-    if (lang === "id") return feature;
+  const getPackageName = (pkg: (typeof OWNER_PACKAGES)[number]) => {
+    return lang === "id" ? pkg.name : pkg.nameEn;
+  };
 
-    const map: Record<string, string> = {
-      "1 Listing Aktif": "1 Active Listing",
-      "Durasi aktif 60 hari": "Active for 60 days",
-      "Direct WhatsApp (Buyer/Renter contact langsung)":
-        "Direct WhatsApp (Buyer/Renter contact directly)",
-      "Tampil di Tetamo Marketplace & App":
-        "Visible on Tetamo Marketplace & App",
-      "Jadwal Scheduling Viewing": "Viewing Scheduling",
-      "Auto renew aktif secara default": "Auto renew enabled by default",
-      "Listing aktif total 60 hari": "Listing active for 60 days",
-      "Featured / highlighted selama 30 hari":
-        "Featured / highlighted for 30 days",
-      "Posting di Social Media (FB / IG / TikTok)":
-        "Posted on Social Media (FB / IG / TikTok)",
-      "Verification Badge": "Verification Badge",
-      "Tetamo Agent Support": "Tetamo Agent Support",
-    };
+  const getPackageFeatures = (pkg: (typeof OWNER_PACKAGES)[number]) => {
+    return lang === "id" ? pkg.features : pkg.featuresEn;
+  };
 
-    return map[feature] ?? feature;
+  const formatDurationLabel = (durationDays?: number) => {
+    if (durationDays === 365) {
+      return lang === "id" ? "1 tahun" : "1 year";
+    }
+
+    return `${durationDays ?? 0} ${lang === "id" ? "hari" : "days"}`;
   };
 
   const ownerPackageIntro = (packageId: string) => {
     if (packageId === "featured") {
       return lang === "id"
-        ? "Pilihan terbaik untuk pemilik yang ingin listing lebih menonjol dan visibilitas lebih kuat."
-        : "Best for owners who want stronger visibility and a more prominent listing.";
+        ? "Pilihan terbaik untuk pemilik yang ingin listing tampil paling menonjol dengan visibilitas tertinggi."
+        : "Best for owners who want the most prominent listing position with the highest visibility.";
+    }
+
+    if (packageId === "priority") {
+      return lang === "id"
+        ? "Pilihan untuk pemilik yang ingin visibilitas lebih tinggi dibanding Basic di marketplace Tetamo."
+        : "For owners who want higher visibility than Basic inside the Tetamo marketplace.";
     }
 
     return lang === "id"
-      ? "Pilihan sederhana untuk mulai memasang properti Anda di Tetamo."
-      : "A simple option to start listing your property on Tetamo.";
+      ? "Pilihan sederhana untuk mulai memasang properti Anda di Tetamo dengan visibilitas basic."
+      : "A simple option to start listing your property on Tetamo with basic visibility.";
   };
 
   return (
@@ -168,15 +166,17 @@ export default function PemilikPage() {
             </h2>
             <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-gray-600 sm:text-base">
               {lang === "id"
-                ? "Pilih paket pemilik yang paling sesuai. Paket Featured dibuat lebih menonjol untuk membantu properti Anda tampil lebih kuat."
-                : "Choose the owner package that fits you best. Featured is designed to help your property stand out more strongly."}
+                ? "Semua paket aktif selama 1 tahun dan sudah termasuk fitur utama Tetamo. Perbedaannya ada pada level visibilitas listing."
+                : "All packages stay active for 1 year and include Tetamo’s core listing features. The difference is the listing visibility level."}
             </p>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
             {OWNER_PACKAGES.map((pkg) => {
               const checked = selectedPlan === pkg.id;
               const isFeatured = pkg.id === "featured";
+              const isPriority = pkg.id === "priority";
+              const displayFeatures = getPackageFeatures(pkg);
 
               return (
                 <div
@@ -191,17 +191,19 @@ export default function PemilikPage() {
                     }
                   }}
                   className={[
-                    "relative overflow-hidden rounded-[28px] border p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition-all duration-300 sm:p-5 cursor-pointer",
+                    "relative cursor-pointer overflow-hidden rounded-[28px] border p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition-all duration-300 sm:p-5",
                     isFeatured
                       ? "border-amber-300 bg-[linear-gradient(180deg,#FFF9E8_0%,#FFFFFF_100%)] shadow-[0_24px_60px_rgba(245,158,11,0.18)]"
-                      : "border-gray-200 bg-white",
+                      : isPriority
+                        ? "border-gray-300 bg-[linear-gradient(180deg,#F9FAFB_0%,#FFFFFF_100%)]"
+                        : "border-gray-200 bg-white",
                     checked
                       ? isFeatured
                         ? "ring-1 ring-amber-400"
                         : "ring-1 ring-[#111827]"
-                      : "hover:border-gray-300 hover:-translate-y-0.5",
+                      : "hover:-translate-y-0.5 hover:border-gray-300",
                   ].join(" ")}
-                  aria-label={pkg.name}
+                  aria-label={getPackageName(pkg)}
                 >
                   {isFeatured ? (
                     <>
@@ -215,11 +217,14 @@ export default function PemilikPage() {
                       <div className="flex items-center gap-2">
                         {isFeatured ? (
                           <Crown className="h-4 w-4 shrink-0 text-amber-500" />
+                        ) : isPriority ? (
+                          <Sparkles className="h-4 w-4 shrink-0 text-[#1C1C1E]" />
                         ) : (
                           <Tag className="h-4 w-4 shrink-0 text-gray-500" />
                         )}
+
                         <h3 className="text-xl font-semibold leading-tight text-[#1C1C1E] sm:text-2xl">
-                          {pkg.name}
+                          {getPackageName(pkg)}
                         </h3>
                       </div>
 
@@ -246,7 +251,7 @@ export default function PemilikPage() {
 
                       {isFeatured ? (
                         <div className="rounded-full bg-amber-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-[0_8px_24px_rgba(245,158,11,0.3)] sm:px-3 sm:text-[11px]">
-                          {lang === "id" ? "Rekomendasi" : "Recommended"}
+                          {lang === "id" ? "Tertinggi" : "Highest"}
                         </div>
                       ) : null}
                     </div>
@@ -261,12 +266,12 @@ export default function PemilikPage() {
                       Rp {pkg.priceIdr.toLocaleString("id-ID")}
                     </div>
                     <div className="mt-1 text-sm text-gray-600 sm:text-base">
-                      / {pkg.durationDays} {lang === "id" ? "hari" : "days"}
+                      / {formatDurationLabel(pkg.durationDays)}
                     </div>
                   </div>
 
                   <ul className="relative z-10 mt-5 space-y-2.5 text-gray-700">
-                    {(pkg.features ?? []).map((feature, idx) => (
+                    {displayFeatures.map((feature, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
                         <span
                           className={`mt-[2px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
@@ -278,7 +283,7 @@ export default function PemilikPage() {
                           ✓
                         </span>
                         <span className="text-xs leading-5 sm:text-sm sm:leading-6">
-                          {translateFeature(feature)}
+                          {feature}
                         </span>
                       </li>
                     ))}
@@ -315,7 +320,7 @@ export default function PemilikPage() {
                 </div>
 
                 <h3 className="mt-3 text-lg font-bold text-[#1C1C1E] sm:text-xl">
-                  {selectedPackage?.name || "-"}
+                  {selectedPackage ? getPackageName(selectedPackage) : "-"}
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-gray-600">
@@ -325,14 +330,18 @@ export default function PemilikPage() {
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {(selectedPackage?.features ?? []).slice(0, 3).map((feature, idx) => (
-                    <span
-                      key={`${feature}-${idx}`}
-                      className="rounded-full border border-gray-200 bg-[#FAFAFA] px-3 py-1.5 text-[11px] font-medium text-[#1C1C1E] sm:text-xs"
-                    >
-                      {translateFeature(feature)}
-                    </span>
-                  ))}
+                  {selectedPackage
+                    ? getPackageFeatures(selectedPackage)
+                        .slice(0, 3)
+                        .map((feature, idx) => (
+                          <span
+                            key={`${feature}-${idx}`}
+                            className="rounded-full border border-gray-200 bg-[#FAFAFA] px-3 py-1.5 text-[11px] font-medium text-[#1C1C1E] sm:text-xs"
+                          >
+                            {feature}
+                          </span>
+                        ))
+                    : null}
                 </div>
               </div>
 
@@ -347,7 +356,7 @@ export default function PemilikPage() {
                       {lang === "id" ? "Paket" : "Package"}
                     </span>
                     <span className="text-sm font-semibold text-[#1C1C1E]">
-                      {selectedPackage?.name || "-"}
+                      {selectedPackage ? getPackageName(selectedPackage) : "-"}
                     </span>
                   </div>
 
@@ -357,7 +366,9 @@ export default function PemilikPage() {
                     </span>
                     <span className="text-sm font-semibold text-[#1C1C1E]">
                       {selectedPackage
-                        ? `Rp ${selectedPackage.priceIdr.toLocaleString("id-ID")}`
+                        ? `Rp ${selectedPackage.priceIdr.toLocaleString(
+                            "id-ID"
+                          )}`
                         : "-"}
                     </span>
                   </div>
@@ -368,9 +379,7 @@ export default function PemilikPage() {
                     </span>
                     <span className="text-sm font-semibold text-[#1C1C1E]">
                       {selectedPackage
-                        ? `${selectedPackage.durationDays} ${
-                            lang === "id" ? "hari" : "days"
-                          }`
+                        ? formatDurationLabel(selectedPackage.durationDays)
                         : "-"}
                     </span>
                   </div>
