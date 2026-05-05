@@ -908,7 +908,7 @@ Is this property still available?`;
           <img
             src={p.images[idx]}
             alt={displayTitle}
-            className="h-[440px] w-full object-cover sm:h-[390px] lg:h-[460px]"
+           className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
           />
         </Link>
 
