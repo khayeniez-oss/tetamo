@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import {
   usePemilikDraftListing,
   type PemilikListingDraft,
+  type PemilikPlanType,
 } from "../../layout";
 import ListingIklan from "@/components/listing/ListingIklan";
 
@@ -14,6 +15,16 @@ type PropertyImageRow = {
   sort_order: number | null;
   is_cover: boolean | null;
 };
+
+function normalizeOwnerPlanId(planId?: string | null): PemilikPlanType | undefined {
+  const value = String(planId || "").trim().toLowerCase();
+
+  if (value === "featured") return "featured";
+  if (value === "priority") return "priority";
+  if (value === "basic") return "basic";
+
+  return undefined;
+}
 
 export default function PemilikIklanEditPage() {
   const router = useRouter();
@@ -125,12 +136,7 @@ export default function PemilikIklanEditPage() {
       const nextDraft: PemilikListingDraft & Record<string, any> = {
         listingType: property.listing_type ?? "",
         rentalType: property.rental_type ?? "",
-        plan:
-          property.plan_id === "featured"
-            ? "featured"
-            : property.plan_id === "basic"
-              ? "basic"
-              : undefined,
+        plan: normalizeOwnerPlanId(property.plan_id),
         mode: "edit",
         source: "owner",
         kode: property.kode ?? kode,

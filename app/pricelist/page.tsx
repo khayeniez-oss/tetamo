@@ -19,6 +19,11 @@ function formatIdr(value?: number | null) {
   }).format(safeValue);
 }
 
+function getPackageId(pkg: PackageLike) {
+  const item = pkg as any;
+  return String(item.id ?? "").trim();
+}
+
 function getPackageName(pkg: PackageLike, isID: boolean) {
   const item = pkg as any;
   return isID ? item.name ?? item.nameEn ?? "" : item.nameEn ?? item.name ?? "";
@@ -89,6 +94,18 @@ function getListingCount(pkg: PackageLike) {
 function getFeaturedDays(pkg: PackageLike) {
   const item = pkg as any;
   return item.featuredDurationDays ?? null;
+}
+
+function getStartHref(pkg: PackageLike, audience: "owner" | "agent") {
+  const packageId = getPackageId(pkg);
+
+  if (audience === "owner") {
+    if (!packageId) return "/signup?role=owner";
+    return `/signup?role=owner&plan=${encodeURIComponent(packageId)}`;
+  }
+
+  if (!packageId) return "/signup?role=agent";
+  return `/signup?role=agent&package=${encodeURIComponent(packageId)}`;
 }
 
 function isRecommendedOwner(pkg: PackageLike, index: number) {
@@ -206,6 +223,7 @@ function PackageCard({
   const monthlyBillingNote = isID
     ? item.monthlyBillingNote
     : item.monthlyBillingNoteEn ?? item.monthlyBillingNote;
+  const startHref = getStartHref(pkg, audience);
 
   const cardBorder = recommended
     ? audience === "owner"
@@ -328,7 +346,7 @@ function PackageCard({
 
         <div className="mt-7 grid grid-cols-2 gap-3">
           <Link
-            href="/signup"
+            href={startHref}
             className={`inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-center text-sm font-semibold transition ${
               recommended
                 ? "bg-[#111827] text-white hover:bg-black"
@@ -451,7 +469,7 @@ export default function PriceListPage() {
             }
           />
 
-          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-2">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {OWNER_PACKAGES.map((pkg, index) => (
               <PackageCard
                 key={(pkg as any).id ?? index}

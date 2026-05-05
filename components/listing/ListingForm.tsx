@@ -32,6 +32,12 @@ function mergeChecklist(...groups: ChecklistItem[][]) {
   );
 }
 
+function getOwnerPackageLabel(plan?: string) {
+  if (plan === "featured") return "Featured";
+  if (plan === "priority") return "Priority";
+  return "Basic";
+}
+
 export default function ListingForm(props: Props) {
   const {
     draft,
@@ -311,7 +317,11 @@ export default function ListingForm(props: Props) {
     }
 
     if (isHospitality) {
-      return mergeChecklist(commonFacilities, houseFacilities, hospitalityFacilities);
+      return mergeChecklist(
+        commonFacilities,
+        houseFacilities,
+        hospitalityFacilities
+      );
     }
 
     if (isCommercial || isRuko) {
@@ -691,7 +701,7 @@ export default function ListingForm(props: Props) {
           {showPackageBadge && hasPlan && (
             <span className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold sm:text-sm">
               {lang === "id" ? "Paket:" : "Package:"}{" "}
-              {draft?.plan === "featured" ? "Featured" : "Basic"}
+              {getOwnerPackageLabel(draft?.plan)}
             </span>
           )}
         </div>
@@ -1433,7 +1443,9 @@ export default function ListingForm(props: Props) {
 
                       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                         {facilityItems.map((item) => {
-                          const checked = Boolean((draft as any)?.fasilitas?.[item.key]);
+                          const checked = Boolean(
+                            (draft as any)?.fasilitas?.[item.key]
+                          );
 
                           return (
                             <label
@@ -1479,7 +1491,9 @@ export default function ListingForm(props: Props) {
 
                       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                         {nearbyItems.map((item) => {
-                          const checked = Boolean((draft as any)?.nearby?.[item.key]);
+                          const checked = Boolean(
+                            (draft as any)?.nearby?.[item.key]
+                          );
 
                           return (
                             <label

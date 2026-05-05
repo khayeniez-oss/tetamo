@@ -177,6 +177,30 @@ function buildAddressSuggestionVariants(params: {
   ]);
 }
 
+function getPlanBadgeClass(plan?: string) {
+  if (plan === "featured") {
+    return "border-yellow-500/40 bg-yellow-500/10 text-yellow-600";
+  }
+
+  if (plan === "priority") {
+    return "border-amber-500/40 bg-amber-500/10 text-amber-700";
+  }
+
+  if (plan === "basic") {
+    return "border-gray-300 bg-white text-gray-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-400";
+}
+
+function getPlanBadgeLabel(plan?: string, lang?: string) {
+  if (plan === "featured") return "FEATURED";
+  if (plan === "priority") return "PRIORITY";
+  if (plan === "basic") return "BASIC";
+
+  return lang === "id" ? "MEMUAT..." : "LOADING...";
+}
+
 export default function ListingIklan({
   draft,
   setDraft,
@@ -391,20 +415,10 @@ export default function ListingIklan({
                 <span
                   className={[
                     "inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-semibold sm:text-[11px]",
-                    draft?.plan === "featured"
-                      ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600"
-                      : draft?.plan === "basic"
-                      ? "border-gray-300 bg-white text-gray-700"
-                      : "border-gray-200 bg-gray-50 text-gray-400",
+                    getPlanBadgeClass(draft?.plan),
                   ].join(" ")}
                 >
-                  {draft?.plan === "featured"
-                    ? "FEATURED"
-                    : draft?.plan === "basic"
-                    ? "BASIC"
-                    : lang === "id"
-                    ? "MEMUAT..."
-                    : "LOADING..."}
+                  {getPlanBadgeLabel(draft?.plan, lang)}
                 </span>
               )}
             </div>
