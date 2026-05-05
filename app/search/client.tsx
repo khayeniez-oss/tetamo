@@ -13,7 +13,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
-type ListingTier = "spotlight" | "featured" | "normal";
+type ListingTier = "spotlight" | "featured" | "priority" | "normal";
 
 type PropertyItem = {
   verifiedListing: boolean;
@@ -273,6 +273,7 @@ function isPromotionActive(flag?: boolean | null, expiresAt?: string | null) {
 function getTierBoost(tier: ListingTier) {
   if (tier === "spotlight") return 220;
   if (tier === "featured") return 140;
+  if (tier === "priority") return 80;
   return 0;
 }
 
@@ -395,12 +396,16 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
     item.plan_id === "featured" &&
     (!item.featured_expires_at || isFutureDate(item.featured_expires_at));
 
+  const priorityActive = item.plan_id === "priority";
+
   const boostActive = isPromotionActive(item.boost_active, item.boost_expires_at);
 
   const listingTier: ListingTier = spotlightActive
     ? "spotlight"
     : featuredActive
     ? "featured"
+    : priorityActive
+    ? "priority"
     : "normal";
 
   const postedByType =
