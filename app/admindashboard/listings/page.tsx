@@ -24,6 +24,8 @@ type ListingStatus =
   | "PAUSED"
   | "REJECTED";
 
+type OwnerPlanId = "basic" | "priority" | "featured";
+
 type AdminAction =
   | "ACTIVE"
   | "REJECTED"
@@ -46,7 +48,10 @@ type Listing = {
   owner: string;
   agent: string;
   postedDate: string;
+  listingExpiresAt: string | null;
   status: ListingStatus;
+  planId: OwnerPlanId;
+  planLabel: string;
   featuredActive: boolean;
   spotlightActive: boolean;
   boostActive: boolean;
@@ -78,6 +83,7 @@ type PropertyRow = {
   plan_id: string | null;
   created_at: string | null;
   is_paused: boolean | null;
+  listing_expires_at: string | null;
   featured_expires_at: string | null;
   boost_active: boolean | null;
   boost_expires_at: string | null;
@@ -139,6 +145,33 @@ function visiblePageNumbers(current: number, total: number) {
   }
 
   return pages;
+}
+
+function normalizeOwnerPlanId(planId?: string | null): OwnerPlanId {
+  const value = String(planId || "").trim().toLowerCase();
+
+  if (value === "featured") return "featured";
+  if (value === "priority") return "priority";
+
+  return "basic";
+}
+
+function getOwnerPlanLabel(planId: OwnerPlanId) {
+  if (planId === "featured") return "Featured Package";
+  if (planId === "priority") return "Priority Package";
+  return "Basic Package";
+}
+
+function getOwnerPlanBadgeClass(planId: OwnerPlanId) {
+  if (planId === "featured") {
+    return "border-purple-200 bg-purple-50 text-purple-700";
+  }
+
+  if (planId === "priority") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
 }
 
 function mapListingStatus(row: PropertyRow): ListingStatus {
@@ -277,6 +310,7 @@ export default function AdminListingsPage() {
             plan_id,
             created_at,
             is_paused,
+            listing_expires_at,
             featured_expires_at,
             boost_active,
             boost_expires_at,
@@ -305,6 +339,7 @@ export default function AdminListingsPage() {
             : item.profiles;
 
           const source = (item.source || "").toLowerCase();
+          const ownerPlanId = normalizeOwnerPlanId(item.plan_id);
 
           const sortedImages = [...(item.property_images ?? [])].sort((a, b) => {
             const coverA = a.is_cover ? 1 : 0;
@@ -329,7 +364,10 @@ export default function AdminListingsPage() {
             owner: source === "owner" ? profile?.full_name || "Unknown Owner" : "-",
             agent: source === "agent" ? profile?.full_name || "Unknown Agent" : "-",
             postedDate: formatPostedDate(item.posted_date || item.created_at),
+            listingExpiresAt: item.listing_expires_at || null,
             status: mapListingStatus(item),
+            planId: ownerPlanId,
+            planLabel: getOwnerPlanLabel(ownerPlanId),
             featuredActive:
               item.plan_id === "featured" &&
               (!item.featured_expires_at || isFutureDate(item.featured_expires_at)),
@@ -384,6 +422,9 @@ export default function AdminListingsPage() {
         ${l.agent}
         ${l.price}
         ${l.status}
+        ${l.planId}
+        ${l.planLabel}
+        ${l.listingExpiresAt ? formatPostedDate(l.listingExpiresAt) : ""}
       `.toLowerCase();
 
       return words.every((w) => searchable.includes(w));
@@ -524,6 +565,8 @@ export default function AdminListingsPage() {
               ? {
                   ...l,
                   status: "FEATURED",
+                  planId: "featured",
+                  planLabel: "Featured Package",
                   featuredActive: true,
                 }
               : l
@@ -913,7 +956,7 @@ export default function AdminListingsPage() {
 
                 <input
                   type="text"
-                  placeholder="Search listing, owner, agent, city, code..."
+                  placeholder="Search listing, owner, agent, city, status, code, package..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -964,6 +1007,14 @@ export default function AdminListingsPage() {
                                 {ui.label}
                               </span>
 
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${getOwnerPlanBadgeClass(
+                                  item.planId
+                                )}`}
+                              >
+                                {item.planLabel}
+                              </span>
+
                               {item.spotlightActive ? (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-semibold text-cyan-700 sm:text-[11px]">
                                   <Gem size={11} />
@@ -996,6 +1047,10 @@ export default function AdminListingsPage() {
                             <p className="mt-1 text-[10px] text-gray-400 sm:text-[11px]">
                               Code: {item.kode} <span className="text-gray-300">•</span>{" "}
                               {item.postedDate}
+                            </p>
+
+                            <p className="mt-1 text-[10px] text-gray-400 sm:text-[11px]">
+                              Listing until: {formatPostedDate(item.listingExpiresAt)}
                             </p>
                           </div>
                         </div>
