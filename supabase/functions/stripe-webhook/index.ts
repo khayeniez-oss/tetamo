@@ -10,6 +10,10 @@ const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
+const OWNER_LISTING_FALLBACK_DAYS = 365;
+const ADDON_FALLBACK_DAYS = 14;
+const EDUCATION_FALLBACK_DAYS = 90;
+
 type PaymentTransactionRow = {
   id: string;
   user_id: string | null;
@@ -508,7 +512,7 @@ function buildOwnerPropertyPayloadFromDraft(
 
   const listingDurationDays = toPositiveNumber(
     getNumber(metadata, "productDurationDays") ?? payment.duration_days,
-    30
+    OWNER_LISTING_FALLBACK_DAYS
   );
 
   const featuredDurationDays = toPositiveNumber(
@@ -617,7 +621,7 @@ async function activateNewListing(
   if (existing?.id) {
     const listingDurationDays = toPositiveNumber(
       getNumber(metadata, "productDurationDays") ?? payment.duration_days,
-      30
+      OWNER_LISTING_FALLBACK_DAYS
     );
 
     const featuredDurationDays = toPositiveNumber(
@@ -727,7 +731,7 @@ async function activateRenewListing(
 
   const listingDurationDays = toPositiveNumber(
     getNumber(metadata, "productDurationDays") ?? payment.duration_days,
-    30
+    OWNER_LISTING_FALLBACK_DAYS
   );
 
   const featuredDurationDays = toPositiveNumber(
@@ -786,7 +790,7 @@ async function activateAddon(
 
   const addonDurationDays = toPositiveNumber(
     getNumber(metadata, "productDurationDays") ?? payment.duration_days,
-    14
+    ADDON_FALLBACK_DAYS
   );
 
   const updatePayload: Record<string, any> = {
@@ -836,7 +840,7 @@ async function activateEducationEntitlement(
   const metadata = asObject(payment.metadata);
   const durationDays = toPositiveNumber(
     getNumber(metadata, "productDurationDays") ?? payment.duration_days,
-    90
+    EDUCATION_FALLBACK_DAYS
   );
 
   const startsAt = paidAtIso;
