@@ -41,6 +41,7 @@ type Property = {
   spotlight?: boolean;
   featured?: boolean;
   boosted?: boolean;
+  priority?: boolean;
 
   id: string;
   slug?: string;
@@ -168,6 +169,7 @@ function calculateRanking(p: Property) {
   if (p.spotlight) score += 1000;
   if (p.featured) score += 500;
   if (p.boosted) score += 200;
+  if (p.priority) score += 100;
   if (p.ownerVerified) score += 20;
   if (p.agentVerified) score += 10;
   if (p.developerVerified) score += 10;
@@ -908,7 +910,7 @@ Is this property still available?`;
           <img
             src={p.images[idx]}
             alt={displayTitle}
-           className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
+            className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
           />
         </Link>
 
@@ -1144,7 +1146,7 @@ export default function PropertiPageClient({
   const jenisListing = sp.get("jenisListing");
 
   const [all, setAll] = useState<Property[]>(initialProperties);
-const [loading, setLoading] = useState(initialProperties.length === 0);
+  const [loading, setLoading] = useState(initialProperties.length === 0);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
@@ -1297,6 +1299,8 @@ const [loading, setLoading] = useState(initialProperties.length === 0);
           row.boost_expires_at
         );
 
+        const priority = row.plan_id === "priority";
+
         const ownerPendingVerification =
           postedByType === "owner" &&
           !isVerified &&
@@ -1347,6 +1351,7 @@ const [loading, setLoading] = useState(initialProperties.length === 0);
           spotlight,
           featured,
           boosted,
+          priority,
 
           id: row.id,
           slug: row.slug ?? undefined,
@@ -1885,11 +1890,15 @@ const [loading, setLoading] = useState(initialProperties.length === 0);
       .filter((p) => !p.spotlight && !p.featured && p.boosted)
       .sort(sortByNewestWithinTier);
 
-    const normal = list
-      .filter((p) => !p.spotlight && !p.featured && !p.boosted)
+    const priority = list
+      .filter((p) => !p.spotlight && !p.featured && !p.boosted && p.priority)
       .sort(sortByNewestWithinTier);
 
-    return [...spotlight, ...featured, ...boosted, ...normal];
+    const normal = list
+      .filter((p) => !p.spotlight && !p.featured && !p.boosted && !p.priority)
+      .sort(sortByNewestWithinTier);
+
+    return [...spotlight, ...featured, ...boosted, ...priority, ...normal];
   }, [all, jenisListing]);
 
   const pageSize = 12;
