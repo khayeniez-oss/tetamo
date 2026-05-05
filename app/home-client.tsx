@@ -1340,7 +1340,7 @@ Is this property still available?`
         <img
           src={property.images[imgIndex]}
           alt="Property"
-          className="h-[410px] w-full object-cover sm:h-[360px] lg:h-[420px]"
+          className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
         />
 
         <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
@@ -1504,7 +1504,7 @@ function FeaturedOwnerPropertyCard({
         <img
           src={property.images[imgIndex]}
           alt="Property"
-          className="h-[320px] w-full object-cover sm:h-[360px] lg:h-[420px]"
+          className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
         />
 
         <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
