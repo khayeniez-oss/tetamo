@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { usePemilikDraftListing } from "../layout";
 import ListingVerifikasi from "@/components/listing/ListingVerifikasi";
 
-type PlanType = "basic" | "featured";
+type PlanType = "basic" | "priority" | "featured";
 
 function cleanText(value: unknown) {
   const text = String(value ?? "").trim();
@@ -144,7 +144,11 @@ export default function PemilikIklanVerifikasiPageClient() {
 
   const currentPlan = useMemo<PlanType>(() => {
     const planFromUrl = searchParams.get("plan");
-    return planFromUrl === "featured" ? "featured" : "basic";
+
+    if (planFromUrl === "priority") return "priority";
+    if (planFromUrl === "featured") return "featured";
+
+    return "basic";
   }, [searchParams]);
 
   useEffect(() => {

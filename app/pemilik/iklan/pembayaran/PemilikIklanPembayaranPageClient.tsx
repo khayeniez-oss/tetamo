@@ -54,7 +54,7 @@ type LocalizedProduct = {
 };
 
 function isPlanId(v: string): v is PlanId {
-  return v === "basic" || v === "featured";
+  return v === "basic" || v === "priority" || v === "featured";
 }
 
 function normalizePaymentFlow(
@@ -221,6 +221,31 @@ function getLocalizedFeatures(
     : product.features;
 }
 
+function formatDurationLabel(durationDays?: number | null, lang: "id" | "en" = "id") {
+  const days = Number(durationDays || 0);
+
+  if (!days) return "-";
+
+  if (days === 365) {
+    return lang === "id" ? "1 tahun" : "1 year";
+  }
+
+  if (days % 365 === 0) {
+    const years = days / 365;
+    return lang === "id" ? `${years} tahun` : `${years} years`;
+  }
+
+  if (days === 30) {
+    return lang === "id" ? "30 hari" : "30 days";
+  }
+
+  if (days === 90) {
+    return lang === "id" ? "90 hari" : "90 days";
+  }
+
+  return lang === "id" ? `${days} hari` : `${days} days`;
+}
+
 export default function PemilikIklanPembayaranPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -293,14 +318,13 @@ export default function PemilikIklanPembayaranPageClient() {
             activationEducation:
               "Education Pass akan aktif setelah pembayaran berhasil terkonfirmasi.",
             activationDefault:
-              "Halaman ini sekarang hanya membuat payment checkout. Listing, renew, boost, atau spotlight tidak diaktifkan dari sini.",
+              "Halaman ini hanya membuat payment checkout. Listing akan aktif sesuai paket setelah pembayaran terkonfirmasi.",
             payment: "Pembayaran",
             renewalFallback:
               "Perpanjangan produk akan mengikuti paket yang dipilih.",
             addonAppliedTo: "Add-on ini akan diterapkan ke listing dengan kode",
             educationDescPrefix:
               "Education Pass ini akan memberi akses premium ke video edukasi TETAMO selama",
-            days: "hari",
             cardTitle: "Debit / Credit Card",
             cardSubtitle: "Visa, Mastercard, JCB, American Express",
             otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
@@ -357,14 +381,13 @@ export default function PemilikIklanPembayaranPageClient() {
             activationEducation:
               "Education Pass will become active after successful payment confirmation.",
             activationDefault:
-              "This page currently only creates the payment checkout. Listing, renew, boost, or spotlight are not activated here directly.",
+              "This page only creates the payment checkout. The listing will become active according to the selected package after payment is confirmed.",
             payment: "Payment",
             renewalFallback:
               "Renewal will follow the selected product package.",
             addonAppliedTo: "This add-on will be applied to listing code",
             educationDescPrefix:
               "This Education Pass gives premium access to TETAMO educational videos for",
-            days: "days",
             cardTitle: "Debit / Credit Card",
             cardSubtitle: "Visa, Mastercard, JCB, American Express",
             otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
@@ -917,9 +940,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 <div className="rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">{ui.duration}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {selectedProduct?.durationDays
-                      ? `${selectedProduct.durationDays} ${ui.days}`
-                      : "-"}
+                    {formatDurationLabel(selectedProduct?.durationDays, currentLang)}
                   </div>
                 </div>
 
@@ -1041,7 +1062,7 @@ export default function PemilikIklanPembayaranPageClient() {
               <p className="mt-3 text-sm leading-6 text-gray-600">
                 {ui.educationDescPrefix}{" "}
                 <span className="font-semibold">
-                  {selectedProduct?.durationDays ?? 90} {ui.days}
+                  {formatDurationLabel(selectedProduct?.durationDays ?? 90, currentLang)}
                 </span>
                 .
               </p>
@@ -1068,9 +1089,7 @@ export default function PemilikIklanPembayaranPageClient() {
 
               <div className="mt-4 text-sm text-gray-700">
                 <span className="font-semibold">{ui.duration}:</span>{" "}
-                {selectedProduct?.durationDays
-                  ? `${selectedProduct.durationDays} ${ui.days}`
-                  : "-"}
+                {formatDurationLabel(selectedProduct?.durationDays, currentLang)}
               </div>
 
               {!isEducation &&
@@ -1078,7 +1097,10 @@ export default function PemilikIklanPembayaranPageClient() {
               (selectedProduct as any).featuredDurationDays ? (
                 <div className="mt-2 text-sm text-gray-700">
                   <span className="font-semibold">{ui.activeFeatured}:</span>{" "}
-                  {(selectedProduct as any).featuredDurationDays} {ui.days}
+                  {formatDurationLabel(
+                    (selectedProduct as any).featuredDurationDays,
+                    currentLang
+                  )}
                 </div>
               ) : null}
             </div>

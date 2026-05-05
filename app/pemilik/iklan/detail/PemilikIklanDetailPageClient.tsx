@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { usePemilikDraftListing } from "../layout";
 import ListingForm from "@/components/listing/ListingForm";
 
-type PlanType = "basic" | "featured";
+type PlanType = "basic" | "priority" | "featured";
 
 const inputBase =
   "mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10";
@@ -17,7 +17,11 @@ export default function PemilikIklanDetailPageClient() {
 
   const currentPlan = useMemo<PlanType>(() => {
     const planFromUrl = searchParams.get("plan");
-    return planFromUrl === "featured" ? "featured" : "basic";
+
+    if (planFromUrl === "priority") return "priority";
+    if (planFromUrl === "featured") return "featured";
+
+    return "basic";
   }, [searchParams]);
 
   useEffect(() => {

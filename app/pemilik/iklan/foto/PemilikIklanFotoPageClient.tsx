@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { usePemilikDraftListing } from "../layout";
 import ListingFoto from "@/components/listing/ListingFoto";
 
-type PlanType = "basic" | "featured";
+type PlanType = "basic" | "priority" | "featured";
 
 export default function PemilikIklanFotoPageClient() {
   const router = useRouter();
@@ -14,7 +14,11 @@ export default function PemilikIklanFotoPageClient() {
 
   const currentPlan = useMemo<PlanType>(() => {
     const planFromUrl = searchParams.get("plan");
-    return planFromUrl === "featured" ? "featured" : "basic";
+
+    if (planFromUrl === "priority") return "priority";
+    if (planFromUrl === "featured") return "featured";
+
+    return "basic";
   }, [searchParams]);
 
   useEffect(() => {

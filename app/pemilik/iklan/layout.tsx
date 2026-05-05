@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useMemo, useState } from "react";
 
-export type PemilikPlanType = "basic" | "featured";
+export type PemilikPlanType = "basic" | "priority" | "featured";
 
 export type PemilikListingDraft = {
   listingType?: "dijual" | "disewa" | "lelang" | "";
