@@ -27,6 +27,8 @@ import {
 
 type ListingStatus = "AKTIF" | "AKAN_KADALUWARSA" | "KADALUWARSA";
 type TransactionStatus = "available" | "sold" | "rented";
+type OwnerPlanId = "basic" | "priority" | "featured";
+
 type EffectiveStatus =
   | ListingStatus
   | "JEDA"
@@ -128,6 +130,39 @@ function mapTransactionStatus(
   if (value === "sold") return "sold";
   if (value === "rented") return "rented";
   return "available";
+}
+
+function normalizeOwnerPlanId(planId?: string | null): OwnerPlanId {
+  const value = String(planId || "").trim().toLowerCase();
+
+  if (value === "featured") return "featured";
+  if (value === "priority") return "priority";
+
+  return "basic";
+}
+
+function getOwnerPlanLabel(planId: OwnerPlanId, lang: string) {
+  if (planId === "featured") {
+    return lang === "id" ? "Paket Featured" : "Featured Package";
+  }
+
+  if (planId === "priority") {
+    return lang === "id" ? "Paket Priority" : "Priority Package";
+  }
+
+  return lang === "id" ? "Paket Basic" : "Basic Package";
+}
+
+function getOwnerPlanBadgeClass(planId: OwnerPlanId) {
+  if (planId === "featured") {
+    return "border-purple-200 bg-purple-50 text-purple-700";
+  }
+
+  if (planId === "priority") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
 }
 
 function formatCurrency(value: number, locale: string) {
@@ -480,7 +515,9 @@ export default function OwnerDashboardPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
-  const [navigatingAddonId, setNavigatingAddonId] = useState<string | null>(null);
+  const [navigatingAddonId, setNavigatingAddonId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -806,6 +843,7 @@ export default function OwnerDashboardPage() {
                 const isBoosting = navigatingAddonId === `${item.id}-boost`;
                 const isSpotlighting =
                   navigatingAddonId === `${item.id}-spotlight`;
+                const ownerPlanId = normalizeOwnerPlanId(item.planId);
 
                 const { featuredActive, boostActive, spotlightActive } =
                   getPromotionFlags(item);
@@ -819,8 +857,7 @@ export default function OwnerDashboardPage() {
                   !item.isPaused;
 
                 const canPause =
-                  !isClosed &&
-                  effectiveStatus !== "PENDING_PAYMENT";
+                  !isClosed && effectiveStatus !== "PENDING_PAYMENT";
 
                 const canRenew =
                   hasKode &&
@@ -832,7 +869,7 @@ export default function OwnerDashboardPage() {
                 return (
                   <div
                     key={item.id}
-                    className="w-full lg:max-w-[520px] rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+                    className="w-full rounded-2xl border border-gray-100 bg-white p-4 shadow-sm lg:max-w-[520px]"
                   >
                     <div className="flex flex-col gap-4">
                       <div className="h-100 w-full overflow-hidden rounded-2xl bg-gray-100 lg:h-64">
@@ -850,6 +887,14 @@ export default function OwnerDashboardPage() {
                           >
                             <BadgeIcon className="h-3 w-3" />
                             {ui.label}
+                          </span>
+
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getOwnerPlanBadgeClass(
+                              ownerPlanId
+                            )}`}
+                          >
+                            {getOwnerPlanLabel(ownerPlanId, lang)}
                           </span>
 
                           {item.verifiedOk ? (
@@ -901,7 +946,10 @@ export default function OwnerDashboardPage() {
                           {featuredActive ? (
                             <span>
                               {t.featuredUntil}:{" "}
-                              {formatDisplayDate(item.featuredExpiresAt, locale)}
+                              {formatDisplayDate(
+                                item.featuredExpiresAt,
+                                locale
+                              )}
                             </span>
                           ) : null}
 
@@ -915,21 +963,30 @@ export default function OwnerDashboardPage() {
                           {spotlightActive && !isClosed ? (
                             <span>
                               {t.spotlightUntil}:{" "}
-                              {formatDisplayDate(item.spotlightExpiresAt, locale)}
+                              {formatDisplayDate(
+                                item.spotlightExpiresAt,
+                                locale
+                              )}
                             </span>
                           ) : null}
 
                           {item.transactionStatus === "sold" ? (
                             <span>
                               {t.soldAt}:{" "}
-                              {formatDisplayDate(item.transactionClosedAt, locale)}
+                              {formatDisplayDate(
+                                item.transactionClosedAt,
+                                locale
+                              )}
                             </span>
                           ) : null}
 
                           {item.transactionStatus === "rented" ? (
                             <span>
                               {t.rentedAt}:{" "}
-                              {formatDisplayDate(item.transactionClosedAt, locale)}
+                              {formatDisplayDate(
+                                item.transactionClosedAt,
+                                locale
+                              )}
                             </span>
                           ) : null}
                         </div>
@@ -940,7 +997,9 @@ export default function OwnerDashboardPage() {
                           onClick={() => {
                             if (!canEdit) return;
                             router.push(
-                              `/pemilik/iklan/edit/${encodeURIComponent(item.kode)}`
+                              `/pemilik/iklan/edit/${encodeURIComponent(
+                                item.kode
+                              )}`
                             );
                           }}
                           disabled={!canEdit}
@@ -1023,7 +1082,9 @@ export default function OwnerDashboardPage() {
                               router.push(
                                 `/pemilik/iklan/pembayaran?kode=${encodeURIComponent(
                                   item.kode
-                                )}&action=renew`
+                                )}&action=renew&plan=${encodeURIComponent(
+                                  ownerPlanId
+                                )}`
                               )
                             }
                             className="shrink-0 rounded-xl bg-[#1C1C1E] px-3 py-2 text-xs font-medium text-white hover:opacity-90"
