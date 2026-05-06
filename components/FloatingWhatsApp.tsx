@@ -39,6 +39,7 @@ type SupportMessage = {
 };
 
 type AuthPromptMode = "handoff" | null;
+type AiFeedbackChoice = "yes" | "no";
 
 const GUEST_SESSION_KEY = "scorpio_assist_guest_session_id";
 const GUEST_MESSAGES_KEY = "scorpio_assist_guest_messages";
@@ -63,6 +64,9 @@ export default function FloatingWhatsApp() {
   const [handoffLoading, setHandoffLoading] = useState(false);
   const [error, setError] = useState("");
   const [authPrompt, setAuthPrompt] = useState<AuthPromptMode>(null);
+  const [aiFeedbackMap, setAiFeedbackMap] = useState<
+    Record<string, AiFeedbackChoice>
+  >({});
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,6 +91,16 @@ export default function FloatingWhatsApp() {
           "How do Tetamo agent packages work?",
         ];
   }, [isID]);
+
+  const latestAiMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.sender_type === "ai") {
+        return messages[i].id;
+      }
+    }
+
+    return "";
+  }, [messages]);
 
   useEffect(() => {
     let ignore = false;
@@ -183,7 +197,7 @@ export default function FloatingWhatsApp() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, waitingForAgent, authPrompt]);
+  }, [messages, waitingForAgent, authPrompt, aiFeedbackMap]);
 
   function persistGuestState(
     nextGuestSessionId: string,
@@ -373,12 +387,14 @@ export default function FloatingWhatsApp() {
     setSending(true);
 
     try {
-      const { error: insertError } = await supabase.from("support_messages").insert({
-        conversation_id: activeConversation.id,
-        sender_type: "user",
-        message_text: trimmed,
-        ai_status: "pending",
-      });
+      const { error: insertError } = await supabase
+        .from("support_messages")
+        .insert({
+          conversation_id: activeConversation.id,
+          sender_type: "user",
+          message_text: trimmed,
+          ai_status: "pending",
+        });
 
       if (insertError) throw insertError;
 
@@ -442,6 +458,13 @@ export default function FloatingWhatsApp() {
     } finally {
       setHandoffLoading(false);
     }
+  }
+
+  function handleAiFeedback(messageId: string, choice: AiFeedbackChoice) {
+    setAiFeedbackMap((prev) => ({
+      ...prev,
+      [messageId]: choice,
+    }));
   }
 
   function formatMessageTime(value: string) {
@@ -534,6 +557,8 @@ export default function FloatingWhatsApp() {
               messages.map((message) => {
                 const isUser = message.sender_type === "user";
                 const isAi = message.sender_type === "ai";
+                const isLatestAiMessage = isAi && message.id === latestAiMessageId;
+                const feedbackChoice = aiFeedbackMap[message.id];
 
                 return (
                   <div
@@ -590,6 +615,78 @@ export default function FloatingWhatsApp() {
                               ? "Chat dengan Tetamo Agent"
                               : "Chat with Tetamo Agent")}
                         </button>
+                      ) : null}
+
+                      {isLatestAiMessage && !waitingForAgent ? (
+                        <div className="mt-2 rounded-[20px] border border-[#ECECEF] bg-white/95 px-3 py-3 shadow-sm">
+                          <p className="text-xs font-semibold text-[#1C1C1E]">
+                            {isID
+                              ? "Apakah jawaban ini membantu?"
+                              : "Did this solve your problem?"}
+                          </p>
+
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAiFeedback(message.id, "yes")}
+                              className={[
+                                "rounded-2xl px-3 py-2 text-xs font-semibold transition",
+                                feedbackChoice === "yes"
+                                  ? "bg-[#111827] text-white"
+                                  : "border border-[#E5E7EB] bg-white text-[#1C1C1E] hover:bg-[#FAFAFA]",
+                              ].join(" ")}
+                            >
+                              {isID ? "Ya, membantu" : "Yes, it helped"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAiFeedback(message.id, "no")}
+                              className={[
+                                "rounded-2xl px-3 py-2 text-xs font-semibold transition",
+                                feedbackChoice === "no"
+                                  ? "border border-amber-200 bg-amber-50 text-amber-800"
+                                  : "border border-[#E5E7EB] bg-white text-[#1C1C1E] hover:bg-[#FAFAFA]",
+                              ].join(" ")}
+                            >
+                              {isID ? "Belum, butuh bantuan" : "No, I need more help"}
+                            </button>
+                          </div>
+
+                          {feedbackChoice === "yes" ? (
+                            <p className="mt-2 text-xs leading-5 text-[#6E6E73]">
+                              {isID
+                                ? "Senang bisa membantu. Anda bisa tanya lagi kapan saja tentang listing, paket, signup, pembayaran, atau marketplace Tetamo."
+                                : "Glad I could help. You can ask me anytime about Tetamo listing, packages, signup, payment, or marketplace."}
+                            </p>
+                          ) : null}
+
+                          {feedbackChoice === "no" ? (
+                            <div className="mt-2">
+                              <p className="text-xs leading-5 text-[#6E6E73]">
+                                {isID
+                                  ? "Maaf kalau jawabannya belum jelas. Silakan tulis bagian yang masih membingungkan, atau lanjut chat dengan Tetamo Agent."
+                                  : "Sorry if the answer was not clear yet. Please tell me what part is still confusing, or continue with a Tetamo Agent."}
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleHandoff()}
+                                disabled={handoffLoading}
+                                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,#FFF9EC_0%,#FFFFFF_100%)] px-3 py-2.5 text-xs font-semibold text-[#1C1C1E] shadow-sm transition hover:opacity-95 disabled:opacity-60"
+                              >
+                                {handoffLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Headphones className="h-4 w-4 text-amber-600" />
+                                )}
+                                {isID
+                                  ? "Chat dengan Tetamo Agent"
+                                  : "Chat with Tetamo Agent"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                   </div>
