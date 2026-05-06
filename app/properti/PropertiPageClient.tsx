@@ -128,8 +128,6 @@ type PropertyRow = {
   contact_phone: string | null;
   contact_role: string | null;
   contact_agency: string | null;
-  created_by_user_id: string | null;
-
   property_images: PropertyImageRow[] | null;
 };
 
@@ -1240,7 +1238,6 @@ export default function PropertiPageClient({
           contact_phone,
           contact_role,
           contact_agency,
-          created_by_user_id,
           property_images (
             image_url,
             sort_order,
@@ -1251,7 +1248,7 @@ export default function PropertiPageClient({
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Failed to load marketplace properties:", error);
+        console.warn("Failed to load marketplace properties:", error);
         if (!ignore) {
           setAll([]);
           setLoading(false);
@@ -1274,8 +1271,7 @@ export default function PropertiPageClient({
           ? sortedImages.map((img) => img.image_url)
           : ["/placeholder-property.jpg"];
 
-        const receiverId =
-          row.contact_user_id || row.user_id || row.created_by_user_id || "";
+        const receiverId = row.contact_user_id || row.user_id || "";
 
         const postedByType = normalizePostedByType(
           row.contact_role,

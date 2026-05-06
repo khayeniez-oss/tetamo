@@ -77,8 +77,9 @@ function detectOS(userAgent: string) {
   if (ua.includes("windows")) return "Windows";
   if (ua.includes("mac os")) return "macOS";
   if (ua.includes("android")) return "Android";
-  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ios"))
+  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ios")) {
     return "iOS";
+  }
   if (ua.includes("linux")) return "Linux";
 
   return "Unknown";
@@ -171,6 +172,19 @@ function buildBrowserMetadata() {
   };
 }
 
+function logAnalyticsWarning(label: string, error: any) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const readable =
+    error?.message ||
+    error?.details ||
+    error?.hint ||
+    error?.code ||
+    JSON.stringify(error || {});
+
+  console.warn(label, readable);
+}
+
 export async function trackEvent({
   event_name,
   property_id = null,
@@ -203,9 +217,9 @@ export async function trackEvent({
     });
 
     if (error) {
-      console.error("trackEvent insert error:", error);
+      logAnalyticsWarning("trackEvent insert warning:", error);
     }
   } catch (error) {
-    console.error("trackEvent unexpected error:", error);
+    logAnalyticsWarning("trackEvent unexpected warning:", error);
   }
 }
