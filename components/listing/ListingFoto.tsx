@@ -52,6 +52,111 @@ const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
 
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  studio: "Studio",
+  rumah: "House",
+  apartemen: "Apartment",
+  gudang: "Warehouse",
+  guesthouse: "Guesthouse",
+  hotel: "Hotel",
+  kantor: "Office",
+  kos: "Boarding House",
+  resort: "Resort",
+  ruko: "Shophouse",
+  rukos: "Shop-Boarding House",
+  tanah: "Land",
+  pabrik: "Factory",
+  vila: "Villa",
+};
+
+const LISTING_TYPE_LABELS: Record<string, string> = {
+  dijual: "For Sale",
+  disewa: "For Rent",
+  lelang: "Auction",
+};
+
+const RENTAL_TYPE_LABELS: Record<string, string> = {
+  bulanan: "Monthly Rental",
+  tahunan: "Yearly Rental",
+  monthly: "Monthly Rental",
+  yearly: "Yearly Rental",
+};
+
+const FURNISHING_LABELS: Record<string, string> = {
+  unfurnished: "Unfurnished",
+  semi: "Semi Furnished",
+  full: "Fully Furnished",
+};
+
+const FACILITY_LABELS: Record<string, string> = {
+  fac_ac: "AC",
+  fac_wifi: "WiFi",
+  fac_cctv: "CCTV",
+  fac_security: "24-Hour Security",
+  fac_parking: "Parking",
+  fac_garden: "Garden",
+  fac_water_heater: "Water Heater",
+  fac_kitchen_set: "Kitchen Set",
+  fac_dining_area: "Dining Area",
+  fac_living_room: "Living Room",
+  fac_storage: "Storage Room",
+  fac_balcony: "Balcony",
+  fac_terrace: "Terrace",
+  fac_laundry_area: "Laundry Area",
+  fac_private_pool: "Private Pool",
+  fac_shared_pool: "Swimming Pool",
+  fac_carport: "Carport",
+  fac_garage: "Garage",
+  fac_maid_room: "Maid Room",
+  fac_smart_lock: "Smart Lock",
+  fac_smart_home: "Smart Home",
+  fac_rooftop: "Rooftop",
+  fac_gazebo: "Gazebo",
+  fac_lift: "Lift",
+  fac_gym: "Gym",
+  fac_lobby: "Lobby",
+  fac_reception: "Reception",
+  fac_access_card: "Access Card",
+  fac_basement_parking: "Basement Parking",
+  fac_function_room: "Function Room",
+  fac_playground: "Kids Playground",
+  fac_loading_dock: "Loading Dock",
+  fac_truck_access: "Truck Access",
+  fac_office_room: "Office Room",
+  fac_staff_room: "Staff Room",
+  fac_generator: "Generator",
+  fac_three_phase: "3-Phase Electricity",
+  fac_high_ceiling: "High Ceiling",
+  fac_meeting_room: "Meeting Room",
+  fac_restaurant: "Restaurant",
+  fac_spa: "Spa",
+  fac_housekeeping: "Housekeeping Room",
+};
+
+const NEARBY_LABELS: Record<string, string> = {
+  near_cafe: "Cafe",
+  near_restaurant: "Restaurant",
+  near_gym: "Gym",
+  near_coworking: "Co-working Space",
+  near_beach_club: "Beach Club",
+  near_beach: "Beach",
+  near_supermarket: "Supermarket",
+  near_traditional_market: "Traditional Market",
+  near_mall: "Mall",
+  near_school: "School",
+  near_international_school: "International School",
+  near_university: "University",
+  near_hospital: "Hospital",
+  near_clinic: "Clinic",
+  near_pharmacy: "Pharmacy",
+  near_airport: "Airport",
+  near_port: "Port",
+  near_toll: "Toll Access",
+  near_main_road: "Main Road",
+  near_office: "Office Area",
+  near_tourist_attraction: "Tourist Attraction",
+};
+
 function capitalizeFirstLetter(s: string) {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -125,6 +230,14 @@ function getSafeVideoExtension(file: File) {
   return "mp4";
 }
 
+function humanizeKey(key: string) {
+  return key
+    .replace(/^fac_/, "")
+    .replace(/^near_/, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function normalizeDraftValue(value: unknown): string {
   if (value === null || value === undefined) return "";
 
@@ -163,16 +276,75 @@ function getDraftText(draft: any, keys: string[]) {
   return "";
 }
 
+function getMappedDraftText(
+  draft: any,
+  keys: string[],
+  labelMap: Record<string, string>
+) {
+  const value = getDraftText(draft, keys);
+  if (!value) return "";
+
+  const normalized = value.trim().toLowerCase();
+  return labelMap[normalized] || labelMap[value] || value;
+}
+
+function getBooleanRecordText(
+  value: unknown,
+  labelMap: Record<string, string> = {}
+) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const entries = Object.entries(value as Record<string, unknown>);
+
+  const selected = entries
+    .map(([key, rawValue]) => {
+      if (rawValue === false || rawValue === null || rawValue === undefined) {
+        return "";
+      }
+
+      if (rawValue === true) {
+        return labelMap[key] || humanizeKey(key);
+      }
+
+      const normalizedValue = normalizeDraftValue(rawValue);
+      if (!normalizedValue) return "";
+
+      const label = labelMap[key] || humanizeKey(key);
+      return `${label}: ${normalizedValue}`;
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(selected)).join(", ");
+}
+
+function joinUniqueText(values: string[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length > 0)
+    )
+  ).join(", ");
+}
+
 function getDraftLocation(draft: any) {
-  const directLocation = getDraftText(draft, [
-    "location",
+  const address = getDraftText(draft, [
     "address",
     "alamat",
     "propertyLocation",
     "fullLocation",
+    "location",
   ]);
 
-  if (directLocation) return directLocation;
+  const housingName = getDraftText(draft, [
+    "customHousing",
+    "custom_housing",
+    "housingName",
+    "housing_name",
+    "cluster",
+    "buildingName",
+    "building_name",
+  ]);
 
   const area = getDraftText(draft, [
     "area",
@@ -185,17 +357,52 @@ function getDraftLocation(draft: any) {
   const city = getDraftText(draft, ["city", "kota", "regency", "kabupaten"]);
   const province = getDraftText(draft, ["province", "provinsi"]);
 
-  return [area, city, province].filter(Boolean).join(", ");
+  return joinUniqueText([address, housingName, area, city, province]);
+}
+
+function getDraftLocationNotes(draft: any) {
+  return joinUniqueText([
+    getDraftText(draft, ["note", "locationNote", "location_note"]),
+    getDraftText(draft, ["roadAccess", "road_access", "aksesJalan"]),
+    getDraftText(draft, ["dimensionText", "dimension_text"]),
+  ]);
 }
 
 function getDraftFeatures(draft: any) {
-  const values = [
-    getDraftText(draft, ["features", "facilities", "amenities"]),
+  const checklistFacilities = getBooleanRecordText(
+    draft?.fasilitas ?? draft?.facilities,
+    FACILITY_LABELS
+  );
+
+  const rawFacilities = joinUniqueText([
+    getDraftText(draft, ["features", "amenities"]),
     getDraftText(draft, ["otherFacilities", "additionalFacilities"]),
     getDraftText(draft, ["propertyFeatures", "highlights"]),
-  ].filter(Boolean);
+    getDraftText(draft, ["parking", "parkir"]),
+    getDraftText(draft, ["pool", "swimmingPool", "kolamRenang"]),
+    getDraftText(draft, ["wifi", "internet"]),
+    getDraftText(draft, ["kitchen", "dapur"]),
+  ]);
 
-  return Array.from(new Set(values)).join(", ");
+  return joinUniqueText([checklistFacilities, rawFacilities]);
+}
+
+function getDraftNearbyPlaces(draft: any) {
+  const checklistNearby = getBooleanRecordText(draft?.nearby, NEARBY_LABELS);
+
+  const rawNearby = joinUniqueText([
+    getDraftText(draft, [
+      "nearbyPlaces",
+      "nearbyLocation",
+      "surroundings",
+      "areaSekitar",
+      "hotspots",
+      "areaHighlights",
+    ]),
+    getDraftLocationNotes(draft),
+  ]);
+
+  return joinUniqueText([checklistNearby, rawNearby]);
 }
 
 function limitText(value: string, limit: number) {
@@ -275,7 +482,7 @@ export default function ListingFoto({
             "Boleh upload screenshot, foto HP, JPG, PNG, WEBP, HEIC, atau HEIF.",
           aiBoxTitle: "Buat judul & deskripsi dengan AI",
           aiBoxSubtitle:
-            "AI akan menggunakan detail properti yang sudah Anda isi sebelumnya.",
+            "AI akan menggunakan detail properti, lokasi, fasilitas, dan area sekitar yang sudah Anda isi.",
           aiButton: "✨ Generate dengan AI",
           aiGenerating: "Membuat...",
           aiUsedShort: "AI Sudah Digunakan",
@@ -340,7 +547,7 @@ export default function ListingFoto({
             "You can upload screenshots, phone photos, JPG, PNG, WEBP, HEIC, or HEIF.",
           aiBoxTitle: "Create title & description with AI",
           aiBoxSubtitle:
-            "AI will use the property details you filled earlier.",
+            "AI will use the property details, location, facilities, and nearby area you filled earlier.",
           aiButton: "✨ Generate with AI",
           aiGenerating: "Generating...",
           aiUsedShort: "AI Used",
@@ -464,150 +671,140 @@ export default function ListingFoto({
   }, [photos.length, title, titleId, description, descriptionId, t]);
 
   function buildAiPayload() {
-  const propertyType = getDraftText(draft, [
-    "propertyType",
-    "property_type",
-    "jenisProperti",
-    "type",
-    "category",
-    "kategori",
-  ]);
+    const propertyType = getMappedDraftText(
+      draft,
+      [
+        "propertyType",
+        "property_type",
+        "jenisProperti",
+        "type",
+        "category",
+        "kategori",
+      ],
+      PROPERTY_TYPE_LABELS
+    );
 
-  const location = getDraftLocation(draft);
+    const location = getDraftLocation(draft);
 
-  const price = getDraftText(draft, [
-    "price",
-    "harga",
-    "priceIdr",
-    "hargaIdr",
-    "salePrice",
-    "rentPrice",
-    "yearlyPrice",
-    "monthlyPrice",
-    "auctionPrice",
-  ]);
+    const price = getDraftText(draft, [
+      "price",
+      "harga",
+      "priceIdr",
+      "hargaIdr",
+      "salePrice",
+      "rentPrice",
+      "yearlyPrice",
+      "monthlyPrice",
+      "auctionPrice",
+    ]);
 
-  const bedrooms = getDraftText(draft, [
-    "bedrooms",
-    "bedroom",
-    "kamarTidur",
-    "kamar_tidur",
-    "bedroomCount",
-    "bedroom_count",
-    "kt",
-    "KT",
-  ]);
+    const bedrooms = getDraftText(draft, [
+      "bedrooms",
+      "bedroom",
+      "kamarTidur",
+      "kamar_tidur",
+      "bedroomCount",
+      "bedroom_count",
+      "bed",
+      "kt",
+      "KT",
+    ]);
 
-  const bathrooms = getDraftText(draft, [
-    "bathrooms",
-    "bathroom",
-    "kamarMandi",
-    "kamar_mandi",
-    "bathroomCount",
-    "bathroom_count",
-    "km",
-    "KM",
-  ]);
+    const bathrooms = getDraftText(draft, [
+      "bathrooms",
+      "bathroom",
+      "kamarMandi",
+      "kamar_mandi",
+      "bathroomCount",
+      "bathroom_count",
+      "bath",
+      "km",
+      "KM",
+    ]);
 
-  const landSize = getDraftText(draft, [
-    "landSize",
-    "land_size",
-    "luasTanah",
-    "luas_tanah",
-    "landArea",
-    "lt",
-    "LT",
-  ]);
+    const landSize = joinUniqueText([
+      getDraftText(draft, [
+        "landSize",
+        "land_size",
+        "luasTanah",
+        "luas_tanah",
+        "landArea",
+        "lt",
+        "LT",
+      ]),
+      getDraftText(draft, ["landUnit", "land_unit"]),
+    ]);
 
-  const buildingSize = getDraftText(draft, [
-    "buildingSize",
-    "building_size",
-    "luasBangunan",
-    "luas_bangunan",
-    "buildingArea",
-    "lb",
-    "LB",
-  ]);
+    const buildingSize = getDraftText(draft, [
+      "buildingSize",
+      "building_size",
+      "luasBangunan",
+      "luas_bangunan",
+      "buildingArea",
+      "lb",
+      "LB",
+    ]);
 
-  const furnishing = getDraftText(draft, [
-    "furnishing",
-    "furnished",
-    "furnish",
-    "furniture",
-    "perabot",
-    "furnitureStatus",
-  ]);
+    const furnishing = getMappedDraftText(
+      draft,
+      [
+        "furnishing",
+        "furnished",
+        "furnish",
+        "furniture",
+        "perabot",
+        "furnitureStatus",
+      ],
+      FURNISHING_LABELS
+    );
 
-  const features = [
-    getDraftFeatures(draft),
-    getDraftText(draft, ["facilities", "fasilitas"]),
-    getDraftText(draft, ["parking", "parkir"]),
-    getDraftText(draft, ["pool", "swimmingPool", "kolamRenang"]),
-    getDraftText(draft, ["wifi", "internet"]),
-    getDraftText(draft, ["kitchen", "dapur"]),
-  ]
-    .filter(Boolean)
-    .join(", ");
+    const features = getDraftFeatures(draft);
 
-  const rawListingType = getDraftText(draft, [
-    "purpose",
-    "listingType",
-    "listing_type",
-    "transactionType",
-    "listingPurpose",
-    "status",
-  ]);
+    const purpose = getMappedDraftText(
+      draft,
+      [
+        "purpose",
+        "listingType",
+        "listing_type",
+        "transactionType",
+        "listingPurpose",
+        "status",
+      ],
+      LISTING_TYPE_LABELS
+    );
 
-  const purpose =
-    rawListingType === "disewa"
-      ? "Rent"
-      : rawListingType === "dijual"
-        ? "Sale"
-        : rawListingType === "lelang"
-          ? "Auction"
-          : rawListingType;
+    const rentalType = getMappedDraftText(
+      draft,
+      ["rentalType", "rental_type", "rentType", "sewaType"],
+      RENTAL_TYPE_LABELS
+    );
 
-  const rentalType = getDraftText(draft, [
-    "rentalType",
-    "rental_type",
-    "rentType",
-    "sewaType",
-  ]);
+    const ownershipTitle = joinUniqueText([
+      getDraftText(draft, ["ownershipTitle", "ownership_title"]),
+      getDraftText(draft, ["sertifikat", "certificate", "titleType"]),
+      getDraftText(draft, ["jenisKepemilikan", "ownership_type"]),
+      getDraftText(draft, ["jenisTanah", "land_type"]),
+      getDraftText(draft, ["jenisZoning", "zoning_type"]),
+    ]);
 
-  const ownershipTitle = [
-    getDraftText(draft, ["ownershipTitle", "ownership_title"]),
-    getDraftText(draft, ["sertifikat", "certificate", "titleType"]),
-    getDraftText(draft, ["jenisKepemilikan"]),
-    getDraftText(draft, ["jenisTanah"]),
-    getDraftText(draft, ["jenisZoning"]),
-  ]
-    .filter(Boolean)
-    .join(", ");
+    const nearbyPlaces = getDraftNearbyPlaces(draft);
 
-  const nearbyPlaces = getDraftText(draft, [
-    "nearbyPlaces",
-    "nearby",
-    "nearbyLocation",
-    "surroundings",
-    "areaSekitar",
-  ]);
-
-  return {
-    propertyType,
-    location,
-    price,
-    bedrooms,
-    bathrooms,
-    landSize,
-    buildingSize,
-    furnishing,
-    features,
-    purpose,
-    rentalType,
-    ownershipTitle,
-    nearbyPlaces,
-  };
-}
+    return {
+      propertyType,
+      location,
+      price,
+      bedrooms,
+      bathrooms,
+      landSize,
+      buildingSize,
+      furnishing,
+      features,
+      purpose,
+      rentalType,
+      ownershipTitle,
+      nearbyPlaces,
+    };
+  }
 
   async function generateWithAi() {
     if (generatingAi) return;
@@ -627,7 +824,8 @@ export default function ListingFoto({
       aiPayload.bedrooms ||
       aiPayload.bathrooms ||
       aiPayload.landSize ||
-      aiPayload.buildingSize;
+      aiPayload.buildingSize ||
+      aiPayload.nearbyPlaces;
 
     if (!hasBasicDetails) {
       alert(t.aiNeedDetails);
@@ -649,23 +847,23 @@ export default function ListingFoto({
       setAiError("");
 
       const {
-  data: { session },
-} = await supabase.auth.getSession();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-if (!session?.access_token) {
-  alert(lang === "id" ? "Silakan login kembali." : "Please log in again.");
-  setGeneratingAi(false);
-  return;
-}
+      if (!session?.access_token) {
+        alert(lang === "id" ? "Silakan login kembali." : "Please log in again.");
+        setGeneratingAi(false);
+        return;
+      }
 
-const response = await fetch("/api/ai/property-description", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${session.access_token}`,
-  },
-  body: JSON.stringify(aiPayload),
-});
+      const response = await fetch("/api/ai/property-description", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(aiPayload),
+      });
 
       const result = (await response.json()) as AiPropertyResponse;
 
@@ -1162,16 +1360,16 @@ const response = await fetch("/api/ai/property-description", {
                     {aiGeneratedOnce
                       ? t.aiUsedShort
                       : generatingAi
-                        ? t.aiGenerating
-                        : t.aiButton}
+                      ? t.aiGenerating
+                      : t.aiButton}
                   </button>
                 </div>
 
                 {aiError ? (
-  <p className="mt-3 text-xs leading-5 text-red-600">
-    {aiError}
-  </p>
-) : null}
+                  <p className="mt-3 text-xs leading-5 text-red-600">
+                    {aiError}
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex items-center justify-between gap-3 text-sm">
