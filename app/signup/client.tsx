@@ -109,6 +109,58 @@ function FormInput({
   );
 }
 
+function PolicyAgreement({
+  isID,
+  checked,
+  onChange,
+}: {
+  isID: boolean;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#E7E7EA] bg-[#FAFAFB] px-4 py-3 text-left">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0 rounded border-[#D8D8DD] accent-[#111827]"
+      />
+
+      <span className="text-xs leading-6 text-[#5F6368] sm:text-sm">
+        {isID ? "Saya menyetujui " : "I agree to Tetamo’s "}
+        <Link
+          href="/terms"
+          target="_blank"
+          className="font-semibold text-[#111827] underline underline-offset-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isID ? "Syarat & Ketentuan" : "Terms & Conditions"}
+        </Link>
+        {", "}
+        <Link
+          href="/privacy-policy"
+          target="_blank"
+          className="font-semibold text-[#111827] underline underline-offset-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isID ? "Kebijakan Privasi" : "Privacy Policy"}
+        </Link>
+        {isID ? ", dan " : ", and "}
+        <Link
+          href="/subscription-policy"
+          target="_blank"
+          className="font-semibold text-[#111827] underline underline-offset-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isID ? "Kebijakan Berlangganan Tetamo" : "Subscription Policy"}
+        </Link>
+        {isID ? "." : "."}
+      </span>
+    </label>
+  );
+}
+
 function RoleCard({
   active,
   disabled,
@@ -229,6 +281,7 @@ export default function SignupPageClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
+  const [agreedToPolicies, setAgreedToPolicies] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<OAuthProvider | null>(
     null
@@ -291,8 +344,21 @@ export default function SignupPageClient() {
     return `${window.location.origin}/auth/callback?${params.toString()}`;
   }
 
+  function alertPolicyAgreementRequired() {
+    alert(
+      isID
+        ? "Silakan setujui Syarat & Ketentuan, Kebijakan Privasi, dan Kebijakan Berlangganan Tetamo terlebih dahulu."
+        : "Please agree to Tetamo’s Terms & Conditions, Privacy Policy, and Subscription Policy first."
+    );
+  }
+
   async function handleOAuthSignup(provider: OAuthProvider) {
     if (!currentRole) return;
+
+    if (!agreedToPolicies) {
+      alertPolicyAgreementRequired();
+      return;
+    }
 
     if (isAdminSignup) {
       alert(
@@ -347,6 +413,11 @@ export default function SignupPageClient() {
           ? "Silakan pilih peran terlebih dahulu."
           : "Please choose a role first."
       );
+      return;
+    }
+
+    if (!agreedToPolicies) {
+      alertPolicyAgreementRequired();
       return;
     }
 
@@ -410,6 +481,8 @@ export default function SignupPageClient() {
             plan: planId,
             from,
             next,
+            agreed_to_terms: true,
+            agreed_to_policies_at: new Date().toISOString(),
           },
         },
       });
@@ -488,6 +561,7 @@ export default function SignupPageClient() {
   }
 
   const isBusy = loading || socialLoading !== null;
+  const signupDisabled = isBusy || !agreedToPolicies;
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -625,7 +699,10 @@ export default function SignupPageClient() {
                     {currentRole !== "admin" ? (
                       <button
                         type="button"
-                        onClick={() => setSelectedRole(null)}
+                        onClick={() => {
+                          setSelectedRole(null);
+                          setAgreedToPolicies(false);
+                        }}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-[#D8D8DD] bg-white px-3 py-2 text-xs font-medium text-[#111827] transition hover:bg-[#F8F8FA]"
                       >
                         <ArrowLeft className="h-3.5 w-3.5" />
@@ -635,13 +712,21 @@ export default function SignupPageClient() {
                   </div>
                 </div>
 
+                <div className="mb-4">
+                  <PolicyAgreement
+                    isID={isID}
+                    checked={agreedToPolicies}
+                    onChange={setAgreedToPolicies}
+                  />
+                </div>
+
                 {!isAdminSignup ? (
                   <>
                     <div className="space-y-3">
                       <button
                         type="button"
                         onClick={() => void handleOAuthSignup("google")}
-                        disabled={isBusy}
+                        disabled={signupDisabled}
                         className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
                       >
                         <GoogleDarkIcon />
@@ -660,7 +745,7 @@ export default function SignupPageClient() {
                         <button
                           type="button"
                           onClick={() => void handleOAuthSignup("facebook")}
-                          disabled={isBusy}
+                          disabled={signupDisabled}
                           className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
                         >
                           <FacebookDarkIcon />
@@ -679,7 +764,7 @@ export default function SignupPageClient() {
                       <button
                         type="button"
                         onClick={() => void handleOAuthSignup("apple")}
-                        disabled={isBusy}
+                        disabled={signupDisabled}
                         className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
                       >
                         <AppleDarkIcon />
@@ -759,7 +844,7 @@ export default function SignupPageClient() {
 
                   <button
                     type="submit"
-                    disabled={isBusy}
+                    disabled={signupDisabled}
                     className="w-full rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
                   >
                     {loading && !socialLoading
