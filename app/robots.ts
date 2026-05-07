@@ -10,14 +10,34 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "*",
         allow: "/",
         disallow: [
+          // Admin dashboard
           "/admindashboard",
+          "/admindashboard/",
+
+          // Agent dashboard
           "/agentdashboard",
+          "/agentdashboard/",
+
+          // Owner dashboard
           "/pemilikdashboard",
-          "/dashboard",
+          "/pemilikdashboard/",
+
+          // Owner listing creation/private flow
+          "/pemilik/iklan",
+          "/pemilik/iklan/",
+
+          // Auth pages
           "/login",
           "/signup",
+          "/forgot-password",
+          "/update-password",
+          "/auth/callback",
+
+          // Payment/private pages
           "/api",
+          "/api/",
           "/payment",
+          "/payment/",
         ],
       },
     ],
