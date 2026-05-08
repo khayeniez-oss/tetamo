@@ -90,6 +90,31 @@ function toPositiveNumber(value: unknown, fallback = 0) {
   return Number.isFinite(num) && num > 0 ? num : fallback;
 }
 
+function nullableText(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : null;
+}
+
+function nullableNumber(value: unknown) {
+  if (value === null || value === undefined) return null;
+
+  const raw = String(value).replace(/[^\d.]/g, "");
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function nullableInteger(value: unknown) {
+  if (value === null || value === undefined) return null;
+
+  const raw = String(value).replace(/[^\d]/g, "");
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function parseDraftSnapshot(value?: string | null) {
   if (!value) return null;
 
@@ -532,57 +557,78 @@ function buildOwnerPropertyPayloadFromDraft(
         ""
     ).trim() || null;
 
+  const landSize = nullableNumber(draft?.lt);
+
   return {
     user_id: payment.user_id,
-    title: draft?.title ?? "",
-    listing_type: draft?.listingType ?? null,
-    property_type: draft?.propertyType ?? null,
-    price: draft?.price ? Number(draft.price) : null,
-    description: draft?.description ?? "",
+    title: nullableText(draft?.title) ?? "",
+    title_id: nullableText(draft?.title_id),
+    listing_type: nullableText(draft?.listingType),
+    property_type: nullableText(draft?.propertyType),
+    price: nullableNumber(draft?.price),
+    description: nullableText(draft?.description) ?? "",
+    description_id: nullableText(draft?.description_id),
 
     status: "pending",
     verification_status: verification.status ?? "pending_verification",
 
     country: "Indonesia",
-    province: draft?.province ?? null,
-    city: draft?.city ?? null,
-    area: draft?.city ?? null,
-    address: draft?.address ?? null,
-    housing_name: draft?.housingName ?? null,
-    custom_housing: draft?.customHousing ?? null,
-    location_note: draft?.note ?? null,
+    province: nullableText(draft?.province),
+    city: nullableText(draft?.city),
+    area:
+      nullableText(draft?.customHousing) ||
+      nullableText(draft?.housingName) ||
+      nullableText(draft?.city),
+    address: nullableText(draft?.address),
+    housing_name: nullableText(draft?.housingName),
+    custom_housing: nullableText(draft?.customHousing),
+    location_note: nullableText(draft?.note),
 
-    bedrooms: draft?.bed ? Number(draft.bed) : null,
-    bathrooms: draft?.bath ? Number(draft.bath) : null,
-    maid_room: draft?.maid ? Number(draft.maid) : null,
-    garage: draft?.garage ? Number(draft.garage) : null,
-    floor: draft?.floor ? Number(draft.floor) : null,
-    building_size: draft?.lb ? Number(draft.lb) : null,
-    land_size: draft?.lt ? Number(draft.lt) : null,
+    bedrooms: nullableInteger(draft?.bed),
+    bathrooms: nullableInteger(draft?.bath),
+    maid_room: nullableInteger(draft?.maid),
+    garage: nullableInteger(draft?.garage),
+    floor: nullableNumber(draft?.floor),
+    building_size: nullableNumber(draft?.lb),
+    land_size: landSize,
 
-    furnishing: draft?.furnishing ?? null,
-    electricity: draft?.listrik ?? null,
-    water_type: draft?.jenisAir ?? null,
+    furnishing: nullableText(draft?.furnishing),
+    electricity: nullableText(draft?.listrik),
+    water_type: nullableText(draft?.jenisAir),
 
-    certificate: draft?.sertifikat ?? null,
-    ownership_type: draft?.jenisKepemilikan ?? null,
-    land_type: draft?.jenisTanah ?? null,
-    zoning_type: draft?.jenisZoning ?? null,
+    certificate: nullableText(draft?.sertifikat),
+    ownership_type: nullableText(draft?.jenisKepemilikan),
+    land_type: nullableText(draft?.jenisTanah),
+    zoning_type: nullableText(draft?.jenisZoning),
 
     kode: finalKode,
     posted_date:
       draft?.postedDate || new Date().toISOString().slice(0, 10),
     plan_id:
       getString(metadata, "selectedPlan") || payment.product_id || null,
-    source: draft?.source ?? "owner",
-    rental_type: draft?.rentalType ?? null,
+    source: nullableText(draft?.source) ?? "owner",
+    rental_type: nullableText(draft?.rentalType),
+    market_type: nullableText(draft?.marketType),
+    sale_type: nullableText(draft?.saleType),
+    lease_years: nullableInteger(draft?.leaseYears),
+    lease_until_year: nullableInteger(draft?.leaseUntilYear),
+    lease_extendable: nullableText(draft?.leaseExtendable),
+
+    land_unit: nullableText(draft?.landUnit) || (landSize ? "m2" : null),
+    unit_floor: nullableText(draft?.unitFloor),
+    tower_block: nullableText(draft?.towerBlock),
+    ceiling_height: nullableNumber(draft?.ceilingHeight),
+    road_access: nullableText(draft?.roadAccess),
+    frontage: nullableNumber(draft?.frontage),
+    depth: nullableNumber(draft?.depth),
+    dimension_text: nullableText(draft?.dimensionText),
 
     facilities: draft?.fasilitas ?? null,
     nearby: draft?.nearby ?? null,
 
     cover_index:
       typeof draft?.coverIndex === "number" ? draft.coverIndex : 0,
-    video_url: draft?.video ?? null,
+    video_url: nullableText(draft?.video),
 
     relationship: verification.relationship ?? null,
     other_relationship: verification.otherRelationship ?? null,
