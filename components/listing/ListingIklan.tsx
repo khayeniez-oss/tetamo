@@ -1,6 +1,6 @@
 "use client";
 
-import React, {
+import {
   useEffect,
   useMemo,
   useRef,
@@ -40,46 +40,46 @@ type Props = {
   housingSuggestions?: string[];
 };
 
-type GoogleAutocompletePrediction = {
-  description?: string;
+type GoogleSuggestionText = {
+  toString: () => string;
 };
 
-type GoogleAutocompleteRequest = {
+type GooglePlacePrediction = {
+  text?: string | GoogleSuggestionText;
+  mainText?: string | GoogleSuggestionText;
+  secondaryText?: string | GoogleSuggestionText;
+};
+
+type GoogleQueryPrediction = {
+  text?: string | GoogleSuggestionText;
+};
+
+type GoogleAutocompleteSuggestionItem = {
+  placePrediction?: GooglePlacePrediction;
+  queryPrediction?: GoogleQueryPrediction;
+};
+
+type GoogleAutocompleteRequestNew = {
   input: string;
-  componentRestrictions?: {
-    country: string | string[];
-  };
+  includedRegionCodes?: string[];
+  sessionToken?: unknown;
 };
 
-type GoogleAutocompletePromiseResponse = {
-  predictions?: GoogleAutocompletePrediction[];
-};
-
-type GoogleAutocompleteCallback = (
-  predictions: GoogleAutocompletePrediction[] | null,
-  status: string
-) => void;
-
-type GoogleAutocompleteService = {
-  getPlacePredictions: (
-    request: GoogleAutocompleteRequest,
-    callback: GoogleAutocompleteCallback
-  ) => void | Promise<GoogleAutocompletePromiseResponse>;
+type GoogleAutocompleteSuggestionApi = {
+  fetchAutocompleteSuggestions: (
+    request: GoogleAutocompleteRequestNew
+  ) => Promise<{
+    suggestions?: GoogleAutocompleteSuggestionItem[];
+  }>;
 };
 
 type GooglePlacesLibrary = {
-  AutocompleteService?: new () => GoogleAutocompleteService;
-};
-
-type GooglePlacesNamespace = {
-  AutocompleteService?: new () => GoogleAutocompleteService;
-  PlacesServiceStatus?: {
-    OK?: string;
-  };
+  AutocompleteSuggestion?: GoogleAutocompleteSuggestionApi;
+  AutocompleteSessionToken?: new () => unknown;
 };
 
 type GoogleMapsNamespace = {
-  places?: GooglePlacesNamespace;
+  places?: unknown;
   importLibrary?: (libraryName: "places") => Promise<GooglePlacesLibrary>;
 };
 
@@ -240,6 +240,21 @@ function normalizeSearch(value: string) {
   return value.trim().toLowerCase();
 }
 
+function toSuggestionText(value: unknown) {
+  if (typeof value === "string") return value;
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toString" in value &&
+    typeof (value as GoogleSuggestionText).toString === "function"
+  ) {
+    return (value as GoogleSuggestionText).toString();
+  }
+
+  return "";
+}
+
 function buildAddressSuggestionVariants(params: {
   query: string;
   city: string;
@@ -315,7 +330,7 @@ function loadGoogleMapsPlaces() {
     return Promise.reject(new Error("Window is not available."));
   }
 
-  if (window.google?.maps?.places) {
+  if (window.google?.maps?.importLibrary) {
     return Promise.resolve();
   }
 
@@ -360,70 +375,54 @@ function loadGoogleMapsPlaces() {
   return window.__tetamoGoogleMapsPlacesPromise;
 }
 
-async function getGoogleAutocompleteService() {
-  await loadGoogleMapsPlaces();
-
-  if (window.google?.maps?.importLibrary) {
-    const placesLibrary = await window.google.maps.importLibrary("places");
-    const AutocompleteService = placesLibrary.AutocompleteService;
-
-    if (AutocompleteService) {
-      return new AutocompleteService();
-    }
-  }
-
-  const fallbackAutocompleteService =
-    window.google?.maps?.places?.AutocompleteService;
-
-  if (fallbackAutocompleteService) {
-    return new fallbackAutocompleteService();
-  }
-
-  throw new Error("Google Places AutocompleteService is not available.");
-}
-
-function getGooglePlacePredictions(
-  service: GoogleAutocompleteService,
-  request: GoogleAutocompleteRequest
+async function getGooglePlacePredictionsNew(
+  request: Omit<GoogleAutocompleteRequestNew, "sessionToken">
 ): Promise<string[]> {
-  return new Promise((resolve) => {
-    const okStatus = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? "OK";
+  try {
+    await loadGoogleMapsPlaces();
 
-    const settle = (
-      predictions: GoogleAutocompletePrediction[] | null | undefined,
-      status?: string
-    ) => {
-      if (status && status !== okStatus) {
-        resolve([]);
-        return;
-      }
+    const placesLibrary = await window.google?.maps?.importLibrary?.("places");
+    const AutocompleteSuggestion = placesLibrary?.AutocompleteSuggestion;
+    const AutocompleteSessionToken = placesLibrary?.AutocompleteSessionToken;
 
-      resolve(
-        (predictions ?? [])
-          .map((prediction) => prediction.description ?? "")
-          .filter(Boolean)
-      );
-    };
+    if (!AutocompleteSuggestion) return [];
 
-    try {
-      const maybePromise = service.getPlacePredictions(
-        request,
-        (predictions, status) => {
-          settle(predictions, status);
-        }
-      );
+    const sessionToken = AutocompleteSessionToken
+      ? new AutocompleteSessionToken()
+      : undefined;
 
-      if (maybePromise && typeof maybePromise.then === "function") {
-        maybePromise
-          .then((response) => {
-            settle(response.predictions ?? [], okStatus);
-          })
-          .catch(() => resolve([]));
-      }
-    } catch {
-      resolve([]);
-    }
-  });
+    const response =
+      await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        ...request,
+        sessionToken,
+      });
+
+    return uniqueStringsInOrder(
+      (response.suggestions ?? [])
+        .map((suggestion) => {
+          const placeText = toSuggestionText(
+            suggestion.placePrediction?.text
+          );
+
+          if (placeText) return placeText;
+
+          const mainText = toSuggestionText(
+            suggestion.placePrediction?.mainText
+          );
+          const secondaryText = toSuggestionText(
+            suggestion.placePrediction?.secondaryText
+          );
+
+          if (mainText && secondaryText) return `${mainText}, ${secondaryText}`;
+          if (mainText) return mainText;
+
+          return toSuggestionText(suggestion.queryPrediction?.text);
+        })
+        .filter(Boolean)
+    );
+  } catch {
+    return [];
+  }
 }
 
 function getPlanBadgeClass(plan?: string) {
@@ -563,25 +562,17 @@ export default function ListingIklan({
     }
 
     const timeout = window.setTimeout(async () => {
-      try {
-        const service = await getGoogleAutocompleteService();
+      const locationText = uniqueStringsInOrder([city, province]).join(", ");
+      const input = locationText ? `${query}, ${locationText}` : query;
 
-        const locationText = uniqueStringsInOrder([city, province]).join(", ");
-        const input = locationText ? `${query}, ${locationText}` : query;
+      const predictions = await getGooglePlacePredictionsNew({
+        input,
+        includedRegionCodes: ["id"],
+      });
 
-        const predictions = await getGooglePlacePredictions(service, {
-          input,
-          componentRestrictions: { country: "id" },
-        });
+      if (requestId !== addressRequestIdRef.current) return;
 
-        if (requestId !== addressRequestIdRef.current) return;
-
-        setGoogleAddressSuggestions(predictions);
-      } catch {
-        if (requestId !== addressRequestIdRef.current) return;
-
-        setGoogleAddressSuggestions([]);
-      }
+      setGoogleAddressSuggestions(predictions);
     }, 350);
 
     return () => {
