@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { geolocation } from "@vercel/functions";
 import { supabase } from "@/lib/supabase";
 
 type AnalyticsEventName =
@@ -22,37 +23,69 @@ type TrackEventBody = {
   metadata?: Record<string, any>;
 };
 
-function cleanHeader(value: string | null) {
+function cleanText(value: unknown) {
   const text = String(value || "").trim();
+
   if (!text || text.toLowerCase() === "unknown") return "";
-  return decodeURIComponent(text);
+
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+function cleanNumber(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readHeader(request: NextRequest, key: string) {
+  return cleanText(request.headers.get(key));
 }
 
 function getGeoMetadata(request: NextRequest) {
-  const countryCode = cleanHeader(request.headers.get("x-vercel-ip-country"));
-  const countryRegion = cleanHeader(
-    request.headers.get("x-vercel-ip-country-region")
-  );
-  const city = cleanHeader(request.headers.get("x-vercel-ip-city"));
-  const latitude = cleanHeader(request.headers.get("x-vercel-ip-latitude"));
-  const longitude = cleanHeader(request.headers.get("x-vercel-ip-longitude"));
-  const timezone = cleanHeader(request.headers.get("x-vercel-ip-timezone"));
+  const geo = geolocation(request);
+
+  const countryCode =
+    cleanText(geo.country) || readHeader(request, "x-vercel-ip-country");
+
+  const region =
+    cleanText((geo as any).countryRegion) ||
+    cleanText((geo as any).region) ||
+    readHeader(request, "x-vercel-ip-country-region");
+
+  const city = cleanText(geo.city) || readHeader(request, "x-vercel-ip-city");
+
+  const latitude =
+    cleanNumber((geo as any).latitude) ||
+    cleanNumber(request.headers.get("x-vercel-ip-latitude"));
+
+  const longitude =
+    cleanNumber((geo as any).longitude) ||
+    cleanNumber(request.headers.get("x-vercel-ip-longitude"));
+
+  const timezone =
+    cleanText((geo as any).timezone) ||
+    readHeader(request, "x-vercel-ip-timezone");
 
   return {
     geo_country_code: countryCode || null,
-    geo_region: countryRegion || null,
+    geo_country_name: countryCode ? countryCode : null,
+    geo_region: region || null,
     geo_city: city || null,
-    geo_latitude: latitude ? Number(latitude) : null,
-    geo_longitude: longitude ? Number(longitude) : null,
+    geo_latitude: latitude,
+    geo_longitude: longitude,
     geo_timezone: timezone || null,
   };
 }
 
 function getRequestMetadata(request: NextRequest) {
-  const userAgent = request.headers.get("user-agent") || "";
-
   return {
-    server_user_agent: userAgent,
+    server_user_agent: request.headers.get("user-agent") || "",
     server_host: request.headers.get("host") || "",
     server_referer: request.headers.get("referer") || "",
   };
@@ -109,7 +142,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, geo: geoMetadata });
   } catch (error: any) {
     console.error("Analytics route error:", error);
 
