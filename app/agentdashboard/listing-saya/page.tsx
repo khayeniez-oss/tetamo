@@ -19,6 +19,10 @@ import {
   PackageCheck,
   CreditCard,
   PlusCircle,
+  Ruler,
+  MapPin,
+  FileText,
+  Building2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { notifyAdmins } from "@/lib/notifications";
@@ -30,6 +34,9 @@ import { useAgentProfile } from "../layout";
 
 type ListingStatus = "AKTIF" | "AKAN_KADALUWARSA" | "KADALUWARSA";
 type TransactionStatus = "available" | "sold" | "rented";
+type RentalType = "" | "daily" | "monthly" | "yearly";
+type SaleType = "" | "freehold" | "leasehold" | "hgb" | "hak_pakai" | "lainnya";
+
 type EffectiveStatus =
   | ListingStatus
   | "PENDING_VERIFICATION"
@@ -52,6 +59,18 @@ type Listing = {
   spotlightActive: boolean;
   transactionStatus: TransactionStatus;
   isPendingVerification: boolean;
+
+  listingType: "dijual" | "disewa";
+  rentalType: RentalType;
+  saleType: SaleType;
+  propertyType: string;
+  landSize: number | null;
+  buildingSize: number | null;
+  landUnit: string;
+  roadAccess: string;
+  ownershipType: string;
+  landType: string;
+  zoningType: string;
 };
 
 type PropertyRow = {
@@ -76,6 +95,18 @@ type PropertyRow = {
   spotlight_active: boolean | null;
   spotlight_expires_at: string | null;
   transaction_status: string | null;
+
+  listing_type: string | null;
+  rental_type: string | null;
+  sale_type: string | null;
+  property_type: string | null;
+  land_size: number | null;
+  building_size: number | null;
+  land_unit: string | null;
+  road_access: string | null;
+  ownership_type: string | null;
+  land_type: string | null;
+  zoning_type: string | null;
 };
 
 type PropertyImageRow = {
@@ -277,6 +308,119 @@ function mapTransactionStatus(
   return "available";
 }
 
+function normalizeRentalType(value?: string | null): RentalType {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "daily" || v === "harian") return "daily";
+  if (v === "monthly" || v === "bulanan") return "monthly";
+  if (v === "yearly" || v === "tahunan") return "yearly";
+
+  return "";
+}
+
+function getRentalTypeLabel(value: RentalType) {
+  if (value === "daily") return "Harian";
+  if (value === "monthly") return "Bulanan";
+  if (value === "yearly") return "Tahunan";
+  return "";
+}
+
+function getRentalTypeBadgeClass(value: RentalType) {
+  if (value === "daily") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  if (value === "monthly") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (value === "yearly") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
+function normalizeSaleType(value?: string | null): SaleType {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "freehold") return "freehold";
+  if (v === "leasehold") return "leasehold";
+  if (v === "hgb") return "hgb";
+  if (v === "hak_pakai") return "hak_pakai";
+  if (v === "lainnya") return "lainnya";
+
+  return "";
+}
+
+function getSaleTypeLabel(value: SaleType) {
+  if (value === "freehold") return "Freehold";
+  if (value === "leasehold") return "Leasehold";
+  if (value === "hgb") return "HGB";
+  if (value === "hak_pakai") return "Hak Pakai";
+  if (value === "lainnya") return "Lainnya";
+  return "";
+}
+
+function getSaleTypeBadgeClass(value: SaleType) {
+  if (value === "freehold") {
+    return "border-green-200 bg-green-50 text-green-700";
+  }
+
+  if (value === "leasehold") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (value === "hgb" || value === "hak_pakai") {
+    return "border-purple-200 bg-purple-50 text-purple-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
+function formatPropertyType(value?: string | null) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (!raw) return "";
+
+  if (raw === "tanah") return "Tanah";
+  if (raw === "rumah") return "Rumah";
+  if (raw === "villa" || raw === "vila") return "Villa";
+  if (raw === "studio") return "Studio";
+  if (raw === "apartemen" || raw === "apartment") return "Apartemen";
+  if (raw === "ruko") return "Ruko";
+  if (raw === "rukan") return "Rukan";
+  if (raw === "gudang") return "Gudang";
+  if (raw === "kantor") return "Kantor";
+  if (raw === "kost" || raw === "kos") return "Kost";
+  if (raw === "guesthouse") return "Guesthouse";
+  if (raw === "hotel") return "Hotel";
+  if (raw === "resort") return "Resort";
+  if (raw === "pabrik") return "Pabrik";
+  if (raw === "toko") return "Toko";
+  if (raw === "rukos") return "Rukos";
+
+  return raw
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatLandUnit(value?: string | null) {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "are") return "are";
+  if (v === "hectare" || v === "hektare") return "ha";
+  if (v === "acre" || v === "acres") return "acre";
+
+  return "m²";
+}
+
+function formatNumber(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "";
+  return new Intl.NumberFormat("id-ID").format(value);
+}
+
 function mapPropertiesWithImages(
   properties: PropertyRow[],
   images: PropertyImageRow[]
@@ -324,6 +468,22 @@ function mapPropertiesWithImages(
         isDateActive(property.spotlight_expires_at),
       transactionStatus: mapTransactionStatus(property.transaction_status),
       isPendingVerification,
+
+      listingType: property.listing_type === "disewa" ? "disewa" : "dijual",
+      rentalType: normalizeRentalType(property.rental_type),
+      saleType: normalizeSaleType(property.sale_type),
+      propertyType: property.property_type || "",
+      landSize:
+        typeof property.land_size === "number" ? property.land_size : null,
+      buildingSize:
+        typeof property.building_size === "number"
+          ? property.building_size
+          : null,
+      landUnit: property.land_unit || "m2",
+      roadAccess: property.road_access || "",
+      ownershipType: property.ownership_type || "",
+      landType: property.land_type || "",
+      zoningType: property.zoning_type || "",
     };
   });
 }
@@ -367,6 +527,35 @@ function getBillingCycleLabel(value: string | null | undefined) {
   if (v === "monthly") return "Bulanan";
   if (v === "yearly") return "Tahunan";
   return "-";
+}
+
+function DetailPill({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ElementType;
+  label: string;
+  value: string;
+}) {
+  if (!value || value === "-") return null;
+
+  return (
+    <div className="flex min-w-0 items-start gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2">
+      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white text-[#1C1C1E]">
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+          {label}
+        </p>
+        <p className="mt-0.5 break-words text-xs font-semibold text-[#1C1C1E]">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /* =========================
@@ -426,7 +615,7 @@ export default function AgentListingSayaPage() {
         supabase
           .from("properties")
           .select(
-            "id, user_id, kode, title, price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status"
+            "id, user_id, kode, title, price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type"
           )
           .eq("user_id", userId)
           .eq("source", "agent")
@@ -543,8 +732,21 @@ export default function AgentListingSayaPage() {
     const words = q.split(/\s+/);
 
     return listings.filter((l) => {
-      const searchableText =
-        `${l.title} ${l.kode} ${l.city} ${l.price}`.toLowerCase();
+      const searchableText = `
+        ${l.title}
+        ${l.kode}
+        ${l.city}
+        ${l.price}
+        ${l.listingType}
+        ${getRentalTypeLabel(l.rentalType)}
+        ${getSaleTypeLabel(l.saleType)}
+        ${formatPropertyType(l.propertyType)}
+        ${l.roadAccess}
+        ${l.ownershipType}
+        ${l.landType}
+        ${l.zoningType}
+      `.toLowerCase();
+
       return words.every((word) => searchableText.includes(word));
     });
   }, [listings, search]);
@@ -750,8 +952,8 @@ export default function AgentListingSayaPage() {
             {!activeMembership
               ? "Pilih Paket"
               : remainingListingSlots <= 0
-              ? "Limit Penuh"
-              : "Tambah Listing"}
+                ? "Limit Penuh"
+                : "Tambah Listing"}
           </button>
         </div>
       </div>
@@ -789,15 +991,15 @@ export default function AgentListingSayaPage() {
             {isLoading
               ? "..."
               : membershipListingLimit > 0
-              ? `${usedListingSlots}/${membershipListingLimit}`
-              : "-"}
+                ? `${usedListingSlots}/${membershipListingLimit}`
+                : "-"}
           </p>
           <p className="mt-1 text-xs text-gray-500">
             {isLoading
               ? "Memuat..."
               : membershipListingLimit > 0
-              ? `${remainingListingSlots} slot tersisa`
-              : "Pilih paket untuk membuka listing"}
+                ? `${remainingListingSlots} slot tersisa`
+                : "Pilih paket untuk membuka listing"}
           </p>
         </div>
 
@@ -810,13 +1012,15 @@ export default function AgentListingSayaPage() {
             {isLoading
               ? "..."
               : activeMembership
-              ? "Aktif"
-              : latestMembership
-              ? "Tidak Aktif"
-              : "-"}
+                ? "Aktif"
+                : latestMembership
+                  ? "Tidak Aktif"
+                  : "-"}
           </p>
           <p className="mt-1 text-xs text-gray-500">
-            {activeMembership?.auto_renew ? "Auto renew aktif" : "Auto renew tidak aktif"}
+            {activeMembership?.auto_renew
+              ? "Auto renew aktif"
+              : "Auto renew tidak aktif"}
           </p>
         </div>
 
@@ -943,12 +1147,12 @@ export default function AgentListingSayaPage() {
               const effectiveStatus: EffectiveStatus = item.isPendingVerification
                 ? "PENDING_VERIFICATION"
                 : item.transactionStatus === "sold"
-                ? "TERJUAL"
-                : item.transactionStatus === "rented"
-                ? "TERSEWA"
-                : item.isPaused
-                ? "JEDA"
-                : baseStatus;
+                  ? "TERJUAL"
+                  : item.transactionStatus === "rented"
+                    ? "TERSEWA"
+                    : item.isPaused
+                      ? "JEDA"
+                      : baseStatus;
 
               const ui = statusUI(effectiveStatus);
               const BadgeIcon = ui.Icon;
@@ -963,9 +1167,23 @@ export default function AgentListingSayaPage() {
                 item.photos?.[0] ??
                 "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
 
+              const listingTypeLabel =
+                item.listingType === "disewa" ? "Disewa" : "Dijual";
+              const rentalLabel = getRentalTypeLabel(item.rentalType);
+              const saleLabel = getSaleTypeLabel(item.saleType);
+              const propertyTypeLabel = formatPropertyType(item.propertyType);
+
+              const landSizeText = item.landSize
+                ? `${formatNumber(item.landSize)} ${formatLandUnit(item.landUnit)}`
+                : "";
+
+              const buildingSizeText = item.buildingSize
+                ? `${formatNumber(item.buildingSize)} m²`
+                : "";
+
               return (
                 <div key={item.id} className="p-4 sm:p-5 lg:p-6">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between xl:gap-6">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                         <div className="h-56 w-full shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-24 sm:w-36 lg:h-28 lg:w-40">
@@ -984,6 +1202,42 @@ export default function AgentListingSayaPage() {
                               <BadgeIcon className="h-3.5 w-3.5" />
                               {ui.label}
                             </span>
+
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${
+                                item.listingType === "dijual"
+                                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                                  : "border-yellow-200 bg-yellow-50 text-yellow-700"
+                              }`}
+                            >
+                              {listingTypeLabel}
+                            </span>
+
+                            {item.listingType === "disewa" && rentalLabel ? (
+                              <span
+                                className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getRentalTypeBadgeClass(
+                                  item.rentalType
+                                )}`}
+                              >
+                                {rentalLabel}
+                              </span>
+                            ) : null}
+
+                            {item.listingType === "dijual" && saleLabel ? (
+                              <span
+                                className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getSaleTypeBadgeClass(
+                                  item.saleType
+                                )}`}
+                              >
+                                {saleLabel}
+                              </span>
+                            ) : null}
+
+                            {propertyTypeLabel ? (
+                              <span className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-700">
+                                {propertyTypeLabel}
+                              </span>
+                            ) : null}
 
                             {item.boostActive && !isClosed && !isPending ? (
                               <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">
@@ -1013,6 +1267,50 @@ export default function AgentListingSayaPage() {
                           </p>
 
                           <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+
+                          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            <DetailPill
+                              icon={Building2}
+                              label="Tipe Properti"
+                              value={propertyTypeLabel}
+                            />
+
+                            <DetailPill
+                              icon={Ruler}
+                              label="Luas Tanah"
+                              value={landSizeText}
+                            />
+
+                            <DetailPill
+                              icon={Home}
+                              label="Luas Bangunan"
+                              value={buildingSizeText}
+                            />
+
+                            <DetailPill
+                              icon={MapPin}
+                              label="Akses Jalan"
+                              value={item.roadAccess}
+                            />
+
+                            <DetailPill
+                              icon={FileText}
+                              label="Kepemilikan"
+                              value={item.ownershipType}
+                            />
+
+                            <DetailPill
+                              icon={Ruler}
+                              label="Jenis Tanah"
+                              value={item.landType}
+                            />
+
+                            <DetailPill
+                              icon={FileText}
+                              label="Zoning"
+                              value={item.zoningType}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1099,8 +1397,8 @@ export default function AgentListingSayaPage() {
                             {isBoosting
                               ? "Loading..."
                               : item.boostActive
-                              ? "Renew Boost"
-                              : "Boost"}
+                                ? "Renew Boost"
+                                : "Boost"}
                           </button>
 
                           <button
@@ -1112,8 +1410,8 @@ export default function AgentListingSayaPage() {
                             {isSpotlighting
                               ? "Loading..."
                               : item.spotlightActive
-                              ? "Renew Spotlight"
-                              : "Spotlight"}
+                                ? "Renew Spotlight"
+                                : "Spotlight"}
                           </button>
                         </div>
                       ) : null}
