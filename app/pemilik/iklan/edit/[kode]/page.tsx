@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
@@ -16,8 +16,37 @@ type PropertyImageRow = {
   is_cover: boolean | null;
 };
 
-function normalizeOwnerPlanId(planId?: string | null): PemilikPlanType | undefined {
-  const value = String(planId || "").trim().toLowerCase();
+type DraftRecord = Record<string, unknown>;
+
+function toRecord(value: unknown): DraftRecord {
+  if (typeof value === "object" && value !== null) {
+    return value as DraftRecord;
+  }
+
+  return {};
+}
+
+function stringFrom(...values: unknown[]) {
+  for (const value of values) {
+    if (value !== null && value !== undefined) {
+      return String(value);
+    }
+  }
+
+  return "";
+}
+
+function optionalStringFrom(...values: unknown[]) {
+  const value = stringFrom(...values);
+  return value || undefined;
+}
+
+function normalizeOwnerPlanId(
+  planId?: string | null
+): PemilikPlanType | undefined {
+  const value = String(planId || "")
+    .trim()
+    .toLowerCase();
 
   if (value === "featured") return "featured";
   if (value === "priority") return "priority";
@@ -45,12 +74,15 @@ export default function PemilikIklanEditPage() {
           setErrorMessage("Kode listing tidak ditemukan.");
           setLoading(false);
         }
+
         return;
       }
 
+      const draftRecord = toRecord(draft);
+
       const hasBilingualDraftFields =
-        (draft as any)?.title_id !== undefined &&
-        (draft as any)?.description_id !== undefined;
+        draftRecord.title_id !== undefined &&
+        draftRecord.description_id !== undefined;
 
       if (
         draft?.mode === "edit" &&
@@ -63,6 +95,7 @@ export default function PemilikIklanEditPage() {
         if (!ignore) {
           setLoading(false);
         }
+
         return;
       }
 
@@ -79,6 +112,7 @@ export default function PemilikIklanEditPage() {
           setErrorMessage("Silakan login terlebih dahulu.");
           setLoading(false);
         }
+
         return;
       }
 
@@ -94,6 +128,7 @@ export default function PemilikIklanEditPage() {
           setErrorMessage(propertyError.message || "Gagal memuat listing.");
           setLoading(false);
         }
+
         return;
       }
 
@@ -102,13 +137,26 @@ export default function PemilikIklanEditPage() {
           setErrorMessage("Listing tidak ditemukan.");
           setLoading(false);
         }
+
+        return;
+      }
+
+      const propertyRecord = toRecord(property);
+      const propertyId = stringFrom(propertyRecord.id);
+
+      if (!propertyId) {
+        if (!ignore) {
+          setErrorMessage("ID listing tidak ditemukan.");
+          setLoading(false);
+        }
+
         return;
       }
 
       const { data: imageRows, error: imageError } = await supabase
         .from("property_images")
         .select("image_url, sort_order, is_cover")
-        .eq("property_id", property.id)
+        .eq("property_id", propertyId)
         .order("sort_order", { ascending: true });
 
       if (imageError) {
@@ -116,6 +164,7 @@ export default function PemilikIklanEditPage() {
           setErrorMessage(imageError.message || "Gagal memuat foto listing.");
           setLoading(false);
         }
+
         return;
       }
 
@@ -124,6 +173,7 @@ export default function PemilikIklanEditPage() {
         const coverB = b.is_cover ? 1 : 0;
 
         if (coverA !== coverB) return coverB - coverA;
+
         return (a.sort_order ?? 0) - (b.sort_order ?? 0);
       });
 
@@ -133,108 +183,88 @@ export default function PemilikIklanEditPage() {
         images.findIndex((img) => Boolean(img.is_cover))
       );
 
-      const nextDraft: PemilikListingDraft & Record<string, any> = {
-        listingType: property.listing_type ?? "",
-        rentalType: property.rental_type ?? "",
-        plan: normalizeOwnerPlanId(property.plan_id),
+      const verificationStatus = stringFrom(propertyRecord.verification_status);
+      const fasilitas = toRecord(
+        propertyRecord.fasilitas ?? propertyRecord.facilities
+      );
+      const nearby = toRecord(propertyRecord.nearby);
+
+      const rawNextDraft: DraftRecord = {
+        listingType: stringFrom(propertyRecord.listing_type),
+        rentalType: stringFrom(propertyRecord.rental_type),
+        plan: normalizeOwnerPlanId(stringFrom(propertyRecord.plan_id)),
         mode: "edit",
         source: "owner",
-        kode: property.kode ?? kode,
-        postedDate: property.posted_date ?? property.created_at ?? undefined,
+        kode: stringFrom(propertyRecord.kode, kode),
+        postedDate: optionalStringFrom(
+          propertyRecord.posted_date,
+          propertyRecord.created_at
+        ),
 
-        address: property.address ?? "",
-        province: property.province ?? "",
-        city: property.city ?? "",
-        housingName: property.housing_name ?? "",
-        customHousing: property.custom_housing ?? "",
-        note: property.note ?? "",
+        address: stringFrom(propertyRecord.address),
+        province: stringFrom(propertyRecord.province),
+        city: stringFrom(propertyRecord.city),
+        housingName: stringFrom(propertyRecord.housing_name),
+        customHousing: stringFrom(propertyRecord.custom_housing),
+        note: stringFrom(propertyRecord.note),
 
-        propertyType: property.property_type ?? "",
-        price:
-          property.price !== null && property.price !== undefined
-            ? String(property.price)
-            : "",
-        lt:
-          property.lt !== null && property.lt !== undefined
-            ? String(property.lt)
-            : property.land_size !== null && property.land_size !== undefined
-              ? String(property.land_size)
-              : "",
-        lb:
-          property.lb !== null && property.lb !== undefined
-            ? String(property.lb)
-            : property.building_size !== null &&
-                property.building_size !== undefined
-              ? String(property.building_size)
-              : "",
-        bed:
-          property.bed !== null && property.bed !== undefined
-            ? String(property.bed)
-            : property.bedrooms !== null && property.bedrooms !== undefined
-              ? String(property.bedrooms)
-              : "",
-        bath:
-          property.bath !== null && property.bath !== undefined
-            ? String(property.bath)
-            : property.bathrooms !== null && property.bathrooms !== undefined
-              ? String(property.bathrooms)
-              : "",
-        maid:
-          property.maid !== null && property.maid !== undefined
-            ? String(property.maid)
-            : property.maid_bedrooms !== null &&
-                property.maid_bedrooms !== undefined
-              ? String(property.maid_bedrooms)
-              : "",
-        furnishing: property.furnishing ?? "",
-        garage:
-          property.garage !== null && property.garage !== undefined
-            ? String(property.garage)
-            : property.garages !== null && property.garages !== undefined
-              ? String(property.garages)
-              : "",
-        floor:
-          property.floor !== null && property.floor !== undefined
-            ? String(property.floor)
-            : property.floors !== null && property.floors !== undefined
-              ? String(property.floors)
-              : "",
+        propertyType: stringFrom(propertyRecord.property_type),
+        price: stringFrom(propertyRecord.price),
 
-        listrik:
-          property.listrik !== null && property.listrik !== undefined
-            ? String(property.listrik)
-            : property.electricity !== null && property.electricity !== undefined
-              ? String(property.electricity)
-              : "",
-        jenisAir: property.jenis_air ?? property.water_type ?? "",
+        lt: stringFrom(propertyRecord.lt, propertyRecord.land_size),
+        lb: stringFrom(propertyRecord.lb, propertyRecord.building_size),
 
-        sertifikat: property.sertifikat ?? property.certificate ?? "",
-        jenisTanah: property.jenis_tanah ?? property.land_type ?? "",
-        jenisZoning: property.jenis_zoning ?? property.zoning_type ?? "",
-        jenisKepemilikan:
-          property.jenis_kepemilikan ?? property.ownership_type ?? "",
+        bed: stringFrom(propertyRecord.bed, propertyRecord.bedrooms),
+        bath: stringFrom(propertyRecord.bath, propertyRecord.bathrooms),
+        maid: stringFrom(propertyRecord.maid, propertyRecord.maid_bedrooms),
 
-        title: property.title ?? "",
-        title_id: (property as any).title_id ?? "",
-        description: property.description ?? "",
-        description_id: (property as any).description_id ?? "",
+        furnishing: stringFrom(propertyRecord.furnishing),
+        garage: stringFrom(propertyRecord.garage, propertyRecord.garages),
+        floor: stringFrom(propertyRecord.floor, propertyRecord.floors),
 
-        verification: property.verification_status
+        listrik: stringFrom(propertyRecord.listrik, propertyRecord.electricity),
+        jenisAir: stringFrom(propertyRecord.jenis_air, propertyRecord.water_type),
+
+        sertifikat: stringFrom(
+          propertyRecord.sertifikat,
+          propertyRecord.certificate
+        ),
+        jenisTanah: stringFrom(
+          propertyRecord.jenis_tanah,
+          propertyRecord.land_type
+        ),
+        jenisZoning: stringFrom(
+          propertyRecord.jenis_zoning,
+          propertyRecord.zoning_type
+        ),
+        jenisKepemilikan: stringFrom(
+          propertyRecord.jenis_kepemilikan,
+          propertyRecord.ownership_type
+        ),
+
+        title: stringFrom(propertyRecord.title),
+        title_id: stringFrom(propertyRecord.title_id),
+        description: stringFrom(propertyRecord.description),
+        description_id: stringFrom(propertyRecord.description_id),
+
+        verification: verificationStatus
           ? {
-              status: property.verification_status,
+              status: verificationStatus,
             }
           : undefined,
 
         payment: undefined,
 
-        fasilitas: property.fasilitas ?? property.facilities ?? {},
-        nearby: property.nearby ?? {},
+        fasilitas,
+        nearby,
 
         photos: photoUrls,
         coverIndex,
-        video: property.video ?? property.video_url ?? "",
-        mediaFolder: property.media_folder ?? undefined,
+        video: stringFrom(propertyRecord.video, propertyRecord.video_url),
+        mediaFolder: optionalStringFrom(propertyRecord.media_folder),
       };
+
+      const nextDraft = rawNextDraft as unknown as PemilikListingDraft;
 
       if (!ignore) {
         setDraft(nextDraft);
@@ -270,6 +300,28 @@ export default function PemilikIklanEditPage() {
         a.localeCompare(b)
       ),
     []
+  );
+
+  const listingDraft = useMemo(
+    () => ({
+      ...toRecord(draft),
+      mode: "edit",
+      source: "owner",
+      kode,
+    }),
+    [draft, kode]
+  );
+
+  const handleSetDraft = useCallback(
+    (updater: (prev: DraftRecord | null | undefined) => DraftRecord) => {
+      setDraft((prev) => {
+        const previousDraft = toRecord(prev);
+        const updatedDraft = updater(previousDraft);
+
+        return updatedDraft as unknown as PemilikListingDraft;
+      });
+    },
+    [setDraft]
   );
 
   function onNext() {
@@ -313,13 +365,8 @@ export default function PemilikIklanEditPage() {
   return (
     <main className="min-h-screen bg-white">
       <ListingIklan
-        draft={{
-          ...(draft || {}),
-          mode: "edit",
-          source: "owner",
-          kode,
-        }}
-        setDraft={setDraft}
+        draft={listingDraft}
+        setDraft={handleSetDraft}
         onNext={onNext}
         provinces={PROVINCES}
         citiesByProvince={CITIES_BY_PROVINCE}

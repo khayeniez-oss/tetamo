@@ -10,9 +10,27 @@ import React, {
 import { useLanguage } from "@/app/context/LanguageContext";
 import { TetamoSelect } from "@/components/ui/TetamoSelect";
 
+type DraftState = {
+  mode?: string;
+  source?: string;
+  plan?: string;
+  listingType?: string;
+  address?: string;
+  province?: string;
+  city?: string;
+  housingName?: string;
+  customHousing?: string;
+  note?: string;
+  kode?: string;
+  postedDate?: string;
+  [key: string]: unknown;
+};
+
+type DraftUpdater = (prev: DraftState | null | undefined) => DraftState;
+
 type Props = {
-  draft: any;
-  setDraft: (fn: any) => void;
+  draft: DraftState | null | undefined;
+  setDraft: (fn: DraftUpdater) => void;
   onNext: () => void;
   onReset?: () => void;
 
@@ -21,6 +39,63 @@ type Props = {
   citiesByProvince?: Record<string, string[]>;
   housingSuggestions?: string[];
 };
+
+type GoogleAutocompletePrediction = {
+  description?: string;
+};
+
+type GoogleAutocompleteRequest = {
+  input: string;
+  componentRestrictions?: {
+    country: string | string[];
+  };
+};
+
+type GoogleAutocompletePromiseResponse = {
+  predictions?: GoogleAutocompletePrediction[];
+};
+
+type GoogleAutocompleteCallback = (
+  predictions: GoogleAutocompletePrediction[] | null,
+  status: string
+) => void;
+
+type GoogleAutocompleteService = {
+  getPlacePredictions: (
+    request: GoogleAutocompleteRequest,
+    callback: GoogleAutocompleteCallback
+  ) => void | Promise<GoogleAutocompletePromiseResponse>;
+};
+
+type GooglePlacesLibrary = {
+  AutocompleteService?: new () => GoogleAutocompleteService;
+};
+
+type GooglePlacesNamespace = {
+  AutocompleteService?: new () => GoogleAutocompleteService;
+  PlacesServiceStatus?: {
+    OK?: string;
+  };
+};
+
+type GoogleMapsNamespace = {
+  places?: GooglePlacesNamespace;
+  importLibrary?: (libraryName: "places") => Promise<GooglePlacesLibrary>;
+};
+
+type GoogleNamespace = {
+  maps?: GoogleMapsNamespace;
+};
+
+declare global {
+  interface Window {
+    google?: GoogleNamespace;
+    __tetamoGoogleMapsPlacesPromise?: Promise<void>;
+  }
+}
+
+const GOOGLE_MAPS_API_KEY =
+  process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 const DEFAULT_PROVINCES = [
   "Aceh",
@@ -133,10 +208,32 @@ const DEFAULT_HOUSING_SUGGESTIONS = [
   "Canggu",
 ].sort((a, b) => a.localeCompare(b));
 
+const PROVINCE_ALIASES: Record<string, string[]> = {
+  "DKI Jakarta": ["jakarta"],
+  "DI Yogyakarta": ["yogyakarta", "jogja", "jogjakarta"],
+};
+
 function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean))).sort(
     (a, b) => a.localeCompare(b)
   );
+}
+
+function uniqueStringsInOrder(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+    const key = cleanValue.toLowerCase();
+
+    if (!cleanValue || seen.has(key)) return;
+
+    seen.add(key);
+    result.push(cleanValue);
+  });
+
+  return result;
 }
 
 function normalizeSearch(value: string) {
@@ -169,12 +266,164 @@ function buildAddressSuggestionVariants(params: {
     city && province ? `${query}, ${city}, ${province}` : "",
     housing ? `${query}, ${housing}` : "",
     housing && city ? `${query}, ${housing}, ${city}` : "",
-    housing && city && province ? `${query}, ${housing}, ${city}, ${province}` : "",
+    housing && city && province
+      ? `${query}, ${housing}, ${city}, ${province}`
+      : "",
     province ? `${query}, ${province}` : "",
     note ? `${query} - ${note}` : "",
     city && note ? `${query}, ${city} - ${note}` : "",
     housing && note ? `${query}, ${housing} - ${note}` : "",
   ]);
+}
+
+function inferProvinceFromAddress(addressText: string, provinces: string[]) {
+  const lowerAddress = normalizeSearch(addressText);
+
+  return (
+    provinces.find((province) => {
+      const lowerProvince = normalizeSearch(province);
+      const aliases = PROVINCE_ALIASES[province] ?? [];
+
+      return (
+        lowerAddress.includes(lowerProvince) ||
+        aliases.some((alias) => lowerAddress.includes(alias))
+      );
+    }) ?? ""
+  );
+}
+
+function inferCityFromAddress(
+  addressText: string,
+  province: string,
+  citiesByProvince: Record<string, string[]>
+) {
+  const lowerAddress = normalizeSearch(addressText);
+
+  const cityCandidates = province
+    ? citiesByProvince[province] ?? []
+    : Object.values(citiesByProvince).flat();
+
+  return (
+    uniqueStrings(cityCandidates).find((city) =>
+      lowerAddress.includes(normalizeSearch(city))
+    ) ?? ""
+  );
+}
+
+function loadGoogleMapsPlaces() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Window is not available."));
+  }
+
+  if (window.google?.maps?.places) {
+    return Promise.resolve();
+  }
+
+  if (!GOOGLE_MAPS_API_KEY) {
+    return Promise.reject(new Error("Missing Google Maps API key."));
+  }
+
+  if (window.__tetamoGoogleMapsPlacesPromise) {
+    return window.__tetamoGoogleMapsPlacesPromise;
+  }
+
+  window.__tetamoGoogleMapsPlacesPromise = new Promise<void>(
+    (resolve, reject) => {
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        'script[data-tetamo-google-maps="true"]'
+      );
+
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve());
+        existingScript.addEventListener("error", () =>
+          reject(new Error("Failed to load Google Maps."))
+        );
+        return;
+      }
+
+      const script = document.createElement("script");
+
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+        GOOGLE_MAPS_API_KEY
+      )}&libraries=places&language=id&region=ID&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.dataset.tetamoGoogleMaps = "true";
+
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Failed to load Google Maps."));
+
+      document.head.appendChild(script);
+    }
+  );
+
+  return window.__tetamoGoogleMapsPlacesPromise;
+}
+
+async function getGoogleAutocompleteService() {
+  await loadGoogleMapsPlaces();
+
+  if (window.google?.maps?.importLibrary) {
+    const placesLibrary = await window.google.maps.importLibrary("places");
+    const AutocompleteService = placesLibrary.AutocompleteService;
+
+    if (AutocompleteService) {
+      return new AutocompleteService();
+    }
+  }
+
+  const fallbackAutocompleteService =
+    window.google?.maps?.places?.AutocompleteService;
+
+  if (fallbackAutocompleteService) {
+    return new fallbackAutocompleteService();
+  }
+
+  throw new Error("Google Places AutocompleteService is not available.");
+}
+
+function getGooglePlacePredictions(
+  service: GoogleAutocompleteService,
+  request: GoogleAutocompleteRequest
+): Promise<string[]> {
+  return new Promise((resolve) => {
+    const okStatus = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? "OK";
+
+    const settle = (
+      predictions: GoogleAutocompletePrediction[] | null | undefined,
+      status?: string
+    ) => {
+      if (status && status !== okStatus) {
+        resolve([]);
+        return;
+      }
+
+      resolve(
+        (predictions ?? [])
+          .map((prediction) => prediction.description ?? "")
+          .filter(Boolean)
+      );
+    };
+
+    try {
+      const maybePromise = service.getPlacePredictions(
+        request,
+        (predictions, status) => {
+          settle(predictions, status);
+        }
+      );
+
+      if (maybePromise && typeof maybePromise.then === "function") {
+        maybePromise
+          .then((response) => {
+            settle(response.predictions ?? [], okStatus);
+          })
+          .catch(() => resolve([]));
+      }
+    } catch {
+      resolve([]);
+    }
+  });
 }
 
 function getPlanBadgeClass(plan?: string) {
@@ -215,40 +464,33 @@ export default function ListingIklan({
 
   const mode = draft?.mode === "edit" ? "edit" : "create";
 
-  const [listingType, setListingType] = useState(draft?.listingType ?? "");
-  const [address, setAddress] = useState(draft?.address ?? "");
-  const [province, setProvince] = useState(draft?.province ?? "");
-  const [city, setCity] = useState(draft?.city ?? "");
-  const [housingName, setHousingName] = useState(draft?.housingName ?? "");
-  const [customHousing, setCustomHousing] = useState(draft?.customHousing ?? "");
-  const [note, setNote] = useState(draft?.note ?? "");
+  const [listingType, setListingType] = useState(
+    () => draft?.listingType ?? ""
+  );
+  const [address, setAddress] = useState(() => draft?.address ?? "");
+  const [province, setProvince] = useState(() => draft?.province ?? "");
+  const [city, setCity] = useState(() => draft?.city ?? "");
+  const [housingName, setHousingName] = useState(
+    () => draft?.housingName ?? ""
+  );
+  const [customHousing, setCustomHousing] = useState(
+    () => draft?.customHousing ?? ""
+  );
+  const [note, setNote] = useState(() => draft?.note ?? "");
 
+  const [googleAddressSuggestions, setGoogleAddressSuggestions] = useState<
+    string[]
+  >([]);
   const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
   const [highlightedAddressIndex, setHighlightedAddressIndex] = useState(-1);
 
   const addressBoxRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setListingType(draft?.listingType ?? "");
-    setAddress(draft?.address ?? "");
-    setProvince(draft?.province ?? "");
-    setCity(draft?.city ?? "");
-    setHousingName(draft?.housingName ?? "");
-    setCustomHousing(draft?.customHousing ?? "");
-    setNote(draft?.note ?? "");
-  }, [
-    draft?.listingType,
-    draft?.address,
-    draft?.province,
-    draft?.city,
-    draft?.housingName,
-    draft?.customHousing,
-    draft?.note,
-  ]);
+  const addressRequestIdRef = useRef(0);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       if (!addressBoxRef.current) return;
+
       if (!addressBoxRef.current.contains(event.target as Node)) {
         setIsAddressDropdownOpen(false);
         setHighlightedAddressIndex(-1);
@@ -256,6 +498,7 @@ export default function ListingIklan({
     }
 
     document.addEventListener("mousedown", handleOutsideClick);
+
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
@@ -309,20 +552,61 @@ export default function ListingIklan({
     });
   }, [address, city, province, housingName, customHousing, note]);
 
+  useEffect(() => {
+    const query = address.trim();
+
+    addressRequestIdRef.current += 1;
+    const requestId = addressRequestIdRef.current;
+
+    if (!GOOGLE_MAPS_API_KEY || query.length < 3) {
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const service = await getGoogleAutocompleteService();
+
+        const locationText = uniqueStringsInOrder([city, province]).join(", ");
+        const input = locationText ? `${query}, ${locationText}` : query;
+
+        const predictions = await getGooglePlacePredictions(service, {
+          input,
+          componentRestrictions: { country: "id" },
+        });
+
+        if (requestId !== addressRequestIdRef.current) return;
+
+        setGoogleAddressSuggestions(predictions);
+      } catch {
+        if (requestId !== addressRequestIdRef.current) return;
+
+        setGoogleAddressSuggestions([]);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [address, city, province]);
+
   const filteredAddressSuggestions = useMemo(() => {
     const query = normalizeSearch(address);
 
     if (query.length < 3) return [];
 
-    return rawAddressSuggestions
-      .filter((item) => normalizeSearch(item).includes(query))
-      .filter((item) => normalizeSearch(item) !== query)
-      .slice(0, 6);
-  }, [address, rawAddressSuggestions]);
+    const googleSuggestions = googleAddressSuggestions.filter(
+      (item) => normalizeSearch(item) !== query
+    );
 
-  useEffect(() => {
-    setHighlightedAddressIndex(-1);
-  }, [filteredAddressSuggestions]);
+    const localSuggestions = rawAddressSuggestions
+      .filter((item) => normalizeSearch(item).includes(query))
+      .filter((item) => normalizeSearch(item) !== query);
+
+    return uniqueStringsInOrder([
+      ...googleSuggestions,
+      ...localSuggestions,
+    ]).slice(0, 6);
+  }, [address, googleAddressSuggestions, rawAddressSuggestions]);
 
   const canNext = useMemo(() => {
     return (
@@ -335,7 +619,24 @@ export default function ListingIklan({
   }, [listingType, address, province, city, housingName, customHousing]);
 
   function chooseAddressSuggestion(value: string) {
+    const inferredProvince = inferProvinceFromAddress(value, finalProvinces);
+    const nextProvince = inferredProvince || province;
+    const inferredCity = inferCityFromAddress(
+      value,
+      nextProvince,
+      finalCitiesByProvince
+    );
+
     setAddress(value);
+
+    if (inferredProvince) {
+      setProvince(inferredProvince);
+    }
+
+    if (inferredCity) {
+      setCity(inferredCity);
+    }
+
     setIsAddressDropdownOpen(false);
     setHighlightedAddressIndex(-1);
   }
@@ -370,10 +671,13 @@ export default function ListingIklan({
         highlightedAddressIndex >= 0 &&
         highlightedAddressIndex < filteredAddressSuggestions.length
       ) {
-        chooseAddressSuggestion(filteredAddressSuggestions[highlightedAddressIndex]);
+        chooseAddressSuggestion(
+          filteredAddressSuggestions[highlightedAddressIndex]
+        );
       } else {
         chooseAddressSuggestion(filteredAddressSuggestions[0]);
       }
+
       return;
     }
 
@@ -386,7 +690,7 @@ export default function ListingIklan({
   function handleNext() {
     if (!canNext) return;
 
-    setDraft((prev: any) => ({
+    setDraft((prev) => ({
       ...(prev || {}),
       mode,
       listingType,
@@ -498,7 +802,7 @@ export default function ListingIklan({
               }
               className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               onChange={(e) =>
-                setDraft((prev: any) => ({
+                setDraft((prev) => ({
                   ...(prev || {}),
                   kode: e.target.value,
                 }))
@@ -516,7 +820,7 @@ export default function ListingIklan({
               value={(draft?.postedDate ?? "").slice(0, 10)}
               className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               onChange={(e) =>
-                setDraft((prev: any) => ({
+                setDraft((prev) => ({
                   ...(prev || {}),
                   postedDate: e.target.value,
                 }))
@@ -539,6 +843,7 @@ export default function ListingIklan({
                 onChange={(e) => {
                   setAddress(e.target.value);
                   setIsAddressDropdownOpen(true);
+                  setHighlightedAddressIndex(-1);
                 }}
                 onFocus={() => {
                   if (filteredAddressSuggestions.length > 0) {
@@ -554,34 +859,35 @@ export default function ListingIklan({
                 className={inputBase}
               />
 
-              {filteredAddressSuggestions.length > 0 && isAddressDropdownOpen && (
-                <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                  <div className="max-h-72 overflow-y-auto py-2">
-                    {filteredAddressSuggestions.map((item, index) => {
-                      const active = index === highlightedAddressIndex;
+              {filteredAddressSuggestions.length > 0 &&
+                isAddressDropdownOpen && (
+                  <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                    <div className="max-h-72 overflow-y-auto py-2">
+                      {filteredAddressSuggestions.map((item, index) => {
+                        const active = index === highlightedAddressIndex;
 
-                      return (
-                        <button
-                          key={`${item}-${index}`}
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            chooseAddressSuggestion(item);
-                          }}
-                          className={[
-                            "block w-full px-4 py-3 text-left text-sm transition",
-                            active
-                              ? "bg-[#1C1C1E] text-white"
-                              : "text-gray-700 hover:bg-gray-50",
-                          ].join(" ")}
-                        >
-                          {item}
-                        </button>
-                      );
-                    })}
+                        return (
+                          <button
+                            key={`${item}-${index}`}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              chooseAddressSuggestion(item);
+                            }}
+                            className={[
+                              "block w-full px-4 py-3 text-left text-sm transition",
+                              active
+                                ? "bg-[#1C1C1E] text-white"
+                                : "text-gray-700 hover:bg-gray-50",
+                            ].join(" ")}
+                          >
+                            {item}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <p className="mt-2 text-xs leading-5 text-gray-500">
                 {lang === "id"

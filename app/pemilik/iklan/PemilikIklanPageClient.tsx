@@ -1,11 +1,27 @@
 "use client";
 
+import { useCallback, useMemo, type ComponentProps } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
-import { usePemilikDraftListing } from "./layout";
+import {
+  usePemilikDraftListing,
+  type PemilikListingDraft,
+} from "./layout";
 import ListingIklan from "@/components/listing/ListingIklan";
 
 type OwnerPlan = "basic" | "priority" | "featured";
+type DraftRecord = Record<string, unknown>;
+
+type ListingIklanProps = ComponentProps<typeof ListingIklan>;
+type ListingIklanDraft = ListingIklanProps["draft"];
+type ListingIklanSetDraft = ListingIklanProps["setDraft"];
+
+function toRecord(value: unknown): DraftRecord {
+  if (typeof value === "object" && value !== null) {
+    return value as DraftRecord;
+  }
+
+  return {};
+}
 
 export default function PemilikIklanPageClient() {
   const router = useRouter();
@@ -21,20 +37,52 @@ export default function PemilikIklanPageClient() {
     return "basic";
   }, [searchParams]);
 
-  useEffect(() => {
-    setDraft((prev: any) => ({
-      ...(prev || {}),
+  const listingDraft = useMemo<ListingIklanDraft>(() => {
+    const draftRecord = toRecord(draft);
+
+    return {
+      ...draftRecord,
       mode: "create",
       source: "owner",
       plan: currentPlan,
       payment: {
-        ...(prev?.payment || {}),
+        ...toRecord(draftRecord.payment),
         planId: currentPlan,
       },
-    }));
-  }, [currentPlan, setDraft]);
+    } as unknown as ListingIklanDraft;
+  }, [draft, currentPlan]);
+
+  const handleSetDraft = useCallback<ListingIklanSetDraft>(
+    (updater) => {
+      setDraft((prev) => {
+        const previousDraft = toRecord(prev);
+
+        const updatedDraft = updater(
+          previousDraft as NonNullable<ListingIklanDraft>
+        );
+
+        return updatedDraft as unknown as PemilikListingDraft;
+      });
+    },
+    [setDraft]
+  );
 
   function handleNext() {
+    setDraft((prev) => {
+      const previousDraft = toRecord(prev);
+
+      return {
+        ...previousDraft,
+        mode: "create",
+        source: "owner",
+        plan: currentPlan,
+        payment: {
+          ...toRecord(previousDraft.payment),
+          planId: currentPlan,
+        },
+      } as unknown as PemilikListingDraft;
+    });
+
     router.push(`/pemilik/iklan/detail?plan=${currentPlan}`);
   }
 
@@ -46,15 +94,8 @@ export default function PemilikIklanPageClient() {
   return (
     <main className="min-h-screen bg-white">
       <ListingIklan
-        draft={
-          {
-            ...(draft || {}),
-            mode: "create",
-            source: "owner",
-            plan: currentPlan,
-          } as any
-        }
-        setDraft={setDraft}
+        draft={listingDraft}
+        setDraft={handleSetDraft}
         onNext={handleNext}
         onReset={handleReset}
       />

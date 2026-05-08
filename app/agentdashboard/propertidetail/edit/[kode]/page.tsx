@@ -1,35 +1,84 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAgentListingDraft } from "@/app/agentdashboard/AgentListingDraftContext";
 import ListingForm from "@/components/listing/ListingForm";
 
-function toInputValue(value: any) {
+type DraftRecord = Record<string, unknown>;
+
+type PropertyImageRow = {
+  image_url: string | null;
+  sort_order: number | null;
+  is_cover: boolean | null;
+};
+
+function toRecord(value: unknown): DraftRecord {
+  if (typeof value === "object" && value !== null) {
+    return value as DraftRecord;
+  }
+
+  return {};
+}
+
+function getString(source: DraftRecord, key: string) {
+  const value = source[key];
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+
+  return "";
+}
+
+function toInputValue(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Gagal memuat data listing.";
+}
+
 export default function AgentEditPropertiDetailPage() {
   const router = useRouter();
-  const params = useParams();
+  const params = useParams<{ kode?: string | string[] }>();
   const { draft, setDraft } = useAgentListingDraft();
 
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
 
-  const draftTitleId = (draft as any)?.title_id;
-  const draftDescriptionId = (draft as any)?.description_id;
+  const inputBase =
+    "mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10";
+
+  const draftRecord = useMemo(() => toRecord(draft), [draft]);
+
+  const draftMode = getString(draftRecord, "mode");
+  const draftSource = getString(draftRecord, "source");
+  const draftKode = getString(draftRecord, "kode");
+  const draftTitleId = draftRecord.title_id;
+  const draftDescriptionId = draftRecord.description_id;
 
   const kode = useMemo(() => {
     const raw = params?.kode;
-    if (Array.isArray(raw)) return decodeURIComponent(raw[0] || "");
+
+    if (Array.isArray(raw)) {
+      return decodeURIComponent(raw[0] || "");
+    }
+
     return decodeURIComponent(String(raw || ""));
   }, [params]);
-
-  const inputBase =
-    "mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10";
 
   useEffect(() => {
     let isMounted = true;
@@ -37,20 +86,22 @@ export default function AgentEditPropertiDetailPage() {
     async function loadPropertyForEdit() {
       if (!kode) {
         if (!isMounted) return;
+
         setPageError("Kode listing tidak ditemukan.");
         setLoading(false);
         return;
       }
 
       const alreadyLoaded =
-        draft?.mode === "edit" &&
-        draft?.source === "agent" &&
-        draft?.kode === kode &&
+        draftMode === "edit" &&
+        draftSource === "agent" &&
+        draftKode === kode &&
         draftTitleId !== undefined &&
         draftDescriptionId !== undefined;
 
       if (alreadyLoaded) {
         if (!isMounted) return;
+
         setLoading(false);
         return;
       }
@@ -84,90 +135,125 @@ export default function AgentEditPropertiDetailPage() {
           throw new Error("Listing agent tidak ditemukan.");
         }
 
+        const propertyRecord = toRecord(property);
+        const propertyId = getString(propertyRecord, "id");
+
         const { data: imageRows, error: imageError } = await supabase
           .from("property_images")
           .select("image_url, sort_order, is_cover")
-          .eq("property_id", property.id)
+          .eq("property_id", propertyId)
           .order("sort_order", { ascending: true });
 
         if (imageError) {
           throw imageError;
         }
 
-        const photos = Array.isArray(imageRows)
-          ? imageRows
-              .map((item) => item.image_url)
-              .filter((url): url is string => Boolean(url))
-          : [];
+        const rows = (imageRows || []) as PropertyImageRow[];
 
-        const coverIndexFromDb = Array.isArray(imageRows)
-          ? imageRows.findIndex((item) => item.is_cover)
-          : -1;
+        const photos = rows
+          .map((item) => item.image_url)
+          .filter((url): url is string => Boolean(url));
+
+        const coverIndexFromDb = rows.findIndex((item) =>
+          Boolean(item.is_cover)
+        );
 
         const coverIndex = coverIndexFromDb >= 0 ? coverIndexFromDb : 0;
 
-        if (!isMounted) return;
-
-        setDraft((prev: any) => ({
-          ...(prev || {}),
+        const nextDraft: DraftRecord = {
           mode: "edit",
           source: "agent",
-          plan: undefined,
           payment: undefined,
 
-          propertyId: property.id,
-          kode: property.kode,
+          propertyId,
+          kode: getString(propertyRecord, "kode") || kode,
 
-          listingType: property.listing_type ?? "",
-          rentalType: property.rental_type ?? "",
-          propertyType: property.property_type ?? "",
+          listingType: getString(propertyRecord, "listing_type"),
+          rentalType: getString(propertyRecord, "rental_type"),
+          propertyType: getString(propertyRecord, "property_type"),
 
-          title: property.title ?? "",
-          title_id: (property as any).title_id ?? "",
-          description: property.description ?? "",
-          description_id: (property as any).description_id ?? "",
+          title: getString(propertyRecord, "title"),
+          title_id: getString(propertyRecord, "title_id"),
+          description: getString(propertyRecord, "description"),
+          description_id: getString(propertyRecord, "description_id"),
 
-          price: toInputValue(property.price),
+          price: toInputValue(propertyRecord.price),
 
-          address: property.address ?? "",
-          province: property.province ?? "",
-          city: property.city ?? "",
+          address: getString(propertyRecord, "address"),
+          province: getString(propertyRecord, "province"),
+          city: getString(propertyRecord, "city"),
 
-          housingName: property.housing_name ?? "",
-          customHousing: property.custom_housing ?? "",
-          note: property.location_note ?? "",
+          housingName: getString(propertyRecord, "housing_name"),
+          customHousing: getString(propertyRecord, "custom_housing"),
+          note:
+            getString(propertyRecord, "location_note") ||
+            getString(propertyRecord, "note"),
 
-          lt: toInputValue(property.land_size),
-          lb: toInputValue(property.building_size),
-          bed: toInputValue(property.bedrooms),
-          bath: toInputValue(property.bathrooms),
-          maid: toInputValue(property.maid_room),
-          garage: toInputValue(property.garage),
-          floor: toInputValue(property.floor),
+          lt: toInputValue(propertyRecord.land_size ?? propertyRecord.lt),
+          lb: toInputValue(
+            propertyRecord.building_size ?? propertyRecord.lb
+          ),
+          bed: toInputValue(propertyRecord.bedrooms ?? propertyRecord.bed),
+          bath: toInputValue(
+            propertyRecord.bathrooms ?? propertyRecord.bath
+          ),
+          maid: toInputValue(
+            propertyRecord.maid_room ?? propertyRecord.maid
+          ),
+          garage: toInputValue(
+            propertyRecord.garage ?? propertyRecord.garages
+          ),
+          floor: toInputValue(propertyRecord.floor ?? propertyRecord.floors),
 
-          furnishing: property.furnishing ?? "",
-          listrik: toInputValue(property.electricity),
-          jenisAir: property.water_type ?? "",
+          furnishing: getString(propertyRecord, "furnishing"),
+          listrik: toInputValue(
+            propertyRecord.electricity ?? propertyRecord.listrik
+          ),
+          jenisAir:
+            getString(propertyRecord, "water_type") ||
+            getString(propertyRecord, "jenis_air"),
 
-          sertifikat: property.certificate ?? "",
-          jenisTanah: property.land_type ?? "",
-          jenisZoning: property.zoning_type ?? "",
-          jenisKepemilikan: property.ownership_type ?? "",
+          sertifikat:
+            getString(propertyRecord, "certificate") ||
+            getString(propertyRecord, "sertifikat"),
+          jenisTanah:
+            getString(propertyRecord, "land_type") ||
+            getString(propertyRecord, "jenis_tanah"),
+          jenisZoning:
+            getString(propertyRecord, "zoning_type") ||
+            getString(propertyRecord, "jenis_zoning"),
+          jenisKepemilikan:
+            getString(propertyRecord, "ownership_type") ||
+            getString(propertyRecord, "jenis_kepemilikan"),
 
-          fasilitas: property.facilities ?? {},
-          nearby: property.nearby ?? {},
+          fasilitas: toRecord(
+            propertyRecord.facilities ?? propertyRecord.fasilitas
+          ),
+          nearby: toRecord(propertyRecord.nearby),
 
-          video: property.video_url ?? "",
+          video:
+            getString(propertyRecord, "video_url") ||
+            getString(propertyRecord, "video"),
           photos,
           coverIndex,
-        }));
+        };
+
+        if (!isMounted) return;
+
+        setDraft((prev) => {
+          return {
+            ...toRecord(prev),
+            ...nextDraft,
+          } as never;
+        });
 
         setLoading(false);
-      } catch (error: any) {
+      } catch (error) {
         console.error("Agent edit properti detail load error:", error);
 
         if (!isMounted) return;
-        setPageError(error?.message || "Gagal memuat data listing.");
+
+        setPageError(getErrorMessage(error));
         setLoading(false);
       }
     }
@@ -179,38 +265,68 @@ export default function AgentEditPropertiDetailPage() {
     };
   }, [
     kode,
-    draft?.kode,
-    draft?.mode,
-    draft?.source,
+    draftMode,
+    draftSource,
+    draftKode,
     draftTitleId,
     draftDescriptionId,
     setDraft,
   ]);
 
-  const isValid = useMemo(() => {
-    const propertyType = String(draft?.propertyType || "").trim();
-    const price = String(draft?.price || "").trim();
-    const lt = String(draft?.lt || "").trim();
-    const listingType = String(draft?.listingType || "").trim();
-    const rentalType = String(draft?.rentalType || "").trim();
+  const listingDraft = useMemo(
+    () => ({
+      ...toRecord(draft),
+      mode: "edit",
+      source: "agent",
+      payment: undefined,
+    }),
+    [draft]
+  );
 
-    const sertifikat = String(draft?.sertifikat || "").trim();
-    const jenisKepemilikan = String(draft?.jenisKepemilikan || "").trim();
-    const jenisTanah = String(draft?.jenisTanah || "").trim();
-    const jenisZoning = String(draft?.jenisZoning || "").trim();
+  const handleSetDraft = useCallback(
+    (updater: (prev: DraftRecord | null | undefined) => DraftRecord) => {
+      setDraft((prev) => {
+        const previousDraft = toRecord(prev);
+        return updater(previousDraft) as never;
+      });
+    },
+    [setDraft]
+  );
+
+  const isValid = useMemo(() => {
+    const propertyType = getString(draftRecord, "propertyType").trim();
+    const price = getString(draftRecord, "price").trim();
+    const lt = getString(draftRecord, "lt").trim();
+    const listingType = getString(draftRecord, "listingType").trim();
+    const rentalType = getString(draftRecord, "rentalType").trim();
+
+    const sertifikat = getString(draftRecord, "sertifikat").trim();
+    const jenisKepemilikan = getString(
+      draftRecord,
+      "jenisKepemilikan"
+    ).trim();
+    const jenisTanah = getString(draftRecord, "jenisTanah").trim();
+    const jenisZoning = getString(draftRecord, "jenisZoning").trim();
+
+    const isApartment = ["apartemen", "studio"].includes(propertyType);
+    const usesLandSize = !isApartment;
+    const requiresRentalType = listingType === "disewa";
+    const requiresSaleLegal = listingType !== "disewa";
+    const requiresLandLegal = propertyType === "tanah" && requiresSaleLegal;
 
     const baseValid =
       propertyType.length > 0 &&
       price.length > 0 &&
-      lt.length > 0;
+      (!usesLandSize || lt.length > 0);
 
-    if (propertyType === "tanah") {
-      if (listingType === "disewa") {
-        return baseValid && rentalType.length > 0;
-      }
+    if (!baseValid) return false;
 
+    if (requiresRentalType && rentalType.length === 0) {
+      return false;
+    }
+
+    if (requiresLandLegal) {
       return (
-        baseValid &&
         sertifikat.length > 0 &&
         jenisKepemilikan.length > 0 &&
         jenisTanah.length > 0 &&
@@ -218,22 +334,8 @@ export default function AgentEditPropertiDetailPage() {
       );
     }
 
-    if (listingType === "disewa") {
-      return baseValid && rentalType.length > 0;
-    }
-
-    return baseValid;
-  }, [
-    draft?.propertyType,
-    draft?.price,
-    draft?.lt,
-    draft?.listingType,
-    draft?.rentalType,
-    draft?.sertifikat,
-    draft?.jenisKepemilikan,
-    draft?.jenisTanah,
-    draft?.jenisZoning,
-  ]);
+    return true;
+  }, [draftRecord]);
 
   function handleBack() {
     router.push(
@@ -243,6 +345,7 @@ export default function AgentEditPropertiDetailPage() {
 
   function handleNext() {
     if (!isValid) return;
+
     router.push(
       `/agentdashboard/deskripsi-foto/edit/${encodeURIComponent(kode)}`
     );
@@ -294,14 +397,8 @@ export default function AgentEditPropertiDetailPage() {
   return (
     <main className="min-h-screen bg-white">
       <ListingForm
-        draft={{
-          ...(draft || {}),
-          mode: "edit",
-          source: "agent",
-          plan: undefined,
-          payment: undefined,
-        }}
-        setDraft={setDraft}
+        draft={listingDraft}
+        setDraft={handleSetDraft}
         inputBase={inputBase}
         isValid={isValid}
         onBack={handleBack}

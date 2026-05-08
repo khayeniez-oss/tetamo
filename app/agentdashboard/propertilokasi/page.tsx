@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, PackageCheck } from "lucide-react";
 import { useAgentListingDraft } from "@/app/agentdashboard/AgentListingDraftContext";
 import ListingIklan from "@/components/listing/ListingIklan";
 import { supabase } from "@/lib/supabase";
+
+type DraftRecord = Record<string, unknown>;
 
 type AgentMembershipRow = {
   id: string;
@@ -16,7 +18,7 @@ type AgentMembershipRow = {
   listing_limit: number | null;
   status: string | null;
   expires_at: string | null;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type PropertySlotRow = {
@@ -26,6 +28,47 @@ type PropertySlotRow = {
   listing_expires_at: string | null;
   transaction_status: string | null;
 };
+
+function toRecord(value: unknown): DraftRecord {
+  if (typeof value === "object" && value !== null) {
+    return value as DraftRecord;
+  }
+
+  return {};
+}
+
+function getNumberFromMetadata(
+  metadata: Record<string, unknown> | null,
+  key: string
+) {
+  const value = metadata?.[key];
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Gagal memeriksa paket agen.";
+}
 
 function isMembershipActive(membership: AgentMembershipRow | null) {
   if (!membership) return false;
@@ -45,11 +88,13 @@ function getMembershipListingLimit(membership: AgentMembershipRow | null) {
   const direct = Number(membership.listing_limit || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
 
+  const metadata = membership.metadata;
+
   const fromMetadata =
-    Number(membership.metadata?.listing_limit || 0) ||
-    Number(membership.metadata?.listingLimit || 0) ||
-    Number(membership.metadata?.active_listing_limit || 0) ||
-    Number(membership.metadata?.activeListingLimit || 0);
+    getNumberFromMetadata(metadata, "listing_limit") ||
+    getNumberFromMetadata(metadata, "listingLimit") ||
+    getNumberFromMetadata(metadata, "active_listing_limit") ||
+    getNumberFromMetadata(metadata, "activeListingLimit");
 
   if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata;
 
@@ -91,16 +136,6 @@ export default function AgentPropertiLokasiPage() {
   const [activeMembership, setActiveMembership] =
     useState<AgentMembershipRow | null>(null);
   const [usedSlots, setUsedSlots] = useState(0);
-
-  useEffect(() => {
-    setDraft((prev: any) => ({
-      ...(prev || {}),
-      mode: "create",
-      source: "agent",
-      plan: undefined,
-      payment: undefined,
-    }));
-  }, [setDraft]);
 
   useEffect(() => {
     let ignore = false;
@@ -153,7 +188,8 @@ export default function AgentPropertiLokasiPage() {
           return;
         }
 
-        const membershipRows = (membershipsRes.data || []) as AgentMembershipRow[];
+        const membershipRows = (membershipsRes.data ||
+          []) as AgentMembershipRow[];
         const propertyRows = (propertiesRes.data || []) as PropertySlotRow[];
 
         const currentMembership =
@@ -165,9 +201,9 @@ export default function AgentPropertiLokasiPage() {
         setActiveMembership(currentMembership);
         setUsedSlots(currentUsedSlots);
         setCheckingAccess(false);
-      } catch (error: any) {
+      } catch (error) {
         if (!ignore) {
-          setAccessError(error?.message || "Gagal memeriksa paket agen.");
+          setAccessError(getErrorMessage(error));
           setCheckingAccess(false);
         }
       }
@@ -189,6 +225,28 @@ export default function AgentPropertiLokasiPage() {
   const canCreateListing =
     Boolean(activeMembership) && listingLimit > 0 && remainingSlots > 0;
 
+  const listingDraft = useMemo(
+    () => ({
+      ...toRecord(draft),
+      mode: "create",
+      source: "agent",
+      plan: undefined,
+      payment: undefined,
+    }),
+    [draft]
+  );
+
+  const handleSetDraft = useCallback(
+    (updater: (prev: DraftRecord | null | undefined) => DraftRecord) => {
+      setDraft((prev: unknown) => {
+        const previousDraft = toRecord(prev);
+
+        return updater(previousDraft);
+      });
+    },
+    [setDraft]
+  );
+
   function handleNext() {
     if (!activeMembership) {
       alert("Paket agen belum aktif. Silakan pilih paket terlebih dahulu.");
@@ -209,6 +267,14 @@ export default function AgentPropertiLokasiPage() {
       router.push("/agentdashboard/listing-saya");
       return;
     }
+
+    setDraft((prev: unknown) => ({
+      ...toRecord(prev),
+      mode: "create",
+      source: "agent",
+      plan: undefined,
+      payment: undefined,
+    }));
 
     router.push("/agentdashboard/propertidetail");
   }
@@ -318,13 +384,8 @@ export default function AgentPropertiLokasiPage() {
   return (
     <main className="min-h-screen bg-white">
       <ListingIklan
-        draft={{
-          ...(draft || {}),
-          mode: "create",
-          source: "agent",
-          plan: undefined,
-        }}
-        setDraft={setDraft}
+        draft={listingDraft}
+        setDraft={handleSetDraft}
         onNext={handleNext}
         onReset={handleReset}
       />

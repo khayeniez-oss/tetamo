@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, PackageCheck } from "lucide-react";
 import { useAgentListingDraft } from "@/app/agentdashboard/AgentListingDraftContext";
 import ListingForm from "@/components/listing/ListingForm";
 import { supabase } from "@/lib/supabase";
+
+type DraftRecord = Record<string, unknown>;
 
 type AgentMembershipRow = {
   id: string;
@@ -16,7 +18,7 @@ type AgentMembershipRow = {
   listing_limit: number | null;
   status: string | null;
   expires_at: string | null;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type PropertySlotRow = {
@@ -26,6 +28,56 @@ type PropertySlotRow = {
   listing_expires_at: string | null;
   transaction_status: string | null;
 };
+
+function toRecord(value: unknown): DraftRecord {
+  if (typeof value === "object" && value !== null) {
+    return value as DraftRecord;
+  }
+
+  return {};
+}
+
+function getString(source: DraftRecord, key: string) {
+  const value = source[key];
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+
+  return "";
+}
+
+function getNumberFromMetadata(
+  metadata: Record<string, unknown> | null,
+  key: string
+) {
+  const value = metadata?.[key];
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Gagal memeriksa paket agen.";
+}
 
 function isMembershipActive(membership: AgentMembershipRow | null) {
   if (!membership) return false;
@@ -45,11 +97,13 @@ function getMembershipListingLimit(membership: AgentMembershipRow | null) {
   const direct = Number(membership.listing_limit || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
 
+  const metadata = membership.metadata;
+
   const fromMetadata =
-    Number(membership.metadata?.listing_limit || 0) ||
-    Number(membership.metadata?.listingLimit || 0) ||
-    Number(membership.metadata?.active_listing_limit || 0) ||
-    Number(membership.metadata?.activeListingLimit || 0);
+    getNumberFromMetadata(metadata, "listing_limit") ||
+    getNumberFromMetadata(metadata, "listingLimit") ||
+    getNumberFromMetadata(metadata, "active_listing_limit") ||
+    getNumberFromMetadata(metadata, "activeListingLimit");
 
   if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata;
 
@@ -95,15 +149,7 @@ export default function AgentPropertiDetailPage() {
   const inputBase =
     "mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10";
 
-  useEffect(() => {
-    setDraft((prev: any) => ({
-      ...(prev || {}),
-      mode: "create",
-      source: "agent",
-      plan: undefined,
-      payment: undefined,
-    }));
-  }, [setDraft]);
+  const draftRecord = useMemo(() => toRecord(draft), [draft]);
 
   useEffect(() => {
     let ignore = false;
@@ -156,7 +202,8 @@ export default function AgentPropertiDetailPage() {
           return;
         }
 
-        const membershipRows = (membershipsRes.data || []) as AgentMembershipRow[];
+        const membershipRows = (membershipsRes.data ||
+          []) as AgentMembershipRow[];
         const propertyRows = (propertiesRes.data || []) as PropertySlotRow[];
 
         const currentMembership =
@@ -168,9 +215,9 @@ export default function AgentPropertiDetailPage() {
         setActiveMembership(currentMembership);
         setUsedSlots(currentUsedSlots);
         setCheckingAccess(false);
-      } catch (error: any) {
+      } catch (error) {
         if (!ignore) {
-          setAccessError(error?.message || "Gagal memeriksa paket agen.");
+          setAccessError(getErrorMessage(error));
           setCheckingAccess(false);
         }
       }
@@ -192,22 +239,46 @@ export default function AgentPropertiDetailPage() {
   const canCreateListing =
     Boolean(activeMembership) && listingLimit > 0 && remainingSlots > 0;
 
-  const isValid = useMemo(() => {
-    const propertyType = String(draft?.propertyType || "").trim();
-    const price = String(draft?.price || "").trim();
-    const lt = String(draft?.lt || "").trim();
-    const listingType = String(draft?.listingType || "").trim();
-    const rentalType = String(draft?.rentalType || "").trim();
+  const listingDraft = useMemo(
+    () => ({
+      ...draftRecord,
+      mode: "create",
+      source: "agent",
+      payment: undefined,
+    }),
+    [draftRecord]
+  );
 
-    const sertifikat = String(draft?.sertifikat || "").trim();
-    const jenisKepemilikan = String(draft?.jenisKepemilikan || "").trim();
-    const jenisTanah = String(draft?.jenisTanah || "").trim();
-    const jenisZoning = String(draft?.jenisZoning || "").trim();
+  const handleSetDraft = useCallback(
+    (updater: (prev: DraftRecord | null | undefined) => DraftRecord) => {
+      setDraft((prev) => {
+        const previousDraft = toRecord(prev);
+        return updater(previousDraft) as never;
+      });
+    },
+    [setDraft]
+  );
+
+  const isValid = useMemo(() => {
+    const propertyType = getString(draftRecord, "propertyType").trim();
+    const price = getString(draftRecord, "price").trim();
+    const lt = getString(draftRecord, "lt").trim();
+    const listingType = getString(draftRecord, "listingType").trim();
+    const rentalType = getString(draftRecord, "rentalType").trim();
+
+    const sertifikat = getString(draftRecord, "sertifikat").trim();
+    const jenisKepemilikan = getString(
+      draftRecord,
+      "jenisKepemilikan"
+    ).trim();
+    const jenisTanah = getString(draftRecord, "jenisTanah").trim();
+    const jenisZoning = getString(draftRecord, "jenisZoning").trim();
 
     const isApartment = ["apartemen", "studio"].includes(propertyType);
     const usesLandSize = !isApartment;
     const requiresRentalType = listingType === "disewa";
-    const requiresLandLegal = propertyType === "tanah" && !requiresRentalType;
+    const requiresSaleLegal = listingType !== "disewa";
+    const requiresLandLegal = propertyType === "tanah" && requiresSaleLegal;
 
     const baseValid =
       propertyType.length > 0 &&
@@ -230,17 +301,7 @@ export default function AgentPropertiDetailPage() {
     }
 
     return true;
-  }, [
-    draft?.propertyType,
-    draft?.price,
-    draft?.lt,
-    draft?.listingType,
-    draft?.rentalType,
-    draft?.sertifikat,
-    draft?.jenisKepemilikan,
-    draft?.jenisTanah,
-    draft?.jenisZoning,
-  ]);
+  }, [draftRecord]);
 
   function handleBack() {
     router.push("/agentdashboard/propertilokasi");
@@ -268,6 +329,13 @@ export default function AgentPropertiDetailPage() {
     }
 
     if (!isValid) return;
+
+    setDraft((prev) => ({
+      ...toRecord(prev),
+      mode: "create",
+      source: "agent",
+      payment: undefined,
+    }) as never);
 
     router.push("/agentdashboard/deskripsi-foto");
   }
@@ -372,14 +440,8 @@ export default function AgentPropertiDetailPage() {
   return (
     <main className="min-h-screen bg-white">
       <ListingForm
-        draft={{
-          ...(draft || {}),
-          mode: "create",
-          source: "agent",
-          plan: undefined,
-          payment: undefined,
-        }}
-        setDraft={setDraft}
+        draft={listingDraft}
+        setDraft={handleSetDraft}
         inputBase={inputBase}
         isValid={isValid}
         onBack={handleBack}
