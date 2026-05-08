@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Download,
+  Filter,
   Globe,
   MapPin,
   MapPinned,
@@ -31,6 +33,8 @@ type AnalyticsEventName =
   | "property_view_detail_click"
   | "lead_created"
   | "buyer_request_submitted";
+
+type DateRangeOption = "today" | "7d" | "30d" | "all";
 
 type AnalyticsEventRow = {
   id: string;
@@ -116,7 +120,56 @@ type BubbleMapPoint = {
   leads: number;
 };
 
+type PropertyCountryInsight = {
+  propertyId: string;
+  kode: string;
+  title: string;
+  city: string;
+  topCountry: string;
+  topCountryCode: string;
+  topCountryVisitors: number;
+  countries: string;
+  views: number;
+  clicks: number;
+  leads: number;
+};
+
+type MetaAttribution = {
+  platform: "Facebook" | "Instagram" | "Messenger" | "Audience Network" | "Meta";
+  source: string;
+  medium: string;
+  campaign: string;
+  adSet: string;
+  adName: string;
+  campaignId: string;
+  isTagged: boolean;
+};
+
+type MetaAdInsight = {
+  key: string;
+  platform: string;
+  source: string;
+  campaign: string;
+  adSet: string;
+  adName: string;
+  campaignId: string;
+  visits: number;
+  events: number;
+  views: number;
+  clicks: number;
+  leads: number;
+  countries: string;
+  isTagged: boolean;
+};
+
 const GOOGLE_MAPS_SCRIPT_ID = "tetamo-google-maps-script";
+
+const DATE_FILTERS: { value: DateRangeOption; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "7d", label: "7 Days" },
+  { value: "30d", label: "30 Days" },
+  { value: "all", label: "All" },
+];
 
 function loadGoogleMapsScript() {
   if (typeof window === "undefined") {
@@ -196,6 +249,10 @@ function cleanText(value: any) {
   return String(value ?? "").trim();
 }
 
+function cleanLower(value: any) {
+  return cleanText(value).toLowerCase();
+}
+
 function cleanUpper(value: any) {
   return cleanText(value).toUpperCase();
 }
@@ -214,6 +271,11 @@ function escapeHtml(value: any) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function csvCell(value: any) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
 }
 
 function getCountryName(countryCode: string) {
@@ -238,6 +300,28 @@ function getCountryFlag(countryCode?: string) {
     .split("")
     .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
     .join("");
+}
+
+function getDateRangeStart(range: DateRangeOption) {
+  const now = new Date();
+
+  if (range === "all") return null;
+
+  if (range === "today") {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
+  const days = range === "7d" ? 7 : 30;
+  const date = new Date(now);
+  date.setDate(date.getDate() - days);
+  return date;
+}
+
+function getDateRangeLabel(range: DateRangeOption) {
+  if (range === "today") return "Today";
+  if (range === "7d") return "Last 7 Days";
+  if (range === "30d") return "Last 30 Days";
+  return "All Time";
 }
 
 function getEventSessionKey(event: AnalyticsEventRow) {
@@ -374,6 +458,85 @@ function shortenPath(value: string, maxLength = 64) {
   if (value.length <= maxLength) return value;
 
   return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function normalizeMetaPlatform(source: string, referrerDomain: string) {
+  const s = cleanLower(source);
+  const ref = cleanLower(referrerDomain);
+
+  if (
+    s === "ig" ||
+    s.includes("instagram") ||
+    ref.includes("instagram") ||
+    ref.includes("l.instagram")
+  ) {
+    return "Instagram" as const;
+  }
+
+  if (
+    s === "fb" ||
+    s.includes("facebook") ||
+    ref.includes("facebook") ||
+    ref.includes("lm.facebook") ||
+    ref.includes("l.facebook")
+  ) {
+    return "Facebook" as const;
+  }
+
+  if (s === "msg" || s.includes("messenger")) {
+    return "Messenger" as const;
+  }
+
+  if (s === "an" || s.includes("audience")) {
+    return "Audience Network" as const;
+  }
+
+  return "Meta" as const;
+}
+
+function getMetaAttribution(event: AnalyticsEventRow): MetaAttribution | null {
+  const metadata = event.metadata || {};
+
+  const utmSource = cleanText(metadata.utm_source);
+  const utmMedium = cleanText(metadata.utm_medium);
+  const utmCampaign = cleanText(metadata.utm_campaign);
+  const utmContent = cleanText(metadata.utm_content);
+  const utmTerm = cleanText(metadata.utm_term);
+  const utmId = cleanText(metadata.utm_id);
+  const utmPlatform = cleanLower(metadata.utm_platform);
+  const trafficSource = cleanText(metadata.traffic_source);
+  const referrerDomain = cleanText(metadata.referrer_domain);
+
+  const sourceCheck = cleanLower(
+    `${utmSource} ${utmMedium} ${utmPlatform} ${trafficSource} ${referrerDomain}`
+  );
+
+  const isMeta =
+    utmPlatform === "meta" ||
+    utmMedium === "paid_social" ||
+    sourceCheck.includes("facebook") ||
+    sourceCheck.includes("instagram") ||
+    sourceCheck.includes("fb") ||
+    sourceCheck.includes("ig") ||
+    sourceCheck.includes("l.instagram") ||
+    sourceCheck.includes("lm.facebook") ||
+    sourceCheck.includes("l.facebook");
+
+  if (!isMeta) return null;
+
+  const source = utmSource || trafficSource || referrerDomain || "meta";
+  const platform = normalizeMetaPlatform(source, referrerDomain);
+
+  return {
+    platform,
+    source,
+    medium: utmMedium || "referral",
+    campaign: utmCampaign || "No campaign tag",
+    adSet: utmTerm || "No ad set tag",
+    adName: utmContent || "No ad tag",
+    campaignId: utmId || "",
+    isTagged: Boolean(utmSource || utmCampaign || utmContent || utmTerm || utmId),
+  };
 }
 
 function StatCard({
@@ -608,38 +771,6 @@ function BubbleIntensityMap({
             fullscreenControl: true,
             clickableIcons: false,
             gestureHandling: "greedy",
-            styles: [
-              {
-                featureType: "all",
-                elementType: "labels.text.fill",
-                stylers: [{ color: "#6b7280" }],
-              },
-              {
-                featureType: "all",
-                elementType: "labels.text.stroke",
-                stylers: [{ color: "#ffffff" }],
-              },
-              {
-                featureType: "landscape",
-                elementType: "geometry",
-                stylers: [{ color: "#f3f4f6" }],
-              },
-              {
-                featureType: "water",
-                elementType: "geometry",
-                stylers: [{ color: "#ffffff" }],
-              },
-              {
-                featureType: "road",
-                elementType: "geometry",
-                stylers: [{ color: "#e5e7eb" }],
-              },
-              {
-                featureType: "administrative",
-                elementType: "geometry.stroke",
-                stylers: [{ color: "#d1d5db" }],
-              },
-            ],
           });
         }
 
@@ -664,23 +795,23 @@ function BubbleIntensityMap({
           const visitCount = Math.max(1, point.visits);
           const absoluteIntensity = Math.min(
             1,
-            Math.log10(visitCount + 1) / Math.log10(35)
+            Math.log10(visitCount + 1) / Math.log10(40)
           );
 
           const position = { lat: point.lat, lng: point.lng };
           bounds.extend(position);
 
-          const radius = Math.min(26000, 2500 + Math.sqrt(visitCount) * 2500);
-          const outerRadius = Math.min(36000, radius * 1.35);
+          const radius = Math.min(22000, 2200 + Math.sqrt(visitCount) * 2200);
+          const outerRadius = Math.min(30000, radius * 1.3);
 
-          const fillOpacity = Math.min(0.3, 0.12 + absoluteIntensity * 0.16);
+          const fillOpacity = Math.min(0.28, 0.1 + absoluteIntensity * 0.16);
           const outerFillOpacity = Math.min(
-            0.16,
-            0.04 + absoluteIntensity * 0.08
+            0.14,
+            0.035 + absoluteIntensity * 0.075
           );
           const strokeOpacity = Math.min(
-            0.72,
-            0.36 + absoluteIntensity * 0.24
+            0.68,
+            0.34 + absoluteIntensity * 0.22
           );
           const strokeWeight = visitCount >= 10 ? 2 : 1;
 
@@ -689,7 +820,7 @@ function BubbleIntensityMap({
             center: position,
             radius: outerRadius,
             strokeColor: "#2563eb",
-            strokeOpacity: 0.06,
+            strokeOpacity: 0.05,
             strokeWeight: 1,
             fillColor: "#2563eb",
             fillOpacity: outerFillOpacity,
@@ -818,6 +949,9 @@ function BubbleIntensityMap({
 
 export default function AdminAnalyticsPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangeOption>("7d");
+  const [selectedPropertyId, setSelectedPropertyId] = useState("all");
+
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [events, setEvents] = useState<AnalyticsEventRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -848,7 +982,7 @@ export default function AdminAnalyticsPage() {
             "id, created_at, event_name, property_id, user_id, source_page, session_id, visitor_id, lead_id, buyer_request_id, metadata"
           )
           .order("created_at", { ascending: false })
-          .limit(5000),
+          .limit(10000),
       ]);
 
       if (propertyError) {
@@ -885,7 +1019,7 @@ export default function AdminAnalyticsPage() {
         },
         (payload) => {
           const nextEvent = payload.new as AnalyticsEventRow;
-          setEvents((prev) => [nextEvent, ...prev].slice(0, 5000));
+          setEvents((prev) => [nextEvent, ...prev].slice(0, 10000));
         }
       )
       .subscribe();
@@ -905,23 +1039,75 @@ export default function AdminAnalyticsPage() {
     return map;
   }, [properties]);
 
-  const last30Events = useMemo(() => {
-    const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
+  const dateFilteredEvents = useMemo(() => {
+    const start = getDateRangeStart(dateRange);
+    if (!start) return events;
+
+    const startTime = start.getTime();
 
     return events.filter((event) => {
       const time = new Date(event.created_at).getTime();
+      return !Number.isNaN(time) && time >= startTime;
+    });
+  }, [events, dateRange]);
+
+  const analyticsEvents = useMemo(() => {
+    if (selectedPropertyId === "all") return dateFilteredEvents;
+
+    return dateFilteredEvents.filter(
+      (event) => event.property_id === selectedPropertyId
+    );
+  }, [dateFilteredEvents, selectedPropertyId]);
+
+  const propertyScopedAllEvents = useMemo(() => {
+    if (selectedPropertyId === "all") return events;
+
+    return events.filter((event) => event.property_id === selectedPropertyId);
+  }, [events, selectedPropertyId]);
+
+  const propertyOptions = useMemo(() => {
+    const idsWithEvents = new Set<string>();
+
+    for (const event of dateFilteredEvents) {
+      if (event.property_id) idsWithEvents.add(event.property_id);
+    }
+
+    return properties
+      .filter((property) => idsWithEvents.has(property.id))
+      .map((property) => ({
+        id: property.id,
+        label: `${property.kode || "No Code"} • ${property.title || "Untitled"}`,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [properties, dateFilteredEvents]);
+
+  const selectedProperty = useMemo(() => {
+    if (selectedPropertyId === "all") return null;
+    return propertyMap.get(selectedPropertyId) || null;
+  }, [selectedPropertyId, propertyMap]);
+
+  const selectedScopeLabel =
+    selectedPropertyId === "all"
+      ? "All Properties"
+      : selectedProperty?.title || "Selected Property";
+
+  const last30Events = useMemo(() => {
+    const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
+
+    return propertyScopedAllEvents.filter((event) => {
+      const time = new Date(event.created_at).getTime();
       return !Number.isNaN(time) && time >= thirtyMinutesAgo;
     });
-  }, [events]);
+  }, [propertyScopedAllEvents]);
 
   const liveEvents = useMemo(() => {
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
 
-    return events.filter((event) => {
+    return propertyScopedAllEvents.filter((event) => {
       const time = new Date(event.created_at).getTime();
       return !Number.isNaN(time) && time >= fiveMinutesAgo;
     });
-  }, [events]);
+  }, [propertyScopedAllEvents]);
 
   const visitorsLast30 = useMemo(() => {
     const set = new Set<string>();
@@ -946,20 +1132,22 @@ export default function AdminAnalyticsPage() {
   const totalVisitors = useMemo(() => {
     const set = new Set<string>();
 
-    for (const event of events) {
-      if (event.visitor_id) set.add(event.visitor_id);
+    for (const event of analyticsEvents) {
+      set.add(getEventSessionKey(event));
     }
 
     return set.size;
-  }, [events]);
+  }, [analyticsEvents]);
 
   const totalViews = useMemo(() => {
-    return events.filter((event) => isViewEvent(event.event_name)).length;
-  }, [events]);
+    return analyticsEvents.filter((event) => isViewEvent(event.event_name))
+      .length;
+  }, [analyticsEvents]);
 
   const totalClicks = useMemo(() => {
-    return events.filter((event) => isClickEvent(event.event_name)).length;
-  }, [events]);
+    return analyticsEvents.filter((event) => isClickEvent(event.event_name))
+      .length;
+  }, [analyticsEvents]);
 
   const activeNow = liveVisitors;
 
@@ -967,7 +1155,7 @@ export default function AdminAnalyticsPage() {
     const q = searchQuery.trim().toLowerCase();
     const map = new Map<string, Set<string>>();
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       const label = getTrafficSourceLabel(event);
       const sessionKey = getEventSessionKey(event);
 
@@ -985,13 +1173,13 @@ export default function AdminAnalyticsPage() {
       }))
       .filter((item) => (q ? item.name.toLowerCase().includes(q) : true))
       .sort((a, b) => b.visits - a.visits);
-  }, [events, searchQuery]);
+  }, [analyticsEvents, searchQuery]);
 
   const devices = useMemo<DeviceData[]>(() => {
     const q = searchQuery.trim().toLowerCase();
     const map = new Map<string, Set<string>>();
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       const label = getDeviceLabel(event);
       const sessionKey = getEventSessionKey(event);
 
@@ -1009,12 +1197,16 @@ export default function AdminAnalyticsPage() {
       }))
       .filter((item) => (q ? item.name.toLowerCase().includes(q) : true))
       .sort((a, b) => b.visits - a.visits);
-  }, [events, searchQuery]);
+  }, [analyticsEvents, searchQuery]);
 
   const conversion = useMemo(() => {
-    const views = events.filter((event) => isViewEvent(event.event_name)).length;
-    const clicks = events.filter((event) => isClickEvent(event.event_name)).length;
-    const leads = events.filter(
+    const views = analyticsEvents.filter((event) =>
+      isViewEvent(event.event_name)
+    ).length;
+    const clicks = analyticsEvents.filter((event) =>
+      isClickEvent(event.event_name)
+    ).length;
+    const leads = analyticsEvents.filter(
       (event) => event.event_name === "lead_created"
     ).length;
 
@@ -1026,12 +1218,144 @@ export default function AdminAnalyticsPage() {
       leadRateFromClicks: clicks > 0 ? (leads / clicks) * 100 : 0,
       leadRateFromViews: views > 0 ? (leads / views) * 100 : 0,
     };
-  }, [events]);
+  }, [analyticsEvents]);
+
+  const metaAdInsights = useMemo<MetaAdInsight[]>(() => {
+    const q = searchQuery.trim().toLowerCase();
+
+    const map = new Map<
+      string,
+      {
+        platform: string;
+        source: string;
+        medium: string;
+        campaign: string;
+        adSet: string;
+        adName: string;
+        campaignId: string;
+        isTagged: boolean;
+        sessions: Set<string>;
+        events: number;
+        views: number;
+        clicks: number;
+        leads: number;
+        countries: Map<string, Set<string>>;
+      }
+    >();
+
+    for (const event of analyticsEvents) {
+      const meta = getMetaAttribution(event);
+      if (!meta) continue;
+
+      const key = [
+        meta.platform,
+        meta.source,
+        meta.campaign,
+        meta.adSet,
+        meta.adName,
+        meta.campaignId,
+      ].join("|");
+
+      if (!map.has(key)) {
+        map.set(key, {
+          platform: meta.platform,
+          source: meta.source,
+          medium: meta.medium,
+          campaign: meta.campaign,
+          adSet: meta.adSet,
+          adName: meta.adName,
+          campaignId: meta.campaignId,
+          isTagged: meta.isTagged,
+          sessions: new Set<string>(),
+          events: 0,
+          views: 0,
+          clicks: 0,
+          leads: 0,
+          countries: new Map<string, Set<string>>(),
+        });
+      }
+
+      const item = map.get(key)!;
+      const sessionKey = getEventSessionKey(event);
+
+      item.sessions.add(sessionKey);
+      item.events += 1;
+
+      if (isViewEvent(event.event_name)) item.views += 1;
+      if (isClickEvent(event.event_name)) item.clicks += 1;
+      if (event.event_name === "lead_created") item.leads += 1;
+
+      const countryCode = getEventCountryCode(event);
+      if (countryCode) {
+        const countryName = getCountryName(countryCode);
+        if (!item.countries.has(countryName)) {
+          item.countries.set(countryName, new Set<string>());
+        }
+        item.countries.get(countryName)!.add(sessionKey);
+      }
+    }
+
+    return Array.from(map.entries())
+      .map(([key, item]) => {
+        const countryLabels = Array.from(item.countries.entries())
+          .map(([country, sessions]) => `${country} (${sessions.size})`)
+          .join(", ");
+
+        return {
+          key,
+          platform: item.platform,
+          source: item.source,
+          campaign: item.campaign,
+          adSet: item.adSet,
+          adName: item.adName,
+          campaignId: item.campaignId,
+          visits: item.sessions.size,
+          events: item.events,
+          views: item.views,
+          clicks: item.clicks,
+          leads: item.leads,
+          countries: countryLabels,
+          isTagged: item.isTagged,
+        };
+      })
+      .filter((item) => {
+        if (!q) return true;
+
+        return `${item.platform} ${item.source} ${item.campaign} ${item.adSet} ${item.adName} ${item.countries}`
+          .toLowerCase()
+          .includes(q);
+      })
+      .sort((a, b) => b.visits - a.visits || b.clicks - a.clicks);
+  }, [analyticsEvents, searchQuery]);
+
+  const metaPlatformStats = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+
+    for (const event of analyticsEvents) {
+      const meta = getMetaAttribution(event);
+      if (!meta) continue;
+
+      if (!map.has(meta.platform)) {
+        map.set(meta.platform, new Set<string>());
+      }
+
+      map.get(meta.platform)!.add(getEventSessionKey(event));
+    }
+
+    const order = ["Facebook", "Instagram", "Messenger", "Audience Network", "Meta"];
+
+    return order
+      .map((platform) => ({
+        platform,
+        visits: map.get(platform)?.size || 0,
+      }))
+      .filter((item) => item.visits > 0);
+  }, [analyticsEvents]);
 
   const pageViewsByPath = useMemo<PageViewItem[]>(() => {
     const map = new Map<string, number>();
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       if (!isViewEvent(event.event_name)) continue;
 
       const pathname = cleanText(
@@ -1045,7 +1369,7 @@ export default function AdminAnalyticsPage() {
       .map(([name, visits]) => ({ name, visits }))
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 5);
-  }, [events]);
+  }, [analyticsEvents]);
 
   const topCountries = useMemo<LocationStat[]>(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1060,7 +1384,7 @@ export default function AdminAnalyticsPage() {
       }
     >();
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       const countryCode = getEventCountryCode(event);
       if (!countryCode) continue;
 
@@ -1094,7 +1418,7 @@ export default function AdminAnalyticsPage() {
         q ? `${item.label} ${item.sublabel}`.toLowerCase().includes(q) : true
       )
       .sort((a, b) => b.visits - a.visits || b.events - a.events);
-  }, [events, searchQuery]);
+  }, [analyticsEvents, searchQuery]);
 
   const topCities = useMemo<LocationStat[]>(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1110,7 +1434,7 @@ export default function AdminAnalyticsPage() {
       }
     >();
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       const countryCode = getEventCountryCode(event);
       const region = getEventRegion(event);
       const city = getEventCity(event);
@@ -1157,7 +1481,7 @@ export default function AdminAnalyticsPage() {
         q ? `${item.label} ${item.sublabel}`.toLowerCase().includes(q) : true
       )
       .sort((a, b) => b.visits - a.visits || b.events - a.events);
-  }, [events, searchQuery]);
+  }, [analyticsEvents, searchQuery]);
 
   const bubbleMapPoints = useMemo<BubbleMapPoint[]>(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1180,7 +1504,7 @@ export default function AdminAnalyticsPage() {
       }
     >();
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       const lat = getEventLatitude(event);
       const lng = getEventLongitude(event);
 
@@ -1252,12 +1576,16 @@ export default function AdminAnalyticsPage() {
         q ? `${item.label} ${item.sublabel}`.toLowerCase().includes(q) : true
       )
       .sort((a, b) => b.visits - a.visits || b.events - a.events);
-  }, [events, searchQuery]);
+  }, [analyticsEvents, searchQuery]);
 
   const listingPerformance = useMemo<ListingAnalytics[]>(() => {
     const map = new Map<string, ListingAnalytics>();
 
     for (const property of properties) {
+      if (selectedPropertyId !== "all" && property.id !== selectedPropertyId) {
+        continue;
+      }
+
       map.set(property.id, {
         id: property.id,
         kode: property.kode ?? "-",
@@ -1269,7 +1597,7 @@ export default function AdminAnalyticsPage() {
       });
     }
 
-    for (const event of events) {
+    for (const event of analyticsEvents) {
       if (!event.property_id) continue;
 
       const property = propertyMap.get(event.property_id);
@@ -1312,7 +1640,120 @@ export default function AdminAnalyticsPage() {
         if (b.clicks !== a.clicks) return b.clicks - a.clicks;
         return b.views - a.views;
       });
-  }, [events, properties, propertyMap, searchQuery]);
+  }, [
+    analyticsEvents,
+    properties,
+    propertyMap,
+    searchQuery,
+    selectedPropertyId,
+  ]);
+
+  const propertyCountryInsights = useMemo<PropertyCountryInsight[]>(() => {
+    const propertyMapData = new Map<
+      string,
+      {
+        propertyId: string;
+        kode: string;
+        title: string;
+        city: string;
+        views: number;
+        clicks: number;
+        leads: number;
+        countries: Map<
+          string,
+          {
+            countryCode: string;
+            countryName: string;
+            sessions: Set<string>;
+            events: number;
+          }
+        >;
+      }
+    >();
+
+    for (const event of analyticsEvents) {
+      if (!event.property_id) continue;
+
+      const property = propertyMap.get(event.property_id);
+
+      if (!propertyMapData.has(event.property_id)) {
+        propertyMapData.set(event.property_id, {
+          propertyId: event.property_id,
+          kode: property?.kode || String(event.metadata?.property_code || "-"),
+          title:
+            property?.title ||
+            String(event.metadata?.property_title || "Unknown Property"),
+          city: property?.city || property?.area || property?.province || "-",
+          views: 0,
+          clicks: 0,
+          leads: 0,
+          countries: new Map(),
+        });
+      }
+
+      const item = propertyMapData.get(event.property_id)!;
+
+      if (isViewEvent(event.event_name)) item.views += 1;
+      if (isClickEvent(event.event_name)) item.clicks += 1;
+      if (event.event_name === "lead_created") item.leads += 1;
+
+      const countryCode = getEventCountryCode(event);
+      if (!countryCode) continue;
+
+      const countryName = getCountryName(countryCode);
+      const sessionKey = getEventSessionKey(event);
+
+      if (!item.countries.has(countryCode)) {
+        item.countries.set(countryCode, {
+          countryCode,
+          countryName,
+          sessions: new Set(),
+          events: 0,
+        });
+      }
+
+      const country = item.countries.get(countryCode)!;
+      country.sessions.add(sessionKey);
+      country.events += 1;
+    }
+
+    return Array.from(propertyMapData.values())
+      .map((item) => {
+        const countries = Array.from(item.countries.values()).sort(
+          (a, b) => b.sessions.size - a.sessions.size || b.events - a.events
+        );
+
+        const top = countries[0];
+
+        return {
+          propertyId: item.propertyId,
+          kode: item.kode,
+          title: item.title,
+          city: item.city,
+          topCountry: top?.countryName || "-",
+          topCountryCode: top?.countryCode || "",
+          topCountryVisitors: top?.sessions.size || 0,
+          countries: countries
+            .slice(0, 3)
+            .map((country) => `${country.countryName} (${country.sessions.size})`)
+            .join(", "),
+          views: item.views,
+          clicks: item.clicks,
+          leads: item.leads,
+        };
+      })
+      .filter(
+        (item) =>
+          item.views > 0 ||
+          item.clicks > 0 ||
+          item.leads > 0 ||
+          item.topCountryVisitors > 0
+      )
+      .sort(
+        (a, b) => b.topCountryVisitors - a.topCountryVisitors || b.views - a.views
+      )
+      .slice(0, 10);
+  }, [analyticsEvents, propertyMap]);
 
   const listingPerformanceTotalPages = Math.max(
     1,
@@ -1321,7 +1762,7 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     setListingPerformancePage(1);
-  }, [searchQuery, listingPerformance.length]);
+  }, [searchQuery, listingPerformance.length, dateRange, selectedPropertyId]);
 
   useEffect(() => {
     if (listingPerformancePage > listingPerformanceTotalPages) {
@@ -1356,7 +1797,7 @@ export default function AdminAnalyticsPage() {
   const recentEvents = useMemo<RecentEventItem[]>(() => {
     const q = searchQuery.trim().toLowerCase();
 
-    return events
+    return analyticsEvents
       .filter(
         (event) =>
           event.event_name === "property_whatsapp_click" ||
@@ -1392,7 +1833,7 @@ export default function AdminAnalyticsPage() {
           eventLabel(item.event_name).toLowerCase().includes(q)
         );
       });
-  }, [events, propertyMap, searchQuery]);
+  }, [analyticsEvents, propertyMap, searchQuery]);
 
   const recentEventsTotalPages = Math.max(
     1,
@@ -1401,7 +1842,7 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     setRecentEventsPage(1);
-  }, [searchQuery, recentEvents.length]);
+  }, [searchQuery, recentEvents.length, dateRange, selectedPropertyId]);
 
   useEffect(() => {
     if (recentEventsPage > recentEventsTotalPages) {
@@ -1419,16 +1860,198 @@ export default function AdminAnalyticsPage() {
     [recentEventsPage, recentEventsTotalPages]
   );
 
+  function handleExportReport() {
+    const rows: string[][] = [];
+
+    rows.push(["Tetamo Analytics Report"]);
+    rows.push(["Date Range", getDateRangeLabel(dateRange)]);
+    rows.push(["Scope", selectedScopeLabel]);
+    rows.push(["Generated At", new Date().toISOString()]);
+    rows.push([]);
+
+    rows.push(["Summary"]);
+    rows.push(["Metric", "Value"]);
+    rows.push(["Total Visitors", String(totalVisitors)]);
+    rows.push(["Total Views", String(totalViews)]);
+    rows.push(["Tracked Clicks", String(totalClicks)]);
+    rows.push(["Live Visitors", String(liveVisitors)]);
+    rows.push(["Click Rate", percentFormat(conversion.clickRate)]);
+    rows.push(["Lead / Click", percentFormat(conversion.leadRateFromClicks)]);
+    rows.push(["Lead / View", percentFormat(conversion.leadRateFromViews)]);
+    rows.push([]);
+
+    rows.push(["Meta Ads Performance"]);
+    rows.push([
+      "Platform",
+      "Source",
+      "Campaign",
+      "Ad Set",
+      "Ad Name",
+      "Campaign ID",
+      "Visitors",
+      "Events",
+      "Views",
+      "Clicks",
+      "Leads",
+      "Countries",
+      "Tagged",
+    ]);
+
+    metaAdInsights.forEach((item) => {
+      rows.push([
+        item.platform,
+        item.source,
+        item.campaign,
+        item.adSet,
+        item.adName,
+        item.campaignId,
+        String(item.visits),
+        String(item.events),
+        String(item.views),
+        String(item.clicks),
+        String(item.leads),
+        item.countries,
+        item.isTagged ? "Yes" : "No",
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(["Listing Performance"]);
+    rows.push(["Code", "Title", "City", "Views", "Clicks", "Leads"]);
+    listingPerformance.forEach((item) => {
+      rows.push([
+        item.kode,
+        item.title,
+        item.city,
+        String(item.views),
+        String(item.clicks),
+        String(item.leads),
+      ]);
+    });
+
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `tetamo-analytics-${dateRange}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-1.5">
-        <h1 className="text-xl font-bold tracking-tight text-[#1C1C1E] sm:text-2xl">
-          Real-time Analytics
-        </h1>
-        <p className="text-[12px] leading-5 text-gray-500 sm:text-sm">
-          See how visitors interact with Tetamo in real time, including where
-          viewers are coming from.
-        </p>
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-bold tracking-tight text-[#1C1C1E] sm:text-2xl">
+            Real-time Analytics
+          </h1>
+          <p className="text-[12px] leading-5 text-gray-500 sm:text-sm">
+            Track Tetamo visitors, Meta ads traffic, listing activity, and viewer
+            location.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleExportReport}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1C1C1E] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 sm:w-auto"
+        >
+          <Download className="h-4 w-4" />
+          Export Report
+        </button>
+      </div>
+
+      <div className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_260px_180px]">
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+              size={16}
+            />
+
+            <input
+              type="text"
+              placeholder="Search source, Meta campaign, ad name, country, city, listing..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-11 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:text-sm"
+            />
+          </div>
+
+          <select
+            value={selectedPropertyId}
+            onChange={(e) => setSelectedPropertyId(e.target.value)}
+            className="h-11 rounded-2xl border border-gray-300 bg-white px-4 text-[13px] outline-none focus:border-[#1C1C1E] sm:text-sm"
+          >
+            <option value="all">All properties</option>
+            {propertyOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+
+          <div className="grid grid-cols-4 gap-1 rounded-2xl border border-gray-200 bg-gray-50 p-1">
+            {DATE_FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setDateRange(item.value)}
+                className={`rounded-xl px-2 py-2 text-[11px] font-semibold transition sm:text-xs ${
+                  dateRange === item.value
+                    ? "bg-[#1C1C1E] text-white shadow-sm"
+                    : "text-gray-600 hover:bg-white"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
+          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1">
+            <Filter className="h-3.5 w-3.5" />
+            {getDateRangeLabel(dateRange)}
+          </span>
+          <span className="rounded-full bg-gray-100 px-3 py-1">
+            Scope: {selectedScopeLabel}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total Visitors"
+          value={numberFormat(totalVisitors)}
+          Icon={Users}
+          caption="Unique visitors in selected scope."
+        />
+        <StatCard
+          title="Total Views"
+          value={numberFormat(totalViews)}
+          Icon={Globe}
+          caption="Property card and detail views."
+        />
+        <StatCard
+          title="Tracked Clicks"
+          value={numberFormat(totalClicks)}
+          Icon={MousePointerClick}
+          caption="WhatsApp, details, and viewing clicks."
+        />
+        <StatCard
+          title="Active Now"
+          value={numberFormat(activeNow)}
+          Icon={Activity}
+          caption="Unique visitors in the last 5 minutes."
+        />
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
@@ -1520,46 +2143,112 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Total Visitors"
-          value={numberFormat(totalVisitors)}
-          Icon={Users}
-          caption="Unique visitor_id tracked."
-        />
-        <StatCard
-          title="Total Views"
-          value={numberFormat(totalViews)}
-          Icon={Globe}
-          caption="Property card and detail views."
-        />
-        <StatCard
-          title="Tracked Clicks"
-          value={numberFormat(totalClicks)}
-          Icon={MousePointerClick}
-          caption="WhatsApp, details, and viewing clicks."
-        />
-        <StatCard
-          title="Active Now"
-          value={numberFormat(activeNow)}
-          Icon={Activity}
-          caption="Unique visitors in the last 5 minutes."
-        />
-      </div>
+      <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+              Meta Ads Performance
+            </h2>
+            <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+              Shows Facebook/Instagram traffic from UTM tags and Meta referral
+              sources. New FB clicks after your URL parameter update will appear
+              here.
+            </p>
+          </div>
+        </div>
 
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-          size={16}
-        />
+        <div className="grid grid-cols-1 gap-3 border-b border-gray-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          {metaPlatformStats.length > 0 ? (
+            metaPlatformStats.map((item) => (
+              <div
+                key={item.platform}
+                className="rounded-2xl border border-gray-100 bg-gray-50 p-4"
+              >
+                <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                  {item.platform}
+                </p>
+                <p className="mt-1 text-xl font-semibold text-[#1C1C1E]">
+                  {numberFormat(item.visits)}
+                </p>
+                <p className="mt-1 text-[11px] text-gray-500">visitors</p>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm text-gray-500">
+              No Meta ad traffic detected yet. Future Facebook/Instagram clicks
+              with UTM parameters will appear here.
+            </div>
+          )}
+        </div>
 
-        <input
-          type="text"
-          placeholder="Search source, device, country, city, listing, code..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-10 w-full rounded-2xl border border-gray-300 pl-10 pr-4 text-[13px] outline-none transition placeholder:text-gray-400 focus:border-[#1C1C1E] sm:h-11 sm:pl-11 sm:text-sm"
-        />
+        {metaAdInsights.length > 0 ? (
+          <div className="divide-y divide-gray-100">
+            {metaAdInsights.slice(0, 12).map((item) => (
+              <div key={item.key} className="px-4 py-4 sm:px-5">
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-semibold text-white">
+                        {item.platform}
+                      </span>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                          item.isTagged
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {item.isTagged ? "UTM Tagged" : "Referral / Untagged"}
+                      </span>
+                    </div>
+
+                    <p className="mt-2 truncate text-sm font-semibold text-[#1C1C1E]">
+                      {item.campaign}
+                    </p>
+                    <p className="mt-1 truncate text-[12px] text-gray-500">
+                      Ad Set: {item.adSet}
+                    </p>
+                    <p className="mt-1 truncate text-[12px] text-gray-500">
+                      Ad: {item.adName}
+                    </p>
+                    {item.countries ? (
+                      <p className="mt-1 truncate text-[11px] text-gray-400">
+                        Countries: {item.countries}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center">
+                    <div>
+                      <p className="text-[10px] text-gray-400">Visitors</p>
+                      <p className="text-sm font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.visits)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Views</p>
+                      <p className="text-sm font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.views)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Clicks</p>
+                      <p className="text-sm font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.clicks)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Leads</p>
+                      <p className="text-sm font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.leads)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1766,6 +2455,68 @@ export default function AdminAnalyticsPage() {
 
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
+              <h2 className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                Top Viewed Countries Per Listing
+              </h2>
+              <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
+                Useful for agent and developer reporting.
+              </p>
+            </div>
+
+            {propertyCountryInsights.length > 0 ? (
+              <div className="divide-y divide-gray-100">
+                {propertyCountryInsights.map((item) => (
+                  <div key={item.propertyId} className="px-3.5 py-4 sm:px-5">
+                    <div className="flex flex-col gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-500 sm:text-[11px]">
+                          {item.kode} • {item.city}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm">
+                          {item.title}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                              Top Country
+                            </p>
+                            <p className="mt-1 truncate text-sm font-semibold text-[#1C1C1E]">
+                              {getCountryFlag(item.topCountryCode)}{" "}
+                              {item.topCountry}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-[#1C1C1E]">
+                              {numberFormat(item.topCountryVisitors)}
+                            </p>
+                            <p className="text-[10px] text-gray-500">
+                              visitors
+                            </p>
+                          </div>
+                        </div>
+
+                        {item.countries ? (
+                          <p className="mt-2 text-[11px] leading-5 text-gray-500">
+                            {item.countries}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-sm text-gray-500 sm:px-5">
+                No country-by-listing data yet.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-3.5 py-4 sm:px-5">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 sm:h-10 sm:w-10">
                   <Activity className="h-4 w-4 text-[#1C1C1E] sm:h-5 sm:w-5" />
@@ -1881,8 +2632,9 @@ export default function AdminAnalyticsPage() {
       </div>
 
       <p className="text-[11px] leading-5 text-gray-500 sm:text-xs">
-        Note: visitor bubbles depend on live Vercel geo headers. Localhost may
-        not show full country/city/latitude/longitude data.
+        Note: Meta Ads Performance becomes clearer after your ads use URL
+        parameters. Old boosted Instagram traffic may still appear as referral
+        or direct.
       </p>
     </div>
   );
