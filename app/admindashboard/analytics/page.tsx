@@ -10,11 +10,8 @@ import {
   Globe,
   MapPin,
   MapPinned,
-  Monitor,
   MousePointerClick,
   Search,
-  Smartphone,
-  Tablet,
   Users,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -959,6 +956,9 @@ export default function AdminAnalyticsPage() {
   const listingPerformancePageSize = 10;
   const [listingPerformancePage, setListingPerformancePage] = useState(1);
 
+  const propertyCountryPageSize = 5;
+  const [propertyCountryPage, setPropertyCountryPage] = useState(1);
+
   const recentEventsPageSize = 3;
   const [recentEventsPage, setRecentEventsPage] = useState(1);
 
@@ -1220,7 +1220,7 @@ export default function AdminAnalyticsPage() {
     };
   }, [analyticsEvents]);
 
-  const metaAdInsights = useMemo<MetaAdInsight[]>(() => {
+  const metaAdInsights = useMemo<MetaAdInsight[]>((() => {
     const q = searchQuery.trim().toLowerCase();
 
     const map = new Map<
@@ -1326,7 +1326,7 @@ export default function AdminAnalyticsPage() {
           .includes(q);
       })
       .sort((a, b) => b.visits - a.visits || b.clicks - a.clicks);
-  }, [analyticsEvents, searchQuery]);
+  }) as () => MetaAdInsight[], [analyticsEvents, searchQuery]);
 
   const metaPlatformStats = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -1751,8 +1751,7 @@ export default function AdminAnalyticsPage() {
       )
       .sort(
         (a, b) => b.topCountryVisitors - a.topCountryVisitors || b.views - a.views
-      )
-      .slice(0, 10);
+      );
   }, [analyticsEvents, propertyMap]);
 
   const listingPerformanceTotalPages = Math.max(
@@ -1760,9 +1759,23 @@ export default function AdminAnalyticsPage() {
     Math.ceil(listingPerformance.length / listingPerformancePageSize)
   );
 
+  const propertyCountryTotalPages = Math.max(
+    1,
+    Math.ceil(propertyCountryInsights.length / propertyCountryPageSize)
+  );
+
   useEffect(() => {
     setListingPerformancePage(1);
   }, [searchQuery, listingPerformance.length, dateRange, selectedPropertyId]);
+
+  useEffect(() => {
+    setPropertyCountryPage(1);
+  }, [
+    searchQuery,
+    propertyCountryInsights.length,
+    dateRange,
+    selectedPropertyId,
+  ]);
 
   useEffect(() => {
     if (listingPerformancePage > listingPerformanceTotalPages) {
@@ -1770,9 +1783,20 @@ export default function AdminAnalyticsPage() {
     }
   }, [listingPerformancePage, listingPerformanceTotalPages]);
 
+  useEffect(() => {
+    if (propertyCountryPage > propertyCountryTotalPages) {
+      setPropertyCountryPage(propertyCountryTotalPages);
+    }
+  }, [propertyCountryPage, propertyCountryTotalPages]);
+
   const pagedListingPerformance = listingPerformance.slice(
     (listingPerformancePage - 1) * listingPerformancePageSize,
     listingPerformancePage * listingPerformancePageSize
+  );
+
+  const pagedPropertyCountryInsights = propertyCountryInsights.slice(
+    (propertyCountryPage - 1) * propertyCountryPageSize,
+    propertyCountryPage * propertyCountryPageSize
   );
 
   const visibleListingPerformancePages = useMemo(
@@ -1784,6 +1808,11 @@ export default function AdminAnalyticsPage() {
     [listingPerformancePage, listingPerformanceTotalPages]
   );
 
+  const visiblePropertyCountryPages = useMemo(
+    () => visiblePageNumbers(propertyCountryPage, propertyCountryTotalPages),
+    [propertyCountryPage, propertyCountryTotalPages]
+  );
+
   const listingPerformanceStartItem =
     listingPerformance.length === 0
       ? 0
@@ -1792,6 +1821,16 @@ export default function AdminAnalyticsPage() {
   const listingPerformanceEndItem = Math.min(
     listingPerformancePage * listingPerformancePageSize,
     listingPerformance.length
+  );
+
+  const propertyCountryStartItem =
+    propertyCountryInsights.length === 0
+      ? 0
+      : (propertyCountryPage - 1) * propertyCountryPageSize + 1;
+
+  const propertyCountryEndItem = Math.min(
+    propertyCountryPage * propertyCountryPageSize,
+    propertyCountryInsights.length
   );
 
   const recentEvents = useMemo<RecentEventItem[]>(() => {
@@ -1923,6 +1962,34 @@ export default function AdminAnalyticsPage() {
         item.kode,
         item.title,
         item.city,
+        String(item.views),
+        String(item.clicks),
+        String(item.leads),
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(["Top Viewed Countries Per Listing"]);
+    rows.push([
+      "Code",
+      "Title",
+      "City",
+      "Top Country",
+      "Top Country Visitors",
+      "Countries",
+      "Views",
+      "Clicks",
+      "Leads",
+    ]);
+
+    propertyCountryInsights.forEach((item) => {
+      rows.push([
+        item.kode,
+        item.title,
+        item.city,
+        item.topCountry,
+        String(item.topCountryVisitors),
+        item.countries,
         String(item.views),
         String(item.clicks),
         String(item.leads),
@@ -2459,55 +2526,108 @@ export default function AdminAnalyticsPage() {
                 Top Viewed Countries Per Listing
               </h2>
               <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
-                Useful for agent and developer reporting.
+                Shows 5 listings per page for cleaner agent and developer reporting.
               </p>
             </div>
 
             {propertyCountryInsights.length > 0 ? (
-              <div className="divide-y divide-gray-100">
-                {propertyCountryInsights.map((item) => (
-                  <div key={item.propertyId} className="px-3.5 py-4 sm:px-5">
-                    <div className="flex flex-col gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-gray-500 sm:text-[11px]">
-                          {item.kode} • {item.city}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm">
-                          {item.title}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
-                              Top Country
-                            </p>
-                            <p className="mt-1 truncate text-sm font-semibold text-[#1C1C1E]">
-                              {getCountryFlag(item.topCountryCode)}{" "}
-                              {item.topCountry}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold text-[#1C1C1E]">
-                              {numberFormat(item.topCountryVisitors)}
-                            </p>
-                            <p className="text-[10px] text-gray-500">
-                              visitors
-                            </p>
-                          </div>
+              <>
+                <div className="divide-y divide-gray-100">
+                  {pagedPropertyCountryInsights.map((item) => (
+                    <div key={item.propertyId} className="px-3.5 py-4 sm:px-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-gray-500 sm:text-[11px]">
+                            {item.kode} • {item.city}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-[13px] font-semibold text-[#1C1C1E] sm:text-sm">
+                            {item.title}
+                          </p>
                         </div>
 
-                        {item.countries ? (
-                          <p className="mt-2 text-[11px] leading-5 text-gray-500">
-                            {item.countries}
-                          </p>
-                        ) : null}
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                                Top Country
+                              </p>
+                              <p className="mt-1 truncate text-sm font-semibold text-[#1C1C1E]">
+                                {getCountryFlag(item.topCountryCode)}{" "}
+                                {item.topCountry}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-[#1C1C1E]">
+                                {numberFormat(item.topCountryVisitors)}
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                visitors
+                              </p>
+                            </div>
+                          </div>
+
+                          {item.countries ? (
+                            <p className="mt-2 text-[11px] leading-5 text-gray-500">
+                              {item.countries}
+                            </p>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-gray-100 px-3.5 py-4 sm:px-5">
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">
+                      Showing {propertyCountryStartItem}–
+                      {propertyCountryEndItem} of {propertyCountryInsights.length}{" "}
+                      listings
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPropertyCountryPage((p) => Math.max(1, p - 1))
+                        }
+                        disabled={propertyCountryPage === 1}
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-40 sm:h-10 sm:px-4 sm:text-sm"
+                      >
+                        Previous
+                      </button>
+
+                      {visiblePropertyCountryPages.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPropertyCountryPage(p)}
+                          className={`inline-flex h-9 min-w-[36px] items-center justify-center rounded-xl border px-3 text-[12px] font-medium sm:h-10 sm:min-w-[40px] sm:text-sm ${
+                            propertyCountryPage === p
+                              ? "border-black bg-black text-white"
+                              : "border-gray-300 bg-white text-gray-700"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPropertyCountryPage((p) =>
+                            Math.min(propertyCountryTotalPages, p + 1)
+                          )
+                        }
+                        disabled={propertyCountryPage === propertyCountryTotalPages}
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-gray-300 bg-[#1C1C1E] px-3.5 text-[12px] font-medium text-white disabled:opacity-40 sm:h-10 sm:px-4 sm:text-sm"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              </>
             ) : (
               <div className="px-4 py-8 text-sm text-gray-500 sm:px-5">
                 No country-by-listing data yet.
