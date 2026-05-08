@@ -1,5 +1,3 @@
-import { supabase } from "@/lib/supabase";
-
 export type AnalyticsEventName =
   | "property_card_view"
   | "property_detail_view"
@@ -197,27 +195,39 @@ export async function trackEvent({
   metadata = {},
 }: TrackEventParams) {
   try {
+    if (typeof window === "undefined") return;
+
     const finalVisitorId = visitor_id ?? getVisitorId();
     const finalSessionId = session_id ?? getSessionId();
     const browserMetadata = buildBrowserMetadata();
 
-    const { error } = await supabase.from("analytics_events").insert({
-      event_name,
-      property_id,
-      user_id,
-      source_page,
-      session_id: finalSessionId,
-      visitor_id: finalVisitorId,
-      lead_id,
-      buyer_request_id,
-      metadata: {
-        ...browserMetadata,
-        ...metadata,
+    const response = await fetch("/api/analytics/track", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
+      keepalive: true,
+      body: JSON.stringify({
+        event_name,
+        property_id,
+        user_id,
+        source_page,
+        session_id: finalSessionId,
+        visitor_id: finalVisitorId,
+        lead_id,
+        buyer_request_id,
+        metadata: {
+          ...browserMetadata,
+          ...metadata,
+        },
+      }),
     });
 
-    if (error) {
-      logAnalyticsWarning("trackEvent insert warning:", error);
+    if (!response.ok) {
+      logAnalyticsWarning("trackEvent API warning:", {
+        status: response.status,
+        statusText: response.statusText,
+      });
     }
   } catch (error) {
     logAnalyticsWarning("trackEvent unexpected warning:", error);
