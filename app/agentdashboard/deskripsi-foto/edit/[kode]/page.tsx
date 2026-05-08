@@ -21,6 +21,16 @@ function cleanNumber(value: any) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+function cleanDecimal(value: any) {
+  if (value === null || value === undefined) return null;
+
+  const raw = String(value).replace(/[^\d.]/g, "");
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function toInputValue(value: any) {
   if (value === null || value === undefined) return "";
   return String(value);
@@ -136,6 +146,11 @@ export default function AgentEditDeskripsiFotoPage() {
           propertyType: property.property_type ?? "",
           marketType: property.market_type ?? "",
 
+          saleType: property.sale_type ?? "",
+          leaseYears: toInputValue(property.lease_years),
+          leaseUntilYear: toInputValue(property.lease_until_year),
+          leaseExtendable: property.lease_extendable ?? "",
+
           title: property.title ?? "",
           title_id: (property as any).title_id ?? "",
           description: property.description ?? "",
@@ -158,6 +173,15 @@ export default function AgentEditDeskripsiFotoPage() {
           maid: toInputValue(property.maid_room),
           garage: toInputValue(property.garage),
           floor: toInputValue(property.floor),
+
+          landUnit: property.land_unit ?? "",
+          unitFloor: property.unit_floor ?? "",
+          towerBlock: property.tower_block ?? "",
+          ceilingHeight: toInputValue(property.ceiling_height),
+          roadAccess: property.road_access ?? "",
+          frontage: toInputValue(property.frontage),
+          depth: toInputValue(property.depth),
+          dimensionText: property.dimension_text ?? "",
 
           furnishing: property.furnishing ?? "",
           listrik: toInputValue(property.electricity),
@@ -222,6 +246,8 @@ export default function AgentEditDeskripsiFotoPage() {
         throw new Error("Please log in first.");
       }
 
+      const draftAny = draft as any;
+
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("full_name, phone, agency, role")
@@ -263,6 +289,11 @@ export default function AgentEditDeskripsiFotoPage() {
         property_type: cleanText(draft?.propertyType),
         market_type: cleanText(draft?.marketType),
 
+        sale_type: cleanText(draftAny?.saleType),
+        lease_years: cleanNumber(draftAny?.leaseYears),
+        lease_until_year: cleanNumber(draftAny?.leaseUntilYear),
+        lease_extendable: cleanText(draftAny?.leaseExtendable),
+
         title: cleanText(draft?.title),
         title_id: cleanText((draft as any)?.title_id),
 
@@ -283,13 +314,22 @@ export default function AgentEditDeskripsiFotoPage() {
         custom_housing: cleanText(draft?.customHousing),
         location_note: cleanText(draft?.note),
 
-        land_size: cleanNumber(draft?.lt),
-        building_size: cleanNumber(draft?.lb),
+        land_size: cleanDecimal(draft?.lt),
+        building_size: cleanDecimal(draft?.lb),
         bedrooms: cleanNumber(draft?.bed),
         bathrooms: cleanNumber(draft?.bath),
         maid_room: cleanNumber(draft?.maid),
         garage: cleanNumber(draft?.garage),
-        floor: cleanNumber(draft?.floor),
+        floor: cleanDecimal(draft?.floor),
+
+        land_unit: cleanText(draftAny?.landUnit) || (draftAny?.lt ? "m2" : null),
+        unit_floor: cleanText(draftAny?.unitFloor),
+        tower_block: cleanText(draftAny?.towerBlock),
+        ceiling_height: cleanDecimal(draftAny?.ceilingHeight),
+        road_access: cleanText(draftAny?.roadAccess),
+        frontage: cleanDecimal(draftAny?.frontage),
+        depth: cleanDecimal(draftAny?.depth),
+        dimension_text: cleanText(draftAny?.dimensionText),
 
         furnishing: cleanText(draft?.furnishing),
         electricity: cleanNumber(draft?.listrik),
