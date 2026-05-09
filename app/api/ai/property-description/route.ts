@@ -14,6 +14,7 @@ const supabaseAdmin = createClient(
 );
 
 type PropertyDescriptionRequest = {
+  source?: "owner" | "agent" | "admin";
   propertyType?: string;
   location?: string;
   price?: string;
@@ -35,6 +36,22 @@ type ErrorWithDetails = {
   status?: number;
   type?: string;
 };
+
+type AiPropertyContent = {
+  englishTitle: string;
+  indonesianTitle: string;
+  englishDescription: string;
+  indonesianDescription: string;
+  seoTitle: string;
+  seoMetaDescription: string;
+  socialCaption: string;
+  whatsappInquiryMessage: string;
+};
+
+const MAX_TITLE = 150;
+const MAX_DESCRIPTION = 2000;
+const MAX_SEO_META = 160;
+const MAX_SOCIAL_CAPTION = 1200;
 
 function cleanJsonText(value: string) {
   const cleaned = value
@@ -62,6 +79,228 @@ function getBearerToken(req: Request) {
   }
 
   return authHeader.slice(7).trim();
+}
+
+function cleanValue(value?: string) {
+  return String(value || "").trim();
+}
+
+function limitText(value: unknown, limit: number) {
+  return String(value || "").trim().slice(0, limit);
+}
+
+function buildFactLine(label: string, value?: string) {
+  const clean = cleanValue(value);
+  if (!clean) return "";
+  return `- ${label}: ${clean}`;
+}
+
+function buildPropertyFacts(body: PropertyDescriptionRequest) {
+  const facts = [
+    buildFactLine("Property type", body.propertyType),
+    buildFactLine("Location / address", body.location),
+    buildFactLine("Price", body.price),
+    buildFactLine("Bedrooms", body.bedrooms),
+    buildFactLine("Bathrooms", body.bathrooms),
+    buildFactLine("Land size", body.landSize),
+    buildFactLine("Building size", body.buildingSize),
+    buildFactLine("Furnishing", body.furnishing),
+    buildFactLine("Features / facilities", body.features),
+    buildFactLine("Purpose", body.purpose),
+    buildFactLine("Rental type", body.rentalType),
+    buildFactLine("Ownership title / certificate", body.ownershipTitle),
+    buildFactLine("Nearby places / hotspots / travel time", body.nearbyPlaces),
+  ].filter(Boolean);
+
+  return facts.length
+    ? facts.join("\n")
+    : "- No property details were provided.";
+}
+
+function normalizeSource(source?: string) {
+  if (source === "agent" || source === "admin" || source === "owner") {
+    return source;
+  }
+
+  return "owner";
+}
+
+function normalizeAiResult(raw: any): AiPropertyContent {
+  return {
+    englishTitle: limitText(raw?.englishTitle, MAX_TITLE),
+    indonesianTitle: limitText(raw?.indonesianTitle, MAX_TITLE),
+    englishDescription: limitText(raw?.englishDescription, MAX_DESCRIPTION),
+    indonesianDescription: limitText(
+      raw?.indonesianDescription,
+      MAX_DESCRIPTION
+    ),
+    seoTitle: limitText(raw?.seoTitle, MAX_TITLE),
+    seoMetaDescription: limitText(raw?.seoMetaDescription, MAX_SEO_META),
+    socialCaption: limitText(raw?.socialCaption, MAX_SOCIAL_CAPTION),
+
+    // Keep this field for compatibility with existing frontend structure.
+    // Do not use it for marketplace/detail WhatsApp button.
+    // Tetamo WhatsApp AI auto-reply should be handled later in a separate Twilio route.
+    whatsappInquiryMessage: "",
+  };
+}
+
+function hasEnoughPropertyFacts(body: PropertyDescriptionRequest) {
+  return Boolean(
+    cleanValue(body.propertyType) ||
+      cleanValue(body.location) ||
+      cleanValue(body.price) ||
+      cleanValue(body.bedrooms) ||
+      cleanValue(body.bathrooms) ||
+      cleanValue(body.landSize) ||
+      cleanValue(body.buildingSize) ||
+      cleanValue(body.furnishing) ||
+      cleanValue(body.features) ||
+      cleanValue(body.purpose) ||
+      cleanValue(body.rentalType) ||
+      cleanValue(body.ownershipTitle) ||
+      cleanValue(body.nearbyPlaces)
+  );
+}
+
+function buildPrompt(params: {
+  propertyFacts: string;
+  source: "owner" | "agent" | "admin";
+}) {
+  const socialCaptionInstruction =
+    params.source === "agent" || params.source === "admin"
+      ? `
+Social caption rules:
+- Create a ready-to-copy Instagram/Facebook caption for an agent to promote the listing.
+- Keep it short, attractive, and professional.
+- Include a clear CTA.
+- Include 5–8 relevant hashtags.
+- Do not overpromise.
+- Do not invent location, facilities, distance, investment return, or legal claims.
+- If the property facts are in Indonesia, the caption may be in Indonesian or bilingual.
+`
+      : `
+Social caption rules:
+- Create a short, professional caption Tetamo admin may use later.
+- Do not make it too long.
+- Include a clear CTA and 5–8 relevant hashtags.
+- Do not overpromise.
+`;
+
+  return `
+You are Tetamo AI Partner, a senior real estate marketing copywriter for Tetamo.
+
+Tetamo is a property marketplace in Indonesia for property owners, agents, developers, buyers, renters, and investors.
+
+Your job:
+Create accurate, professional, persuasive property listing content based only on the information provided.
+
+Important context:
+- The main output is for Tetamo's property listing form.
+- English and Indonesian titles/descriptions will be shown on the marketplace.
+- Social caption is a value-add for Tetamo agents/admin to promote the listing.
+- WhatsApp AI support is handled separately through Tetamo's official WhatsApp/Twilio flow, so do not create a WhatsApp inquiry message here.
+
+Main writing goal:
+- Make the listing feel ready to publish on a real estate marketplace.
+- Write like a professional real estate marketer.
+- Keep the tone professional, warm, confident, and trustworthy.
+- Use natural English and natural Bahasa Indonesia.
+- Indonesian must not sound like direct Google Translate.
+- Sell the property, but stay honest and factual.
+
+Very important truth rules:
+- Use only the property facts provided.
+- Do not invent missing property facts.
+- Do not invent price, permit, ownership title, availability, facilities, nearby places, road access, travel time, distance, or legal claims.
+- Do not invent exact minutes such as "5 minutes to the beach" unless timing or distance was provided.
+- If nearby places are provided without minutes, mention the nearby places without adding fake travel time.
+- If location is provided but nearby places are not provided, talk about the location carefully without naming unprovided hotspots.
+- If ownership title/certificate is provided, mention it only as provided.
+- Do not claim the certificate guarantees legal safety.
+- Do not say "luxury", "premium", "exclusive", "beachfront", "ocean view", "high ROI", "guaranteed investment", "walking distance", or "close to cafes/shops" unless supported by the provided facts.
+- Never mention missing information directly.
+- Do not write phrases like "bedrooms are not provided", "size is not provided", "specific details are not provided", or "information is limited".
+- If a detail is missing, simply omit it.
+
+Description structure:
+For both English and Indonesian descriptions, follow this order:
+
+1. Start with the location.
+   - Open with where the property is located.
+   - Make the area sound attractive only based on the location provided.
+   - If address/area/city/province is provided, use it naturally.
+
+2. Explain the property details.
+   - Include property type, sale/rent/auction purpose, price, rental type, furnishing, land size, building size, bedrooms, bathrooms, certificate, and facilities only if provided.
+
+3. Explain nearby area, hotspots, lifestyle, or access.
+   - Use nearby places only if provided.
+   - Mention timing/distance only if provided.
+   - If no nearby details are provided, skip this section naturally.
+
+4. Explain why the property is attractive.
+   - Highlight comfort, layout, practical value, location, facilities, visibility, or suitability based on provided facts.
+   - Do not overpromise.
+
+5. End with a professional call to action.
+   - Encourage the buyer/renter/investor to inquire or schedule a viewing through Tetamo.
+
+English description rules:
+- Write 2–4 strong paragraphs.
+- Avoid boring openings like "This property is available".
+- Keep it polished, natural, and sales-ready.
+- Keep under 2000 characters.
+
+Indonesian description rules:
+- Use natural Indonesian property marketing language.
+- Do not translate word-for-word from English.
+- Keep it persuasive, clear, and professional.
+- Follow the same meaning as the English version.
+- Keep under 2000 characters.
+
+Title rules:
+- Create attractive titles that are still accurate.
+- Include property type, location, and strongest provided feature when possible.
+- Keep each title under 150 characters.
+- Do not use all caps.
+- Do not overstuff keywords.
+- Do not use fake urgency like "limited offer" unless provided.
+
+SEO rules:
+- SEO title must be clear and search-friendly.
+- SEO meta description should be under 160 characters.
+- Use property type, location, purpose, and strongest provided feature where possible.
+- Do not stuff keywords.
+
+${socialCaptionInstruction}
+
+WhatsApp message rule:
+- Return whatsappInquiryMessage as an empty string.
+- Do not create a buyer/renter WhatsApp inquiry message in this route.
+- Tetamo's 24/7 WhatsApp AI support will be handled separately through Twilio.
+
+Property facts provided:
+${params.propertyFacts}
+
+Return ONLY valid JSON.
+Do not wrap the JSON in markdown.
+Do not use \`\`\`json.
+Do not add explanation before or after the JSON.
+
+Return this exact JSON structure:
+
+{
+  "englishTitle": "",
+  "indonesianTitle": "",
+  "englishDescription": "",
+  "indonesianDescription": "",
+  "seoTitle": "",
+  "seoMetaDescription": "",
+  "socialCaption": "",
+  "whatsappInquiryMessage": ""
+}
+`;
 }
 
 export async function POST(req: Request) {
@@ -105,139 +344,61 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json()) as PropertyDescriptionRequest;
+    const source = normalizeSource(body.source);
 
-    const {
-      propertyType,
-      location,
-      price,
-      bedrooms,
-      bathrooms,
-      landSize,
-      buildingSize,
-      furnishing,
-      features,
-      purpose,
-      rentalType,
-      ownershipTitle,
-      nearbyPlaces,
-    } = body;
+    if (!hasEnoughPropertyFacts(body)) {
+      return NextResponse.json(
+        {
+          error:
+            "Please complete the property details before generating AI content.",
+        },
+        { status: 400 }
+      );
+    }
 
-    const prompt = `
-You are Tetamo AI Partner, a senior real estate marketing copywriter for Tetamo.
-
-Tetamo is a property marketplace in Indonesia for property owners, agents, developers, buyers, and renters.
-
-Your job is to create premium, professional, persuasive property listing content based only on the information provided.
-
-Main writing goal:
-- Do not only describe the property.
-- Sell the property through strong, polished, trustworthy real estate copy.
-- Tell a short story about the unit, lifestyle, location, and why the property is practical or desirable.
-- Make the property sound attractive without exaggerating or inventing facts.
-- Write like a professional property agent or real estate marketer, not like a simple form summary.
-
-Writing style:
-- Professional, polished, confident, warm, and sales-focused.
-- Natural English and natural Bahasa Indonesia.
-- Not childish.
-- Not robotic.
-- Not rushed.
-- Avoid boring phrases like "This property is available" as the main opening.
-- Avoid repeating the same sentence structure.
-- Use smooth paragraph flow.
-- Make the description feel ready to publish on a real estate marketplace.
-
-Very important rules:
-- Do not invent missing property facts.
-- Do not invent prices, permits, ownership title, availability, facilities, nearby places, or legal claims.
-- If ownership title is provided, mention it only as provided. Do not say it guarantees legal/security benefits.
-- Do not say "luxury", "premium", "exclusive", "beachfront", "near the beach", "high ROI", "investment opportunity", or "close to cafes/shops" unless supported by the provided details.
-- If bedrooms, bathrooms, land size, building size, furnishing, features, or nearby places are missing, do not pretend they exist.
-- If information is limited, still write professionally, but do not over-explain fake details.
-- Keep titles under 150 characters.
-- Keep each description under 2000 characters.
-- Return ONLY valid JSON.
-- Do not wrap the JSON in markdown.
-- Do not use \`\`\`json.
-- Do not add explanation before or after the JSON.
-
-Description structure:
-When enough details are provided, write 2–4 strong paragraphs for each description.
-
-For English description:
-1. Start with a polished opening that presents the property and location attractively.
-2. Explain the unit clearly: property type, purpose, rental/sale type, furnishing, size, bedrooms, bathrooms, and features if provided.
-3. Explain the lifestyle or practical value of the location based only on provided location/nearby details.
-4. Mention the best renter/buyer profile when appropriate.
-5. End with a professional closing sentence that encourages inquiry.
-
-For Indonesian description:
-1. Use natural Indonesian, not direct Google-translate style.
-2. Keep it professional and clear for Indonesian property seekers.
-3. Make it persuasive but not excessive.
-4. Follow the same meaning as the English version.
-
-Title style:
-- Create attractive titles that are still accurate.
-- Include property type, purpose, location, and strongest feature if provided.
-- Do not overstuff the title.
-- Do not use all caps.
-
-SEO:
-- SEO title must be clear and search-friendly.
-- SEO meta description must be under 160 characters if possible.
-- Social caption should be short, attractive, and suitable for Tetamo social media.
-- WhatsApp inquiry message should sound natural from an interested buyer/renter.
-
-Property details:
-Property type: ${propertyType || "Not provided"}
-Location: ${location || "Not provided"}
-Price: ${price || "Not provided"}
-Bedrooms: ${bedrooms || "Not provided"}
-Bathrooms: ${bathrooms || "Not provided"}
-Land size: ${landSize || "Not provided"}
-Building size: ${buildingSize || "Not provided"}
-Furnishing: ${furnishing || "Not provided"}
-Features: ${features || "Not provided"}
-Purpose: ${purpose || "Not provided"}
-Rental type: ${rentalType || "Not provided"}
-Ownership title: ${ownershipTitle || "Not provided"}
-Nearby places: ${nearbyPlaces || "Not provided"}
-
-Return this exact JSON structure:
-
-{
-  "englishTitle": "",
-  "indonesianTitle": "",
-  "englishDescription": "",
-  "indonesianDescription": "",
-  "seoTitle": "",
-  "seoMetaDescription": "",
-  "socialCaption": "",
-  "whatsappInquiryMessage": ""
-}
-`;
+    const propertyFacts = buildPropertyFacts(body);
+    const prompt = buildPrompt({ propertyFacts, source });
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
-      temperature: 0.75,
-      max_output_tokens: 1800,
+      temperature: 0.65,
+      max_output_tokens: 2200,
     });
 
     const rawText = response.output_text || "";
     const cleanedText = cleanJsonText(rawText);
 
-    let result;
+    let parsedResult: unknown;
 
     try {
-      result = JSON.parse(cleanedText);
+      parsedResult = JSON.parse(cleanedText);
     } catch {
+      console.error("AI response was not valid JSON:", {
+        rawText,
+        cleanedText,
+      });
+
       return NextResponse.json(
         {
-          error: "AI response was not valid JSON.",
-          raw: rawText,
-          cleaned: cleanedText,
+          error: "AI response was not valid JSON. Please try again.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const result = normalizeAiResult(parsedResult);
+
+    if (
+      !result.englishTitle ||
+      !result.indonesianTitle ||
+      !result.englishDescription ||
+      !result.indonesianDescription
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "AI did not return complete listing content. Please try again.",
         },
         { status: 500 }
       );
