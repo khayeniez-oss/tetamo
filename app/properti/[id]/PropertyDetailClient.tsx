@@ -35,7 +35,7 @@ import {
   Eye,
 } from "lucide-react";
 
-type RentalType = "monthly" | "yearly" | "";
+type RentalType = "daily" | "monthly" | "yearly" | "";
 type SupportedCurrency = "IDR" | "USD" | "AUD";
 
 type PropertyImageRow = {
@@ -90,6 +90,10 @@ type PropertyRow = {
   nearby: Record<string, boolean> | null;
   listing_type: string | null;
   rental_type: string | null;
+  sale_type: string | null;
+  lease_years: number | null;
+  lease_until_year: number | null;
+  lease_extendable: string | null;
   property_type: string | null;
   source: string | null;
   status: string | null;
@@ -121,6 +125,10 @@ type PropertyItem = {
   slug?: string;
   jenisListing: "dijual" | "disewa";
   rentalType: RentalType;
+  saleType: string;
+  leaseYearsValue: number | null;
+  leaseUntilYearValue: number | null;
+  leaseExtendable: string;
   propertyType: string;
 
   title: string;
@@ -362,6 +370,7 @@ function normalizePostedByType(
 function normalizeRentalType(value?: string | null): RentalType {
   const v = String(value || "").trim().toLowerCase();
 
+  if (v === "daily" || v === "harian") return "daily";
   if (v === "monthly" || v === "bulanan") return "monthly";
   if (v === "yearly" || v === "tahunan") return "yearly";
 
@@ -369,6 +378,10 @@ function normalizeRentalType(value?: string | null): RentalType {
 }
 
 function getRentalTypeLabel(rentalType: RentalType, lang: string): string {
+  if (rentalType === "daily") {
+    return lang === "id" ? "Harian" : "Daily";
+  }
+
   if (rentalType === "monthly") {
     return lang === "id" ? "Bulanan" : "Monthly";
   }
@@ -381,6 +394,10 @@ function getRentalTypeLabel(rentalType: RentalType, lang: string): string {
 }
 
 function rentalTypeBadgeClass(rentalType: RentalType) {
+  if (rentalType === "daily") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
   if (rentalType === "monthly") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
@@ -390,6 +407,37 @@ function rentalTypeBadgeClass(rentalType: RentalType) {
   }
 
   return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
+function normalizeSaleType(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getSaleTypeLabel(value?: string | null, lang?: string) {
+  const raw = normalizeSaleType(value);
+
+  if (!raw) return "";
+  if (raw === "freehold") return "Freehold";
+  if (raw === "leasehold") return "Leasehold";
+  if (raw === "hgb") return "HGB";
+  if (raw === "hak_pakai") return lang === "id" ? "Hak Pakai" : "Right to Use";
+  if (raw === "lainnya") return lang === "id" ? "Lainnya" : "Other";
+
+  return raw
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatLeaseExtendable(value?: string | null, lang?: string) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (!raw) return "";
+  if (raw === "ya") return lang === "id" ? "Bisa diperpanjang" : "Extendable";
+  if (raw === "tidak") return lang === "id" ? "Tidak bisa diperpanjang" : "Not extendable";
+  if (raw === "tidak_tahu") return lang === "id" ? "Belum diketahui" : "Not sure";
+
+  return value || "";
 }
 
 function isListingPublic(
@@ -1029,6 +1077,10 @@ const [loading, setLoading] = useState(!initialProperty);
         slug: row.slug ?? undefined,
         jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
         rentalType: normalizeRentalType(row.rental_type),
+        saleType: toStringOrEmpty(row.sale_type),
+        leaseYearsValue: toNumberOrNull(row.lease_years),
+        leaseUntilYearValue: toNumberOrNull(row.lease_until_year),
+        leaseExtendable: toStringOrEmpty(row.lease_extendable),
         propertyType: row.property_type || "",
 
         title: localizedTitle,
@@ -2166,6 +2218,44 @@ Is this property still available?`;
         }
       : null,
 
+    property.jenisListing === "dijual" && property.saleType
+      ? {
+          key: "saleType",
+          label: lang === "id" ? "Tipe Jual" : "Sale Type",
+          value: getSaleTypeLabel(property.saleType, lang),
+          icon: FileText,
+        }
+      : null,
+
+    property.jenisListing === "dijual" && property.leaseYearsValue
+      ? {
+          key: "leaseYears",
+          label: lang === "id" ? "Masa Lease" : "Lease Term",
+          value: `${formatNumber(property.leaseYearsValue)} ${
+            lang === "id" ? "tahun" : "years"
+          }`,
+          icon: Clock,
+        }
+      : null,
+
+    property.jenisListing === "dijual" && property.leaseUntilYearValue
+      ? {
+          key: "leaseUntilYear",
+          label: lang === "id" ? "Lease Sampai" : "Lease Until",
+          value: String(property.leaseUntilYearValue),
+          icon: Clock,
+        }
+      : null,
+
+    property.jenisListing === "dijual" && property.leaseExtendable
+      ? {
+          key: "leaseExtendable",
+          label: lang === "id" ? "Perpanjangan" : "Extension",
+          value: formatLeaseExtendable(property.leaseExtendable, lang),
+          icon: FileText,
+        }
+      : null,
+
     property.pricePerSqmValue
       ? {
           key: "pricePerSqm",
@@ -2694,15 +2784,15 @@ Is this property still available?`;
           </h2>
 
           {detailChips.length > 0 ? (
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
               {detailChips.map((item) => {
                 const Icon = item.icon;
                 return (
                   <div
                     key={item.key}
-                    className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                    className="min-h-[74px] rounded-2xl border border-gray-200 bg-gray-50 p-2.5 sm:p-3"
                   >
-                    <div className="flex flex-col gap-2">
+                    <div className="flex h-full flex-col justify-between gap-2">
                       <div className="flex items-center gap-2 text-gray-500">
                         <Icon className="h-3.5 w-3.5 shrink-0" />
                         <div className="text-[10px] font-semibold uppercase leading-tight tracking-wide">
@@ -2710,7 +2800,7 @@ Is this property still available?`;
                         </div>
                       </div>
 
-                      <div className="text-sm font-semibold leading-tight text-[#1C1C1E]">
+                      <div className="text-xs font-semibold leading-tight text-[#1C1C1E] sm:text-[13px]">
                         {item.value}
                       </div>
                     </div>

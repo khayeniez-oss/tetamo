@@ -11,10 +11,12 @@ const openai = new OpenAI({
 });
 
 const MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-5.4-mini";
+
 const SITE_URL = (Deno.env.get("SITE_URL") ?? "https://www.tetamo.com").replace(
   /\/+$/,
   ""
 );
+
 const PRICELIST_URL = `${SITE_URL}/pricelist`;
 const FAQ_URL = `${SITE_URL}/faq`;
 
@@ -68,7 +70,7 @@ Penting:
 `.trim();
 
 const SYSTEM_PROMPT = `
-You are Scorpio Assist for Tetamo.
+You are Tetamo AI Support Assistant.
 
 Your job:
 - Answer Tetamo questions using Tetamo FAQ, Tetamo articles, Tetamo pricing, and Tetamo platform knowledge.
@@ -135,6 +137,48 @@ function formatIdr(value: number | string | null | undefined) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function escapeXml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function limitWhatsAppReply(value: string) {
+  const clean = String(value || "").trim();
+
+  if (clean.length <= 1500) return clean;
+
+  return clean.slice(0, 1490).trim() + "...";
+}
+
+function createTwimlMessage(message: string) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>${escapeXml(message)}</Message>
+</Response>`;
+}
+
+function twimlResponse(message: string) {
+  return new Response(createTwimlMessage(limitWhatsAppReply(message)), {
+    status: 200,
+    headers: {
+      "Content-Type": "text/xml; charset=utf-8",
+    },
+  });
+}
+
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+  });
 }
 
 function detectReplyLanguage(text: string): "id" | "en" {
@@ -489,6 +533,7 @@ async function fetchPublishedArticles() {
 
 function scoreArticle(article: any, question: string, lang: "id" | "en") {
   const q = normalize(question);
+
   const title =
     lang === "id"
       ? normalize(article?.title_id || article?.title)
@@ -622,9 +667,11 @@ function buildPricingPlansText(plans: any[], lang: "id" | "en") {
   }
 
   const lines = plans.map((plan) => {
-    const name = plan?.plan_name || plan?.payment_title || plan?.plan_code || "Package";
+    const name =
+      plan?.plan_name || plan?.payment_title || plan?.plan_code || "Package";
     const price = formatIdr(plan?.price);
     const durationDays = Number(plan?.duration_days ?? 0);
+
     const duration =
       durationDays >= 365
         ? lang === "id"
@@ -639,6 +686,7 @@ function buildPricingPlansText(plans: any[], lang: "id" | "en") {
         : "per package";
 
     const listings = Number(plan?.max_listings ?? 0);
+
     const listingText =
       listings > 0
         ? lang === "id"
@@ -667,8 +715,6 @@ async function answerPricingQuestion(params: {
   const { question, lang } = params;
   const value = normalize(question);
   const pricingUrl = getPricingPageUrl(question);
-  const plans = await fetchPricingPlansFromSupabase();
-  const pricingPlansText = buildPricingPlansText(plans, lang);
 
   const asksOwner =
     value.includes("owner") ||
@@ -684,6 +730,11 @@ async function answerPricingQuestion(params: {
     value.includes("gold") ||
     value.includes("pro") ||
     value.includes("membership");
+
+  // Keep this fetch for website/support knowledge freshness.
+  // If pricing_plans fails, static pricing below still answers correctly.
+  const plans = await fetchPricingPlansFromSupabase();
+  buildPricingPlansText(plans, lang);
 
   if (lang === "id") {
     if (asksOwner && !asksAgent) {
@@ -723,9 +774,7 @@ Paket agen:
 - Agent Pro: Rp3.999.000 per tahun untuk 500 listing aktif.
 
 Harga terbaru bisa dicek di sini:
-${pricingUrl}
-
-${pricingPlansText ? "" : ""}`.trim();
+${pricingUrl}`;
   }
 
   if (asksOwner && !asksAgent) {
@@ -786,106 +835,210 @@ ${FAQ_URL}
 If this is about your account, payment, invoice, refund, or a specific issue, you can chat with a Tetamo Agent. Tetamo Agent support hours: ${SUPPORT_HOURS_EN}`;
 }
 
-Deno.serve(async (req: Request) => {
+function buildWhatsAppFallbackReply(lang: "id" | "en") {
+  if (lang === "id") {
+    return `Halo, selamat datang di Tetamo.
+
+Apakah Anda ingin pasang listing properti, mencari properti, atau bertanya tentang paket owner/agen?`;
+  }
+
+  return `Hi, welcome to Tetamo.
+
+Are you looking to list a property, find a property, or ask about owner/agent packages?`;
+}
+
+async function generateTwilioWhatsAppReply(question: string) {
+  const cleanQuestion = String(question || "").trim();
+  const lang = detectReplyLanguage(cleanQuestion);
+
+  if (!cleanQuestion) {
+    return buildWhatsAppFallbackReply(lang);
+  }
+
   try {
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const payload = await req.json();
-    const messageId = payload?.message_id || payload?.record?.id || null;
-
-    if (!messageId) {
-      return new Response(JSON.stringify({ error: "Missing message_id" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: incomingMessage, error: incomingError } = await supabase
-      .from("support_messages")
-      .select("id, conversation_id, sender_type, message_text, ai_status, created_at")
-      .eq("id", messageId)
-      .maybeSingle();
-
-    if (incomingError) throw incomingError;
-
-    if (!incomingMessage) {
-      return new Response(JSON.stringify({ error: "Message not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (incomingMessage.sender_type !== "user") {
-      return new Response(JSON.stringify({ ok: true, skipped: "Not a user message" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (incomingMessage.ai_status && incomingMessage.ai_status !== "pending") {
-      return new Response(JSON.stringify({ ok: true, skipped: "Already processed" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: conversation, error: conversationError } = await supabase
-      .from("support_conversations")
-      .select(
-        "id, user_id, property_id, guest_name, guest_email, guest_phone, source, status, handoff_requested, handoff_status"
-      )
-      .eq("id", incomingMessage.conversation_id)
-      .maybeSingle();
-
-    if (conversationError) throw conversationError;
-
-    const { data: history, error: historyError } = await supabase
-      .from("support_messages")
-      .select("sender_type, message_text, created_at")
-      .eq("conversation_id", incomingMessage.conversation_id)
-      .order("created_at", { ascending: true })
-      .limit(12);
-
-    if (historyError) throw historyError;
-
-    const question = String(incomingMessage.message_text || "");
-    const lang = detectReplyLanguage(question);
-    const historyText = (history ?? [])
-      .map(
-        (item: any) =>
-          `${String(item.sender_type).toUpperCase()}: ${item.message_text}`
-      )
-      .join("\n");
-
-    const conversationContext = buildConversationContext(conversation);
-    const pricingQuestion = isPricingQuestion(question);
-
-    let aiText = "";
-    let matchedFaq: any = null;
-
-    if (pricingQuestion) {
-      aiText = await answerPricingQuestion({
-        question,
+    if (isPricingQuestion(cleanQuestion)) {
+      return await answerPricingQuestion({
+        question: cleanQuestion,
         lang,
       });
+    }
+
+    const faqEntries = await fetchFaqEntries();
+    const matchedFaq = findBestFaqEntry(faqEntries, cleanQuestion, lang);
+
+    if (matchedFaq) {
+      const faqAnswer = buildFaqAnswer(matchedFaq, lang);
+      if (faqAnswer) return faqAnswer;
+    }
+
+    const articles = await fetchPublishedArticles();
+    const matchedArticle = findBestArticle(articles, cleanQuestion, lang);
+    const articleContext = buildArticleContext(matchedArticle, lang);
+    const coreKnowledge = buildCoreKnowledge(lang);
+
+    if (!Deno.env.get("OPENAI_API_KEY")) {
+      return buildWhatsAppFallbackReply(lang);
+    }
+
+    const userPrompt = `
+Customer WhatsApp message:
+${cleanQuestion}
+
+Tetamo core knowledge:
+${coreKnowledge}
+
+${articleContext ? articleContext : "No strongly matched article found."}
+
+Reply as Tetamo WhatsApp support.
+
+Rules:
+- Keep it short and WhatsApp-friendly.
+- Reply in the same language as the customer.
+- If the customer only says "hi", "hello", "info", or unclear, ask if they are an owner, agent, buyer/renter, or developer.
+- Explain Tetamo clearly when relevant.
+- Tetamo is a property marketplace platform for owners, agents, agencies, developers, buyers, and renters.
+- Mention direct WhatsApp inquiry, verified listing/owner/agent where available, schedule viewing, AI bilingual listing title/description, photo/video upload, and marketplace exposure when relevant.
+- Do not guarantee leads, sale, rental, or ROI.
+- If pricing is asked, use the current Tetamo pricing in the system prompt.
+- Do not invent facts.
+`.trim();
+
+    const response = await openai.responses.create({
+      model: MODEL,
+      instructions: SYSTEM_PROMPT,
+      input: userPrompt,
+    });
+
+    const aiText = removeOldPricingLines(String(response.output_text || "").trim());
+
+    return aiText || buildWhatsAppFallbackReply(lang);
+  } catch (error) {
+    console.error("Twilio WhatsApp AI reply error:", error);
+    return buildWhatsAppFallbackReply(lang);
+  }
+}
+
+async function handleTwilioWhatsAppWebhook(req: Request) {
+  try {
+    const rawBody = await req.text();
+    const params = new URLSearchParams(rawBody);
+
+    const from = params.get("From") || "";
+    const to = params.get("To") || "";
+    const body = params.get("Body") || "";
+    const profileName = params.get("ProfileName") || "";
+    const messageSid = params.get("MessageSid") || params.get("SmsMessageSid") || "";
+    const numMedia = params.get("NumMedia") || "0";
+
+    console.log("Twilio WhatsApp inbound:", {
+      from,
+      to,
+      body,
+      profileName,
+      messageSid,
+      numMedia,
+    });
+
+    const reply = await generateTwilioWhatsAppReply(body);
+
+    console.log("Twilio WhatsApp reply generated:", {
+      to: from,
+      from: to,
+      messageSid,
+      replyPreview: reply.slice(0, 120),
+    });
+
+    return twimlResponse(reply);
+  } catch (error) {
+    console.error("Twilio WhatsApp webhook error:", error);
+
+    return twimlResponse(
+      "Hi, welcome to Tetamo. We received your message. Are you looking to list a property, find a property, or ask about owner/agent packages?"
+    );
+  }
+}
+
+async function handleWebsiteSupportAi(req: Request) {
+  const payload = await req.json();
+  const messageId = payload?.message_id || payload?.record?.id || null;
+
+  if (!messageId) {
+    return jsonResponse({ error: "Missing message_id" }, 400);
+  }
+
+  const { data: incomingMessage, error: incomingError } = await supabase
+    .from("support_messages")
+    .select("id, conversation_id, sender_type, message_text, ai_status, created_at")
+    .eq("id", messageId)
+    .maybeSingle();
+
+  if (incomingError) throw incomingError;
+
+  if (!incomingMessage) {
+    return jsonResponse({ error: "Message not found" }, 404);
+  }
+
+  if (incomingMessage.sender_type !== "user") {
+    return jsonResponse({ ok: true, skipped: "Not a user message" }, 200);
+  }
+
+  if (incomingMessage.ai_status && incomingMessage.ai_status !== "pending") {
+    return jsonResponse({ ok: true, skipped: "Already processed" }, 200);
+  }
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from("support_conversations")
+    .select(
+      "id, user_id, property_id, guest_name, guest_email, guest_phone, source, status, handoff_requested, handoff_status"
+    )
+    .eq("id", incomingMessage.conversation_id)
+    .maybeSingle();
+
+  if (conversationError) throw conversationError;
+
+  const { data: history, error: historyError } = await supabase
+    .from("support_messages")
+    .select("sender_type, message_text, created_at")
+    .eq("conversation_id", incomingMessage.conversation_id)
+    .order("created_at", { ascending: true })
+    .limit(12);
+
+  if (historyError) throw historyError;
+
+  const question = String(incomingMessage.message_text || "");
+  const lang = detectReplyLanguage(question);
+
+  const historyText = (history ?? [])
+    .map(
+      (item: any) =>
+        `${String(item.sender_type).toUpperCase()}: ${item.message_text}`
+    )
+    .join("\n");
+
+  const conversationContext = buildConversationContext(conversation);
+  const pricingQuestion = isPricingQuestion(question);
+
+  let aiText = "";
+  let matchedFaq: any = null;
+
+  if (pricingQuestion) {
+    aiText = await answerPricingQuestion({
+      question,
+      lang,
+    });
+  } else {
+    const faqEntries = await fetchFaqEntries();
+    matchedFaq = findBestFaqEntry(faqEntries, question, lang);
+
+    if (matchedFaq) {
+      aiText = buildFaqAnswer(matchedFaq, lang);
     } else {
-      const faqEntries = await fetchFaqEntries();
-      matchedFaq = findBestFaqEntry(faqEntries, question, lang);
+      const articles = await fetchPublishedArticles();
+      const matchedArticle = findBestArticle(articles, question, lang);
+      const articleContext = buildArticleContext(matchedArticle, lang);
+      const coreKnowledge = buildCoreKnowledge(lang);
 
-      if (matchedFaq) {
-        aiText = buildFaqAnswer(matchedFaq, lang);
-      } else {
-        const articles = await fetchPublishedArticles();
-        const matchedArticle = findBestArticle(articles, question, lang);
-        const articleContext = buildArticleContext(matchedArticle, lang);
-        const coreKnowledge = buildCoreKnowledge(lang);
-
-        const userPrompt = `
+      const userPrompt = `
 Tetamo support conversation context:
 ${conversationContext}
 
@@ -910,86 +1063,103 @@ Rules:
 - If the answer is not available from Tetamo knowledge, say you are not fully sure and guide the user to FAQ or Tetamo Agent.
 - Only suggest Tetamo Agent if the issue is account-specific, payment-problem related, complaint/refund related, or the user explicitly asks for human help.
 - If suggesting Tetamo Agent, mention support hours: ${
-          lang === "id" ? SUPPORT_HOURS_ID : SUPPORT_HOURS_EN
-        }.
+        lang === "id" ? SUPPORT_HOURS_ID : SUPPORT_HOURS_EN
+      }.
 `.trim();
 
-        const response = await openai.responses.create({
-          model: MODEL,
-          instructions: SYSTEM_PROMPT,
-          input: userPrompt,
-        });
-
-        aiText = String(response.output_text || "").trim();
-      }
-    }
-
-    if (!aiText) {
-      aiText = buildFallbackHelpReply(lang);
-    }
-
-    aiText = removeOldPricingLines(aiText);
-
-    if (!aiText) {
-      aiText = buildFallbackHelpReply(lang);
-    }
-
-    const shouldHandoff = needsHumanHelp(question);
-
-    const actionLabel = shouldHandoff
-      ? lang === "id"
-        ? "Chat dengan Tetamo Agent"
-        : "Chat with Tetamo Agent"
-      : null;
-
-    const { error: insertAiError } = await supabase
-      .from("support_messages")
-      .insert({
-        conversation_id: incomingMessage.conversation_id,
-        sender_type: "ai",
-        message_text: aiText,
-        ai_status: "sent",
-        suggested_action: shouldHandoff ? "handoff_to_human" : null,
-        suggested_action_label: actionLabel,
+      const response = await openai.responses.create({
+        model: MODEL,
+        instructions: SYSTEM_PROMPT,
+        input: userPrompt,
       });
 
-    if (insertAiError) throw insertAiError;
+      aiText = String(response.output_text || "").trim();
+    }
+  }
 
-    const { error: updateUserMessageError } = await supabase
-      .from("support_messages")
-      .update({ ai_status: "replied" })
-      .eq("id", incomingMessage.id);
+  if (!aiText) {
+    aiText = buildFallbackHelpReply(lang);
+  }
 
-    if (updateUserMessageError) throw updateUserMessageError;
+  aiText = removeOldPricingLines(aiText);
 
-    return new Response(
-      JSON.stringify({
+  if (!aiText) {
+    aiText = buildFallbackHelpReply(lang);
+  }
+
+  const shouldHandoff = needsHumanHelp(question);
+
+  const actionLabel = shouldHandoff
+    ? lang === "id"
+      ? "Chat dengan Tetamo Agent"
+      : "Chat with Tetamo Agent"
+    : null;
+
+  const { error: insertAiError } = await supabase
+    .from("support_messages")
+    .insert({
+      conversation_id: incomingMessage.conversation_id,
+      sender_type: "ai",
+      message_text: aiText,
+      ai_status: "sent",
+      suggested_action: shouldHandoff ? "handoff_to_human" : null,
+      suggested_action_label: actionLabel,
+    });
+
+  if (insertAiError) throw insertAiError;
+
+  const { error: updateUserMessageError } = await supabase
+    .from("support_messages")
+    .update({ ai_status: "replied" })
+    .eq("id", incomingMessage.id);
+
+  if (updateUserMessageError) throw updateUserMessageError;
+
+  return jsonResponse(
+    {
+      ok: true,
+      message_id: incomingMessage.id,
+      ai_reply: aiText,
+      suggested_action: shouldHandoff ? "handoff_to_human" : null,
+      suggested_action_label: actionLabel,
+      matched_faq_slug: matchedFaq?.slug ?? null,
+      reply_language: lang,
+      used_current_pricing: pricingQuestion,
+    },
+    200
+  );
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    if (req.method === "GET") {
+      return jsonResponse({
         ok: true,
-        message_id: incomingMessage.id,
-        ai_reply: aiText,
-        suggested_action: shouldHandoff ? "handoff_to_human" : null,
-        suggested_action_label: actionLabel,
-        matched_faq_slug: matchedFaq?.slug ?? null,
-        reply_language: lang,
-        used_current_pricing: pricingQuestion,
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+        message:
+          "Tetamo AI reply function is active. Supports website JSON and Twilio WhatsApp form webhook.",
+      });
+    }
+
+    if (req.method !== "POST") {
+      return jsonResponse({ error: "Method not allowed" }, 405);
+    }
+
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      return await handleTwilioWhatsAppWebhook(req);
+    }
+
+    return await handleWebsiteSupportAi(req);
   } catch (error) {
     console.error("tetamo-ai-reply error:", error);
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         ok: false,
         error: error instanceof Error ? error.message : "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+      },
+      500
     );
   }
 });

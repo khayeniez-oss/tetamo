@@ -14,15 +14,26 @@ import {
 } from "lucide-react";
 
 type ListingTier = "spotlight" | "featured" | "priority" | "normal";
+type RentalType = "" | "daily" | "monthly" | "yearly";
+type SaleType = "" | "freehold" | "leasehold" | "hgb" | "hak_pakai" | "lainnya";
 
 type PropertyItem = {
   verifiedListing: boolean;
   ownerApproved: boolean;
   agentVerified: boolean;
+
   id: string;
+  slug?: string;
+
   jenisListing: "dijual" | "disewa";
+  rentalType: RentalType;
+  saleType: SaleType;
+  propertyType: string;
+
   title: string;
   price: string;
+  priceValue: number;
+
   province: string;
   area: string;
   size: string;
@@ -30,17 +41,25 @@ type PropertyItem = {
   furnished: string;
   certificate: string;
   description: string;
+
   agentName: string;
   agency: string;
   photo: string;
   whatsapp: string;
   images: string[];
+
   kodeListing: string;
   postedDate: string;
+
   verifiedOwnerStatus?: string;
   verifiedAgent?: boolean;
   boosted?: boolean;
   listingTier: ListingTier;
+
+  roadAccess: string;
+  zoningType: string;
+  landType: string;
+  ownershipType: string;
 };
 
 type SortOption =
@@ -64,6 +83,7 @@ type SuggestionItem = {
   sublabel?: string;
   query: string;
   propertyId?: string;
+  propertySlug?: string;
   listingTier?: ListingTier;
   boosted?: boolean;
 };
@@ -83,7 +103,11 @@ type DbProfile = {
 
 type DbProperty = {
   id: string;
+  slug: string | null;
+
   title: string | null;
+  title_id: string | null;
+
   price: number | null;
   province: string | null;
   city: string | null;
@@ -93,8 +117,20 @@ type DbProperty = {
   bedrooms: number | null;
   furnishing: string | null;
   certificate: string | null;
+
   description: string | null;
+  description_id: string | null;
+
   listing_type: string | null;
+  rental_type: string | null;
+  sale_type: string | null;
+  property_type: string | null;
+
+  road_access: string | null;
+  zoning_type: string | null;
+  land_type: string | null;
+  ownership_type: string | null;
+
   kode: string | null;
   posted_date: string | null;
   created_at: string | null;
@@ -111,6 +147,7 @@ type DbProperty = {
   spotlight_active: boolean | null;
   spotlight_expires_at: string | null;
   transaction_status: string | null;
+
   property_images: DbPropertyImage[] | null;
   profiles: DbProfile | DbProfile[] | null;
 };
@@ -131,6 +168,17 @@ const VALID_PRICE_RANGES: PriceRange[] = [
   ">3m",
 ];
 
+const VALID_RENTAL_TYPES: RentalType[] = ["", "daily", "monthly", "yearly"];
+
+const VALID_SALE_TYPES: SaleType[] = [
+  "",
+  "freehold",
+  "leasehold",
+  "hgb",
+  "hak_pakai",
+  "lainnya",
+];
+
 function normalizeText(value: string) {
   return value
     .toLowerCase()
@@ -138,12 +186,14 @@ function normalizeText(value: string) {
     .replace(/,/g, "")
     .replace(/\//g, " ")
     .replace(/-/g, " ")
+    .replace(/_/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function formatIdr(value: number | null | undefined) {
   if (typeof value !== "number") return "Rp 0";
+
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
@@ -171,13 +221,16 @@ function mapFurnishing(value?: string | null, lang?: string) {
 
   if (v === "full") return lang === "id" ? "Full Furnish" : "Fully Furnished";
   if (v === "semi") return lang === "id" ? "Semi Furnish" : "Semi Furnished";
-  if (v === "unfurnished") return lang === "id" ? "Tanpa Furnitur" : "Unfurnished";
+  if (v === "unfurnished") {
+    return lang === "id" ? "Tanpa Furnitur" : "Unfurnished";
+  }
 
   return value;
 }
 
 function normalizeWhatsapp(phone?: string | null) {
   if (!phone) return "";
+
   const digits = phone.replace(/[^\d]/g, "");
 
   if (digits.startsWith("62")) return digits;
@@ -187,15 +240,21 @@ function normalizeWhatsapp(phone?: string | null) {
   return digits;
 }
 
+function getPropertyHref(item: { slug?: string | null; id: string }) {
+  return `/properti/${item.slug || item.id}`;
+}
+
 function extractPriceNumber(price: string) {
   const cleaned = price
     .toLowerCase()
     .replace(/rp/g, "")
     .replace(/\./g, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, "")
     .trim();
 
-  if (cleaned.includes("/ tahun")) {
-    const yearly = cleaned.replace("/ tahun", "").trim();
+  if (cleaned.includes("/tahun")) {
+    const yearly = cleaned.replace("/tahun", "").trim();
     return Number(yearly) || 0;
   }
 
@@ -207,6 +266,7 @@ function getPriceRange(value: number): PriceRange {
   if (value < 500_000_000) return "100jt-500jt";
   if (value < 1_000_000_000) return "500jt-1m";
   if (value <= 3_000_000_000) return "1m-3m";
+
   return ">3m";
 }
 
@@ -215,10 +275,113 @@ function extractBedroomCount(bed: string) {
   return match ? Number(match[0]) : 0;
 }
 
+function normalizeRentalType(value?: string | null): RentalType {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "daily" || v === "harian") return "daily";
+  if (v === "monthly" || v === "bulanan") return "monthly";
+  if (v === "yearly" || v === "tahunan") return "yearly";
+
+  return "";
+}
+
+function getRentalTypeLabel(value: RentalType, lang: string) {
+  if (value === "daily") return lang === "id" ? "Harian" : "Daily";
+  if (value === "monthly") return lang === "id" ? "Bulanan" : "Monthly";
+  if (value === "yearly") return lang === "id" ? "Tahunan" : "Yearly";
+
+  return "";
+}
+
+function rentalTypeBadgeClass(value: RentalType) {
+  if (value === "daily") return "border-orange-200 bg-orange-50 text-orange-700";
+  if (value === "monthly") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (value === "yearly") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
+function normalizeSaleType(value?: string | null): SaleType {
+  const v = String(value || "").trim().toLowerCase();
+
+  if (v === "freehold") return "freehold";
+  if (v === "leasehold") return "leasehold";
+  if (v === "hgb") return "hgb";
+  if (v === "hak_pakai") return "hak_pakai";
+  if (v === "lainnya") return "lainnya";
+
+  return "";
+}
+
+function getSaleTypeLabel(value: SaleType, lang: string) {
+  if (value === "freehold") return "Freehold";
+  if (value === "leasehold") return "Leasehold";
+  if (value === "hgb") return "HGB";
+  if (value === "hak_pakai") return lang === "id" ? "Hak Pakai" : "Right to Use";
+  if (value === "lainnya") return lang === "id" ? "Lainnya" : "Other";
+
+  return "";
+}
+
+function saleTypeBadgeClass(value: SaleType) {
+  if (value === "freehold") return "border-green-200 bg-green-50 text-green-700";
+  if (value === "leasehold") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (value === "hgb" || value === "hak_pakai") {
+    return "border-purple-200 bg-purple-50 text-purple-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
+function formatPropertyType(value?: string | null, lang?: string) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (!raw) return "";
+
+  if (raw === "tanah") return lang === "id" ? "Tanah" : "Land";
+  if (raw === "rumah") return lang === "id" ? "Rumah" : "House";
+  if (raw === "villa" || raw === "vila") return "Villa";
+  if (raw === "studio") return "Studio";
+  if (raw === "apartemen" || raw === "apartment") {
+    return lang === "id" ? "Apartemen" : "Apartment";
+  }
+  if (raw === "ruko") return lang === "id" ? "Ruko" : "Shophouse";
+  if (raw === "rukan") return lang === "id" ? "Rukan" : "Office Unit";
+  if (raw === "gudang") return lang === "id" ? "Gudang" : "Warehouse";
+  if (raw === "kantor") return lang === "id" ? "Kantor" : "Office";
+  if (raw === "kost" || raw === "kos") {
+    return lang === "id" ? "Kost" : "Boarding House";
+  }
+  if (raw === "guesthouse") return "Guesthouse";
+  if (raw === "hotel") return "Hotel";
+  if (raw === "resort") return "Resort";
+  if (raw === "pabrik") return lang === "id" ? "Pabrik" : "Factory";
+  if (raw === "toko") return lang === "id" ? "Toko" : "Shop";
+  if (raw === "rukos") return lang === "id" ? "Rukos" : "Shop-Boarding House";
+
+  return raw
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function buildSearchableText(item: PropertyItem) {
   return normalizeText(`
     ${item.title}
     ${item.jenisListing}
+    ${item.rentalType}
+    ${getRentalTypeLabel(item.rentalType, "id")}
+    ${getRentalTypeLabel(item.rentalType, "en")}
+    ${item.saleType}
+    ${getSaleTypeLabel(item.saleType, "id")}
+    ${getSaleTypeLabel(item.saleType, "en")}
+    ${item.propertyType}
+    ${formatPropertyType(item.propertyType, "id")}
+    ${formatPropertyType(item.propertyType, "en")}
     ${item.price}
     ${item.province}
     ${item.area}
@@ -231,6 +394,10 @@ function buildSearchableText(item: PropertyItem) {
     ${item.agency}
     ${item.kodeListing}
     ${item.postedDate}
+    ${item.roadAccess}
+    ${item.zoningType}
+    ${item.landType}
+    ${item.ownershipType}
     ${item.listingTier}
     ${item.boosted ? "boost boosted" : ""}
     ${item.verifiedListing ? "verified listing" : ""}
@@ -274,6 +441,7 @@ function getTierBoost(tier: ListingTier) {
   if (tier === "spotlight") return 220;
   if (tier === "featured") return 140;
   if (tier === "priority") return 80;
+
   return 0;
 }
 
@@ -306,6 +474,18 @@ function calculateRelevanceScore(item: PropertyItem, query: string) {
   const normalizedProvince = normalizeText(item.province);
   const normalizedAgency = normalizeText(item.agency);
   const normalizedAgent = normalizeText(item.agentName);
+  const normalizedRental = normalizeText(
+    `${item.rentalType} ${getRentalTypeLabel(item.rentalType, "id")} ${getRentalTypeLabel(
+      item.rentalType,
+      "en"
+    )}`
+  );
+  const normalizedSale = normalizeText(
+    `${item.saleType} ${getSaleTypeLabel(item.saleType, "id")} ${getSaleTypeLabel(
+      item.saleType,
+      "en"
+    )}`
+  );
 
   let score = 0;
 
@@ -319,11 +499,16 @@ function calculateRelevanceScore(item: PropertyItem, query: string) {
     score += 700;
   }
 
+  if (normalizedRental.includes(normalizedQuery)) score += 300;
+  if (normalizedSale.includes(normalizedQuery)) score += 300;
+
   for (const word of words) {
     if (normalizedCode.includes(word)) score += 250;
     if (normalizedTitle.includes(word)) score += 160;
     if (normalizedArea.includes(word)) score += 120;
     if (normalizedProvince.includes(word)) score += 100;
+    if (normalizedRental.includes(word)) score += 90;
+    if (normalizedSale.includes(word)) score += 90;
     if (normalizedAgency.includes(word)) score += 70;
     if (normalizedAgent.includes(word)) score += 60;
     if (searchable.includes(word)) score += 25;
@@ -341,6 +526,35 @@ function calculateRelevanceScore(item: PropertyItem, query: string) {
     score += 120;
   }
 
+  if (
+    (normalizedQuery.includes("harian") || normalizedQuery.includes("daily")) &&
+    item.rentalType === "daily"
+  ) {
+    score += 160;
+  }
+
+  if (
+    (normalizedQuery.includes("bulanan") || normalizedQuery.includes("monthly")) &&
+    item.rentalType === "monthly"
+  ) {
+    score += 160;
+  }
+
+  if (
+    (normalizedQuery.includes("tahunan") || normalizedQuery.includes("yearly")) &&
+    item.rentalType === "yearly"
+  ) {
+    score += 160;
+  }
+
+  if (normalizedQuery.includes("freehold") && item.saleType === "freehold") {
+    score += 160;
+  }
+
+  if (normalizedQuery.includes("leasehold") && item.saleType === "leasehold") {
+    score += 160;
+  }
+
   score += getTierBoost(item.listingTier);
   if (item.boosted) score += 120;
   if (item.agentVerified) score += 40;
@@ -352,8 +566,10 @@ function calculateRelevanceScore(item: PropertyItem, query: string) {
 
 function normalizeTransactionStatus(value?: string | null) {
   const v = (value || "").trim().toLowerCase();
+
   if (v === "sold") return "sold";
   if (v === "rented") return "rented";
+
   return "available";
 }
 
@@ -380,6 +596,7 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
     const coverB = b.is_cover ? 1 : 0;
 
     if (coverA !== coverB) return coverB - coverA;
+
     return (a.sort_order ?? 0) - (b.sort_order ?? 0);
   });
 
@@ -397,31 +614,51 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
     (!item.featured_expires_at || isFutureDate(item.featured_expires_at));
 
   const priorityActive = item.plan_id === "priority";
-
   const boostActive = isPromotionActive(item.boost_active, item.boost_expires_at);
 
   const listingTier: ListingTier = spotlightActive
     ? "spotlight"
     : featuredActive
-    ? "featured"
-    : priorityActive
-    ? "priority"
-    : "normal";
+      ? "featured"
+      : priorityActive
+        ? "priority"
+        : "normal";
 
   const postedByType =
     item.source === "agent" || item.source === "developer"
       ? item.source
       : "owner";
 
+  const localizedTitle =
+    lang === "id"
+      ? item.title_id || item.title || "-"
+      : item.title || item.title_id || "-";
+
+  const localizedDescription =
+    lang === "id"
+      ? item.description_id || item.description || "-"
+      : item.description || item.description_id || "-";
+
+  const priceValue = Number(item.price ?? 0);
+
   return {
     verifiedListing: Boolean(item.verified_ok),
     ownerApproved:
       item.verification_status === "verified" || Boolean(item.verified_ok),
     agentVerified: postedByType === "agent" ? Boolean(item.verified_ok) : false,
+
     id: item.id,
+    slug: item.slug || undefined,
+
     jenisListing: item.listing_type === "disewa" ? "disewa" : "dijual",
-    title: item.title || "-",
-    price: formatIdr(item.price ?? 0),
+    rentalType: normalizeRentalType(item.rental_type),
+    saleType: normalizeSaleType(item.sale_type),
+    propertyType: item.property_type || "",
+
+    title: localizedTitle,
+    price: formatIdr(priceValue),
+    priceValue,
+
     province: item.province || "-",
     area: item.area || item.city || "-",
     size: `${item.building_size ?? item.land_size ?? 0} m²`,
@@ -431,7 +668,8 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
         : `${item.bedrooms ?? 0} Bed`,
     furnished: mapFurnishing(item.furnishing, lang),
     certificate: item.certificate || "-",
-    description: item.description || "-",
+    description: localizedDescription,
+
     agentName: profile?.full_name || "Tetamo User",
     agency: profile?.agency || "",
     photo:
@@ -439,13 +677,20 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
       "https://randomuser.me/api/portraits/men/32.jpg",
     whatsapp: normalizeWhatsapp(profile?.phone),
     images,
+
     kodeListing: item.kode || "-",
     postedDate: formatPostedDate(item.posted_date || item.created_at),
+
     verifiedOwnerStatus:
       item.verification_status === "verified" ? "verified" : "pending",
     verifiedAgent: postedByType === "agent" ? Boolean(item.verified_ok) : false,
     boosted: boostActive,
     listingTier,
+
+    roadAccess: item.road_access || "",
+    zoningType: item.zoning_type || "",
+    landType: item.land_type || "",
+    ownershipType: item.ownership_type || "",
   };
 }
 
@@ -528,6 +773,8 @@ export default function SearchPageContent() {
           location: "Lokasi",
           property: "Properti",
           listingType: "Tipe Listing",
+          rentalType: "Jenis Sewa",
+          saleType: "Status Jual",
           province: "Provinsi",
           area: "Area",
           bedroom: "Kamar",
@@ -536,6 +783,16 @@ export default function SearchPageContent() {
           allListing: "Semua Listing",
           forSale: "Dijual",
           forRent: "Disewa",
+          allRentalType: "Semua Jenis Sewa",
+          daily: "Harian",
+          monthly: "Bulanan",
+          yearly: "Tahunan",
+          allSaleType: "Semua Status Jual",
+          freehold: "Freehold",
+          leasehold: "Leasehold",
+          hgb: "HGB",
+          hakPakai: "Hak Pakai",
+          lainnya: "Lainnya",
           allProvince: "Semua Provinsi",
           allArea: "Semua Area",
           allBedroom: "Semua Kamar",
@@ -572,6 +829,8 @@ export default function SearchPageContent() {
           location: "Location",
           property: "Property",
           listingType: "Listing Type",
+          rentalType: "Rental Type",
+          saleType: "Sale Type",
           province: "Province",
           area: "Area",
           bedroom: "Bedrooms",
@@ -580,6 +839,16 @@ export default function SearchPageContent() {
           allListing: "All Listings",
           forSale: "For Sale",
           forRent: "For Rent",
+          allRentalType: "All Rental Types",
+          daily: "Daily",
+          monthly: "Monthly",
+          yearly: "Yearly",
+          allSaleType: "All Sale Types",
+          freehold: "Freehold",
+          leasehold: "Leasehold",
+          hgb: "HGB",
+          hakPakai: "Right to Use",
+          lainnya: "Other",
           allProvince: "All Provinces",
           allArea: "All Areas",
           allBedroom: "Any Bedroom",
@@ -602,20 +871,36 @@ export default function SearchPageContent() {
           page: "Page",
         };
 
-  const qParam = searchParams.get("q") || "";
+  const qParam = searchParams.get("q") || searchParams.get("query") || "";
+
   const jenisListingParam =
     searchParams.get("jenisListing") === "dijual" ||
     searchParams.get("jenisListing") === "disewa"
       ? (searchParams.get("jenisListing") as "" | "dijual" | "disewa")
       : "";
+
+  const rentalTypeParam = VALID_RENTAL_TYPES.includes(
+    normalizeRentalType(searchParams.get("rentalType"))
+  )
+    ? normalizeRentalType(searchParams.get("rentalType"))
+    : "";
+
+  const saleTypeParam = VALID_SALE_TYPES.includes(
+    normalizeSaleType(searchParams.get("saleType"))
+  )
+    ? normalizeSaleType(searchParams.get("saleType"))
+    : "";
+
   const provinceParam = searchParams.get("province") || "";
   const areaParam = searchParams.get("area") || "";
   const bedroomParam = searchParams.get("bedroom") || "";
+
   const priceRangeParam = VALID_PRICE_RANGES.includes(
     (searchParams.get("priceRange") || "") as PriceRange
   )
     ? ((searchParams.get("priceRange") || "") as PriceRange)
     : "";
+
   const sortByParam = VALID_SORTS.includes(
     (searchParams.get("sortBy") || "relevan") as SortOption
   )
@@ -623,7 +908,8 @@ export default function SearchPageContent() {
     : "relevan";
 
   const parsedPage = Number(searchParams.get("page") || "1");
-  const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const currentPage =
+    Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
   const [allProperties, setAllProperties] = useState<PropertyItem[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -652,6 +938,7 @@ export default function SearchPageContent() {
     }
 
     document.addEventListener("mousedown", handleOutsideClick);
+
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
@@ -681,6 +968,7 @@ export default function SearchPageContent() {
     }
 
     const qs = params.toString();
+
     return qs ? `/search?${qs}` : "/search";
   }
 
@@ -709,7 +997,9 @@ export default function SearchPageContent() {
         .from("properties")
         .select(`
           id,
+          slug,
           title,
+          title_id,
           price,
           province,
           city,
@@ -720,7 +1010,15 @@ export default function SearchPageContent() {
           furnishing,
           certificate,
           description,
+          description_id,
           listing_type,
+          rental_type,
+          sale_type,
+          property_type,
+          road_access,
+          zoning_type,
+          land_type,
+          ownership_type,
           kode,
           posted_date,
           created_at,
@@ -790,6 +1088,7 @@ export default function SearchPageContent() {
 
   useEffect(() => {
     if (!provinceParam) return;
+
     const validAreas = new Set(
       allProperties
         .filter((item) => item.province === provinceParam)
@@ -830,6 +1129,7 @@ export default function SearchPageContent() {
         sublabel: `${item.title} • ${item.area}, ${item.province}`,
         query: item.kodeListing,
         propertyId: item.id,
+        propertySlug: item.slug,
         listingTier: item.listingTier,
         boosted: item.boosted,
       }));
@@ -861,6 +1161,7 @@ export default function SearchPageContent() {
       sublabel: `${item.area}, ${item.province} • ${item.price}`,
       query: item.title,
       propertyId: item.id,
+      propertySlug: item.slug,
       listingTier: item.listingTier,
       boosted: item.boosted,
     }));
@@ -886,17 +1187,31 @@ export default function SearchPageContent() {
 
         const matchesJenis =
           !jenisListingParam || item.jenisListing === jenisListingParam;
-        const matchesProvince = !provinceParam || item.province === provinceParam;
+
+        const matchesRental =
+          !rentalTypeParam ||
+          (item.jenisListing === "disewa" && item.rentalType === rentalTypeParam);
+
+        const matchesSale =
+          !saleTypeParam ||
+          (item.jenisListing === "dijual" && item.saleType === saleTypeParam);
+
+        const matchesProvince =
+          !provinceParam || item.province === provinceParam;
+
         const matchesArea = !areaParam || item.area === areaParam;
+
         const matchesBedroom =
           !bedroomParam || extractBedroomCount(item.bed) >= Number(bedroomParam);
+
         const matchesPrice =
-          !priceRangeParam ||
-          getPriceRange(extractPriceNumber(item.price)) === priceRangeParam;
+          !priceRangeParam || getPriceRange(item.priceValue) === priceRangeParam;
 
         return (
           matchesQuery &&
           matchesJenis &&
+          matchesRental &&
+          matchesSale &&
           matchesProvince &&
           matchesArea &&
           matchesBedroom &&
@@ -927,6 +1242,8 @@ export default function SearchPageContent() {
     allProperties,
     qParam,
     jenisListingParam,
+    rentalTypeParam,
+    saleTypeParam,
     provinceParam,
     areaParam,
     bedroomParam,
@@ -934,7 +1251,10 @@ export default function SearchPageContent() {
     sortByParam,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredResults.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredResults.length / ITEMS_PER_PAGE)
+  );
 
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
@@ -944,7 +1264,9 @@ export default function SearchPageContent() {
   );
 
   const startItem =
-    filteredResults.length === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
+    filteredResults.length === 0
+      ? 0
+      : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
 
   const endItem = Math.min(
     safeCurrentPage * ITEMS_PER_PAGE,
@@ -967,7 +1289,7 @@ export default function SearchPageContent() {
     const query = (customQuery ?? searchInput).trim();
     setShowSuggestions(false);
 
-    pushSearchUrl({ q: query || null });
+    pushSearchUrl({ q: query || null, query: null });
   }
 
   function handleSuggestionClick(item: SuggestionItem) {
@@ -975,18 +1297,23 @@ export default function SearchPageContent() {
 
     if ((item.type === "property" || item.type === "kode") && item.propertyId) {
       router.push(
-        `/properti/${item.propertyId}?back=${encodeURIComponent(currentSearchUrl)}`
+        `${getPropertyHref({
+          id: item.propertyId,
+          slug: item.propertySlug,
+        })}?back=${encodeURIComponent(currentSearchUrl)}`
       );
       return;
     }
 
     setSearchInput(item.query);
-    pushSearchUrl({ q: item.query || null });
+    pushSearchUrl({ q: item.query || null, query: null });
   }
 
   function clearFilters() {
     replaceSearchUrl({
       jenisListing: "",
+      rentalType: "",
+      saleType: "",
       province: "",
       area: "",
       bedroom: "",
@@ -996,8 +1323,34 @@ export default function SearchPageContent() {
     setMobileMoreFiltersOpen(false);
   }
 
+  function handleListingTypeChange(value: string) {
+    replaceSearchUrl({
+      jenisListing: value as "" | "dijual" | "disewa",
+      rentalType: value === "dijual" ? "" : rentalTypeParam,
+      saleType: value === "disewa" ? "" : saleTypeParam,
+    });
+  }
+
+  function handleRentalTypeChange(value: string) {
+    replaceSearchUrl({
+      rentalType: value,
+      jenisListing: value ? "disewa" : jenisListingParam,
+      saleType: value ? "" : saleTypeParam,
+    });
+  }
+
+  function handleSaleTypeChange(value: string) {
+    replaceSearchUrl({
+      saleType: value,
+      jenisListing: value ? "dijual" : jenisListingParam,
+      rentalType: value ? "" : rentalTypeParam,
+    });
+  }
+
   const hasActiveFilters =
     jenisListingParam ||
+    rentalTypeParam ||
+    saleTypeParam ||
     provinceParam ||
     areaParam ||
     bedroomParam ||
@@ -1210,9 +1563,7 @@ export default function SearchPageContent() {
             <FilterSelect
               label={t.listingType}
               value={jenisListingParam}
-              onChange={(value) =>
-                replaceSearchUrl({ jenisListing: value as "" | "dijual" | "disewa" })
-              }
+              onChange={handleListingTypeChange}
             >
               <option value="">{t.allListing}</option>
               <option value="dijual">{t.forSale}</option>
@@ -1258,6 +1609,30 @@ export default function SearchPageContent() {
           {mobileMoreFiltersOpen && (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
               <FilterSelect
+                label={t.rentalType}
+                value={rentalTypeParam}
+                onChange={handleRentalTypeChange}
+              >
+                <option value="">{t.allRentalType}</option>
+                <option value="daily">{t.daily}</option>
+                <option value="monthly">{t.monthly}</option>
+                <option value="yearly">{t.yearly}</option>
+              </FilterSelect>
+
+              <FilterSelect
+                label={t.saleType}
+                value={saleTypeParam}
+                onChange={handleSaleTypeChange}
+              >
+                <option value="">{t.allSaleType}</option>
+                <option value="freehold">{t.freehold}</option>
+                <option value="leasehold">{t.leasehold}</option>
+                <option value="hgb">{t.hgb}</option>
+                <option value="hak_pakai">{t.hakPakai}</option>
+                <option value="lainnya">{t.lainnya}</option>
+              </FilterSelect>
+
+              <FilterSelect
                 label={t.area}
                 value={areaParam}
                 onChange={(value) => replaceSearchUrl({ area: value })}
@@ -1298,13 +1673,11 @@ export default function SearchPageContent() {
             </div>
           )}
 
-          <div className="mt-4 hidden xl:grid xl:grid-cols-6 xl:gap-3">
+          <div className="mt-4 hidden xl:grid xl:grid-cols-4 xl:gap-3 2xl:grid-cols-8">
             <FilterSelect
               label={t.listingType}
               value={jenisListingParam}
-              onChange={(value) =>
-                replaceSearchUrl({ jenisListing: value as "" | "dijual" | "disewa" })
-              }
+              onChange={handleListingTypeChange}
             >
               <option value="">{t.allListing}</option>
               <option value="dijual">{t.forSale}</option>
@@ -1312,9 +1685,35 @@ export default function SearchPageContent() {
             </FilterSelect>
 
             <FilterSelect
+              label={t.rentalType}
+              value={rentalTypeParam}
+              onChange={handleRentalTypeChange}
+            >
+              <option value="">{t.allRentalType}</option>
+              <option value="daily">{t.daily}</option>
+              <option value="monthly">{t.monthly}</option>
+              <option value="yearly">{t.yearly}</option>
+            </FilterSelect>
+
+            <FilterSelect
+              label={t.saleType}
+              value={saleTypeParam}
+              onChange={handleSaleTypeChange}
+            >
+              <option value="">{t.allSaleType}</option>
+              <option value="freehold">{t.freehold}</option>
+              <option value="leasehold">{t.leasehold}</option>
+              <option value="hgb">{t.hgb}</option>
+              <option value="hak_pakai">{t.hakPakai}</option>
+              <option value="lainnya">{t.lainnya}</option>
+            </FilterSelect>
+
+            <FilterSelect
               label={t.province}
               value={provinceParam}
-              onChange={(value) => replaceSearchUrl({ province: value, area: "" })}
+              onChange={(value) =>
+                replaceSearchUrl({ province: value, area: "" })
+              }
             >
               <option value="">{t.allProvince}</option>
               {provinces.map((p) => (
@@ -1377,8 +1776,8 @@ export default function SearchPageContent() {
 
           <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-600">
-              {t.showing} {startItem}–{endItem} {t.from} {filteredResults.length}{" "}
-              {t.properties}
+              {t.showing} {startItem}–{endItem} {t.from}{" "}
+              {filteredResults.length} {t.properties}
             </p>
 
             {hasActiveFilters && (
@@ -1406,10 +1805,15 @@ export default function SearchPageContent() {
             <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
               {paginatedResults.map((item) => {
                 const tierUI = getListingTierUI(item.listingTier, lang);
+                const rentalLabel = getRentalTypeLabel(item.rentalType, lang);
+                const saleLabel = getSaleTypeLabel(item.saleType, lang);
+                const propertyTypeLabel = formatPropertyType(item.propertyType, lang);
 
                 return (
                   <Link
-                    href={`/properti/${item.id}?back=${encodeURIComponent(currentSearchUrl)}`}
+                    href={`${getPropertyHref(item)}?back=${encodeURIComponent(
+                      currentSearchUrl
+                    )}`}
                     key={item.id}
                     className="block overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
                   >
@@ -1420,21 +1824,15 @@ export default function SearchPageContent() {
                         className="h-[440px] w-full object-cover sm:h-[430px] lg:h-[500px]"
                       />
 
-                      <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                        TETAMO
-                      </div>
-                    </div>
-
-                    <div className="p-4 sm:p-5">
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <div className="absolute left-3 top-3 flex max-w-[calc(100%-24px)] flex-wrap gap-2">
                         {item.verifiedListing && (
-                          <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] text-green-700">
+                          <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-medium text-green-700">
                             {t.verified}
                           </span>
                         )}
 
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${
                             item.jenisListing === "dijual"
                               ? "border-blue-200 bg-blue-50 text-blue-700"
                               : "border-yellow-200 bg-yellow-50 text-yellow-700"
@@ -1442,6 +1840,40 @@ export default function SearchPageContent() {
                         >
                           {item.jenisListing === "dijual" ? t.forSale : t.forRent}
                         </span>
+
+                        {item.jenisListing === "disewa" && rentalLabel ? (
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${rentalTypeBadgeClass(
+                              item.rentalType
+                            )}`}
+                          >
+                            {rentalLabel}
+                          </span>
+                        ) : null}
+
+                        {item.jenisListing === "dijual" && saleLabel ? (
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${saleTypeBadgeClass(
+                              item.saleType
+                            )}`}
+                          >
+                            {saleLabel}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="absolute bottom-3 right-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                        TETAMO
+                      </div>
+                    </div>
+
+                    <div className="p-4 sm:p-5">
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        {propertyTypeLabel ? (
+                          <span className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-700">
+                            {propertyTypeLabel}
+                          </span>
+                        ) : null}
 
                         {tierUI ? (
                           <span

@@ -23,7 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/trackEvent";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
 
-type RentalType = "monthly" | "yearly" | "";
+type RentalType = "daily" | "monthly" | "yearly" | "";
 type SupportedCurrency = "IDR" | "USD" | "AUD";
 
 type Property = {
@@ -47,6 +47,7 @@ type Property = {
   slug?: string;
   jenisListing: "dijual" | "disewa";
   rentalType: RentalType;
+  saleType?: string;
   propertyType: string;
   kode?: string;
   postedDate?: string;
@@ -106,6 +107,7 @@ type PropertyRow = {
   furnishing: string | null;
   listing_type: string | null;
   rental_type: string | null;
+  sale_type: string | null;
   property_type: string | null;
   source: string | null;
   status: string | null;
@@ -332,6 +334,7 @@ function normalizePostedByType(
 function normalizeRentalType(value?: string | null): RentalType {
   const v = String(value || "").trim().toLowerCase();
 
+  if (v === "daily" || v === "harian") return "daily";
   if (v === "monthly" || v === "bulanan") return "monthly";
   if (v === "yearly" || v === "tahunan") return "yearly";
 
@@ -342,24 +345,63 @@ function getRentalTypeLabel(
   rentalType: RentalType,
   lang: "id" | "en"
 ): string {
-  if (rentalType === "monthly") {
-    return lang === "id" ? "Bulanan" : "Monthly";
-  }
-
-  if (rentalType === "yearly") {
-    return lang === "id" ? "Tahunan" : "Yearly";
-  }
+  if (rentalType === "daily") return lang === "id" ? "Harian" : "Daily";
+  if (rentalType === "monthly") return lang === "id" ? "Bulanan" : "Monthly";
+  if (rentalType === "yearly") return lang === "id" ? "Tahunan" : "Yearly";
 
   return "";
 }
 
 function rentalTypeBadgeClass(rentalType: RentalType) {
+  if (rentalType === "daily") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
   if (rentalType === "monthly") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
   if (rentalType === "yearly") {
     return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
+function normalizeSaleType(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getSaleTypeLabel(value?: string | null, lang?: string) {
+  const raw = normalizeSaleType(value);
+
+  if (!raw) return "";
+
+  if (raw === "freehold") return "Freehold";
+  if (raw === "leasehold") return "Leasehold";
+  if (raw === "hgb") return "HGB";
+  if (raw === "hak_pakai") return lang === "id" ? "Hak Pakai" : "Right to Use";
+  if (raw === "lainnya") return lang === "id" ? "Lainnya" : "Other";
+
+  return raw
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function saleTypeBadgeClass(value?: string | null) {
+  const raw = normalizeSaleType(value);
+
+  if (raw === "leasehold") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (raw === "freehold") {
+    return "border-green-200 bg-green-50 text-green-700";
+  }
+
+  if (raw === "hgb" || raw === "hak_pakai") {
+    return "border-purple-200 bg-purple-50 text-purple-700";
   }
 
   return "border-gray-200 bg-gray-50 text-gray-700";
@@ -470,6 +512,7 @@ function PropertyCard({
   const displayTitle = getLocalizedPropertyTitle(p, lang);
   const displayPrice = formatPriceByCurrency(p.priceValue, currentCurrency);
   const secondaryPrice = formatSecondaryPrice(p.priceValue, currentCurrency);
+  const saleTypeLabel = getSaleTypeLabel(p.saleType, lang);
 
   const next = () =>
     setIdx((prev) => (prev === p.images.length - 1 ? 0 : prev + 1));
@@ -501,6 +544,7 @@ function PropertyCard({
               property_code: p.kode ?? null,
               listing_type: p.jenisListing,
               rental_type: p.rentalType || null,
+              sale_type: p.saleType || null,
               property_type: p.propertyType,
               posted_by_type: p.postedByType,
               area: p.area,
@@ -523,6 +567,7 @@ function PropertyCard({
     p.kode,
     p.jenisListing,
     p.rentalType,
+    p.saleType,
     p.propertyType,
     p.postedByType,
     p.area,
@@ -644,6 +689,7 @@ function PropertyCard({
         property_code: property.kode ?? null,
         listing_type: property.jenisListing,
         rental_type: property.rentalType || null,
+        sale_type: property.saleType || null,
         property_type: property.propertyType,
         posted_by_type: property.postedByType,
         area: property.area,
@@ -723,6 +769,7 @@ Is this property still available?`;
           property_code: property.kode ?? null,
           listing_type: property.jenisListing,
           rental_type: property.rentalType || null,
+          sale_type: property.saleType || null,
           property_type: property.propertyType,
           posted_by_type: property.postedByType,
           area: property.area,
@@ -957,6 +1004,16 @@ Is this property still available?`;
             </div>
           ) : null}
 
+          {p.jenisListing === "dijual" && saleTypeLabel ? (
+            <div
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${saleTypeBadgeClass(
+                p.saleType
+              )}`}
+            >
+              {saleTypeLabel}
+            </div>
+          ) : null}
+
           <div
             className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-sm sm:text-[11px] ${propertyTypeBadgeClass()}`}
           >
@@ -1142,6 +1199,7 @@ export default function PropertiPageClient({
   const pathname = usePathname();
   const sp = useSearchParams();
   const jenisListing = sp.get("jenisListing");
+  const selectedRentalType = normalizeRentalType(sp.get("rentalType"));
 
   const [all, setAll] = useState<Property[]>(initialProperties);
   const [loading, setLoading] = useState(initialProperties.length === 0);
@@ -1217,6 +1275,7 @@ export default function PropertiPageClient({
           furnishing,
           listing_type,
           rental_type,
+          sale_type,
           property_type,
           source,
           status,
@@ -1300,32 +1359,26 @@ export default function PropertiPageClient({
         const ownerPendingVerification =
           postedByType === "owner" &&
           !isVerified &&
-          (
-            row.status === "pending" ||
+          (row.status === "pending" ||
             row.status === "pending_approval" ||
             row.verification_status === "pending_verification" ||
-            row.verification_status === "pending_approval"
-          );
+            row.verification_status === "pending_approval");
 
         const agentPendingVerification =
           postedByType === "agent" &&
           !isVerified &&
-          (
-            row.status === "pending" ||
+          (row.status === "pending" ||
             row.status === "pending_approval" ||
             row.verification_status === "pending_verification" ||
-            row.verification_status === "pending_approval"
-          );
+            row.verification_status === "pending_approval");
 
         const developerPendingApproval =
           postedByType === "developer" &&
           !isVerified &&
-          (
-            row.status === "pending" ||
+          (row.status === "pending" ||
             row.status === "pending_approval" ||
             row.verification_status === "pending_verification" ||
-            row.verification_status === "pending_approval"
-          );
+            row.verification_status === "pending_approval");
 
         const resolvedName = row.contact_name || "Tetamo User";
         const resolvedAgency = row.contact_agency || "";
@@ -1353,6 +1406,7 @@ export default function PropertiPageClient({
           slug: row.slug ?? undefined,
           jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
           rentalType: normalizeRentalType(row.rental_type),
+          saleType: row.sale_type || "",
           propertyType: row.property_type || "",
           kode: row.kode ?? undefined,
           postedDate: formatPostedDate(liveDate),
@@ -1874,6 +1928,12 @@ export default function PropertiPageClient({
       list = list.filter((p) => p.jenisListing === jenisListing);
     }
 
+    if (selectedRentalType) {
+      list = list.filter(
+        (p) => p.jenisListing === "disewa" && p.rentalType === selectedRentalType
+      );
+    }
+
     const spotlight = list
       .filter((p) => p.spotlight)
       .sort(sortByNewestWithinTier);
@@ -1895,30 +1955,38 @@ export default function PropertiPageClient({
       .sort(sortByNewestWithinTier);
 
     return [...spotlight, ...featured, ...boosted, ...priority, ...normal];
-  }, [all, jenisListing]);
+  }, [all, jenisListing, selectedRentalType]);
 
   const pageSize = 12;
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setPage(1);
-  }, [jenisListing, all.length]);
+  }, [jenisListing, selectedRentalType, all.length]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const start = (page - 1) * pageSize;
   const paged = filtered.slice(start, start + pageSize);
 
-  const currentFilterLabel = jenisListing
-    ? jenisListing === "dijual"
-      ? lang === "id"
-        ? "Dijual"
-        : "For Sale"
+  const currentFilterLabel = useMemo(() => {
+    const listingLabel = jenisListing
+      ? jenisListing === "dijual"
+        ? lang === "id"
+          ? "Dijual"
+          : "For Sale"
+        : lang === "id"
+          ? "Disewa"
+          : "For Rent"
       : lang === "id"
-        ? "Disewa"
-        : "For Rent"
-    : lang === "id"
-      ? "Semua"
-      : "All";
+        ? "Semua"
+        : "All";
+
+    const rentalLabel = selectedRentalType
+      ? getRentalTypeLabel(selectedRentalType, lang)
+      : "";
+
+    return rentalLabel ? `${listingLabel} • ${rentalLabel}` : listingLabel;
+  }, [jenisListing, selectedRentalType, lang]);
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -1973,18 +2041,33 @@ export default function PropertiPageClient({
           <div className="mt-5 flex flex-wrap gap-3">
             <FilterChip
               href="/properti"
-              active={!jenisListing}
+              active={!jenisListing && !selectedRentalType}
               label={lang === "id" ? "Semua" : "All"}
             />
             <FilterChip
               href="/properti?jenisListing=dijual"
-              active={jenisListing === "dijual"}
+              active={jenisListing === "dijual" && !selectedRentalType}
               label={lang === "id" ? "Dijual" : "For Sale"}
             />
             <FilterChip
               href="/properti?jenisListing=disewa"
-              active={jenisListing === "disewa"}
+              active={jenisListing === "disewa" && !selectedRentalType}
               label={lang === "id" ? "Disewa" : "For Rent"}
+            />
+            <FilterChip
+              href="/properti?jenisListing=disewa&rentalType=harian"
+              active={selectedRentalType === "daily"}
+              label={lang === "id" ? "Harian" : "Daily"}
+            />
+            <FilterChip
+              href="/properti?jenisListing=disewa&rentalType=bulanan"
+              active={selectedRentalType === "monthly"}
+              label={lang === "id" ? "Bulanan" : "Monthly"}
+            />
+            <FilterChip
+              href="/properti?jenisListing=disewa&rentalType=tahunan"
+              active={selectedRentalType === "yearly"}
+              label={lang === "id" ? "Tahunan" : "Yearly"}
             />
           </div>
 
@@ -2052,6 +2135,99 @@ export default function PropertiPageClient({
           >
             {lang === "id" ? "Berikutnya" : "Next"}
           </button>
+        </div>
+
+        <div className="mt-10 rounded-[32px] border border-gray-200 bg-[#1C1C1E] p-5 text-white shadow-[0_18px_60px_rgba(0,0,0,0.18)] sm:p-6 lg:p-8">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+                TETAMO MARKETPLACE
+              </div>
+
+              <h2 className="mt-4 text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl lg:text-4xl">
+                {lang === "id"
+                  ? "Cari atau Pasang Properti Anda dengan Tetamo"
+                  : "Find or List Your Property with Tetamo"}
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/70 sm:text-base">
+                {lang === "id"
+                  ? "Tetamo membantu pemilik, agen, dan developer menampilkan properti dengan lebih profesional — lengkap dengan listing terverifikasi, direct WhatsApp, jadwal viewing, dan exposure marketplace."
+                  : "Tetamo helps owners, agents, and developers present properties professionally — with verified listings, direct WhatsApp leads, viewing schedule, and marketplace exposure."}
+              </p>
+
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                  <p className="text-sm font-bold text-white">
+                    {lang === "id" ? "Listing Terverifikasi" : "Verified Listing"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-white/60">
+                    {lang === "id"
+                      ? "Bangun trust lebih cepat."
+                      : "Build trust faster."}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                  <p className="text-sm font-bold text-white">Direct WhatsApp</p>
+                  <p className="mt-1 text-xs leading-5 text-white/60">
+                    {lang === "id"
+                      ? "Lead langsung ke pemilik atau agen."
+                      : "Leads go directly to owner or agent."}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                  <p className="text-sm font-bold text-white">
+                    {lang === "id"
+                      ? "AI Judul & Deskripsi"
+                      : "AI Title & Description"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-white/60">
+                    {lang === "id"
+                      ? "Lebih rapi, bilingual, dan SEO friendly."
+                      : "Cleaner, bilingual, and SEO friendly."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white p-4 text-[#1C1C1E] shadow-2xl sm:p-5">
+              <p className="text-sm font-bold">
+                {lang === "id"
+                  ? "Siap pasang listing?"
+                  : "Ready to list your property?"}
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {lang === "id"
+                  ? "Pilih paket yang sesuai untuk pemilik, agen, atau kebutuhan promosi properti Anda."
+                  : "Choose the right package for owners, agents, or your property promotion needs."}
+              </p>
+
+              <div className="mt-5 flex flex-col gap-3">
+                <Link
+                  href="/pricelist"
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-bold text-white transition hover:opacity-90"
+                >
+                  {lang === "id" ? "Lihat Paket Tetamo" : "View Tetamo Packages"}
+                </Link>
+
+                <Link
+                  href="/search"
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
+                >
+                  {lang === "id" ? "Cari Properti" : "Find Property"}
+                </Link>
+              </div>
+
+              <p className="mt-4 text-center text-[11px] leading-5 text-gray-500">
+                {lang === "id"
+                  ? "Tanpa komisi. Listing lebih mudah. Exposure lebih luas."
+                  : "No commission. Easier listing. Wider exposure."}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </main>
