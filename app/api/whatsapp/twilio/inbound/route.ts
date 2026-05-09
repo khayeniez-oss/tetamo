@@ -37,8 +37,10 @@ type HandoverResult = {
 const TETAMO_LINKS = {
   pricelist: "https://www.tetamo.com/pricelist",
   developerLicense: "https://www.tetamo.com/developer-license",
-  howToListBlog: "https://www.tetamo.com/blog/how-to-list-my-property-in-tetamo",
-  howToPostVideo: "https://www.tetamo.com/education/cara-posting-properti-di-tetamo",
+  howToListBlog:
+    "https://www.tetamo.com/blog/how-to-list-my-property-in-tetamo",
+  howToPostVideo:
+    "https://www.tetamo.com/education/cara-posting-properti-di-tetamo",
   dashboardVideo:
     "https://www.tetamo.com/education/cara-menggunakan-dashboard-tetamo-untuk-owner-dan-agent",
 };
@@ -82,9 +84,9 @@ function getRawPayload(params: URLSearchParams) {
 function limitWhatsAppReply(value: string) {
   const clean = String(value || "").trim();
 
-  if (clean.length <= 1600) return clean;
+  if (clean.length <= 1700) return clean;
 
-  return clean.slice(0, 1590).trim() + "...";
+  return clean.slice(0, 1690).trim() + "...";
 }
 
 function detectLanguage(message: string) {
@@ -114,6 +116,9 @@ function detectLanguage(message: string) {
     "paket",
     "dashboard",
     "listing",
+    "kantor",
+    "alamat",
+    "perusahaan",
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
@@ -446,7 +451,7 @@ Most messages come from Instagram/Facebook/Meta advertising. You respond 24/7 to
 Your personality:
 - Professional, friendly, helpful, and sales-driven.
 - Sound like a real Tetamo admin, not a robotic FAQ bot.
-- Be warm, clear, and confident.
+- Be warm, clear, confident, and practical.
 - Do not be too formal unless the customer is formal.
 - Do not always start with "Thank you" or "Thanks for reaching out."
 - Vary your opening naturally:
@@ -459,6 +464,19 @@ Your personality:
 - Use Indonesian when the customer writes Indonesian.
 - Use English when the customer writes English.
 - If the customer mixes English and Indonesian, light bilingual is okay.
+
+Official Tetamo company information:
+- Tetamo is an Australian-based SaaS/property marketplace business under Tetamo Pty Ltd.
+- Tetamo has a company presence/office in Sydney, Australia.
+- Tetamo operates digitally and serves Indonesia's property market through its online platform.
+- Tetamo is a platform, not a brokerage, not a real estate agency, and not a real estate agent.
+- Tetamo helps property owners, agents, agencies, developers, buyers, renters, and investors advertise, discover, and inquire about property through the platform.
+- Tetamo does not represent itself as the seller, landlord, buyer agent, or real estate broker for listed properties.
+- Tetamo provides platform, advertising, listing, marketplace, technology, and SaaS-related services.
+- If asked where the office is, do NOT say Tetamo has no office. Say Tetamo is an Australian-based company under Tetamo Pty Ltd with a company presence/office in Sydney, Australia, and operates digitally for Indonesia's property market.
+- If asked for a walk-in appointment, physical visit, or full address, say Tetamo primarily handles support and platform inquiries online through official channels, and admin can follow up for official business matters.
+- If asked if Tetamo can operate in Indonesia even though it is Australian-based, explain that Tetamo is an online platform/SaaS business serving the Indonesian property market digitally, similar to how global online platforms can operate across countries through online services. Keep it simple and professional.
+- Do not provide legal advice. If the question is legal, licensing, government registration, tax, compliance, or formal business verification, say admin can follow up with the official company information.
 
 Tetamo identity:
 Tetamo is a property marketplace platform in Indonesia for property owners, agents, agencies, developers, buyers, renters, and investors.
@@ -576,7 +594,7 @@ Example:
 "I’m happy to help, but let’s keep the conversation professional so I can assist you properly."
 
 Admin handover:
-If the issue needs admin, payment check, verification check, refund, complaint, custom proposal, or account-specific support:
+If the issue needs admin, payment check, verification check, refund, complaint, custom proposal, legal/compliance question, full company address request, or account-specific support:
 - Do not pretend to solve it.
 - Say admin can follow up.
 - Keep the reply polite and clear.
@@ -611,7 +629,7 @@ async function generateTetamoAiReply(params: {
     model: "gpt-4.1-mini",
     input: prompt,
     temperature: 0.5,
-    max_output_tokens: 650,
+    max_output_tokens: 700,
   });
 
   return limitWhatsAppReply(
@@ -750,6 +768,6 @@ export async function GET() {
   return Response.json({
     success: true,
     message:
-      "Tetamo Twilio WhatsApp inbound webhook is active with improved AI sales/support reply.",
+      "Tetamo Twilio WhatsApp inbound webhook is active with improved company info and AI sales/support reply.",
   });
 }
