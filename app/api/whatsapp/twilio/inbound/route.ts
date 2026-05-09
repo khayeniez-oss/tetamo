@@ -34,6 +34,13 @@ type HandoverResult = {
   reason: string;
 };
 
+type TwilioSendResult = {
+  success: boolean;
+  sid: string | null;
+  status?: string | null;
+  error?: unknown;
+};
+
 const TETAMO_LINKS = {
   pricelist: "https://www.tetamo.com/pricelist",
   developerLicense: "https://www.tetamo.com/developer-license",
@@ -59,6 +66,20 @@ function createTwimlMessage(message: string) {
 <Response>
   <Message>${escapeXml(message)}</Message>
 </Response>`;
+}
+
+function createEmptyTwimlResponse() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response></Response>`;
+}
+
+function twimlResponse(xml: string) {
+  return new Response(xml, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/xml; charset=utf-8",
+    },
+  });
 }
 
 function cleanWhatsappPhone(value: string) {
@@ -122,6 +143,132 @@ function detectLanguage(message: string) {
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
+}
+
+function getSafeFallbackReply(message: string) {
+  const lang = detectLanguage(message);
+
+  if (lang === "id") {
+    return `Halo, selamat datang di Tetamo.
+
+Apakah Anda ingin memasang listing properti, mencari properti, atau bertanya tentang paket owner/agent/developer?`;
+  }
+
+  return `Hi, welcome to Tetamo.
+
+Are you looking to list a property, find a property, or ask about owner/agent/developer packages?`;
+}
+
+async function sendTwilioWhatsappMessage(
+  to: string,
+  message: string
+): Promise<TwilioSendResult> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+
+  if (!to) {
+    console.error("Twilio WhatsApp send skipped. Missing recipient number.");
+
+    return {
+      success: false,
+      sid: null,
+      error: "Missing recipient number.",
+    };
+  }
+
+  if (!accountSid || !authToken || !from) {
+    console.error("Missing Twilio send env vars.", {
+      hasAccountSid: Boolean(accountSid),
+      hasAuthToken: Boolean(authToken),
+      hasFrom: Boolean(from),
+    });
+
+    return {
+      success: false,
+      sid: null,
+      error: "Missing Twilio send environment variables.",
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(`${accountSid}:${authToken}`).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          From: from,
+          To: to,
+          Body: message,
+        }),
+      }
+    );
+
+    const responseText = await response.text();
+
+    let result: any = null;
+
+    try {
+      result = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      result = responseText;
+    }
+
+    if (!response.ok) {
+      console.error("Twilio WhatsApp API send failed:", result);
+
+      return {
+        success: false,
+        sid: null,
+        error: result,
+      };
+    }
+
+    console.log("Twilio WhatsApp API reply sent:", {
+      sid: result?.sid || null,
+      status: result?.status || null,
+      to,
+    });
+
+    return {
+      success: true,
+      sid: result?.sid || null,
+      status: result?.status || null,
+      error: null,
+    };
+  } catch (error) {
+    console.error("Twilio WhatsApp API send error:", error);
+
+    return {
+      success: false,
+      sid: null,
+      error,
+    };
+  }
+}
+
+async function sendReplyAndReturnXml(params: URLSearchParams, reply: string) {
+  const from = params.get("From") || "";
+
+  const twilioSendResult = await sendTwilioWhatsappMessage(from, reply);
+
+  if (twilioSendResult.success) {
+    return {
+      twilioSendResult,
+      response: twimlResponse(createEmptyTwimlResponse()),
+    };
+  }
+
+  return {
+    twilioSendResult,
+    response: twimlResponse(createTwimlMessage(reply)),
+  };
 }
 
 function detectHandover(message: string): HandoverResult {
@@ -373,6 +520,9 @@ async function saveOutboundMessage(
     adminGenerated?: boolean;
     source?: string;
     handoverReason?: string;
+    twilioMessageSid?: string | null;
+    twilioSendStatus?: string | null;
+    twilioSendError?: unknown;
   }
 ) {
   const from = params.get("From") || "";
@@ -398,6 +548,9 @@ async function saveOutboundMessage(
         ai_reply: Boolean(options?.aiGenerated),
         admin_handover: Boolean(options?.handoverReason),
         handover_reason: options?.handoverReason || null,
+        twilio_message_sid: options?.twilioMessageSid || null,
+        twilio_send_status: options?.twilioSendStatus || null,
+        twilio_send_error: options?.twilioSendError || null,
       },
       created_at: outboundAt,
     });
@@ -615,48 +768,31 @@ async function generateTetamoAiReply(params: {
   customerMessage: string;
   recentMessages: MessageRow[];
 }) {
-  if (!process.env.OPENAI_API_KEY) {
-    const lang = detectLanguage(params.customerMessage);
+  const fallbackReply = getSafeFallbackReply(params.customerMessage);
 
-    return lang === "id"
-      ? "Halo, selamat datang di Tetamo. Pesan Anda sudah kami terima. Saat ini AI sedang belum tersedia, tetapi tim Tetamo tetap dapat menindaklanjuti percakapan ini."
-      : "Hi, welcome to Tetamo. We received your message. Our AI is temporarily unavailable, but the Tetamo team can still follow up.";
+  if (!process.env.OPENAI_API_KEY) {
+    return fallbackReply;
   }
 
-  const prompt = buildTetamoAiPrompt(params);
+  try {
+    const prompt = buildTetamoAiPrompt(params);
 
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    input: prompt,
-    temperature: 0.5,
-    max_output_tokens: 700,
-  });
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: prompt,
+      temperature: 0.5,
+      max_output_tokens: 700,
+    });
 
-  return limitWhatsAppReply(
-    response.output_text ||
-      "Hi, welcome to Tetamo. Are you looking to list a property, find a property, or ask about agent/developer packages?"
-  );
+    return limitWhatsAppReply(response.output_text || fallbackReply);
+  } catch (error) {
+    console.error("OpenAI WhatsApp reply failed:", error);
+    return fallbackReply;
+  }
 }
 
 export async function POST(req: Request) {
   try {
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.SUPABASE_SERVICE_ROLE_KEY
-    ) {
-      console.error("Missing Supabase env vars for WhatsApp webhook.");
-
-      const reply =
-        "Hi, Tetamo received your message. Please try again shortly.";
-
-      return new Response(createTwimlMessage(reply), {
-        status: 200,
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-        },
-      });
-    }
-
     const rawBody = await req.text();
     const params = new URLSearchParams(rawBody);
 
@@ -672,18 +808,27 @@ export async function POST(req: Request) {
       body,
     });
 
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      console.error("Missing Supabase env vars for WhatsApp webhook.");
+
+      const reply =
+        "Hi, Tetamo received your message. Please try again shortly.";
+
+      const { response } = await sendReplyAndReturnXml(params, reply);
+      return response;
+    }
+
     const conversation = await upsertConversation(params);
 
     if (!conversation?.id) {
       const reply =
         "Hi, Tetamo received your message. Please try again shortly.";
 
-      return new Response(createTwimlMessage(reply), {
-        status: 200,
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-        },
-      });
+      const { response } = await sendReplyAndReturnXml(params, reply);
+      return response;
     }
 
     await saveInboundMessage(params, conversation.id);
@@ -699,17 +844,24 @@ export async function POST(req: Request) {
           ? "Percakapan ini sudah ditandai untuk ditindaklanjuti oleh admin Tetamo. Tim kami akan membantu Anda lebih lanjut."
           : "This conversation has already been marked for Tetamo admin follow-up. Our team will assist you further.";
 
+      const { twilioSendResult, response } = await sendReplyAndReturnXml(
+        params,
+        reply
+      );
+
       await saveOutboundMessage(params, conversation.id, reply, {
         aiGenerated: false,
-        source: "tetamo_handover_notice",
+        source: twilioSendResult.success
+          ? "tetamo_handover_notice_twilio_api"
+          : "tetamo_handover_notice_send_failed",
+        twilioMessageSid: twilioSendResult.sid,
+        twilioSendStatus: twilioSendResult.status || null,
+        twilioSendError: twilioSendResult.success
+          ? null
+          : twilioSendResult.error || null,
       });
 
-      return new Response(createTwimlMessage(reply), {
-        status: 200,
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-        },
-      });
+      return response;
     }
 
     const handover = detectHandover(body);
@@ -717,18 +869,25 @@ export async function POST(req: Request) {
     if (handover.shouldHandover) {
       const reply = buildHandoverReply(body, handover.reason);
 
+      const { twilioSendResult, response } = await sendReplyAndReturnXml(
+        params,
+        reply
+      );
+
       await saveOutboundMessage(params, conversation.id, reply, {
         aiGenerated: false,
-        source: "tetamo_admin_handover",
+        source: twilioSendResult.success
+          ? "tetamo_admin_handover_twilio_api"
+          : "tetamo_admin_handover_send_failed",
         handoverReason: handover.reason,
+        twilioMessageSid: twilioSendResult.sid,
+        twilioSendStatus: twilioSendResult.status || null,
+        twilioSendError: twilioSendResult.success
+          ? null
+          : twilioSendResult.error || null,
       });
 
-      return new Response(createTwimlMessage(reply), {
-        status: 200,
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-        },
-      });
+      return response;
     }
 
     const recentMessages = await getRecentMessages(conversation.id);
@@ -738,29 +897,31 @@ export async function POST(req: Request) {
       recentMessages,
     });
 
+    const { twilioSendResult, response } = await sendReplyAndReturnXml(
+      params,
+      aiReply
+    );
+
     await saveOutboundMessage(params, conversation.id, aiReply, {
       aiGenerated: true,
-      source: "tetamo_ai",
+      source: twilioSendResult.success
+        ? "tetamo_ai_twilio_api"
+        : "tetamo_ai_send_failed",
+      twilioMessageSid: twilioSendResult.sid,
+      twilioSendStatus: twilioSendResult.status || null,
+      twilioSendError: twilioSendResult.success
+        ? null
+        : twilioSendResult.error || null,
     });
 
-    return new Response(createTwimlMessage(aiReply), {
-      status: 200,
-      headers: {
-        "Content-Type": "text/xml; charset=utf-8",
-      },
-    });
+    return response;
   } catch (error) {
     console.error("Twilio inbound webhook error:", error);
 
     const fallbackReply =
       "Hi, Tetamo received your message. Please try again shortly.";
 
-    return new Response(createTwimlMessage(fallbackReply), {
-      status: 200,
-      headers: {
-        "Content-Type": "text/xml; charset=utf-8",
-      },
-    });
+    return twimlResponse(createTwimlMessage(fallbackReply));
   }
 }
 
@@ -768,6 +929,6 @@ export async function GET() {
   return Response.json({
     success: true,
     message:
-      "Tetamo Twilio WhatsApp inbound webhook is active with improved company info and AI sales/support reply.",
+      "Tetamo Twilio WhatsApp inbound webhook is active and sends replies through Twilio API.",
   });
 }
