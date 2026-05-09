@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
@@ -10,6 +11,8 @@ type Props = {
   onNext: () => void;
   onBack: () => void;
 };
+
+type SourceType = "owner" | "agent" | "admin";
 
 type DraftMedia = {
   photos?: string[];
@@ -21,8 +24,12 @@ type DraftMedia = {
   description_id?: string;
   mediaFolder?: string;
   mode?: "create" | "edit";
-  source?: "owner" | "agent";
+  source?: SourceType;
   aiGeneratedOnce?: boolean;
+  ai_seo_title?: string;
+  ai_seo_meta_description?: string;
+  ai_social_caption?: string;
+  ai_whatsapp_inquiry_message?: string;
 };
 
 type AiPropertyContent = {
@@ -409,6 +416,33 @@ function limitText(value: string, limit: number) {
   return value.trim().slice(0, limit);
 }
 
+function normalizeSourceFromDraftAndPath(draft: any, pathname: string): SourceType {
+  const rawSource = String(draft?.source || "").toLowerCase();
+
+  if (rawSource === "admin") return "admin";
+  if (rawSource === "agent") return "agent";
+  if (rawSource === "owner") return "owner";
+
+  const rawRole = String(
+    draft?.role ||
+      draft?.userRole ||
+      draft?.accountType ||
+      draft?.profileRole ||
+      draft?.dashboardRole ||
+      ""
+  ).toLowerCase();
+
+  if (rawRole.includes("admin")) return "admin";
+  if (rawRole.includes("agent")) return "agent";
+  if (rawRole.includes("owner") || rawRole.includes("pemilik")) return "owner";
+
+  if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/agent")) return "agent";
+  if (pathname.startsWith("/pemilik")) return "owner";
+
+  return "owner";
+}
+
 export default function ListingFoto({
   draft,
   setDraft,
@@ -416,15 +450,20 @@ export default function ListingFoto({
   onBack,
 }: Props) {
   const { lang } = useLanguage();
+  const pathname = usePathname() || "";
   const initial = (draft || {}) as DraftMedia;
 
   const mode: "create" | "edit" =
     initial.mode === "edit" ? "edit" : "create";
-  const source: "owner" | "agent" =
-    initial.source === "agent" ? "agent" : "owner";
+
+  const source = useMemo<SourceType>(() => {
+    return normalizeSourceFromDraftAndPath(draft, pathname);
+  }, [draft, pathname]);
 
   const isEdit = mode === "edit";
   const isAgent = source === "agent";
+  const isAdmin = source === "admin";
+  const canUseSocialCaption = isAgent || isAdmin;
   const shouldSubmitForApproval = isEdit || isAgent;
 
   const t =
@@ -451,6 +490,7 @@ export default function ListingFoto({
           loginFirst: "Silakan login terlebih dahulu.",
           maxPhotos: "Maksimum 30 foto.",
           minPhotos: "Minimal 3 foto diperlukan.",
+          photoRequirement: "Minimal 3 foto diperlukan. Maksimum 30 foto.",
           imageTypesOnly:
             "Hanya file gambar yang diperbolehkan. Gunakan JPG, PNG, WEBP, HEIC, atau HEIF.",
           imageSizeLimit: "Ukuran foto harus di bawah 10MB.",
@@ -483,6 +523,8 @@ export default function ListingFoto({
           aiBoxTitle: "Buat judul & deskripsi dengan AI",
           aiBoxSubtitle:
             "AI akan menggunakan detail properti, lokasi, fasilitas, dan area sekitar yang sudah Anda isi.",
+          aiSocialNote:
+            "Untuk agent/admin, AI juga akan membuat caption media sosial siap pakai.",
           aiButton: "✨ Generate dengan AI",
           aiGenerating: "Membuat...",
           aiUsedShort: "AI Sudah Digunakan",
@@ -494,6 +536,11 @@ export default function ListingFoto({
           aiOverwriteConfirm:
             "Konten judul/deskripsi yang sudah ada akan diganti oleh hasil AI. Lanjutkan?",
           aiAlreadyGenerated: "AI sudah digunakan 1x untuk listing ini.",
+          socialCaptionTitle: "AI Social Media Caption",
+          socialCaptionSubtitle:
+            "Gunakan caption ini untuk promosi listing di Instagram, Facebook, TikTok, atau WhatsApp broadcast.",
+          copyCaption: "Salin Caption",
+          copiedCaption: "Caption tersalin",
         }
       : {
           back: "Back",
@@ -517,6 +564,7 @@ export default function ListingFoto({
           loginFirst: "Please log in first.",
           maxPhotos: "Maximum 30 photos allowed.",
           minPhotos: "At least 3 photos are required.",
+          photoRequirement: "At least 3 photos are required. Maximum 30 photos.",
           imageTypesOnly:
             "Only image files are allowed. Use JPG, PNG, WEBP, HEIC, or HEIF.",
           imageSizeLimit: "Image size must be under 10MB.",
@@ -548,6 +596,8 @@ export default function ListingFoto({
           aiBoxTitle: "Create title & description with AI",
           aiBoxSubtitle:
             "AI will use the property details, location, facilities, and nearby area you filled earlier.",
+          aiSocialNote:
+            "For agent/admin, AI will also create a ready-to-use social media caption.",
           aiButton: "✨ Generate with AI",
           aiGenerating: "Generating...",
           aiUsedShort: "AI Used",
@@ -559,6 +609,11 @@ export default function ListingFoto({
           aiOverwriteConfirm:
             "Existing title/description content will be replaced by the AI result. Continue?",
           aiAlreadyGenerated: "AI has already been used 1x for this listing.",
+          socialCaptionTitle: "AI Social Media Caption",
+          socialCaptionSubtitle:
+            "Use this caption to promote the listing on Instagram, Facebook, TikTok, or WhatsApp broadcast.",
+          copyCaption: "Copy Caption",
+          copiedCaption: "Caption copied",
         };
 
   const [photos, setPhotos] = useState<string[]>(initial.photos ?? []);
@@ -572,10 +627,23 @@ export default function ListingFoto({
   const [descriptionId, setDescriptionId] = useState<string>(
     initial.description_id ?? ""
   );
+  const [aiSeoTitle, setAiSeoTitle] = useState<string>(
+    initial.ai_seo_title ?? ""
+  );
+  const [aiSeoMetaDescription, setAiSeoMetaDescription] = useState<string>(
+    initial.ai_seo_meta_description ?? ""
+  );
+  const [socialCaption, setSocialCaption] = useState<string>(
+    initial.ai_social_caption ?? ""
+  );
+  const [aiWhatsappInquiryMessage, setAiWhatsappInquiryMessage] =
+    useState<string>(initial.ai_whatsapp_inquiry_message ?? "");
+
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [captionCopied, setCaptionCopied] = useState(false);
   const [aiGeneratedOnce, setAiGeneratedOnce] = useState<boolean>(
     Boolean(initial.aiGeneratedOnce)
   );
@@ -598,6 +666,12 @@ export default function ListingFoto({
     setTitleId((draft as any)?.title_id ?? "");
     setDescription((draft as any)?.description ?? "");
     setDescriptionId((draft as any)?.description_id ?? "");
+    setAiSeoTitle((draft as any)?.ai_seo_title ?? "");
+    setAiSeoMetaDescription((draft as any)?.ai_seo_meta_description ?? "");
+    setSocialCaption((draft as any)?.ai_social_caption ?? "");
+    setAiWhatsappInquiryMessage(
+      (draft as any)?.ai_whatsapp_inquiry_message ?? ""
+    );
     setAiGeneratedOnce(Boolean((draft as any)?.aiGeneratedOnce));
 
     hydratedRef.current = true;
@@ -608,6 +682,7 @@ export default function ListingFoto({
 
     setDraft((p: any) => ({
       ...(p || {}),
+      source,
       photos,
       coverIndex,
       video,
@@ -616,8 +691,13 @@ export default function ListingFoto({
       description,
       description_id: descriptionId,
       aiGeneratedOnce,
+      ai_seo_title: aiSeoTitle,
+      ai_seo_meta_description: aiSeoMetaDescription,
+      ai_social_caption: socialCaption,
+      ai_whatsapp_inquiry_message: aiWhatsappInquiryMessage,
     }));
   }, [
+    source,
     photos,
     coverIndex,
     video,
@@ -626,6 +706,10 @@ export default function ListingFoto({
     description,
     descriptionId,
     aiGeneratedOnce,
+    aiSeoTitle,
+    aiSeoMetaDescription,
+    socialCaption,
+    aiWhatsappInquiryMessage,
     setDraft,
   ]);
 
@@ -634,6 +718,7 @@ export default function ListingFoto({
       setCoverIndex(0);
       return;
     }
+
     if (coverIndex > photos.length - 1) {
       setCoverIndex(0);
     }
@@ -790,6 +875,7 @@ export default function ListingFoto({
     const nearbyPlaces = getDraftNearbyPlaces(draft);
 
     return {
+      source,
       propertyType,
       location,
       price,
@@ -845,6 +931,7 @@ export default function ListingFoto({
     try {
       setGeneratingAi(true);
       setAiError("");
+      setCaptionCopied(false);
 
       const {
         data: { session },
@@ -893,27 +980,38 @@ export default function ListingFoto({
           )
         : descriptionId;
 
+      const nextSeoTitle = generated.seoTitle || aiSeoTitle || "";
+      const nextSeoMetaDescription =
+        generated.seoMetaDescription || aiSeoMetaDescription || "";
+      const nextSocialCaption =
+        canUseSocialCaption && generated.socialCaption
+          ? generated.socialCaption
+          : socialCaption || "";
+      const nextWhatsappInquiryMessage =
+        generated.whatsappInquiryMessage || aiWhatsappInquiryMessage || "";
+
       setTitle(nextTitle);
       setTitleId(nextTitleId);
       setDescription(nextDescription);
       setDescriptionId(nextDescriptionId);
+      setAiSeoTitle(nextSeoTitle);
+      setAiSeoMetaDescription(nextSeoMetaDescription);
+      setSocialCaption(nextSocialCaption);
+      setAiWhatsappInquiryMessage(nextWhatsappInquiryMessage);
       setAiGeneratedOnce(true);
 
       setDraft((p: any) => ({
         ...(p || {}),
+        source,
         title: nextTitle,
         title_id: nextTitleId,
         description: nextDescription,
         description_id: nextDescriptionId,
         aiGeneratedOnce: true,
-        ai_seo_title: generated.seoTitle || p?.ai_seo_title || "",
-        ai_seo_meta_description:
-          generated.seoMetaDescription || p?.ai_seo_meta_description || "",
-        ai_social_caption: generated.socialCaption || p?.ai_social_caption || "",
-        ai_whatsapp_inquiry_message:
-          generated.whatsappInquiryMessage ||
-          p?.ai_whatsapp_inquiry_message ||
-          "",
+        ai_seo_title: nextSeoTitle,
+        ai_seo_meta_description: nextSeoMetaDescription,
+        ai_social_caption: nextSocialCaption,
+        ai_whatsapp_inquiry_message: nextWhatsappInquiryMessage,
       }));
     } catch (error: any) {
       console.error("Generate AI listing content error:", error);
@@ -922,6 +1020,21 @@ export default function ListingFoto({
       alert(message);
     } finally {
       setGeneratingAi(false);
+    }
+  }
+
+  async function copySocialCaption() {
+    if (!socialCaption.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(socialCaption);
+      setCaptionCopied(true);
+
+      window.setTimeout(() => {
+        setCaptionCopied(false);
+      }, 1800);
+    } catch (error) {
+      console.error("Copy social caption error:", error);
     }
   }
 
@@ -1201,6 +1314,10 @@ export default function ListingFoto({
                   {t.uploadPhotoHint}
                 </div>
 
+                <p className="mt-2 text-xs font-medium text-gray-700">
+                  {t.photoRequirement}
+                </p>
+
                 <div className="mt-4 relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
                   {photos.length === 0 ? (
                     <div className="flex h-full items-center justify-center px-4 text-center text-sm text-gray-500">
@@ -1344,6 +1461,14 @@ export default function ListingFoto({
                     <p className="mt-1 text-xs leading-5 text-gray-600 sm:text-sm">
                       {t.aiBoxSubtitle}
                     </p>
+                    {canUseSocialCaption ? (
+                      <p className="mt-1 text-xs leading-5 text-gray-600">
+                        {t.aiSocialNote}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      {t.aiNote}
+                    </p>
                   </div>
 
                   <button
@@ -1371,6 +1496,33 @@ export default function ListingFoto({
                   </p>
                 ) : null}
               </div>
+
+              {canUseSocialCaption && socialCaption.trim() ? (
+                <div className="mb-6 rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:px-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                        {t.socialCaptionTitle}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-gray-600 sm:text-sm">
+                        {t.socialCaptionSubtitle}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={copySocialCaption}
+                      type="button"
+                      className="inline-flex shrink-0 items-center justify-center rounded-2xl border border-gray-200 px-4 py-2.5 text-xs font-semibold text-[#1C1C1E] hover:bg-gray-50 sm:text-sm"
+                    >
+                      {captionCopied ? t.copiedCaption : t.copyCaption}
+                    </button>
+                  </div>
+
+                  <div className="mt-4 whitespace-pre-line rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-700">
+                    {socialCaption}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="flex items-center justify-between gap-3 text-sm">
                 <label className="font-semibold">{t.englishTitle} *</label>
