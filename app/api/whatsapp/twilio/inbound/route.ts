@@ -1,4 +1,3 @@
-cat > app/api/whatsapp/twilio/inbound/route.ts <<'EOF'
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -10,7 +9,7 @@ const supabaseAdmin = createClient(
 );
 
 function escapeXml(value: string) {
-  return value
+  return String(value || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -26,13 +25,23 @@ function createTwimlMessage(message: string) {
 }
 
 function cleanWhatsappPhone(value: string) {
-  return value.replace(/^whatsapp:/i, "").trim();
+  return String(value || "").replace(/^whatsapp:/i, "").trim();
 }
 
 function getWindowExpiry() {
   const expiry = new Date();
   expiry.setHours(expiry.getHours() + 24);
   return expiry.toISOString();
+}
+
+function getRawPayload(params: URLSearchParams) {
+  const payload: Record<string, string> = {};
+
+  params.forEach((value, key) => {
+    payload[key] = value;
+  });
+
+  return payload;
 }
 
 async function saveWhatsappConversation(params: URLSearchParams, reply: string) {
@@ -51,10 +60,10 @@ async function saveWhatsappConversation(params: URLSearchParams, reply: string) 
   const messageSid =
     params.get("MessageSid") || params.get("SmsMessageSid") || "";
   const mediaCount = Number(params.get("NumMedia") || 0);
+
   const now = new Date().toISOString();
   const windowExpiresAt = getWindowExpiry();
-
-  const rawPayload = Object.fromEntries(params.entries());
+  const rawPayload = getRawPayload(params);
 
   const phone = from;
   const phoneE164 = cleanWhatsappPhone(from);
@@ -143,6 +152,8 @@ async function saveWhatsappConversation(params: URLSearchParams, reply: string) 
     }
   }
 
+  const outboundAt = new Date().toISOString();
+
   const { error: outboundError } = await supabaseAdmin
     .from("whatsapp_messages")
     .insert({
@@ -160,7 +171,7 @@ async function saveWhatsappConversation(params: URLSearchParams, reply: string) 
       raw_payload: {
         test_reply: true,
       },
-      created_at: new Date().toISOString(),
+      created_at: outboundAt,
     });
 
   if (outboundError) {
@@ -172,12 +183,15 @@ async function saveWhatsappConversation(params: URLSearchParams, reply: string) 
     .update({
       last_message: reply,
       last_message_direction: "outbound",
-      last_message_at: new Date().toISOString(),
+      last_message_at: outboundAt,
     })
     .eq("id", conversationId);
 
   if (updateError) {
-    console.error("Failed to update conversation after outbound reply:", updateError);
+    console.error(
+      "Failed to update conversation after outbound reply:",
+      updateError
+    );
   }
 }
 
