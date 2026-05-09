@@ -48,6 +48,8 @@ const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "handled", label: "Handled" },
 ];
 
+const MESSAGE_BATCH_SIZE = 30;
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
 
@@ -100,6 +102,8 @@ export default function AdminWhatsappInboxPage() {
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [visibleMessageCount, setVisibleMessageCount] =
+    useState(MESSAGE_BATCH_SIZE);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
@@ -117,6 +121,13 @@ export default function AdminWhatsappInboxPage() {
       pausedAi: conversations.filter((item) => !item.ai_enabled).length,
     };
   }, [conversations]);
+
+  const visibleMessages = useMemo(() => {
+    if (messages.length <= visibleMessageCount) return messages;
+    return messages.slice(messages.length - visibleMessageCount);
+  }, [messages, visibleMessageCount]);
+
+  const hiddenMessagesCount = Math.max(messages.length - visibleMessageCount, 0);
 
   async function getAccessToken() {
     const {
@@ -163,6 +174,7 @@ export default function AdminWhatsappInboxPage() {
       ) {
         setSelectedConversation(null);
         setMessages([]);
+        setVisibleMessageCount(MESSAGE_BATCH_SIZE);
       }
 
       if (!selectedConversationId && nextConversations.length > 0) {
@@ -188,6 +200,7 @@ export default function AdminWhatsappInboxPage() {
       if (!token) {
         setError("Please log in as admin first.");
         setMessages([]);
+        setVisibleMessageCount(MESSAGE_BATCH_SIZE);
         return;
       }
 
@@ -208,6 +221,7 @@ export default function AdminWhatsappInboxPage() {
 
       setSelectedConversation((result.conversation || null) as Conversation | null);
       setMessages((result.messages || []) as Message[]);
+      setVisibleMessageCount(MESSAGE_BATCH_SIZE);
     } catch (err: any) {
       console.error("Load WhatsApp messages error:", err);
       setError(err?.message || "Failed to load WhatsApp messages.");
@@ -256,6 +270,10 @@ export default function AdminWhatsappInboxPage() {
     } finally {
       setActionLoading("");
     }
+  }
+
+  function loadMoreMessages() {
+    setVisibleMessageCount((prev) => prev + MESSAGE_BATCH_SIZE);
   }
 
   useEffect(() => {
@@ -546,7 +564,20 @@ export default function AdminWhatsappInboxPage() {
                   </div>
                 ) : null}
 
-                {messages.map((message) => {
+                {!loadingMessages && hiddenMessagesCount > 0 ? (
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={loadMoreMessages}
+                      className="rounded-full border border-gray-200 bg-white px-5 py-2.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                    >
+                      Load More ({hiddenMessagesCount} older message
+                      {hiddenMessagesCount > 1 ? "s" : ""})
+                    </button>
+                  </div>
+                ) : null}
+
+                {visibleMessages.map((message) => {
                   const isInbound = message.direction === "inbound";
                   const isSystem = message.direction === "system";
 
