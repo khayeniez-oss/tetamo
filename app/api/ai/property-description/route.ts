@@ -51,7 +51,7 @@ type AiPropertyContent = {
 const MAX_TITLE = 150;
 const MAX_DESCRIPTION = 2000;
 const MAX_SEO_META = 160;
-const MAX_SOCIAL_CAPTION = 1200;
+const MAX_SOCIAL_CAPTION = 1000;
 
 function cleanJsonText(value: string) {
   const cleaned = value
@@ -117,7 +117,7 @@ function buildPropertyFacts(body: PropertyDescriptionRequest) {
     : "- No property details were provided.";
 }
 
-function normalizeSource(source?: string) {
+function normalizeSource(source?: string): "owner" | "agent" | "admin" {
   if (source === "agent" || source === "admin" || source === "owner") {
     return source;
   }
@@ -125,7 +125,14 @@ function normalizeSource(source?: string) {
   return "owner";
 }
 
-function normalizeAiResult(raw: any): AiPropertyContent {
+function canGenerateSocialCaption(source: "owner" | "agent" | "admin") {
+  return source === "agent" || source === "admin";
+}
+
+function normalizeAiResult(
+  raw: any,
+  source: "owner" | "agent" | "admin"
+): AiPropertyContent {
   return {
     englishTitle: limitText(raw?.englishTitle, MAX_TITLE),
     indonesianTitle: limitText(raw?.indonesianTitle, MAX_TITLE),
@@ -136,11 +143,14 @@ function normalizeAiResult(raw: any): AiPropertyContent {
     ),
     seoTitle: limitText(raw?.seoTitle, MAX_TITLE),
     seoMetaDescription: limitText(raw?.seoMetaDescription, MAX_SEO_META),
-    socialCaption: limitText(raw?.socialCaption, MAX_SOCIAL_CAPTION),
 
-    // Keep this field for compatibility with existing frontend structure.
-    // Do not use it for marketplace/detail WhatsApp button.
-    // Tetamo WhatsApp AI auto-reply should be handled later in a separate Twilio route.
+    // Social caption is a selling point for agents/admin only.
+    socialCaption: canGenerateSocialCaption(source)
+      ? limitText(raw?.socialCaption, MAX_SOCIAL_CAPTION)
+      : "",
+
+    // Keep this field for frontend compatibility only.
+    // Do not use this route for Tetamo WhatsApp AI auto-reply.
     whatsappInquiryMessage: "",
   };
 }
@@ -163,29 +173,38 @@ function hasEnoughPropertyFacts(body: PropertyDescriptionRequest) {
   );
 }
 
+function buildSocialCaptionInstruction(source: "owner" | "agent" | "admin") {
+  if (!canGenerateSocialCaption(source)) {
+    return `
+Social caption rules:
+- Return socialCaption as an empty string.
+- Owners should only receive title and description from this route.
+`;
+  }
+
+  return `
+Social caption rules for agent/admin:
+- Create a ready-to-copy Instagram/Facebook caption for an agent/admin to promote the listing.
+- Target length: 500–700 characters.
+- Maximum length: 1,000 characters.
+- Do not make it too short.
+- Start with a strong hook.
+- Mention the property type, location, purpose, and strongest provided features.
+- Add lifestyle or area appeal only if supported by the provided location/nearby facts.
+- End with a clear call to action.
+- Include 6–10 relevant hashtags at the end.
+- The caption should feel valuable enough for an agent to copy and post directly.
+- The caption may be in English, Indonesian, or light bilingual style depending on the property facts and tone.
+- Do not invent facilities, distance, exact travel time, legal claims, ROI, urgency, or availability.
+- Do not use fake hype such as "limited offer", "guaranteed ROI", "best investment", or "exclusive" unless supported by the facts.
+`;
+}
+
 function buildPrompt(params: {
   propertyFacts: string;
   source: "owner" | "agent" | "admin";
 }) {
-  const socialCaptionInstruction =
-    params.source === "agent" || params.source === "admin"
-      ? `
-Social caption rules:
-- Create a ready-to-copy Instagram/Facebook caption for an agent to promote the listing.
-- Keep it short, attractive, and professional.
-- Include a clear CTA.
-- Include 5–8 relevant hashtags.
-- Do not overpromise.
-- Do not invent location, facilities, distance, investment return, or legal claims.
-- If the property facts are in Indonesia, the caption may be in Indonesian or bilingual.
-`
-      : `
-Social caption rules:
-- Create a short, professional caption Tetamo admin may use later.
-- Do not make it too long.
-- Include a clear CTA and 5–8 relevant hashtags.
-- Do not overpromise.
-`;
+  const socialCaptionInstruction = buildSocialCaptionInstruction(params.source);
 
   return `
 You are Tetamo AI Partner, a senior real estate marketing copywriter for Tetamo.
@@ -198,7 +217,7 @@ Create accurate, professional, persuasive property listing content based only on
 Important context:
 - The main output is for Tetamo's property listing form.
 - English and Indonesian titles/descriptions will be shown on the marketplace.
-- Social caption is a value-add for Tetamo agents/admin to promote the listing.
+- Social caption is a value-add for Tetamo agents/admin only.
 - WhatsApp AI support is handled separately through Tetamo's official WhatsApp/Twilio flow, so do not create a WhatsApp inquiry message here.
 
 Main writing goal:
@@ -362,8 +381,8 @@ export async function POST(req: Request) {
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
-      temperature: 0.65,
-      max_output_tokens: 2200,
+      temperature: 0.6,
+      max_output_tokens: 2400,
     });
 
     const rawText = response.output_text || "";
@@ -387,7 +406,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = normalizeAiResult(parsedResult);
+    const result = normalizeAiResult(parsedResult, source);
 
     if (
       !result.englishTitle ||
@@ -399,6 +418,16 @@ export async function POST(req: Request) {
         {
           error:
             "AI did not return complete listing content. Please try again.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (canGenerateSocialCaption(source) && !result.socialCaption) {
+      return NextResponse.json(
+        {
+          error:
+            "AI did not return a social media caption. Please try again.",
         },
         { status: 500 }
       );
