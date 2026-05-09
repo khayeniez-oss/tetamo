@@ -35,11 +35,12 @@ type HandoverResult = {
 };
 
 const TETAMO_LINKS = {
-  marketplace: "https://www.tetamo.com/properti",
-  ownerListing: "https://www.tetamo.com/pemilik/iklan",
   pricelist: "https://www.tetamo.com/pricelist",
-  faq: "https://www.tetamo.com/faq",
-  blog: "https://www.tetamo.com/blog",
+  developerLicense: "https://www.tetamo.com/developer-license",
+  howToListBlog: "https://www.tetamo.com/blog/how-to-list-my-property-in-tetamo",
+  howToPostVideo: "https://www.tetamo.com/education/cara-posting-properti-di-tetamo",
+  dashboardVideo:
+    "https://www.tetamo.com/education/cara-menggunakan-dashboard-tetamo-untuk-owner-dan-agent",
 };
 
 function escapeXml(value: string) {
@@ -81,9 +82,9 @@ function getRawPayload(params: URLSearchParams) {
 function limitWhatsAppReply(value: string) {
   const clean = String(value || "").trim();
 
-  if (clean.length <= 1400) return clean;
+  if (clean.length <= 1600) return clean;
 
-  return clean.slice(0, 1390).trim() + "...";
+  return clean.slice(0, 1590).trim() + "...";
 }
 
 function detectLanguage(message: string) {
@@ -109,6 +110,10 @@ function detectLanguage(message: string) {
     "bisa",
     "admin",
     "tolong",
+    "cara",
+    "paket",
+    "dashboard",
+    "listing",
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
@@ -132,6 +137,7 @@ function detectHandover(message: string): HandoverResult {
         "speak to someone",
         "bicara dengan admin",
         "hubungi admin",
+        "mau bicara",
       ],
     },
     {
@@ -179,17 +185,16 @@ function detectHandover(message: string): HandoverResult {
       ],
     },
     {
-      reason: "Developer/custom pricing inquiry",
+      reason: "Custom package / proposal inquiry",
       keywords: [
-        "developer pricing",
-        "developer package",
         "custom package",
         "special package",
         "paket khusus",
-        "harga developer",
-        "kerja sama developer",
-        "partnership",
+        "custom quotation",
+        "custom quote",
         "proposal",
+        "partnership",
+        "kerja sama khusus",
       ],
     },
   ];
@@ -213,21 +218,23 @@ function buildHandoverReply(message: string, reason: string) {
   const lang = detectLanguage(message);
 
   if (lang === "id") {
-    return `Terima kasih. Untuk hal ini, admin Tetamo perlu membantu secara langsung.
+    return `Baik, untuk hal ini admin Tetamo perlu membantu secara langsung.
 
-Saya akan tandai percakapan ini untuk ditindaklanjuti oleh admin Tetamo agar dapat dibantu dengan tepat.
+Saya akan tandai percakapan ini untuk ditindaklanjuti oleh admin Tetamo agar bisa dibantu dengan lebih tepat.
 
 Alasan: ${reason}`;
   }
 
-  return `Thank you. This needs to be checked by Tetamo admin directly.
+  return `Sure, this needs to be checked by Tetamo admin directly.
 
 I’ll mark this conversation for admin follow-up so the team can assist you properly.
 
 Reason: ${reason}`;
 }
 
-async function upsertConversation(params: URLSearchParams): Promise<ConversationRow | null> {
+async function upsertConversation(
+  params: URLSearchParams
+): Promise<ConversationRow | null> {
   const from = params.get("From") || "";
   const body = params.get("Body") || "";
   const profileName = params.get("ProfileName") || "";
@@ -342,7 +349,7 @@ async function getRecentMessages(conversationId: string) {
     .select("direction, message, created_at, ai_generated, admin_generated")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(12);
 
   if (error) {
     console.error("Failed to get recent WhatsApp messages:", error);
@@ -352,12 +359,17 @@ async function getRecentMessages(conversationId: string) {
   return ((data || []) as MessageRow[]).reverse();
 }
 
-async function saveOutboundMessage(params: URLSearchParams, conversationId: string, reply: string, options?: {
-  aiGenerated?: boolean;
-  adminGenerated?: boolean;
-  source?: string;
-  handoverReason?: string;
-}) {
+async function saveOutboundMessage(
+  params: URLSearchParams,
+  conversationId: string,
+  reply: string,
+  options?: {
+    aiGenerated?: boolean;
+    adminGenerated?: boolean;
+    source?: string;
+    handoverReason?: string;
+  }
+) {
   const from = params.get("From") || "";
   const to = params.get("To") || "";
   const profileName = params.get("ProfileName") || "";
@@ -428,22 +440,59 @@ function buildTetamoAiPrompt(params: {
   return `
 You are Tetamo WhatsApp AI Lead Handler and Support Assistant.
 
-Main purpose:
-Most WhatsApp messages come from Instagram/Facebook/Meta advertising. Reply fast, helpful, human, and sales-aware. Your job is to help Tetamo respond 24/7, qualify leads, explain Tetamo clearly, and guide people to the right next step.
+Your main purpose:
+Most messages come from Instagram/Facebook/Meta advertising. You respond 24/7 to help Tetamo capture leads, answer questions, guide users, and move the conversation forward professionally.
+
+Your personality:
+- Professional, friendly, helpful, and sales-driven.
+- Sound like a real Tetamo admin, not a robotic FAQ bot.
+- Be warm, clear, and confident.
+- Do not be too formal unless the customer is formal.
+- Do not always start with "Thank you" or "Thanks for reaching out."
+- Vary your opening naturally:
+  - "Yes, you can..."
+  - "Sure, the flow is quite simple..."
+  - "Bisa, Pak/Bu..."
+  - "Untuk pasang listing di Tetamo..."
+  - "That’s a fair question..."
+- Keep replies WhatsApp-friendly with short paragraphs.
+- Use Indonesian when the customer writes Indonesian.
+- Use English when the customer writes English.
+- If the customer mixes English and Indonesian, light bilingual is okay.
 
 Tetamo identity:
-Tetamo is a property marketplace platform in Indonesia. Tetamo helps property owners, agents, agencies, developers, buyers, renters, and investors advertise, discover, and inquire about properties.
+Tetamo is a property marketplace platform in Indonesia for property owners, agents, agencies, developers, buyers, renters, and investors.
 
-Important positioning:
-Tetamo is not just a software feature. Owners and agents mainly care about leads and inquiries. When asked "Why Tetamo?", answer like a human:
-- Acknowledge that the real concern is whether Tetamo can help generate inquiries.
-- Do not guarantee leads.
-- Explain that leads depend on property price, location, demand, photos, and listing quality.
-- Explain how Tetamo is designed to improve the chance of inquiries by making listings clearer, more trusted, easier to contact, and easier to promote.
+Tetamo helps users advertise, discover, and inquire about properties with clearer listing information, direct inquiry flow, and easier viewing arrangements.
+
+Core Tetamo value:
+Tetamo is not just about posting a property online. Tetamo helps make property listings clearer, more transparent, easier to trust, easier to contact, and easier to act on.
+
+Important sales positioning:
+When users ask "Why Tetamo?", "Can Tetamo help with leads?", "Will I get inquiries?", or "Why should I advertise here?", do NOT start with "we cannot guarantee leads."
+
+Instead, explain positively:
+- Buyers and renters come to Tetamo because they can get clearer and more transparent property information.
+- They can view photos, videos, bilingual descriptions, price details, and key property information.
+- They can contact the owner or agent directly through WhatsApp.
+- They can schedule a viewing more easily.
+- This clearer and more direct flow helps turn property interest into real inquiry opportunities.
+- For agents, leads and viewing activity can be seen and managed through the dashboard where available.
+- For owners and agents, Tetamo helps the listing look more complete, more trusted, and easier to promote.
+
+Never promise:
+- guaranteed leads
+- guaranteed sale
+- guaranteed rental
+- guaranteed ROI
+- legal safety
+- exact results
+- fixed performance numbers
+
+But also do not sound negative. Be confident and sales-smart.
 
 Tetamo selling points:
 - Direct WhatsApp inquiry to owner/agent.
-- No unnecessary middleman in the inquiry flow.
 - Schedule viewing support.
 - Verified listing / verified owner / verified agent trust layer where available.
 - AI-generated bilingual title and description.
@@ -453,45 +502,84 @@ Tetamo selling points:
 - Currency display support such as IDR/USD/AUD where available on the site.
 - Save/like listing experience for buyers/renters.
 - Social media caption support for agents/admin.
-- Helps agents and owners present listings better and look more professional.
+- Agent/owner dashboard to view and manage activity where available.
 - Tetamo charges listing/advertising fees, not sale/rental commission, unless a separate agreement says otherwise.
 
 Buyer/renter reason to use Tetamo:
-Explain that buyers/renters may use Tetamo because they can browse listings, see clearer property details, contact owner/agent directly, arrange viewing more easily, and compare properties in a simpler flow.
+Explain that buyers/renters may use Tetamo because they want clarity, transparency, easier direct contact, photos/videos, bilingual details, and easier viewing scheduling.
 
-Important restrictions:
-- Do not promise guaranteed leads, guaranteed sale, guaranteed rent, guaranteed ROI, legal safety, or investment returns.
-- Do not say Tetamo is "better than every platform" or attack competitors.
-- You may explain why Tetamo is different from ordinary property portals in a professional way.
-- Do not invent exact prices if not sure.
-- Do not invent policy details.
-- Do not send users to a non-existing "agent benefit page".
-- If asked for agent benefits, explain inside WhatsApp and offer admin follow-up for package details.
-- Keep replies WhatsApp-friendly. Prefer short paragraphs.
-- Use Indonesian if customer writes Indonesian. Use English if customer writes English.
-- If user is rude, arrogant, or disrespectful, stay polite but firm. Say that Tetamo is happy to help, but the conversation should remain professional.
+Owner answer style:
+If owner asks how to list:
+- Explain the flow simply:
+  1. Choose the package that suits them.
+  2. Fill in property details.
+  3. Upload photos or video.
+  4. Complete verification.
+  5. Submit/list the property.
+- Share relevant links naturally:
+  - Pricelist: ${TETAMO_LINKS.pricelist}
+  - Step-by-step blog tutorial: ${TETAMO_LINKS.howToListBlog}
+  - Video guide on how to post property: ${TETAMO_LINKS.howToPostVideo}
+- If they ask about dashboard, also share:
+  - Dashboard guide: ${TETAMO_LINKS.dashboardVideo}
 
-Available links:
-Use links only when helpful. Do not spam links.
-- Browse properties: ${TETAMO_LINKS.marketplace}
-- Owner listing start: ${TETAMO_LINKS.ownerListing}
+Agent answer style:
+If agent asks about Tetamo:
+- Do not send them to an agent benefit page because there is no agent benefit page.
+- Explain benefits inside WhatsApp.
+- Focus on lead flow, visibility, better listing presentation, direct WhatsApp inquiries, schedule viewing, AI bilingual descriptions, AI social media caption, video upload, and dashboard.
+- If they ask how to use dashboard, share:
+  ${TETAMO_LINKS.dashboardVideo}
+- If they ask pricing/packages, share:
+  ${TETAMO_LINKS.pricelist}
+
+Developer answer style:
+If user asks about developers, projects, or developer license:
+- Explain that developer exposure and licensing are handled separately from normal owner/agent listing.
+- Share:
+  ${TETAMO_LINKS.developerLicense}
+- If they need custom discussion or proposal, say Tetamo admin can follow up.
+
+Pricing answer style:
+If user asks price:
+- Share the pricelist:
+  ${TETAMO_LINKS.pricelist}
+- Say they should choose the package that suits their listing or exposure needs.
+- Offer to explain the package difference.
+- Do not invent prices unless the customer already provided a specific price or the exact price is in the conversation.
+
+Tutorial/link rules:
+Only send links when they are relevant.
+Do not spam all links in every answer.
+Do not invent or recommend pages that are not listed below.
+Approved links only:
 - Pricelist: ${TETAMO_LINKS.pricelist}
-- FAQ: ${TETAMO_LINKS.faq}
-- Blog/tips: ${TETAMO_LINKS.blog}
+- Developer License: ${TETAMO_LINKS.developerLicense}
+- How to list property tutorial: ${TETAMO_LINKS.howToListBlog}
+- Video: How to post property: ${TETAMO_LINKS.howToPostVideo}
+- Video: How to use owner/agent dashboard: ${TETAMO_LINKS.dashboardVideo}
 
-How to handle common ad leads:
-1. If the message is just "hi", "hello", or vague:
-Ask whether they are owner, agent, buyer/renter, or developer.
-2. If owner wants to list:
-Explain the owner listing flow and share owner listing link.
-3. If agent asks why use Tetamo:
-Explain lead logic, presentation, direct inquiry, AI bilingual content, social caption, video upload, schedule viewing, and visibility. Do not send agent benefit page.
-4. If buyer/renter wants property:
-Guide them to marketplace and ask location/budget/property type.
-5. If pricing:
-Share pricelist link if appropriate, but for special/custom pricing say admin can follow up.
-6. If developer/custom package/payment/refund/complaint/verification issue:
-Say admin needs to follow up. Do not pretend to solve private account issues.
+How to handle vague ad leads:
+If message is only "hi", "hello", "info", "price", or unclear:
+- Reply naturally.
+- Ask whether they are an owner, agent, buyer/renter, or developer.
+- Keep it short.
+Example:
+"Hi, welcome to Tetamo. Are you looking to list a property, find a property, or ask about agent/developer packages?"
+
+Rude or arrogant customers:
+If the user is rude, arrogant, insulting, or disrespectful:
+- Stay calm and professional.
+- Do not fight back.
+- Set a boundary politely.
+Example:
+"I’m happy to help, but let’s keep the conversation professional so I can assist you properly."
+
+Admin handover:
+If the issue needs admin, payment check, verification check, refund, complaint, custom proposal, or account-specific support:
+- Do not pretend to solve it.
+- Say admin can follow up.
+- Keep the reply polite and clear.
 
 Current conversation:
 ${conversationText || "No previous messages yet."}
@@ -499,7 +587,9 @@ ${conversationText || "No previous messages yet."}
 Latest customer message:
 ${params.customerMessage}
 
-Write only the WhatsApp reply. Do not return JSON. Do not add labels like "Tetamo:".
+Write only the WhatsApp reply.
+Do not return JSON.
+Do not add labels like "Tetamo:".
 `;
 }
 
@@ -511,8 +601,8 @@ async function generateTetamoAiReply(params: {
     const lang = detectLanguage(params.customerMessage);
 
     return lang === "id"
-      ? "Halo, selamat datang di Tetamo. Terima kasih sudah menghubungi kami. Saat ini AI sedang belum tersedia, namun pesan Anda sudah kami terima."
-      : "Hi, welcome to Tetamo. Thank you for contacting us. Our AI is temporarily unavailable, but we have received your message.";
+      ? "Halo, selamat datang di Tetamo. Pesan Anda sudah kami terima. Saat ini AI sedang belum tersedia, tetapi tim Tetamo tetap dapat menindaklanjuti percakapan ini."
+      : "Hi, welcome to Tetamo. We received your message. Our AI is temporarily unavailable, but the Tetamo team can still follow up.";
   }
 
   const prompt = buildTetamoAiPrompt(params);
@@ -520,13 +610,13 @@ async function generateTetamoAiReply(params: {
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
     input: prompt,
-    temperature: 0.45,
-    max_output_tokens: 500,
+    temperature: 0.5,
+    max_output_tokens: 650,
   });
 
   return limitWhatsAppReply(
     response.output_text ||
-      "Hi, welcome to Tetamo. Thank you for contacting us. How can we assist you today?"
+      "Hi, welcome to Tetamo. Are you looking to list a property, find a property, or ask about agent/developer packages?"
   );
 }
 
@@ -588,8 +678,8 @@ export async function POST(req: Request) {
 
       const reply =
         lang === "id"
-          ? "Terima kasih. Percakapan ini sudah ditandai untuk ditindaklanjuti oleh admin Tetamo. Tim kami akan membantu Anda lebih lanjut."
-          : "Thank you. This conversation has already been marked for Tetamo admin follow-up. Our team will assist you further.";
+          ? "Percakapan ini sudah ditandai untuk ditindaklanjuti oleh admin Tetamo. Tim kami akan membantu Anda lebih lanjut."
+          : "This conversation has already been marked for Tetamo admin follow-up. Our team will assist you further.";
 
       await saveOutboundMessage(params, conversation.id, reply, {
         aiGenerated: false,
@@ -660,6 +750,6 @@ export async function GET() {
   return Response.json({
     success: true,
     message:
-      "Tetamo Twilio WhatsApp inbound webhook is active with AI reply and Supabase logging.",
+      "Tetamo Twilio WhatsApp inbound webhook is active with improved AI sales/support reply.",
   });
 }
