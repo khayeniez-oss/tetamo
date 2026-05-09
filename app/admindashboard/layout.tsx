@@ -267,20 +267,21 @@ export default function AdminDashboardLayout({
         ],
       },
       {
-        key: "platform",
-        title: "Platform",
-        items: [
-          { href: "/admindashboard/support", label: "Support" },
-          { href: "/admindashboard/settings", label: "Settings" },
-          { href: "/admindashboard/logs", label: "Logs" },
-          { href: "/admindashboard/ai-insights", label: "AI Insights" },
-          {
-            href: "/admindashboard/buyer-requests",
-            label: "Buyer Requests",
-            badgeCount: newBuyerRequestsCount,
-          },
-        ],
-      },
+  key: "platform",
+  title: "Platform",
+  items: [
+    { href: "/admindashboard/support", label: "Support" },
+    { href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
+    { href: "/admindashboard/settings", label: "Settings" },
+    { href: "/admindashboard/logs", label: "Logs" },
+    { href: "/admindashboard/ai-insights", label: "AI Insights" },
+    {
+      href: "/admindashboard/buyer-requests",
+      label: "Buyer Requests",
+      badgeCount: newBuyerRequestsCount,
+    },
+  ],
+},
     ],
     [
       adminNotificationCount,
