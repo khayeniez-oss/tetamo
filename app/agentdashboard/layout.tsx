@@ -387,7 +387,7 @@ export default function AgentDashboardLayout({
     };
   }, []);
 
-  const socialLinks = useMemo<SocialLink[]>(() => {
+  const socialLinks = useMemo<SocialLink[]>((() => {
     const links: SocialLink[] = [];
 
     const instagram = normalizeSocialUrl(agent.instagram);
@@ -417,7 +417,7 @@ export default function AgentDashboardLayout({
     }
 
     return links;
-  }, [
+  }) as () => SocialLink[], [
     agent.instagram,
     agent.facebook,
     agent.tiktok,
@@ -451,7 +451,6 @@ export default function AgentDashboardLayout({
   );
 
   const isLoadingState = !hasCheckedAuth || loadingProfile || loadingMembership;
-  const currentPath = pathname || "/agentdashboard";
 
   useEffect(() => {
     if (!hasCheckedAuth || loadingProfile || loadingMembership) return;
@@ -465,7 +464,11 @@ export default function AgentDashboardLayout({
       return;
     }
 
-    if (isAgentAccount && !hasActiveMembership && !isAllowedWithoutMembership(pathname)) {
+    if (
+      isAgentAccount &&
+      !hasActiveMembership &&
+      !isAllowedWithoutMembership(pathname)
+    ) {
       router.replace("/agentdashboard/paket");
     }
   }, [
@@ -592,7 +595,9 @@ export default function AgentDashboardLayout({
                   </p>
 
                   {agent.agency ? (
-                    <p className="mt-1 text-sm text-white/70">{agent.agency}</p>
+                    <p className="mt-1 text-sm text-white/70">
+                      {agent.agency}
+                    </p>
                   ) : null}
 
                   <p className="mt-2 text-sm font-medium text-white/95">
@@ -691,6 +696,11 @@ export default function AgentDashboardLayout({
                     {renderMenuLink(
                       "/agentdashboard/listing-saya",
                       "Listing Saya",
+                      { requiresMembership: true }
+                    )}
+                    {renderMenuLink(
+                      "/agentdashboard/ai-social",
+                      "AI Social Media",
                       { requiresMembership: true }
                     )}
                     {renderMenuLink("/agentdashboard/leads", "Leads", {
