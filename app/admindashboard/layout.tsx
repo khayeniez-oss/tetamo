@@ -258,6 +258,7 @@ export default function AdminDashboardLayout({
         items: [
           { href: "/admindashboard/blogs", label: "Blogs" },
           { href: "/admindashboard/education", label: "Education" },
+          { href: "/admindashboard/ai-social", label: "AI Social Media" },
           {
             href: "/admindashboard/notifications",
             label: "Notifications",
@@ -267,21 +268,21 @@ export default function AdminDashboardLayout({
         ],
       },
       {
-  key: "platform",
-  title: "Platform",
-  items: [
-    { href: "/admindashboard/support", label: "Support" },
-    { href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
-    { href: "/admindashboard/settings", label: "Settings" },
-    { href: "/admindashboard/logs", label: "Logs" },
-    { href: "/admindashboard/ai-insights", label: "AI Insights" },
-    {
-      href: "/admindashboard/buyer-requests",
-      label: "Buyer Requests",
-      badgeCount: newBuyerRequestsCount,
-    },
-  ],
-},
+        key: "platform",
+        title: "Platform",
+        items: [
+          { href: "/admindashboard/support", label: "Support" },
+          { href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
+          { href: "/admindashboard/settings", label: "Settings" },
+          { href: "/admindashboard/logs", label: "Logs" },
+          { href: "/admindashboard/ai-insights", label: "AI Insights" },
+          {
+            href: "/admindashboard/buyer-requests",
+            label: "Buyer Requests",
+            badgeCount: newBuyerRequestsCount,
+          },
+        ],
+      },
     ],
     [
       adminNotificationCount,
@@ -299,9 +300,9 @@ export default function AdminDashboardLayout({
     return found?.key ?? sections[0]?.key ?? "overview";
   }
 
-  const [openMobileSectionKey, setOpenMobileSectionKey] = useState<string | null>(
-  getActiveSectionKey(navSections, pathname)
-);
+  const [openMobileSectionKey, setOpenMobileSectionKey] = useState<
+    string | null
+  >(getActiveSectionKey(navSections, pathname));
 
   useEffect(() => {
     let ignore = false;
@@ -717,7 +718,9 @@ export default function AdminDashboardLayout({
       <div className="mt-5 space-y-3">
         {navSections.map((section) => {
           const isOpen = openMobileSectionKey === section.key;
-          const hasActiveItem = section.items.some((item) => isActive(item.href));
+          const hasActiveItem = section.items.some((item) =>
+            isActive(item.href)
+          );
 
           return (
             <div
@@ -732,7 +735,9 @@ export default function AdminDashboardLayout({
                   )
                 }
                 className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition ${
-                  hasActiveItem ? "bg-white/10" : "bg-transparent hover:bg-white/5"
+                  hasActiveItem
+                    ? "bg-white/10"
+                    : "bg-transparent hover:bg-white/5"
                 }`}
               >
                 <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/55">
