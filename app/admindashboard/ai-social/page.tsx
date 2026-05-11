@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
 import {
   Copy,
   Loader2,
   Megaphone,
   Sparkles,
   Home,
-  Building2,
   Globe2,
   RefreshCcw,
 } from "lucide-react";
@@ -293,7 +292,7 @@ function StatCard({
   title,
   text,
 }: {
-  icon: React.ElementType;
+  icon: ElementType;
   title: string;
   text: string;
 }) {
@@ -481,7 +480,9 @@ export default function AdminAiSocialPage() {
 
   const adCopyText = result?.adCopy
     ? [
-        result.adCopy.primaryText ? `Primary Text:\n${result.adCopy.primaryText}` : "",
+        result.adCopy.primaryText
+          ? `Primary Text:\n${result.adCopy.primaryText}`
+          : "",
         result.adCopy.headline ? `Headline:\n${result.adCopy.headline}` : "",
         result.adCopy.description
           ? `Description:\n${result.adCopy.description}`
@@ -492,6 +493,7 @@ export default function AdminAiSocialPage() {
     : "";
 
   const ctaText = safeJoin(result?.ctaOptions);
+
   const hashtagText = result?.hashtags?.length
     ? result.hashtags
         .map((tag) => {
@@ -521,8 +523,10 @@ export default function AdminAiSocialPage() {
               AI Social Media Generator
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-              Generate ready-to-post captions, reels scripts, ad copy, CTAs, and
-              hashtags for Tetamo listings, manual properties, and campaign content.
+              Generate ready-to-post captions, reels scripts, ad copy, CTAs,
+              WhatsApp broadcast copy, and hashtags for Tetamo listings,
+              property campaigns, owner campaigns, agent campaigns, and developer
+              promotions.
             </p>
           </div>
 
@@ -545,17 +549,17 @@ export default function AdminAiSocialPage() {
           <StatCard
             icon={Home}
             title="Property Content"
-            text="Create captions and scripts using existing Tetamo listings or manual property details."
+            text="Use real Tetamo listings or manual property details to generate stronger social media content."
           />
           <StatCard
             icon={Megaphone}
             title="Campaign Content"
-            text="Promote Tetamo, owner listings, agent features, developer license, and marketplace benefits."
+            text="Promote Tetamo, owner listings, agent features, developer license, verified listings, and marketplace benefits."
           />
           <StatCard
             icon={Globe2}
             title="EN / ID / Bilingual"
-            text="Generate English, Indonesian, or bilingual content with Tetamo’s sales positioning."
+            text="Generate English, Bahasa Indonesia, or bilingual content with every output field properly translated."
           />
         </div>
       </section>
@@ -590,7 +594,7 @@ export default function AdminAiSocialPage() {
                 {
                   value: "campaign",
                   label: "Tetamo Campaign",
-                  text: "Create brand, owner, agent, or developer campaign posts.",
+                  text: "Create owner, agent, developer, or marketplace campaign posts.",
                 },
               ].map((item) => (
                 <button
@@ -666,7 +670,7 @@ export default function AdminAiSocialPage() {
                 value={extraInstruction}
                 onChange={setExtraInstruction}
                 rows={3}
-                placeholder="Example: Make it more premium, focus on direct WhatsApp leads, add stronger CTA, avoid emojis..."
+                placeholder="Example: Make it more premium, focus on direct WhatsApp inquiries, include the price clearly, sell the location more strongly..."
               />
             </div>
           </div>
@@ -679,7 +683,8 @@ export default function AdminAiSocialPage() {
                 <div>
                   <h2 className="text-base font-bold">Select Tetamo Listing</h2>
                   <p className="mt-1 text-sm leading-6 text-gray-500">
-                    AI will use the selected listing details from your properties table.
+                    AI will use the selected listing details from your properties
+                    table.
                   </p>
                 </div>
 
@@ -1029,7 +1034,11 @@ export default function AdminAiSocialPage() {
               onCopy={copyToClipboard}
             />
 
-            <OutputCard title="Ad Copy" value={adCopyText} onCopy={copyToClipboard} />
+            <OutputCard
+              title="Ad Copy"
+              value={adCopyText}
+              onCopy={copyToClipboard}
+            />
 
             <OutputCard
               title="WhatsApp Broadcast"
