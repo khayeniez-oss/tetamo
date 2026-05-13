@@ -36,25 +36,11 @@ function normalizePhoneNumber(value: string | null) {
 
   if (!cleaned) return "";
 
-  if (cleaned.startsWith("+")) {
-    return cleaned;
-  }
-
-  if (cleaned.startsWith("00")) {
-    return `+${cleaned.slice(2)}`;
-  }
-
-  if (cleaned.startsWith("0")) {
-    return `+62${cleaned.slice(1)}`;
-  }
-
-  if (cleaned.startsWith("62")) {
-    return `+${cleaned}`;
-  }
-
-  if (cleaned.startsWith("8")) {
-    return `+62${cleaned}`;
-  }
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("00")) return `+${cleaned.slice(2)}`;
+  if (cleaned.startsWith("0")) return `+62${cleaned.slice(1)}`;
+  if (cleaned.startsWith("62")) return `+${cleaned}`;
+  if (cleaned.startsWith("8")) return `+62${cleaned}`;
 
   return `+${cleaned}`;
 }
@@ -96,6 +82,11 @@ export default function AuthCallbackPageClient() {
   const requestedRole = normalizeRole(searchParams.get("role"));
   const flow = normalizeFlow(searchParams.get("flow"));
   const safeNext = getSafeNext(searchParams.get("next"));
+
+  const fullNameFromCallback = String(
+    searchParams.get("full_name") || ""
+  ).trim();
+
   const phoneFromCallback = normalizePhoneNumber(searchParams.get("phone"));
   const validPhoneFromCallback =
     phoneFromCallback && isValidInternationalPhone(phoneFromCallback)
@@ -142,7 +133,7 @@ export default function AuthCallbackPageClient() {
 
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("role, phone")
+          .select("role, phone, full_name")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -160,12 +151,13 @@ export default function AuthCallbackPageClient() {
           normalizeRole((user.user_metadata?.role as string | undefined) ?? null) ||
           "owner";
 
-        if (!profile) {
-          const fullName =
-            user.user_metadata?.full_name ||
-            user.user_metadata?.name ||
-            "";
+        const fallbackFullName =
+          fullNameFromCallback ||
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          "";
 
+        if (!profile) {
           const email = user.email || "";
 
           const { data: newProfile, error: insertError } = await supabase
@@ -174,7 +166,7 @@ export default function AuthCallbackPageClient() {
               {
                 id: user.id,
                 email,
-                full_name: fullName,
+                full_name: fallbackFullName,
                 role: finalRole,
                 phone: validPhoneFromCallback || null,
               },
@@ -192,16 +184,26 @@ export default function AuthCallbackPageClient() {
           }
 
           finalRole = normalizeRole(newProfile.role) || finalRole;
-        } else if (validPhoneFromCallback && !profile.phone) {
-          const { error: phoneUpdateError } = await supabase
-            .from("profiles")
-            .update({
-              phone: validPhoneFromCallback,
-            })
-            .eq("id", user.id);
+        } else {
+          const updates: Record<string, string> = {};
 
-          if (phoneUpdateError) {
-            console.error("profile phone update error:", phoneUpdateError);
+          if (validPhoneFromCallback && !profile.phone) {
+            updates.phone = validPhoneFromCallback;
+          }
+
+          if (fullNameFromCallback && !profile.full_name) {
+            updates.full_name = fullNameFromCallback;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            const { error: updateError } = await supabase
+              .from("profiles")
+              .update(updates)
+              .eq("id", user.id);
+
+            if (updateError) {
+              console.error("profile callback update error:", updateError);
+            }
           }
         }
 
@@ -227,6 +229,7 @@ export default function AuthCallbackPageClient() {
     requestedRole,
     flow,
     safeNext,
+    fullNameFromCallback,
     validPhoneFromCallback,
     authError,
     authErrorDescription,
