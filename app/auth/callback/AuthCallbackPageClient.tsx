@@ -14,6 +14,7 @@ function normalizeRole(value: string | null): AllowedRole | null {
   if (v === "agent") return "agent";
   if (v === "developer") return "developer";
   if (v === "admin") return "admin";
+
   return null;
 }
 
@@ -22,13 +23,52 @@ function normalizeFlow(value: string | null): AuthFlow | null {
 
   if (v === "login") return "login";
   if (v === "signup") return "signup";
+
   return null;
+}
+
+function normalizePhoneNumber(value: string | null) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return "";
+
+  const cleaned = raw.replace(/[^\d+]/g, "");
+
+  if (!cleaned) return "";
+
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+
+  if (cleaned.startsWith("00")) {
+    return `+${cleaned.slice(2)}`;
+  }
+
+  if (cleaned.startsWith("0")) {
+    return `+62${cleaned.slice(1)}`;
+  }
+
+  if (cleaned.startsWith("62")) {
+    return `+${cleaned}`;
+  }
+
+  if (cleaned.startsWith("8")) {
+    return `+62${cleaned}`;
+  }
+
+  return `+${cleaned}`;
+}
+
+function isValidInternationalPhone(value: string) {
+  if (!value) return false;
+  return /^\+[1-9]\d{7,14}$/.test(value);
 }
 
 function getSafeNext(value: string | null): string {
   if (!value) return "";
   if (!value.startsWith("/")) return "";
   if (value.startsWith("//")) return "";
+
   return value;
 }
 
@@ -37,12 +77,14 @@ function getDefaultRedirect(role: AllowedRole, flow: AuthFlow | null): string {
     if (role === "owner") return "/pemilik";
     if (role === "agent") return "/agentdashboard/paket";
     if (role === "admin") return "/admindashboard";
+
     return "/";
   }
 
   if (role === "owner") return "/pemilikdashboard";
   if (role === "agent") return "/agentdashboard";
   if (role === "admin") return "/admindashboard";
+
   return "/";
 }
 
@@ -54,6 +96,12 @@ export default function AuthCallbackPageClient() {
   const requestedRole = normalizeRole(searchParams.get("role"));
   const flow = normalizeFlow(searchParams.get("flow"));
   const safeNext = getSafeNext(searchParams.get("next"));
+  const phoneFromCallback = normalizePhoneNumber(searchParams.get("phone"));
+  const validPhoneFromCallback =
+    phoneFromCallback && isValidInternationalPhone(phoneFromCallback)
+      ? phoneFromCallback
+      : "";
+
   const authError = searchParams.get("error");
   const authErrorDescription = searchParams.get("error_description");
 
@@ -94,7 +142,7 @@ export default function AuthCallbackPageClient() {
 
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, phone")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -128,6 +176,7 @@ export default function AuthCallbackPageClient() {
                 email,
                 full_name: fullName,
                 role: finalRole,
+                phone: validPhoneFromCallback || null,
               },
               { onConflict: "id" }
             )
@@ -143,12 +192,24 @@ export default function AuthCallbackPageClient() {
           }
 
           finalRole = normalizeRole(newProfile.role) || finalRole;
+        } else if (validPhoneFromCallback && !profile.phone) {
+          const { error: phoneUpdateError } = await supabase
+            .from("profiles")
+            .update({
+              phone: validPhoneFromCallback,
+            })
+            .eq("id", user.id);
+
+          if (phoneUpdateError) {
+            console.error("profile phone update error:", phoneUpdateError);
+          }
         }
 
         const target = safeNext || getDefaultRedirect(finalRole, flow);
         router.replace(target);
       } catch (error) {
         console.error("Auth callback error:", error);
+
         if (!cancelled) {
           router.replace("/login");
         }
@@ -166,6 +227,7 @@ export default function AuthCallbackPageClient() {
     requestedRole,
     flow,
     safeNext,
+    validPhoneFromCallback,
     authError,
     authErrorDescription,
   ]);

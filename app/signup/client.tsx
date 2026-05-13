@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 type AllowedRole = "owner" | "agent" | "developer" | "admin";
-type OAuthProvider = "google" | "facebook" | "apple";
+type OAuthProvider = "google" | "facebook";
 
 function normalizeRole(value: string | null): AllowedRole | null {
   const v = String(value || "").toLowerCase();
@@ -24,6 +24,43 @@ function normalizeRole(value: string | null): AllowedRole | null {
   if (v === "admin") return "admin";
 
   return null;
+}
+
+function normalizePhoneNumber(value: string) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return "";
+
+  const cleaned = raw.replace(/[^\d+]/g, "");
+
+  if (!cleaned) return "";
+
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+
+  if (cleaned.startsWith("00")) {
+    return `+${cleaned.slice(2)}`;
+  }
+
+  if (cleaned.startsWith("0")) {
+    return `+62${cleaned.slice(1)}`;
+  }
+
+  if (cleaned.startsWith("62")) {
+    return `+${cleaned}`;
+  }
+
+  if (cleaned.startsWith("8")) {
+    return `+62${cleaned}`;
+  }
+
+  return `+${cleaned}`;
+}
+
+function isValidInternationalPhone(value: string) {
+  if (!value) return false;
+  return /^\+[1-9]\d{7,14}$/.test(value);
 }
 
 function GoogleDarkIcon() {
@@ -55,19 +92,6 @@ function FacebookDarkIcon() {
   );
 }
 
-function AppleDarkIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="h-5 w-5 text-[#1C1C1E]"
-      fill="currentColor"
-    >
-      <path d="M16.365 12.498c.024 2.633 2.31 3.51 2.336 3.521-.019.062-.365 1.253-1.203 2.483-.724 1.062-1.474 2.118-2.659 2.14-1.163.022-1.537-.69-2.868-.69-1.332 0-1.747.668-2.846.712-1.145.044-2.019-1.145-2.75-2.203-1.494-2.16-2.635-6.106-1.103-8.767.76-1.321 2.12-2.158 3.594-2.18 1.123-.022 2.183.756 2.868.756.684 0 1.968-.934 3.317-.797.565.023 2.152.228 3.171 1.72-.082.051-1.891 1.103-1.857 3.305ZM14.48 5.21c.606-.734 1.015-1.756.904-2.77-.873.034-1.929.582-2.555 1.316-.562.648-1.053 1.687-.92 2.68.972.075 1.965-.495 2.57-1.226Z" />
-    </svg>
-  );
-}
-
 function Pill({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex rounded-full border border-[#D8D8DD] bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] shadow-sm">
@@ -83,6 +107,8 @@ function FormInput({
   value,
   onChange,
   autoComplete,
+  inputMode,
+  helperText,
 }: {
   label: string;
   type?: string;
@@ -90,6 +116,8 @@ function FormInput({
   value: string;
   onChange: (value: string) => void;
   autoComplete?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  helperText?: string;
 }) {
   return (
     <div>
@@ -103,8 +131,13 @@ function FormInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
+        inputMode={inputMode}
         className="w-full rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-[#8E8E93] focus:border-[#1C1C1E] focus:ring-4 focus:ring-black/5"
       />
+
+      {helperText ? (
+        <p className="mt-2 text-xs leading-5 text-[#6E6E73]">{helperText}</p>
+      ) : null}
     </div>
   );
 }
@@ -278,6 +311,7 @@ export default function SignupPageClient() {
     initialRole
   );
   const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
@@ -300,6 +334,7 @@ export default function SignupPageClient() {
   const currentRole = selectedRole;
   const isAdminSignup = currentRole === "admin";
   const isDeveloperRole = currentRole === "developer";
+  const phoneRequired = currentRole === "owner" || currentRole === "agent";
 
   const roleLabel = useMemo(() => {
     if (currentRole === "agent") return isID ? "Agen" : "Agent";
@@ -329,13 +364,39 @@ export default function SignupPageClient() {
       ? `/login?next=${encodeURIComponent(next)}`
       : "/login";
 
+  function getValidatedPhoneForSubmit() {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+    if (phoneRequired && !normalizedPhone) {
+      alert(
+        isID
+          ? "Mohon masukkan nomor WhatsApp / telepon Anda."
+          : "Please enter your WhatsApp / phone number."
+      );
+      return null;
+    }
+
+    if (normalizedPhone && !isValidInternationalPhone(normalizedPhone)) {
+      alert(
+        isID
+          ? "Mohon masukkan nomor WhatsApp / telepon dengan format internasional yang valid. Contoh: +62 812 3456 7890."
+          : "Please enter a valid international WhatsApp / phone number. Example: +62 812 3456 7890."
+      );
+      return null;
+    }
+
+    return normalizedPhone;
+  }
+
   function getOAuthRedirectTo(provider: OAuthProvider) {
     const params = new URLSearchParams();
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
     if (currentRole) params.set("role", currentRole);
     params.set("provider", provider);
     params.set("flow", "signup");
 
+    if (normalizedPhone) params.set("phone", normalizedPhone);
     if (packageId) params.set("package", packageId);
     if (planId) params.set("plan", planId);
     if (from) params.set("from", from);
@@ -359,6 +420,10 @@ export default function SignupPageClient() {
       alertPolicyAgreementRequired();
       return;
     }
+
+    const normalizedPhone = getValidatedPhoneForSubmit();
+
+    if (normalizedPhone === null) return;
 
     if (isAdminSignup) {
       alert(
@@ -426,6 +491,10 @@ export default function SignupPageClient() {
       return;
     }
 
+    const normalizedPhone = getValidatedPhoneForSubmit();
+
+    if (normalizedPhone === null) return;
+
     const trimmedFullName = fullName.trim();
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
@@ -477,6 +546,7 @@ export default function SignupPageClient() {
           data: {
             full_name: trimmedFullName,
             role: currentRole,
+            phone: normalizedPhone,
             package: packageId,
             plan: planId,
             from,
@@ -499,6 +569,7 @@ export default function SignupPageClient() {
             id: data.user.id,
             email: trimmedEmail,
             full_name: trimmedFullName,
+            phone: normalizedPhone,
             role: currentRole,
           },
           {
@@ -584,7 +655,7 @@ export default function SignupPageClient() {
               </p>
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-4">
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <InfoCard
                 eyebrow={isID ? "Untuk Pemilik" : "For Owners"}
                 title={
@@ -720,6 +791,35 @@ export default function SignupPageClient() {
                   />
                 </div>
 
+                <div className="mb-4">
+                  <FormInput
+                    label={
+                      isID
+                        ? phoneRequired
+                          ? "Nomor WhatsApp / Telepon"
+                          : "Nomor WhatsApp / Telepon (Opsional)"
+                        : phoneRequired
+                        ? "WhatsApp / Phone Number"
+                        : "WhatsApp / Phone Number (Optional)"
+                    }
+                    type="tel"
+                    placeholder={
+                      isID
+                        ? "Contoh: +62 812 3456 7890"
+                        : "Example: +62 812 3456 7890"
+                    }
+                    value={phoneNumber}
+                    onChange={setPhoneNumber}
+                    autoComplete="tel"
+                    inputMode="tel"
+                    helperText={
+                      isID
+                        ? "Kami menggunakan nomor ini untuk verifikasi akun, dukungan listing, dan komunikasi inquiry properti."
+                        : "We use this for account verification, listing support, and property inquiry communication."
+                    }
+                  />
+                </div>
+
                 {!isAdminSignup ? (
                   <>
                     <div className="space-y-3">
@@ -760,24 +860,6 @@ export default function SignupPageClient() {
                           </span>
                         </button>
                       ) : null}
-
-                      <button
-                        type="button"
-                        onClick={() => void handleOAuthSignup("apple")}
-                        disabled={signupDisabled}
-                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
-                      >
-                        <AppleDarkIcon />
-                        <span>
-                          {socialLoading === "apple"
-                            ? isID
-                              ? "Menghubungkan ke Apple..."
-                              : "Connecting to Apple..."
-                            : isID
-                            ? "Daftar dengan Apple"
-                            : "Sign up with Apple"}
-                        </span>
-                      </button>
                     </div>
 
                     <div className="my-6 flex items-center gap-3">
