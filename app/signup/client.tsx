@@ -28,32 +28,16 @@ function normalizeRole(value: string | null): AllowedRole | null {
 
 function normalizePhoneNumber(value: string) {
   const raw = String(value || "").trim();
-
   if (!raw) return "";
 
   const cleaned = raw.replace(/[^\d+]/g, "");
-
   if (!cleaned) return "";
 
-  if (cleaned.startsWith("+")) {
-    return cleaned;
-  }
-
-  if (cleaned.startsWith("00")) {
-    return `+${cleaned.slice(2)}`;
-  }
-
-  if (cleaned.startsWith("0")) {
-    return `+62${cleaned.slice(1)}`;
-  }
-
-  if (cleaned.startsWith("62")) {
-    return `+${cleaned}`;
-  }
-
-  if (cleaned.startsWith("8")) {
-    return `+62${cleaned}`;
-  }
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("00")) return `+${cleaned.slice(2)}`;
+  if (cleaned.startsWith("0")) return `+62${cleaned.slice(1)}`;
+  if (cleaned.startsWith("62")) return `+${cleaned}`;
+  if (cleaned.startsWith("8")) return `+62${cleaned}`;
 
   return `+${cleaned}`;
 }
@@ -95,7 +79,6 @@ function FormInput({
   onChange,
   autoComplete,
   inputMode,
-  helperText,
 }: {
   label: string;
   type?: string;
@@ -112,7 +95,6 @@ function FormInput({
     | "numeric"
     | "decimal"
     | "search";
-  helperText?: string;
 }) {
   return (
     <div>
@@ -129,10 +111,6 @@ function FormInput({
         inputMode={inputMode}
         className="w-full rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none transition placeholder:text-[#8E8E93] focus:border-[#1C1C1E] focus:ring-4 focus:ring-black/5"
       />
-
-      {helperText ? (
-        <p className="mt-2 text-xs leading-5 text-[#6E6E73]">{helperText}</p>
-      ) : null}
     </div>
   );
 }
@@ -181,7 +159,7 @@ function PolicyAgreement({
           className="font-semibold text-[#111827] underline underline-offset-4"
           onClick={(e) => e.stopPropagation()}
         >
-          {isID ? "Kebijakan Berlangganan Tetamo" : "Subscription Policy"}
+          {isID ? "Kebijakan Berlangganan" : "Subscription Policy"}
         </Link>
         .
       </span>
@@ -328,11 +306,9 @@ export default function SignupPageClient() {
   const currentRole = selectedRole;
   const isAdminSignup = currentRole === "admin";
   const isDeveloperRole = currentRole === "developer";
-  const phoneRequired =
-    currentRole === "owner" || currentRole === "agent" || currentRole === "admin";
 
   const roleLabel = useMemo(() => {
-    if (currentRole === "agent") return isID ? "Agen" : "Agent";
+    if (currentRole === "agent") return isID ? "Agent" : "Agent";
     if (currentRole === "developer") return "Developer";
     if (currentRole === "admin") return "Admin";
     if (currentRole === "owner") return isID ? "Pemilik" : "Owner";
@@ -359,10 +335,10 @@ export default function SignupPageClient() {
       ? `/login?next=${encodeURIComponent(next)}`
       : "/login";
 
-  function getValidatedPhoneForSubmit() {
+  function validatePhone() {
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-    if (phoneRequired && !normalizedPhone) {
+    if (!normalizedPhone) {
       alert(
         isID
           ? "Mohon masukkan nomor WhatsApp / telepon Anda."
@@ -371,11 +347,11 @@ export default function SignupPageClient() {
       return null;
     }
 
-    if (normalizedPhone && !isValidInternationalPhone(normalizedPhone)) {
+    if (!isValidInternationalPhone(normalizedPhone)) {
       alert(
         isID
-          ? "Mohon masukkan nomor WhatsApp / telepon dengan format internasional yang valid. Contoh: +62 812 3456 7890."
-          : "Please enter a valid international WhatsApp / phone number. Example: +62 812 3456 7890."
+          ? "Mohon masukkan nomor WhatsApp / telepon yang valid."
+          : "Please enter a valid WhatsApp / phone number."
       );
       return null;
     }
@@ -383,7 +359,7 @@ export default function SignupPageClient() {
     return normalizedPhone;
   }
 
-  function getValidatedFullNameForSubmit() {
+  function validateFullName() {
     const trimmedFullName = fullName.trim();
 
     if (!trimmedFullName) {
@@ -420,18 +396,18 @@ export default function SignupPageClient() {
   function alertPolicyAgreementRequired() {
     alert(
       isID
-        ? "Silakan setujui Syarat & Ketentuan, Kebijakan Privasi, dan Kebijakan Berlangganan Tetamo terlebih dahulu."
-        : "Please agree to Tetamo’s Terms & Conditions, Privacy Policy, and Subscription Policy first."
+        ? "Silakan setujui Syarat & Ketentuan, Kebijakan Privasi, dan Kebijakan Berlangganan terlebih dahulu."
+        : "Please agree to the Terms, Privacy Policy, and Subscription Policy first."
     );
   }
 
   async function handleOAuthSignup(provider: OAuthProvider) {
     if (!currentRole) return;
 
-    const trimmedFullName = getValidatedFullNameForSubmit();
+    const trimmedFullName = validateFullName();
     if (trimmedFullName === null) return;
 
-    const normalizedPhone = getValidatedPhoneForSubmit();
+    const normalizedPhone = validatePhone();
     if (normalizedPhone === null) return;
 
     if (!agreedToPolicies) {
@@ -489,10 +465,10 @@ export default function SignupPageClient() {
       return;
     }
 
-    const trimmedFullName = getValidatedFullNameForSubmit();
+    const trimmedFullName = validateFullName();
     if (trimmedFullName === null) return;
 
-    const normalizedPhone = getValidatedPhoneForSubmit();
+    const normalizedPhone = validatePhone();
     if (normalizedPhone === null) return;
 
     if (!agreedToPolicies) {
@@ -510,11 +486,7 @@ export default function SignupPageClient() {
     const trimmedAdminCode = adminCode.trim();
 
     if (!trimmedEmail || !trimmedPassword) {
-      alert(
-        isID
-          ? "Untuk daftar dengan email, mohon isi email dan kata sandi. Atau gunakan daftar dengan Google di bawah."
-          : "For email signup, please enter your email and password. Or use Sign up with Google below."
-      );
+      alert(isID ? "Mohon lengkapi semua field." : "Please complete all fields.");
       return;
     }
 
@@ -645,7 +617,6 @@ export default function SignupPageClient() {
   }
 
   const isBusy = loading || socialLoading !== null;
-  const signupDisabled = isBusy;
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -657,14 +628,14 @@ export default function SignupPageClient() {
             <div className="mt-5 max-w-3xl">
               <h1 className="text-[32px] font-black leading-[1.08] tracking-[-0.03em] text-[#0F172A] sm:text-[42px] lg:text-[56px]">
                 {isID
-                  ? "Mulai akun Tetamo Anda dengan tampilan yang lebih profesional"
-                  : "Join Tetamo with a more premium and professional start"}
+                  ? "Mulai akun Tetamo Anda"
+                  : "Create your Tetamo account"}
               </h1>
 
               <p className="mt-4 max-w-3xl text-base leading-8 text-[#5F6368] sm:text-lg">
                 {isID
-                  ? "Pilih peran Anda dan lanjutkan ke alur yang sesuai untuk pemilik, agent, developer, atau admin."
-                  : "Choose your role and continue to the right flow for owners, agents, developers, or admins."}
+                  ? "Pilih peran Anda dan lanjutkan ke alur yang sesuai."
+                  : "Choose your role and continue to the right flow."}
               </p>
             </div>
 
@@ -678,8 +649,8 @@ export default function SignupPageClient() {
                 }
                 description={
                   isID
-                    ? "Cocok untuk pemilik yang ingin tampilan listing lebih menarik dan peluang inquiry yang lebih baik."
-                    : "Best for owners who want a more attractive listing presence and better inquiry potential."
+                    ? "Cocok untuk pemilik yang ingin memasang properti di Tetamo."
+                    : "For owners who want to list their property on Tetamo."
                 }
                 tone="amber"
               />
@@ -688,13 +659,13 @@ export default function SignupPageClient() {
                 eyebrow={isID ? "Untuk Agent" : "For Agents"}
                 title={
                   isID
-                    ? "Bangun profil dan kelola listing"
-                    : "Build your profile and manage listings"
+                    ? "Kelola listing dan leads"
+                    : "Manage listings and leads"
                 }
                 description={
                   isID
-                    ? "Ideal untuk agent yang ingin mengelola listing, leads, viewing, dan branding dalam satu alur."
-                    : "Ideal for agents who want to manage listings, leads, viewing, and branding in one flow."
+                    ? "Untuk agent yang ingin mengelola listing, leads, dan jadwal viewing."
+                    : "For agents who want to manage listings, leads, and viewing schedules."
                 }
                 tone="emerald"
               />
@@ -706,13 +677,13 @@ export default function SignupPageClient() {
           <div className="px-5 py-6 sm:px-8 sm:py-8">
             <div className="mb-7 text-center sm:mb-8">
               <h2 className="text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl">
-                {isID ? "Buat Akun TETAMO" : "Create Your TETAMO Account"}
+                {isID ? "Buat Akun" : "Create Account"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-[#6E6E73]">
                 {isID
-                  ? "Pilih peran Anda untuk melanjutkan ke alur yang sesuai."
-                  : "Choose your role to continue with the right flow."}
+                  ? "Pilih peran Anda untuk melanjutkan."
+                  : "Choose your role to continue."}
               </p>
             </div>
 
@@ -724,8 +695,8 @@ export default function SignupPageClient() {
                   title={isID ? "Pemilik Properti" : "Property Owner"}
                   desc={
                     isID
-                      ? "Untuk pemilik yang ingin memasang listing dan mengelola properti di TETAMO."
-                      : "For owners who want to list and manage their properties on TETAMO."
+                      ? "Untuk pemilik yang ingin memasang listing."
+                      : "For owners who want to list properties."
                   }
                   onClick={() => setSelectedRole("owner")}
                 />
@@ -738,8 +709,8 @@ export default function SignupPageClient() {
                   title={isID ? "Agent Properti" : "Property Agent"}
                   desc={
                     isID
-                      ? "Untuk agent yang ingin memilih paket, mengelola listing, leads, jadwal viewing, dan komisi."
-                      : "For agents who want to choose a package, manage listings, leads, viewing schedules, and commissions."
+                      ? "Untuk agent yang ingin mengelola listing dan leads."
+                      : "For agents who want to manage listings and leads."
                   }
                   onClick={() => setSelectedRole("agent")}
                 />
@@ -751,8 +722,8 @@ export default function SignupPageClient() {
                   title="Developer"
                   desc={
                     isID
-                      ? "Untuk developer atau project owner yang ingin meminta quotation untuk menggunakan TETAMO License."
-                      : "For developers or project owners who want to request a quotation to use the TETAMO License."
+                      ? "Untuk developer yang ingin meminta quotation."
+                      : "For developers who want to request a quotation."
                   }
                   onClick={() => router.push(developerLicensePath)}
                 />
@@ -806,42 +777,25 @@ export default function SignupPageClient() {
                   <FormInput
                     label={isID ? "Nomor WhatsApp / Telepon" : "WhatsApp / Phone Number"}
                     type="tel"
-                    placeholder={
-                      isID
-                        ? "Contoh: +62 812 3456 7890"
-                        : "Example: +62 812 3456 7890"
-                    }
+                    placeholder="+62 812 3456 7890"
                     value={phoneNumber}
                     onChange={setPhoneNumber}
                     autoComplete="tel"
                     inputMode="tel"
-                    helperText={
-                      isID
-                        ? "Wajib diisi. Kami menggunakan nomor ini untuk verifikasi akun, dukungan listing, dan komunikasi inquiry properti."
-                        : "Required. We use this for account verification, listing support, and property inquiry communication."
-                    }
                   />
 
                   <FormInput
                     label={isID ? "Nama Lengkap" : "Full Name"}
-                    placeholder={
-                      isID
-                        ? "Masukkan nama lengkap Anda"
-                        : "Enter your full name"
-                    }
+                    placeholder={isID ? "Nama lengkap" : "Full name"}
                     value={fullName}
                     onChange={setFullName}
                     autoComplete="name"
                   />
 
                   <FormInput
-                    label={
-                      isID
-                        ? "Email (untuk daftar dengan email)"
-                        : "Email (for email signup)"
-                    }
+                    label="Email"
                     type="email"
-                    placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
+                    placeholder="Email"
                     value={email}
                     onChange={setEmail}
                     autoComplete="email"
@@ -849,13 +803,9 @@ export default function SignupPageClient() {
                   />
 
                   <FormInput
-                    label={
-                      isID
-                        ? "Kata Sandi (untuk daftar dengan email)"
-                        : "Password (for email signup)"
-                    }
+                    label={isID ? "Kata Sandi" : "Password"}
                     type="password"
-                    placeholder={isID ? "Buat kata sandi" : "Create a password"}
+                    placeholder={isID ? "Kata sandi" : "Password"}
                     value={password}
                     onChange={setPassword}
                     autoComplete="new-password"
@@ -865,11 +815,7 @@ export default function SignupPageClient() {
                     <FormInput
                       label="Admin Code"
                       type="password"
-                      placeholder={
-                        isID
-                          ? "Masukkan admin signup code"
-                          : "Enter admin signup code"
-                      }
+                      placeholder="Admin code"
                       value={adminCode}
                       onChange={setAdminCode}
                       autoComplete="off"
@@ -884,16 +830,16 @@ export default function SignupPageClient() {
 
                   <button
                     type="submit"
-                    disabled={signupDisabled}
+                    disabled={isBusy}
                     className="w-full rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white transition hover:bg-black disabled:opacity-60"
                   >
                     {loading && !socialLoading
                       ? isID
-                        ? "Sedang membuat akun..."
+                        ? "Membuat akun..."
                         : "Creating account..."
                       : isID
-                      ? "Buat Akun dengan Email"
-                      : "Create Account with Email"}
+                      ? "Buat Akun"
+                      : "Create Account"}
                   </button>
                 </form>
 
@@ -902,7 +848,7 @@ export default function SignupPageClient() {
                     <div className="my-6 flex items-center gap-3">
                       <div className="h-px flex-1 bg-[#E5E5E7]" />
                       <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6E6E73]">
-                        {isID ? "Atau daftar dengan Google" : "Or sign up with Google"}
+                        {isID ? "Atau" : "or"}
                       </span>
                       <div className="h-px flex-1 bg-[#E5E5E7]" />
                     </div>
@@ -910,18 +856,18 @@ export default function SignupPageClient() {
                     <button
                       type="button"
                       onClick={() => void handleOAuthSignup("google")}
-                      disabled={signupDisabled}
+                      disabled={isBusy}
                       className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
                     >
                       <GoogleDarkIcon />
                       <span>
                         {socialLoading === "google"
                           ? isID
-                            ? "Menghubungkan ke Google..."
-                            : "Connecting to Google..."
+                            ? "Menghubungkan..."
+                            : "Connecting..."
                           : isID
-                          ? "Daftar dengan Google"
-                          : "Sign up with Google"}
+                          ? "Lanjutkan dengan Google"
+                          : "Continue with Google"}
                       </span>
                     </button>
                   </>
