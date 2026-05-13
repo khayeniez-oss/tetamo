@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 
 export type PemilikPlanType = "basic" | "priority" | "featured";
+export type PemilikPaymentGateway = "stripe" | "xendit" | "hitpay";
 
 export type PemilikListingDraft = {
   listingType?: "dijual" | "disewa" | "lelang" | "";
@@ -54,7 +55,7 @@ export type PemilikListingDraft = {
     amount?: number;
     currency?: "IDR";
     status?: "unpaid" | "pending" | "paid" | "failed";
-    method?: "stripe" | "xendit";
+    method?: PemilikPaymentGateway;
     paidAt?: string;
   };
 

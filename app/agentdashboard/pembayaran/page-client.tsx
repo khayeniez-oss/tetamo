@@ -27,7 +27,7 @@ type ExistingProperty = {
 };
 
 type BillingCycle = "monthly" | "yearly";
-type GatewayType = "stripe" | "xendit";
+type GatewayType = "stripe" | "xendit" | "hitpay";
 
 type AgentPackageUI = (typeof AGENT_PACKAGES)[number] & {
   availableBillingCycles?: BillingCycle[];
@@ -64,7 +64,8 @@ const money = (n: number) =>
 function cleanProviderWords(value: string | null | undefined) {
   return String(value || "")
     .replace(/stripe/gi, "secure payment")
-    .replace(/xendit/gi, "payment provider");
+    .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment");
 }
 
 function normalizePaymentFlow(
@@ -267,12 +268,16 @@ function getPaymentDescription(
 
     if (lang === "id") {
       return `Tinjau paket ${product.name} dengan tipe tagihan ${cycleLabel}. Paket ini mencakup ${
-        listingLimit > 0 ? `${listingLimit} listing aktif` : "akses membership agen"
+        listingLimit > 0
+          ? `${listingLimit} listing aktif`
+          : "akses membership agen"
       }.`;
     }
 
     return `Review the ${product.name} package with ${cycleLabel} billing. This package includes ${
-      listingLimit > 0 ? `${listingLimit} active listings` : "agent membership access"
+      listingLimit > 0
+        ? `${listingLimit} active listings`
+        : "agent membership access"
     }.`;
   }
 
@@ -372,7 +377,10 @@ function translateFeature(feature: string, lang: "id" | "en") {
       "Kesempatan eksposur premium di platform",
       "Opportunity for premium platform exposure",
     ],
-    ["Slot Agen Unggulan terbatas (7 agen)", "Limited Featured Agent slots (7 agents)"],
+    [
+      "Slot Agen Unggulan terbatas (7 agen)",
+      "Limited Featured Agent slots (7 agents)",
+    ],
     ["Tersedia opsi bayar bulanan", "Monthly payment option available"],
     ["Auto renew aktif secara default", "Auto renew enabled by default"],
     ["Durasi boost 14 hari", "Boost duration 14 days"],
@@ -466,16 +474,17 @@ export default function AgentPembayaranPageClient() {
             duration: "Durasi",
             days: "hari",
             cardTitle: "Debit / Credit Card",
-            cardSubtitle: "Visa, Mastercard, JCB, American Express",
-            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
-            otherMethodsSubtitle:
-              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            cardSubtitle:
+              "Visa, Mastercard, American Express, dan kartu lain yang didukung.",
+            qrisTitle: "QRIS",
+            qrisSubtitle:
+              "Bayar aman menggunakan aplikasi bank atau e-wallet yang mendukung QRIS, termasuk BCA Mobile, BNI Mobile Banking, BRImo, Livin’ by Mandiri, GoPay, OVO, DANA, ShopeePay, dan LinkAja.",
             whatYouGet: "Yang Anda Dapatkan",
             total: "Total",
             payNow: "Bayar Sekarang",
             preparingPayment: "Menyiapkan Pembayaran...",
             checkoutNote:
-              "Checkout akan dibuat otomatis saat tombol ditekan.",
+              "Checkout aman akan dibuat otomatis saat tombol ditekan.",
             listingCodeNotFound: "Kode listing tidak ditemukan.",
             relogin: "Silakan login ulang.",
             listingNotFound: "Listing tidak ditemukan.",
@@ -526,16 +535,17 @@ export default function AgentPembayaranPageClient() {
             duration: "Duration",
             days: "days",
             cardTitle: "Debit / Credit Card",
-            cardSubtitle: "Visa, Mastercard, JCB, American Express",
-            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
-            otherMethodsSubtitle:
-              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            cardSubtitle:
+              "Visa, Mastercard, American Express, and other supported cards.",
+            qrisTitle: "QRIS",
+            qrisSubtitle:
+              "Pay securely using any QRIS-supported banking app or e-wallet, including BCA Mobile, BNI Mobile Banking, BRImo, Livin’ by Mandiri, GoPay, OVO, DANA, ShopeePay, and LinkAja.",
             whatYouGet: "What You Get",
             total: "Total",
             payNow: "Pay Now",
             preparingPayment: "Preparing Payment...",
             checkoutNote:
-              "Checkout will be created automatically when you click the button.",
+              "A secure checkout will be created automatically when you click the button.",
             listingCodeNotFound: "Listing code was not found.",
             relogin: "Please log in again.",
             listingNotFound: "Listing was not found.",
@@ -885,6 +895,9 @@ export default function AgentPembayaranPageClient() {
           : membershipTermDays ?? selectedProduct.durationDays
         : selectedProduct.durationDays;
 
+      const selectedPaymentMethod =
+        selectedGateway === "hitpay" ? "qris" : "card";
+
       const paymentRecord: TetamoPayment = {
         id: crypto.randomUUID(),
         userId: user.id,
@@ -897,7 +910,7 @@ export default function AgentPembayaranPageClient() {
         currency: "IDR",
         autoRenew: Boolean(selectedProduct.autoRenewDefault ?? true),
         status: "pending",
-        paymentMethod: "card",
+        paymentMethod: selectedPaymentMethod,
         gateway: selectedGateway,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -905,8 +918,8 @@ export default function AgentPembayaranPageClient() {
           action: isEducation
             ? "education-access"
             : isAddon
-            ? "addon"
-            : "membership",
+              ? "addon"
+              : "membership",
 
           selectedBillingCycle: isMembershipProduct(selectedProduct)
             ? selectedBillingCycle
@@ -953,7 +966,8 @@ export default function AgentPembayaranPageClient() {
           paymentDescription: resolvedPaymentDescription,
           billingNote: resolvedBillingNote,
 
-          stripeMode: "live-ready",
+          gateway: selectedGateway,
+          paymentMethod: selectedPaymentMethod,
           role: "agent",
         } as any,
       };
@@ -1026,8 +1040,8 @@ export default function AgentPembayaranPageClient() {
               {isEducation
                 ? ui.summaryEducation
                 : isAddon
-                ? ui.summaryAddon
-                : ui.summaryMembership}
+                  ? ui.summaryAddon
+                  : ui.summaryMembership}
             </h2>
 
             {isAddon ? (
@@ -1166,7 +1180,7 @@ export default function AgentPembayaranPageClient() {
                         "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
                         selectedBillingCycle === "yearly"
                           ? "border-[#1C1C1E] bg-black text-white"
-                          : "border-gray-200 bg-white text-[#1C1C1E]",
+                          : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
                       ].join(" ")}
                     >
                       <div className="font-semibold">{ui.yearly}</div>
@@ -1184,7 +1198,7 @@ export default function AgentPembayaranPageClient() {
                         "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
                         selectedBillingCycle === "monthly"
                           ? "border-[#1C1C1E] bg-black text-white"
-                          : "border-gray-200 bg-white text-[#1C1C1E]",
+                          : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
                       ].join(" ")}
                     >
                       <div className="font-semibold">{ui.monthly}</div>
@@ -1242,7 +1256,7 @@ export default function AgentPembayaranPageClient() {
                 "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
                 selectedGateway === "stripe"
                   ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E]",
+                  : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
               ].join(" ")}
             >
               <div className="font-semibold">{ui.cardTitle}</div>
@@ -1259,13 +1273,25 @@ export default function AgentPembayaranPageClient() {
             </button>
 
             <button
+              onClick={() => setSelectedGateway("hitpay")}
               type="button"
-              disabled
-              className="mt-3 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-400"
+              className={[
+                "mt-3 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+                selectedGateway === "hitpay"
+                  ? "border-[#1C1C1E] bg-black text-white"
+                  : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
+              ].join(" ")}
             >
-              <div className="font-semibold">{ui.otherMethodsTitle}</div>
-              <div className="mt-1 text-xs text-gray-400">
-                {ui.otherMethodsSubtitle}
+              <div className="font-semibold">{ui.qrisTitle}</div>
+              <div
+                className={[
+                  "mt-1 text-xs leading-5",
+                  selectedGateway === "hitpay"
+                    ? "text-white/80"
+                    : "text-gray-500",
+                ].join(" ")}
+              >
+                {ui.qrisSubtitle}
               </div>
             </button>
 

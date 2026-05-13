@@ -17,7 +17,7 @@ import type {
 import type { PemilikPlanType } from "../layout";
 
 type PlanId = PemilikPlanType;
-type GatewayType = "stripe" | "xendit";
+type GatewayType = "stripe" | "xendit" | "hitpay";
 
 type ExistingProperty = {
   id: string;
@@ -221,7 +221,10 @@ function getLocalizedFeatures(
     : product.features;
 }
 
-function formatDurationLabel(durationDays?: number | null, lang: "id" | "en" = "id") {
+function formatDurationLabel(
+  durationDays?: number | null,
+  lang: "id" | "en" = "id"
+) {
   const days = Number(durationDays || 0);
 
   if (!days) return "-";
@@ -326,10 +329,11 @@ export default function PemilikIklanPembayaranPageClient() {
             educationDescPrefix:
               "Education Pass ini akan memberi akses premium ke video edukasi TETAMO selama",
             cardTitle: "Debit / Credit Card",
-            cardSubtitle: "Visa, Mastercard, JCB, American Express",
-            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
-            otherMethodsSubtitle:
-              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            cardSubtitle:
+              "Visa, Mastercard, American Express, dan kartu lain yang didukung.",
+            qrisTitle: "QRIS",
+            qrisSubtitle:
+              "Bayar aman menggunakan aplikasi bank atau e-wallet yang mendukung QRIS, termasuk BCA Mobile, BNI Mobile Banking, BRImo, Livin’ by Mandiri, GoPay, OVO, DANA, ShopeePay, dan LinkAja.",
             whatYouGet: "Yang Anda Dapatkan",
             total: "Total",
             billingFallback:
@@ -337,7 +341,7 @@ export default function PemilikIklanPembayaranPageClient() {
             payNow: "Bayar Sekarang",
             creatingCheckout: "Membuat Checkout...",
             checkingAuth: "Memeriksa Sesi...",
-            checkoutNote: "Checkout akan dibuat otomatis saat tombol ditekan.",
+            checkoutNote: "Checkout aman akan dibuat otomatis saat tombol ditekan.",
             listingCodeNotFound: "Kode listing tidak ditemukan.",
             relogin: "Silakan login ulang.",
             notFoundPaymentProduct: "Produk pembayaran tidak ditemukan.",
@@ -389,10 +393,11 @@ export default function PemilikIklanPembayaranPageClient() {
             educationDescPrefix:
               "This Education Pass gives premium access to TETAMO educational videos for",
             cardTitle: "Debit / Credit Card",
-            cardSubtitle: "Visa, Mastercard, JCB, American Express",
-            otherMethodsTitle: "QRIS / E-Wallet / Virtual Account",
-            otherMethodsSubtitle:
-              "BCA, BNI, BRI, Mandiri, QRIS, GoPay, OVO, DANA, ShopeePay — coming soon",
+            cardSubtitle:
+              "Visa, Mastercard, American Express, and other supported cards.",
+            qrisTitle: "QRIS",
+            qrisSubtitle:
+              "Pay securely using any QRIS-supported banking app or e-wallet, including BCA Mobile, BNI Mobile Banking, BRImo, Livin’ by Mandiri, GoPay, OVO, DANA, ShopeePay, and LinkAja.",
             whatYouGet: "What You Get",
             total: "Total",
             billingFallback:
@@ -401,7 +406,7 @@ export default function PemilikIklanPembayaranPageClient() {
             creatingCheckout: "Creating Checkout...",
             checkingAuth: "Checking Session...",
             checkoutNote:
-              "Checkout will be created automatically when you click the button.",
+              "A secure checkout will be created automatically when you click the button.",
             listingCodeNotFound: "Listing code was not found.",
             relogin: "Please log in again.",
             notFoundPaymentProduct: "Payment product was not found.",
@@ -794,6 +799,9 @@ export default function PemilikIklanPembayaranPageClient() {
         ? ""
         : existingProperty?.kode || draft?.kode || kode || "";
 
+      const selectedPaymentMethod =
+        selectedGateway === "hitpay" ? "qris" : "card";
+
       const paymentRecord: TetamoPayment = {
         id: crypto.randomUUID(),
         userId,
@@ -806,7 +814,7 @@ export default function PemilikIklanPembayaranPageClient() {
         currency: "IDR",
         autoRenew: Boolean(selectedProduct?.autoRenewDefault ?? true),
         status: "pending",
-        paymentMethod: "card",
+        paymentMethod: selectedPaymentMethod,
         gateway: selectedGateway,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -844,6 +852,8 @@ export default function PemilikIklanPembayaranPageClient() {
           paymentTitle: localizedPaymentTitle || null,
           paymentDescription: localizedPaymentDescription || null,
           billingNote: localizedBillingNote || null,
+          gateway: selectedGateway,
+          paymentMethod: selectedPaymentMethod,
         },
       };
 
@@ -940,7 +950,10 @@ export default function PemilikIklanPembayaranPageClient() {
                 <div className="rounded-2xl border border-gray-200 p-4">
                   <div className="text-xs text-gray-500">{ui.duration}</div>
                   <div className="mt-1 text-sm font-semibold sm:text-base">
-                    {formatDurationLabel(selectedProduct?.durationDays, currentLang)}
+                    {formatDurationLabel(
+                      selectedProduct?.durationDays,
+                      currentLang
+                    )}
                   </div>
                 </div>
 
@@ -1062,7 +1075,10 @@ export default function PemilikIklanPembayaranPageClient() {
               <p className="mt-3 text-sm leading-6 text-gray-600">
                 {ui.educationDescPrefix}{" "}
                 <span className="font-semibold">
-                  {formatDurationLabel(selectedProduct?.durationDays ?? 90, currentLang)}
+                  {formatDurationLabel(
+                    selectedProduct?.durationDays ?? 90,
+                    currentLang
+                  )}
                 </span>
                 .
               </p>
@@ -1112,7 +1128,7 @@ export default function PemilikIklanPembayaranPageClient() {
                 "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
                 selectedGateway === "stripe"
                   ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E]",
+                  : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
               ].join(" ")}
             >
               <div className="font-semibold">{ui.cardTitle}</div>
@@ -1129,13 +1145,25 @@ export default function PemilikIklanPembayaranPageClient() {
             </button>
 
             <button
+              onClick={() => setSelectedGateway("hitpay")}
               type="button"
-              disabled
-              className="mt-3 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-400"
+              className={[
+                "mt-3 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+                selectedGateway === "hitpay"
+                  ? "border-[#1C1C1E] bg-black text-white"
+                  : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
+              ].join(" ")}
             >
-              <div className="font-semibold">{ui.otherMethodsTitle}</div>
-              <div className="mt-1 text-xs text-gray-400">
-                {ui.otherMethodsSubtitle}
+              <div className="font-semibold">{ui.qrisTitle}</div>
+              <div
+                className={[
+                  "mt-1 text-xs leading-5",
+                  selectedGateway === "hitpay"
+                    ? "text-white/80"
+                    : "text-gray-500",
+                ].join(" ")}
+              >
+                {ui.qrisSubtitle}
               </div>
             </button>
 
