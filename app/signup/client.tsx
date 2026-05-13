@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
 type AllowedRole = "owner" | "agent" | "developer" | "admin";
-type OAuthProvider = "google" | "facebook";
+type OAuthProvider = "google";
 
 function normalizeRole(value: string | null): AllowedRole | null {
   const v = String(value || "").toLowerCase();
@@ -79,19 +79,6 @@ function GoogleDarkIcon() {
   );
 }
 
-function FacebookDarkIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="h-5 w-5 text-[#1C1C1E]"
-      fill="currentColor"
-    >
-      <path d="M13.642 21v-8.201h2.757l.413-3.197h-3.17V7.561c0-.926.257-1.557 1.586-1.557H16.9V3.145C16.61 3.106 15.618 3 14.463 3c-2.412 0-4.064 1.472-4.064 4.176v2.426H7.67v3.197h2.729V21h3.243Z" />
-    </svg>
-  );
-}
-
 function Pill({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex rounded-full border border-[#D8D8DD] bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] shadow-sm">
@@ -116,7 +103,15 @@ function FormInput({
   value: string;
   onChange: (value: string) => void;
   autoComplete?: string;
-  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  inputMode?:
+    | "none"
+    | "text"
+    | "tel"
+    | "url"
+    | "email"
+    | "numeric"
+    | "decimal"
+    | "search";
   helperText?: string;
 }) {
   return (
@@ -188,7 +183,7 @@ function PolicyAgreement({
         >
           {isID ? "Kebijakan Berlangganan Tetamo" : "Subscription Policy"}
         </Link>
-        {isID ? "." : "."}
+        .
       </span>
     </label>
   );
@@ -299,7 +294,6 @@ export default function SignupPageClient() {
 
   const isID = lang === "id";
   const developerLicensePath = "/developer-license";
-  const showFacebook = process.env.NEXT_PUBLIC_ENABLE_FACEBOOK_AUTH === "true";
 
   const initialRole = normalizeRole(searchParams.get("role"));
   const packageId = searchParams.get("package") || "";
@@ -310,8 +304,8 @@ export default function SignupPageClient() {
   const [selectedRole, setSelectedRole] = useState<AllowedRole | null>(
     initialRole
   );
-  const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
@@ -334,7 +328,8 @@ export default function SignupPageClient() {
   const currentRole = selectedRole;
   const isAdminSignup = currentRole === "admin";
   const isDeveloperRole = currentRole === "developer";
-  const phoneRequired = currentRole === "owner" || currentRole === "agent";
+  const phoneRequired =
+    currentRole === "owner" || currentRole === "agent" || currentRole === "admin";
 
   const roleLabel = useMemo(() => {
     if (currentRole === "agent") return isID ? "Agen" : "Agent";
@@ -388,14 +383,31 @@ export default function SignupPageClient() {
     return normalizedPhone;
   }
 
+  function getValidatedFullNameForSubmit() {
+    const trimmedFullName = fullName.trim();
+
+    if (!trimmedFullName) {
+      alert(
+        isID
+          ? "Mohon masukkan nama lengkap Anda."
+          : "Please enter your full name."
+      );
+      return null;
+    }
+
+    return trimmedFullName;
+  }
+
   function getOAuthRedirectTo(provider: OAuthProvider) {
     const params = new URLSearchParams();
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const trimmedFullName = fullName.trim();
 
     if (currentRole) params.set("role", currentRole);
     params.set("provider", provider);
     params.set("flow", "signup");
 
+    if (trimmedFullName) params.set("full_name", trimmedFullName);
     if (normalizedPhone) params.set("phone", normalizedPhone);
     if (packageId) params.set("package", packageId);
     if (planId) params.set("plan", planId);
@@ -416,14 +428,16 @@ export default function SignupPageClient() {
   async function handleOAuthSignup(provider: OAuthProvider) {
     if (!currentRole) return;
 
+    const trimmedFullName = getValidatedFullNameForSubmit();
+    if (trimmedFullName === null) return;
+
+    const normalizedPhone = getValidatedPhoneForSubmit();
+    if (normalizedPhone === null) return;
+
     if (!agreedToPolicies) {
       alertPolicyAgreementRequired();
       return;
     }
-
-    const normalizedPhone = getValidatedPhoneForSubmit();
-
-    if (normalizedPhone === null) return;
 
     if (isAdminSignup) {
       alert(
@@ -443,20 +457,14 @@ export default function SignupPageClient() {
     setSocialLoading(provider);
 
     try {
-      const options: {
-        redirectTo: string;
-        queryParams?: Record<string, string>;
-      } = {
-        redirectTo: getOAuthRedirectTo(provider),
-      };
-
-      if (provider === "google") {
-        options.queryParams = { prompt: "select_account" };
-      }
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options,
+        options: {
+          redirectTo: getOAuthRedirectTo(provider),
+          queryParams: {
+            prompt: "select_account",
+          },
+        },
       });
 
       if (error) {
@@ -481,6 +489,12 @@ export default function SignupPageClient() {
       return;
     }
 
+    const trimmedFullName = getValidatedFullNameForSubmit();
+    if (trimmedFullName === null) return;
+
+    const normalizedPhone = getValidatedPhoneForSubmit();
+    if (normalizedPhone === null) return;
+
     if (!agreedToPolicies) {
       alertPolicyAgreementRequired();
       return;
@@ -491,17 +505,16 @@ export default function SignupPageClient() {
       return;
     }
 
-    const normalizedPhone = getValidatedPhoneForSubmit();
-
-    if (normalizedPhone === null) return;
-
-    const trimmedFullName = fullName.trim();
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
     const trimmedAdminCode = adminCode.trim();
 
-    if (!trimmedFullName || !trimmedEmail || !trimmedPassword) {
-      alert(isID ? "Mohon lengkapi semua field." : "Please complete all fields.");
+    if (!trimmedEmail || !trimmedPassword) {
+      alert(
+        isID
+          ? "Untuk daftar dengan email, mohon isi email dan kata sandi. Atau gunakan daftar dengan Google di bawah."
+          : "For email signup, please enter your email and password. Or use Sign up with Google below."
+      );
       return;
     }
 
@@ -632,7 +645,7 @@ export default function SignupPageClient() {
   }
 
   const isBusy = loading || socialLoading !== null;
-  const signupDisabled = isBusy || !agreedToPolicies;
+  const signupDisabled = isBusy;
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFFFF_36%,#F6FFFB_100%)] px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
@@ -650,7 +663,7 @@ export default function SignupPageClient() {
 
               <p className="mt-4 max-w-3xl text-base leading-8 text-[#5F6368] sm:text-lg">
                 {isID
-                  ? "Pilih peran Anda dan lanjutkan ke alur yang sesuai untuk pemilik, agen, developer, atau admin."
+                  ? "Pilih peran Anda dan lanjutkan ke alur yang sesuai untuk pemilik, agent, developer, atau admin."
                   : "Choose your role and continue to the right flow for owners, agents, developers, or admins."}
               </p>
             </div>
@@ -665,8 +678,8 @@ export default function SignupPageClient() {
                 }
                 description={
                   isID
-                    ? "Cocok untuk pemilik yang ingin tampilan listing lebih menarik dan peluang lead yang lebih baik."
-                    : "Best for owners who want a more attractive listing presence and better lead potential."
+                    ? "Cocok untuk pemilik yang ingin tampilan listing lebih menarik dan peluang inquiry yang lebih baik."
+                    : "Best for owners who want a more attractive listing presence and better inquiry potential."
                 }
                 tone="amber"
               />
@@ -722,7 +735,7 @@ export default function SignupPageClient() {
                   icon={
                     <BriefcaseBusiness className="h-5 w-5 text-[#1C1C1E]" />
                   }
-                  title={isID ? "Agen Properti" : "Property Agent"}
+                  title={isID ? "Agent Properti" : "Property Agent"}
                   desc={
                     isID
                       ? "Untuk agent yang ingin memilih paket, mengelola listing, leads, jadwal viewing, dan komisi."
@@ -783,25 +796,15 @@ export default function SignupPageClient() {
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <PolicyAgreement
-                    isID={isID}
-                    checked={agreedToPolicies}
-                    onChange={setAgreedToPolicies}
-                  />
-                </div>
-
-                <div className="mb-4">
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleSignup();
+                  }}
+                >
                   <FormInput
-                    label={
-                      isID
-                        ? phoneRequired
-                          ? "Nomor WhatsApp / Telepon"
-                          : "Nomor WhatsApp / Telepon (Opsional)"
-                        : phoneRequired
-                        ? "WhatsApp / Phone Number"
-                        : "WhatsApp / Phone Number (Optional)"
-                    }
+                    label={isID ? "Nomor WhatsApp / Telepon" : "WhatsApp / Phone Number"}
                     type="tel"
                     placeholder={
                       isID
@@ -814,71 +817,11 @@ export default function SignupPageClient() {
                     inputMode="tel"
                     helperText={
                       isID
-                        ? "Kami menggunakan nomor ini untuk verifikasi akun, dukungan listing, dan komunikasi inquiry properti."
-                        : "We use this for account verification, listing support, and property inquiry communication."
+                        ? "Wajib diisi. Kami menggunakan nomor ini untuk verifikasi akun, dukungan listing, dan komunikasi inquiry properti."
+                        : "Required. We use this for account verification, listing support, and property inquiry communication."
                     }
                   />
-                </div>
 
-                {!isAdminSignup ? (
-                  <>
-                    <div className="space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => void handleOAuthSignup("google")}
-                        disabled={signupDisabled}
-                        className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
-                      >
-                        <GoogleDarkIcon />
-                        <span>
-                          {socialLoading === "google"
-                            ? isID
-                              ? "Menghubungkan ke Google..."
-                              : "Connecting to Google..."
-                            : isID
-                            ? "Daftar dengan Google"
-                            : "Sign up with Google"}
-                        </span>
-                      </button>
-
-                      {showFacebook ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleOAuthSignup("facebook")}
-                          disabled={signupDisabled}
-                          className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
-                        >
-                          <FacebookDarkIcon />
-                          <span>
-                            {socialLoading === "facebook"
-                              ? isID
-                                ? "Menghubungkan ke Facebook..."
-                                : "Connecting to Facebook..."
-                              : isID
-                              ? "Daftar dengan Facebook"
-                              : "Sign up with Facebook"}
-                          </span>
-                        </button>
-                      ) : null}
-                    </div>
-
-                    <div className="my-6 flex items-center gap-3">
-                      <div className="h-px flex-1 bg-[#E5E5E7]" />
-                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6E6E73]">
-                        {isID ? "Atau" : "Or"}
-                      </span>
-                      <div className="h-px flex-1 bg-[#E5E5E7]" />
-                    </div>
-                  </>
-                ) : null}
-
-                <form
-                  className="space-y-4"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void handleSignup();
-                  }}
-                >
                   <FormInput
                     label={isID ? "Nama Lengkap" : "Full Name"}
                     placeholder={
@@ -892,16 +835,25 @@ export default function SignupPageClient() {
                   />
 
                   <FormInput
-                    label="Email"
+                    label={
+                      isID
+                        ? "Email (untuk daftar dengan email)"
+                        : "Email (for email signup)"
+                    }
                     type="email"
                     placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
                     value={email}
                     onChange={setEmail}
                     autoComplete="email"
+                    inputMode="email"
                   />
 
                   <FormInput
-                    label={isID ? "Kata Sandi" : "Password"}
+                    label={
+                      isID
+                        ? "Kata Sandi (untuk daftar dengan email)"
+                        : "Password (for email signup)"
+                    }
                     type="password"
                     placeholder={isID ? "Buat kata sandi" : "Create a password"}
                     value={password}
@@ -924,6 +876,12 @@ export default function SignupPageClient() {
                     />
                   ) : null}
 
+                  <PolicyAgreement
+                    isID={isID}
+                    checked={agreedToPolicies}
+                    onChange={setAgreedToPolicies}
+                  />
+
                   <button
                     type="submit"
                     disabled={signupDisabled}
@@ -934,10 +892,40 @@ export default function SignupPageClient() {
                         ? "Sedang membuat akun..."
                         : "Creating account..."
                       : isID
-                      ? "Daftar"
-                      : "Sign up"}
+                      ? "Buat Akun dengan Email"
+                      : "Create Account with Email"}
                   </button>
                 </form>
+
+                {!isAdminSignup ? (
+                  <>
+                    <div className="my-6 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-[#E5E5E7]" />
+                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-[#6E6E73]">
+                        {isID ? "Atau daftar dengan Google" : "Or sign up with Google"}
+                      </span>
+                      <div className="h-px flex-1 bg-[#E5E5E7]" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleOAuthSignup("google")}
+                      disabled={signupDisabled}
+                      className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#111827] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+                    >
+                      <GoogleDarkIcon />
+                      <span>
+                        {socialLoading === "google"
+                          ? isID
+                            ? "Menghubungkan ke Google..."
+                            : "Connecting to Google..."
+                          : isID
+                          ? "Daftar dengan Google"
+                          : "Sign up with Google"}
+                      </span>
+                    </button>
+                  </>
+                ) : null}
 
                 <p className="mt-6 text-center text-sm leading-6 text-[#6E6E73]">
                   {isID ? "Sudah punya akun?" : "Already have an account?"}{" "}
