@@ -20,6 +20,13 @@ import type {
 export const runtime = "nodejs";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const hitpayApiKey = process.env.HITPAY_API_KEY;
+const hitpayMode = String(process.env.HITPAY_MODE || "live").toLowerCase();
+const hitpayBaseUrl =
+  hitpayMode === "sandbox" || hitpayMode === "test"
+    ? "https://api.sandbox.hit-pay.com"
+    : "https://api.hit-pay.com";
+
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -98,11 +105,13 @@ function normalizeGateway(
 ): TetamoGateway {
   const v = String(value || "").toLowerCase();
 
-  if (v === "stripe" || v === "xendit") {
+  if (v === "stripe" || v === "xendit" || v === "hitpay") {
     return v;
   }
 
   if (paymentMethod === "card") return "stripe";
+  if (paymentMethod === "qris") return "hitpay";
+
   return "xendit";
 }
 
@@ -642,6 +651,114 @@ async function getAuthenticatedUserIdFromBearer(req: Request) {
   };
 }
 
+function truncateText(value: string, maxLength = 255) {
+  const clean = String(value || "").trim();
+
+  if (clean.length <= maxLength) return clean;
+
+  return clean.slice(0, maxLength).trim();
+}
+
+function replaceCheckoutSessionPlaceholder(url: string, replacement: string) {
+  return String(url || "").replace("{CHECKOUT_SESSION_ID}", replacement);
+}
+
+function buildHitPayWebhookUrl(requestOrigin: string) {
+  const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+  const baseUrl = siteUrl || requestOrigin;
+
+  return new URL("/api/webhooks/hitpay", baseUrl).toString();
+}
+
+function normalizeHitPayPhone(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return "";
+
+  return raw.replace(/\s+/g, "");
+}
+
+async function createHitPayPaymentRequest({
+  paymentId,
+  amount,
+  customerName,
+  customerEmail,
+  customerPhone,
+  purpose,
+  redirectUrl,
+  webhookUrl,
+  metadata,
+}: {
+  paymentId: string;
+  amount: number;
+  customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  purpose: string;
+  redirectUrl: string;
+  webhookUrl: string;
+  metadata: Record<string, unknown>;
+}) {
+  if (!hitpayApiKey) {
+    throw new Error("HITPAY_API_KEY is missing.");
+  }
+
+  const payload: Record<string, unknown> = {
+    amount: Number(amount),
+    currency: "IDR",
+    payment_methods: ["ifpay_qris"],
+    purpose: truncateText(purpose, 255),
+    reference_number: paymentId,
+    redirect_url: redirectUrl,
+    webhook: webhookUrl,
+    allow_repeated_payments: false,
+    send_email: false,
+    send_sms: false,
+    metadata,
+  };
+
+  if (customerName) payload.name = customerName;
+  if (customerEmail) payload.email = customerEmail;
+
+  const normalizedPhone = normalizeHitPayPhone(customerPhone);
+  if (normalizedPhone) payload.phone = normalizedPhone;
+
+  const response = await fetch(`${hitpayBaseUrl}/v1/payment-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      "X-BUSINESS-API-KEY": hitpayApiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await response.text();
+
+  let data: any = null;
+
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.message ||
+        data?.error ||
+        rawText ||
+        `HitPay request failed with status ${response.status}`
+    );
+  }
+
+  if (!data?.id || !data?.url) {
+    throw new Error("HitPay did not return a valid checkout URL.");
+  }
+
+  return data;
+}
+
 export async function POST(req: Request) {
   try {
     if (!admin) {
@@ -905,6 +1022,120 @@ export async function POST(req: Request) {
         },
         { status: 500 }
       );
+    }
+
+    if (gateway === "hitpay") {
+      const nowIso = new Date().toISOString();
+
+      try {
+        if (paymentRequest.paymentMethod !== "qris") {
+          throw new Error("HitPay is currently enabled for QRIS only.");
+        }
+
+        const hitpayRedirectUrl = replaceCheckoutSessionPlaceholder(
+          successUrl,
+          paymentRequest.id
+        );
+
+        const hitpayWebhookUrl = buildHitPayWebhookUrl(requestOrigin);
+
+        const hitpayRequest = await createHitPayPaymentRequest({
+          paymentId: paymentRequest.id,
+          amount: paymentRequest.amount,
+          customerName: profile?.full_name || null,
+          customerEmail: verifiedUser?.email || profile?.email || null,
+          customerPhone: profile?.phone || null,
+          purpose: textData.paymentTitle || textData.productName,
+          redirectUrl: hitpayRedirectUrl,
+          webhookUrl: hitpayWebhookUrl,
+          metadata: {
+            payment_transaction_id: paymentRequest.id,
+            user_id: paymentRequest.userId,
+            property_id: propertySnapshot?.id || propertyId || "",
+            source_role: sourceRole,
+            payment_type: paymentType,
+            product_id: paymentRequest.productId,
+            product_type: paymentRequest.productType,
+            flow: paymentRequest.flow,
+            listing_code: propertySnapshot?.kode || propertyCodeSnapshot || "",
+            selected_billing_cycle: selectedBillingCycle || "",
+            vehicle_type: vehicleType || "",
+            gateway: "hitpay",
+            payment_method: "qris",
+          },
+        });
+
+        const { error: hitpayUpdateError } = await admin
+          .from("payment_transactions")
+          .update({
+            status: "checkout_created",
+            checkout_url: hitpayRequest.url ?? null,
+            checkout_expires_at: hitpayRequest.expiry_date || null,
+            updated_at: nowIso,
+            metadata: {
+              ...metadata,
+              gateway: "hitpay",
+              payment_method: "qris",
+              hitpay_mode: hitpayMode,
+              hitpay_base_url: hitpayBaseUrl,
+              hitpay_payment_request_id: hitpayRequest.id,
+              hitpay_reference_number:
+                hitpayRequest.reference_number || paymentRequest.id,
+              hitpay_checkout_url: hitpayRequest.url ?? null,
+              hitpay_status: hitpayRequest.status || "pending",
+              hitpay_payment_methods:
+                hitpayRequest.payment_methods || ["ifpay_qris"],
+              hitpay_redirect_url: hitpayRedirectUrl,
+              hitpay_webhook_url: hitpayWebhookUrl,
+              success_url: hitpayRedirectUrl,
+              cancel_url: cancelUrl,
+            },
+          })
+          .eq("id", paymentRequest.id);
+
+        if (hitpayUpdateError) {
+          throw hitpayUpdateError;
+        }
+
+        return NextResponse.json({
+          success: true,
+          gateway: "hitpay",
+          paymentMethod: "qris",
+          checkoutUrl: hitpayRequest.url ?? "",
+          paymentId: paymentRequest.id,
+          sessionId: hitpayRequest.id,
+        });
+      } catch (hitpayError: any) {
+        console.error("HitPay payment request error:", hitpayError);
+
+        await admin
+          .from("payment_transactions")
+          .update({
+            status: "failed",
+            failed_at: nowIso,
+            updated_at: nowIso,
+            admin_notes:
+              hitpayError?.message || "HitPay checkout creation failed.",
+            metadata: {
+              ...metadata,
+              gateway: "hitpay",
+              payment_method: "qris",
+              hitpay_error:
+                hitpayError?.message || "HitPay checkout creation failed.",
+            },
+          })
+          .eq("id", paymentRequest.id);
+
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              hitpayError?.message || "HitPay checkout creation failed.",
+            paymentId: paymentRequest.id,
+          },
+          { status: 500 }
+        );
+      }
     }
 
     if (gateway !== "stripe") {
