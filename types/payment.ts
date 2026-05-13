@@ -14,7 +14,7 @@ export type TetamoPaymentFlow =
   | "agent-membership"
   | "education-access";
 
-export type TetamoGateway = "stripe" | "xendit";
+export type TetamoGateway = "stripe" | "xendit" | "hitpay";
 
 export type TetamoPaymentMethod =
   | "card"
