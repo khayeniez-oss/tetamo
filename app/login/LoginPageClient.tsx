@@ -7,7 +7,7 @@ import { AlertCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/app/context/LanguageContext";
 
-type SocialProvider = "google" | "facebook" | "apple";
+type SocialProvider = "google";
 
 function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
@@ -21,32 +21,6 @@ function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
       <path d="M12.24 22c2.73 0 5.021-.903 6.695-2.452l-3.246-2.548c-.903.608-2.055.973-3.449.973-2.65 0-4.896-1.786-5.698-4.189H3.19v2.63A10.115 10.115 0 0 0 12.24 22Z" />
       <path d="M6.542 13.784A6.083 6.083 0 0 1 6.224 12c0-.62.111-1.222.318-1.784V7.586H3.19A10.115 10.115 0 0 0 2.125 12c0 1.633.39 3.18 1.065 4.414l3.352-2.63Z" />
       <path d="M12.24 6.027c1.483 0 2.813.51 3.862 1.51l2.895-2.895C17.257 3.028 14.966 2 12.24 2A10.115 10.115 0 0 0 3.19 7.586l3.352 2.63c.802-2.403 3.048-4.189 5.698-4.189Z" />
-    </svg>
-  );
-}
-
-function FacebookIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={className}
-      fill="currentColor"
-    >
-      <path d="M13.642 21v-8.201h2.757l.413-3.197h-3.17V7.561c0-.926.257-1.557 1.586-1.557H16.9V3.145C16.61 3.106 15.618 3 14.463 3c-2.412 0-4.064 1.472-4.064 4.176v2.426H7.67v3.197h2.729V21h3.243Z" />
-    </svg>
-  );
-}
-
-function AppleIcon({ className = "h-5 w-5" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={className}
-      fill="currentColor"
-    >
-      <path d="M16.365 12.16c.02 2.23 1.956 2.97 1.978 2.98-.016.052-.309 1.064-1.018 2.11-.612.904-1.247 1.804-2.246 1.823-.98.019-1.295-.58-2.416-.58-1.12 0-1.472.561-2.397.599-.964.037-1.699-.966-2.316-1.866-1.26-1.824-2.223-5.154-.93-7.397.642-1.113 1.79-1.816 3.037-1.835.946-.019 1.84.637 2.416.637.576 0 1.656-.788 2.79-.672.475.02 1.806.192 2.66 1.443-.069.043-1.588.926-1.558 2.758Zm-1.974-6.727c.512-.621.858-1.485.764-2.347-.738.03-1.631.49-2.16 1.11-.474.548-.89 1.43-.778 2.274.822.064 1.662-.419 2.174-1.037Z" />
     </svg>
   );
 }
@@ -157,8 +131,6 @@ export default function LoginPageClient() {
   const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
     null
   );
-
-  const showFacebook = process.env.NEXT_PUBLIC_ENABLE_FACEBOOK_AUTH === "true";
 
   const rawNext = searchParams.get("next") || "";
   const roleFromUrl = searchParams.get("role") || "";
@@ -325,21 +297,15 @@ export default function LoginPageClient() {
       options: oauthRedirectTo
         ? {
             redirectTo: oauthRedirectTo,
-            ...(provider === "google"
-              ? {
-                  queryParams: {
-                    prompt: "select_account",
-                  },
-                }
-              : {}),
-          }
-        : provider === "google"
-        ? {
             queryParams: {
               prompt: "select_account",
             },
           }
-        : undefined,
+        : {
+            queryParams: {
+              prompt: "select_account",
+            },
+          },
     });
 
     if (error) {
@@ -359,45 +325,37 @@ export default function LoginPageClient() {
 
             <div className="mt-5 max-w-3xl">
               <h1 className="text-[32px] font-black leading-[1.08] tracking-[-0.03em] text-[#0F172A] sm:text-[42px] lg:text-[56px]">
-                {isID
-                  ? "Masuk kembali ke akun Tetamo Anda"
-                  : "Log back into your Tetamo account"}
+                {isID ? "Masuk ke akun Tetamo" : "Log in to Tetamo"}
               </h1>
 
               <p className="mt-4 max-w-3xl text-base leading-8 text-[#5F6368] sm:text-lg">
                 {isID
-                  ? "Lanjutkan ke dashboard Anda untuk mengelola listing, leads, viewing, dan aktivitas akun."
-                  : "Continue to your dashboard to manage listings, leads, viewings, and account activity."}
+                  ? "Lanjutkan ke dashboard Anda untuk mengelola akun, listing, leads, dan aktivitas Tetamo."
+                  : "Continue to your dashboard to manage your account, listings, leads, and Tetamo activity."}
               </p>
             </div>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 sm:gap-4">
               <InfoCard
                 eyebrow={isID ? "Akses Cepat" : "Quick Access"}
-                title={
-                  isID
-                    ? "Masuk dan lanjutkan pekerjaan Anda"
-                    : "Log in and continue your work"
-                }
+                title={isID ? "Masuk dan lanjutkan" : "Log in and continue"}
                 description={
                   isID
-                    ? "Masuk untuk kembali ke dashboard Anda dengan alur yang cepat dan jelas."
-                    : "Log in to return to your dashboard with a clear and simple flow."
+                    ? "Kembali ke dashboard Anda dengan alur yang sederhana."
+                    : "Return to your dashboard with a simple flow."
                 }
                 tone="amber"
               />
 
               <InfoCard
-                eyebrow={isID ? "Akses Dashboard" : "Dashboard Access"}
+                eyebrow={isID ? "Dashboard" : "Dashboard"}
                 title={
-                  isID
-                    ? "Kelola listing dan akun Anda"
-                    : "Manage your listings and account"
+                  isID ? "Kelola aktivitas Tetamo" : "Manage Tetamo activity"
                 }
                 description={
                   isID
-                    ? "Cocok untuk pemilik, agen, admin, dan pengguna yang sudah memiliki akun Tetamo."
-                    : "Best for owners, agents, admins, and existing Tetamo account holders."
+                    ? "Untuk pemilik, agent, admin, dan pengguna Tetamo."
+                    : "For owners, agents, admins, and Tetamo users."
                 }
                 tone="emerald"
               />
@@ -409,13 +367,11 @@ export default function LoginPageClient() {
           <div className="px-5 py-6 sm:px-8 sm:py-8">
             <div className="mb-7 text-center sm:mb-8">
               <h2 className="text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl">
-                {isID ? "Selamat Datang Kembali" : "Welcome Back"}
+                {isID ? "Selamat Datang" : "Welcome Back"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-[#6E6E73]">
-                {isID
-                  ? "Masuk ke akun TETAMO Anda"
-                  : "Log in to your TETAMO account"}
+                {isID ? "Masuk ke akun Anda" : "Log in to your account"}
               </p>
             </div>
 
@@ -448,7 +404,7 @@ export default function LoginPageClient() {
               <FormInput
                 label="Email"
                 type="email"
-                placeholder={isID ? "Masukkan email Anda" : "Enter your email"}
+                placeholder="Email"
                 value={email}
                 onChange={(value) => {
                   setEmail(value);
@@ -461,9 +417,7 @@ export default function LoginPageClient() {
                 <FormInput
                   label={isID ? "Kata Sandi" : "Password"}
                   type={showPassword ? "text" : "password"}
-                  placeholder={
-                    isID ? "Masukkan kata sandi Anda" : "Enter your password"
-                  }
+                  placeholder={isID ? "Kata sandi" : "Password"}
                   value={password}
                   onChange={(value) => {
                     setPassword(value);
@@ -524,7 +478,7 @@ export default function LoginPageClient() {
                     : "Logging in..."
                   : isID
                   ? "Masuk"
-                  : "Log in"}
+                  : "Log In"}
               </button>
             </form>
 
@@ -536,63 +490,23 @@ export default function LoginPageClient() {
               <div className="h-px flex-1 bg-[#E5E5E7]" />
             </div>
 
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => void handleOAuthLogin("google")}
-                disabled={isBusy}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
-              >
-                <GoogleIcon className="h-5 w-5 text-[#1C1C1E]" />
-                <span>
-                  {socialLoading === "google"
-                    ? isID
-                      ? "Menghubungkan ke Google..."
-                      : "Connecting to Google..."
-                    : isID
-                    ? "Lanjutkan dengan Google"
-                    : "Continue with Google"}
-                </span>
-              </button>
-
-              {showFacebook ? (
-                <button
-                  type="button"
-                  onClick={() => void handleOAuthLogin("facebook")}
-                  disabled={isBusy}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
-                >
-                  <FacebookIcon className="h-5 w-5 text-[#1C1C1E]" />
-                  <span>
-                    {socialLoading === "facebook"
-                      ? isID
-                        ? "Menghubungkan ke Facebook..."
-                        : "Connecting to Facebook..."
-                      : isID
-                      ? "Lanjutkan dengan Facebook"
-                      : "Continue with Facebook"}
-                  </span>
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => void handleOAuthLogin("apple")}
-                disabled={isBusy}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
-              >
-                <AppleIcon className="h-5 w-5 text-[#1C1C1E]" />
-                <span>
-                  {socialLoading === "apple"
-                    ? isID
-                      ? "Menghubungkan ke Apple..."
-                      : "Connecting to Apple..."
-                    : isID
-                    ? "Lanjutkan dengan Apple"
-                    : "Continue with Apple"}
-                </span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void handleOAuthLogin("google")}
+              disabled={isBusy}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#D8D8DD] bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F8FA] disabled:opacity-60"
+            >
+              <GoogleIcon className="h-5 w-5 text-[#1C1C1E]" />
+              <span>
+                {socialLoading === "google"
+                  ? isID
+                    ? "Menghubungkan..."
+                    : "Connecting..."
+                  : isID
+                  ? "Lanjutkan dengan Google"
+                  : "Continue with Google"}
+              </span>
+            </button>
 
             <div className="mt-6 rounded-[24px] border border-[#ECECF1] bg-[#FAFAFB] p-4">
               <div className="flex items-start gap-3">
@@ -601,8 +515,8 @@ export default function LoginPageClient() {
                 </div>
                 <div className="text-sm leading-6 text-[#6E6E73]">
                   {isID
-                    ? "Belum punya akun? Daftar dulu untuk mulai menggunakan Tetamo."
-                    : "Do not have an account yet? Sign up first to start using Tetamo."}
+                    ? "Belum punya akun? Daftar untuk mulai menggunakan Tetamo."
+                    : "Don’t have an account? Sign up to start using Tetamo."}
                 </div>
               </div>
             </div>
@@ -613,7 +527,7 @@ export default function LoginPageClient() {
                 href={signupHref}
                 className="font-semibold text-[#111827] underline underline-offset-4"
               >
-                {isID ? "Daftar" : "Sign up"}
+                {isID ? "Daftar" : "Sign Up"}
               </Link>
             </p>
           </div>
