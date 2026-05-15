@@ -1052,7 +1052,7 @@ export async function POST(req: Request) {
           ? rawClientPaymentId
           : null,
       server_payment_id: paymentRequest.id,
-      payment_id_was_replaced: replacedInvalidPaymentId,
+      payment_id_was_replaced: String(replacedInvalidPaymentId),
     };
 
     const initialInsert = {
@@ -1148,7 +1148,7 @@ export async function POST(req: Request) {
                 ? rawClientPaymentId
                 : "",
             server_payment_id: paymentRequest.id,
-            payment_id_was_replaced: replacedInvalidPaymentId,
+            payment_id_was_replaced: String(replacedInvalidPaymentId),
           },
         });
 
