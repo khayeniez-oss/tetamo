@@ -420,6 +420,29 @@ function buildHitPayEventId(
   return raw.slice(0, 240);
 }
 
+function buildRawHitPayEventId(
+  rawBody: string,
+  eventTypeHeader: string | null,
+  reason: string
+) {
+  const bodyHash = crypto
+    .createHash("sha256")
+    .update(rawBody || "")
+    .digest("hex")
+    .slice(0, 48);
+
+  const raw = [
+    "hitpay",
+    eventTypeHeader || "event",
+    reason || "attempt",
+    bodyHash,
+  ]
+    .join("_")
+    .replace(/[^a-zA-Z0-9_.:-]/g, "_");
+
+  return raw.slice(0, 240);
+}
+
 function mergeHitPayMetadata(
   existingMetadata: Record<string, any>,
   patch: Record<string, unknown>
@@ -515,6 +538,71 @@ async function markWebhookEvent(
       processed_at: new Date().toISOString(),
     })
     .eq("event_id", eventId);
+}
+
+async function logHitPayWebhookAttempt({
+  eventId,
+  eventType,
+  eventTypeHeader,
+  eventObjectHeader,
+  signature,
+  payload,
+  rawBody,
+  objectId,
+  processingStatus = "received",
+  processingError = null,
+}: {
+  eventId: string;
+  eventType: string;
+  eventTypeHeader: string | null;
+  eventObjectHeader: string | null;
+  signature: string | null;
+  payload: Record<string, any> | null;
+  rawBody: string;
+  objectId: string | null;
+  processingStatus?: string;
+  processingError?: string | null;
+}) {
+  if (!admin) {
+    throw new Error("Supabase admin client is not configured.");
+  }
+
+  const row: Record<string, unknown> = {
+    provider: "hitpay",
+    event_id: eventId,
+    event_type: eventType,
+    livemode: hitpayMode === "live",
+    api_version: null,
+    object_id: objectId,
+    checkout_session_id: null,
+    payment_intent_id: null,
+    charge_id: payload ? extractHitPayPaymentId(payload) || null : null,
+    invoice_id: null,
+    processing_status: processingStatus,
+    processing_error: processingError,
+    payload: {
+      provider: "hitpay",
+      event_type_header: eventTypeHeader,
+      event_object_header: eventObjectHeader,
+      signature_present: Boolean(signature),
+      raw_body_hash: crypto
+        .createHash("sha256")
+        .update(rawBody || "")
+        .digest("hex"),
+      raw_body_preview: rawBody ? rawBody.slice(0, 1200) : "",
+      body: payload,
+    },
+  };
+
+  if (processingStatus !== "received") {
+    row.processed_at = new Date().toISOString();
+  }
+
+  const insertResult = await admin.from("payment_webhook_events").insert(row);
+
+  if (insertResult.error && insertResult.error.code !== "23505") {
+    throw new Error(insertResult.error.message);
+  }
 }
 
 function verifyWebhookPaymentMatchesTransaction(
@@ -1326,42 +1414,69 @@ async function completePaidHitPayPayment({
   if (paymentUpdateError) throw paymentUpdateError;
 
   if (!activationDone) {
-    const activationResult = await activateAfterPayment(
-      {
-        ...payment,
-        status: "paid",
-        paid_at: nextPaidAt,
-        customer_name: payload.name || payment.customer_name || null,
-        customer_email:
-          payload.email ||
-          primaryPayment.buyer_email ||
-          payment.customer_email ||
-          null,
-        customer_phone: payload.phone || payment.customer_phone || null,
-        metadata: mergedMetadata,
-      },
-      nextPaidAt
-    );
+    try {
+      const activationResult = await activateAfterPayment(
+        {
+          ...payment,
+          status: "paid",
+          paid_at: nextPaidAt,
+          customer_name: payload.name || payment.customer_name || null,
+          customer_email:
+            payload.email ||
+            primaryPayment.buyer_email ||
+            payment.customer_email ||
+            null,
+          customer_phone: payload.phone || payment.customer_phone || null,
+          metadata: mergedMetadata,
+        },
+        nextPaidAt
+      );
 
-    const finalMetadata = {
-      ...mergedMetadata,
-      activation: {
-        done: true,
-        processedAt: new Date().toISOString(),
-        processedBy: "hitpay_webhook",
-        ...activationResult,
-      },
-    };
+      const finalMetadata = {
+        ...mergedMetadata,
+        activation: {
+          done: true,
+          processedAt: new Date().toISOString(),
+          processedBy: "hitpay_webhook",
+          ...activationResult,
+        },
+      };
 
-    const { error: activationUpdateError } = await admin
-      .from("payment_transactions")
-      .update({
-        metadata: finalMetadata,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", payment.id);
+      const { error: activationUpdateError } = await admin
+        .from("payment_transactions")
+        .update({
+          metadata: finalMetadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
 
-    if (activationUpdateError) throw activationUpdateError;
+      if (activationUpdateError) throw activationUpdateError;
+    } catch (activationError) {
+      const activationErrorMessage =
+        activationError instanceof Error
+          ? activationError.message
+          : "Unknown activation error.";
+
+      await admin
+        .from("payment_transactions")
+        .update({
+          metadata: {
+            ...mergedMetadata,
+            activation: {
+              done: false,
+              processedAt: new Date().toISOString(),
+              processedBy: "hitpay_webhook",
+              error: activationErrorMessage,
+            },
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
+
+      throw new Error(
+        `Payment was marked paid, but activation failed: ${activationErrorMessage}`
+      );
+    }
   }
 
   await markWebhookEvent(eventId, {
@@ -1455,42 +1570,49 @@ export async function POST(req: Request) {
     );
   }
 
-  const signature = req.headers.get("hitpay-signature");
-  const eventTypeHeader = req.headers.get("hitpay-event-type");
-  const eventObjectHeader = req.headers.get("hitpay-event-object");
+  const signature =
+    req.headers.get("hitpay-signature") ||
+    req.headers.get("x-hitpay-signature");
+
+  const eventTypeHeader =
+    req.headers.get("hitpay-event-type") ||
+    req.headers.get("x-hitpay-event-type");
+
+  const eventObjectHeader =
+    req.headers.get("hitpay-event-object") ||
+    req.headers.get("x-hitpay-event-object");
 
   const rawBody = await req.text();
-
-  try {
-    const isValidSignature = verifyHitPaySignature(rawBody, signature);
-
-    if (!isValidSignature) {
-      return json(
-        {
-          ok: false,
-          error: "Invalid HitPay signature.",
-        },
-        401
-      );
-    }
-  } catch (error) {
-    return json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "HitPay signature validation failed.",
-      },
-      500
-    );
-  }
 
   let payload: Record<string, any>;
 
   try {
     payload = JSON.parse(rawBody);
   } catch {
+    const eventType = eventTypeHeader || "hitpay.invalid_json";
+    const eventId = buildRawHitPayEventId(
+      rawBody,
+      eventTypeHeader,
+      "invalid_json"
+    );
+
+    try {
+      await logHitPayWebhookAttempt({
+        eventId,
+        eventType,
+        eventTypeHeader,
+        eventObjectHeader,
+        signature,
+        payload: null,
+        rawBody,
+        objectId: null,
+        processingStatus: "failed",
+        processingError: "Invalid JSON payload.",
+      });
+    } catch (logError) {
+      console.error("Failed to log invalid HitPay webhook JSON:", logError);
+    }
+
     return json(
       {
         ok: false,
@@ -1505,34 +1627,69 @@ export async function POST(req: Request) {
     `payment_request.${String(payload.status || "unknown").toLowerCase()}`;
 
   const eventId = buildHitPayEventId(payload, eventTypeHeader);
+  const objectId = extractHitPayPaymentRequestId(payload) || null;
 
-  const initialInsert = await admin.from("payment_webhook_events").insert({
-    provider: "hitpay",
-    event_id: eventId,
-    event_type: eventType,
-    livemode: hitpayMode === "live",
-    api_version: null,
-    object_id: extractHitPayPaymentRequestId(payload) || null,
-    checkout_session_id: null,
-    payment_intent_id: null,
-    charge_id: null,
-    invoice_id: null,
-    processing_status: "received",
-    payload: {
-      provider: "hitpay",
-      event_type_header: eventTypeHeader,
-      event_object_header: eventObjectHeader,
-      signature_present: Boolean(signature),
-      body: payload,
-    },
-  });
-
-  if (initialInsert.error && initialInsert.error.code !== "23505") {
+  try {
+    await logHitPayWebhookAttempt({
+      eventId,
+      eventType,
+      eventTypeHeader,
+      eventObjectHeader,
+      signature,
+      payload,
+      rawBody,
+      objectId,
+      processingStatus: "received",
+    });
+  } catch (logError) {
     return json(
       {
         ok: false,
         error: "Failed to log HitPay webhook event.",
-        details: initialInsert.error.message,
+        details:
+          logError instanceof Error
+            ? logError.message
+            : "Unknown logging error.",
+      },
+      500
+    );
+  }
+
+  try {
+    const isValidSignature = verifyHitPaySignature(rawBody, signature);
+
+    if (!isValidSignature) {
+      await markWebhookEvent(eventId, {
+        processing_status: "failed",
+        processing_error: "Rejected: invalid HitPay signature.",
+        object_id: objectId,
+      });
+
+      return json(
+        {
+          ok: false,
+          error: "Invalid HitPay signature.",
+        },
+        401
+      );
+    }
+  } catch (error) {
+    await markWebhookEvent(eventId, {
+      processing_status: "failed",
+      processing_error:
+        error instanceof Error
+          ? `HitPay signature validation failed: ${error.message}`
+          : "HitPay signature validation failed.",
+      object_id: objectId,
+    });
+
+    return json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "HitPay signature validation failed.",
       },
       500
     );
@@ -1545,12 +1702,13 @@ export async function POST(req: Request) {
       await markWebhookEvent(eventId, {
         processing_status: "ignored",
         processing_error: "No payment_transactions row found for HitPay event.",
-        object_id: extractHitPayPaymentRequestId(payload) || null,
+        object_id: objectId,
       });
 
       return json({
         ok: true,
         ignored: true,
+        eventId,
         reason: "No payment transaction found.",
       });
     }
@@ -1568,7 +1726,7 @@ export async function POST(req: Request) {
       await markWebhookEvent(eventId, {
         processing_status: "ignored",
         processing_error: "Pending HitPay webhook event ignored.",
-        object_id: extractHitPayPaymentRequestId(payload) || null,
+        object_id: objectId,
       });
     } else {
       await handleNonPaidHitPayStatus({
@@ -1591,7 +1749,7 @@ export async function POST(req: Request) {
       processing_status: "failed",
       processing_error:
         error instanceof Error ? error.message : "Unknown processing error.",
-      object_id: extractHitPayPaymentRequestId(payload) || null,
+      object_id: objectId,
     });
 
     return json(
