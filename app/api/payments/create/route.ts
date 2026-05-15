@@ -884,7 +884,7 @@ export async function POST(req: Request) {
             ? rawClientPaymentId
             : null,
         server_payment_id: safePaymentId,
-        payment_id_was_replaced: replacedInvalidPaymentId,
+        payment_id_was_replaced: String(replacedInvalidPaymentId),
       },
     };
 
