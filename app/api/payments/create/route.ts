@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
   getAnyProductById,
@@ -166,6 +167,45 @@ function normalizeBillingCycle(value: unknown): BillingCycle | null {
   return null;
 }
 
+function isValidUuid(value: unknown) {
+  const text = String(value || "").trim();
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    text
+  );
+}
+
+function getRawClientPaymentId(value: unknown) {
+  const text = String(value || "").trim();
+  return text || "";
+}
+
+function createSafePaymentId(value: unknown) {
+  const text = getRawClientPaymentId(value);
+
+  if (isValidUuid(text)) {
+    return text;
+  }
+
+  return crypto.randomUUID();
+}
+
+function replaceClientPaymentIdInUrl(
+  url: string,
+  clientPaymentId: string,
+  serverPaymentId: string
+) {
+  if (!url || !clientPaymentId || clientPaymentId === serverPaymentId) {
+    return url;
+  }
+
+  return String(url)
+    .split(encodeURIComponent(clientPaymentId))
+    .join(encodeURIComponent(serverPaymentId))
+    .split(clientPaymentId)
+    .join(serverPaymentId);
+}
+
 function getMetadataString(
   metadata: PaymentMetadata | undefined,
   key: string
@@ -198,6 +238,8 @@ function resolveSelectedBillingCycle(
   return (
     normalizeBillingCycle(metadata.selectedBillingCycle) ||
     normalizeBillingCycle(metadata.billingCycle) ||
+    normalizeBillingCycle(metadata.selected_billing_cycle) ||
+    normalizeBillingCycle(metadata.billing_cycle) ||
     null
   );
 }
@@ -775,6 +817,11 @@ export async function POST(req: Request) {
     const body = (await req.json()) as CreatePaymentBody;
     const bodyMetadata = (body?.metadata || {}) as PaymentMetadata;
 
+    const rawClientPaymentId = getRawClientPaymentId(body?.id);
+    const safePaymentId = createSafePaymentId(rawClientPaymentId);
+    const replacedInvalidPaymentId =
+      Boolean(rawClientPaymentId) && rawClientPaymentId !== safePaymentId;
+
     const paymentMethod = normalizePaymentMethod(body?.paymentMethod);
     const userType = normalizeUserType(body?.userType);
     const productType = normalizeProductType(body?.productType);
@@ -807,7 +854,7 @@ export async function POST(req: Request) {
     const effectiveUserId = verifiedUser?.id || bodyUserId;
 
     const paymentRequest: TetamoPayment = {
-      id: body?.id ?? crypto.randomUUID(),
+      id: safePaymentId,
       userId: effectiveUserId,
       userType,
       flow,
@@ -831,6 +878,13 @@ export async function POST(req: Request) {
         selectedBillingCycle:
           selectedBillingCycle ||
           getMetadataString(bodyMetadata, "selectedBillingCycle"),
+        requested_payment_id: rawClientPaymentId || null,
+        client_payment_id:
+          replacedInvalidPaymentId && rawClientPaymentId
+            ? rawClientPaymentId
+            : null,
+        server_payment_id: safePaymentId,
+        payment_id_was_replaced: replacedInvalidPaymentId,
       },
     };
 
@@ -875,11 +929,29 @@ export async function POST(req: Request) {
     );
 
     const requestOrigin = new URL(req.url).origin;
+
+    const providedSuccessUrl = body.successUrl
+      ? replaceClientPaymentIdInUrl(
+          body.successUrl,
+          rawClientPaymentId,
+          paymentRequest.id
+        )
+      : "";
+
+    const providedCancelUrl = body.cancelUrl
+      ? replaceClientPaymentIdInUrl(
+          body.cancelUrl,
+          rawClientPaymentId,
+          paymentRequest.id
+        )
+      : "";
+
     const successUrl =
-      body.successUrl ||
+      providedSuccessUrl ||
       buildDefaultSuccessUrl(requestOrigin, paymentRequest, bodyMetadata);
+
     const cancelUrl =
-      body.cancelUrl ||
+      providedCancelUrl ||
       buildDefaultCancelUrl(requestOrigin, paymentRequest, bodyMetadata);
 
     const propertyId =
@@ -927,7 +999,8 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             success: false,
-            message: "You are not allowed to create a payment for this property.",
+            message:
+              "You are not allowed to create a payment for this property.",
           },
           { status: 403 }
         );
@@ -973,6 +1046,13 @@ export async function POST(req: Request) {
       stripe_currency: "idr",
       stripe_minor_amount: toStripeMinorAmount("idr", paymentRequest.amount),
       vehicle_type: vehicleType,
+      requested_payment_id: rawClientPaymentId || null,
+      client_payment_id:
+        replacedInvalidPaymentId && rawClientPaymentId
+          ? rawClientPaymentId
+          : null,
+      server_payment_id: paymentRequest.id,
+      payment_id_was_replaced: replacedInvalidPaymentId,
     };
 
     const initialInsert = {
@@ -1062,6 +1142,13 @@ export async function POST(req: Request) {
             vehicle_type: vehicleType || "",
             gateway: "hitpay",
             payment_method: "qris",
+            requested_payment_id: rawClientPaymentId || "",
+            client_payment_id:
+              replacedInvalidPaymentId && rawClientPaymentId
+                ? rawClientPaymentId
+                : "",
+            server_payment_id: paymentRequest.id,
+            payment_id_was_replaced: replacedInvalidPaymentId,
           },
         });
 
@@ -1104,6 +1191,11 @@ export async function POST(req: Request) {
           checkoutUrl: hitpayRequest.url ?? "",
           paymentId: paymentRequest.id,
           sessionId: hitpayRequest.id,
+          replacedInvalidPaymentId,
+          clientPaymentId:
+            replacedInvalidPaymentId && rawClientPaymentId
+              ? rawClientPaymentId
+              : null,
         });
       } catch (hitpayError: any) {
         console.error("HitPay payment request error:", hitpayError);
@@ -1213,6 +1305,13 @@ export async function POST(req: Request) {
         listing_code: propertySnapshot?.kode || propertyCodeSnapshot || "",
         selected_billing_cycle: selectedBillingCycle || "",
         vehicle_type: vehicleType || "",
+        requested_payment_id: rawClientPaymentId || "",
+        client_payment_id:
+          replacedInvalidPaymentId && rawClientPaymentId
+            ? rawClientPaymentId
+            : "",
+        server_payment_id: paymentRequest.id,
+        payment_id_was_replaced: String(replacedInvalidPaymentId),
       },
       line_items: [
         {
@@ -1278,6 +1377,11 @@ export async function POST(req: Request) {
       checkoutUrl: session.url ?? "",
       paymentId: paymentRequest.id,
       sessionId: session.id,
+      replacedInvalidPaymentId,
+      clientPaymentId:
+        replacedInvalidPaymentId && rawClientPaymentId
+          ? rawClientPaymentId
+          : null,
     });
   } catch (error: any) {
     console.error("Payment create error:", error);
