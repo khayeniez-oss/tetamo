@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 
 type Role = "owner" | "agent";
 
@@ -98,8 +99,8 @@ export default function MobilePaymentSuccessPage() {
         </h1>
 
         <p style={styles.description}>
-          Your payment has been received. Open the Tetamo app to view the
-          updated payment status, receipt, and next steps.
+          Your payment has been received. Open the Tetamo app to view your
+          payment status, receipt, and next steps.
         </p>
 
         <div style={styles.statusBox}>
@@ -113,14 +114,14 @@ export default function MobilePaymentSuccessPage() {
 
         <p style={styles.note}>
           If the app does not open automatically, tap the button above. Your
-          payment status is confirmed by Tetamo using the payment webhook.
+          payment status will be updated securely in Tetamo.
         </p>
       </section>
     </main>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#050505",
@@ -129,16 +130,14 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
   card: {
     width: "100%",
     maxWidth: 460,
     borderRadius: 28,
     border: "1px solid #303030",
-    background:
-      "linear-gradient(180deg, rgba(18,18,18,1), rgba(5,5,5,1))",
+    background: "linear-gradient(180deg, rgba(18,18,18,1), rgba(5,5,5,1))",
     padding: 24,
     textAlign: "center",
     boxShadow: "0 24px 80px rgba(0,0,0,0.45)",
