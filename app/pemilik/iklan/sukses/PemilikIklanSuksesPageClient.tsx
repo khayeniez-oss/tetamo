@@ -47,6 +47,12 @@ type LinkedPropertyRow = {
   verification_status: string | null;
 };
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
 function formatCurrency(
   amount: number | null | undefined,
   currency: string | null | undefined,
@@ -100,17 +106,56 @@ function normalizeStatus(value?: string | null): PaymentStatus {
 function humanizePaymentType(value?: string | null, lang: "id" | "en" = "id") {
   const v = String(value || "").toLowerCase();
 
-  if (v === "listing_fee") return lang === "id" ? "Iklan Listing" : "Listing Payment";
+  if (v === "listing_fee") {
+    return lang === "id" ? "Iklan Listing" : "Listing Payment";
+  }
+
   if (v === "featured") return "Featured Listing";
   if (v === "boost") return "Boost Listing";
   if (v === "spotlight") return "Homepage Spotlight";
   if (v === "education") return "Education Pass";
-  if (v === "package") return lang === "id" ? "Paket Membership" : "Membership Package";
+
+  if (v === "package") {
+    return lang === "id" ? "Paket Membership" : "Membership Package";
+  }
 
   return lang === "id" ? "Pembayaran" : "Payment";
 }
 
-function humanizePaymentMethod() {
+function humanizePaymentMethod(
+  payment: PaymentRow | null,
+  lang: "id" | "en"
+) {
+  const metadata = asObject(payment?.metadata);
+  const qrisMeta = asObject(metadata.hitpay);
+
+  const gateway = String(
+    metadata.gateway ||
+      metadata.payment_gateway ||
+      qrisMeta.gateway ||
+      ""
+  ).toLowerCase();
+
+  const method = String(
+    metadata.paymentMethod ||
+      metadata.payment_method ||
+      qrisMeta.payment_method ||
+      qrisMeta.paymentMethod ||
+      ""
+  ).toLowerCase();
+
+  const hasQrisReference = Boolean(
+    metadata.hitpay_payment_request_id ||
+      metadata.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  if (method === "qris" || gateway === "hitpay" || hasQrisReference) {
+    return lang === "id" ? "Dibayar dengan QRIS" : "Paid by QRIS";
+  }
+
   return "Debit / Credit Card";
 }
 
@@ -128,14 +173,12 @@ function isPropertyPendingReview(property: LinkedPropertyRow | null) {
   );
 }
 
-function getStateUI(
-  args: {
-    isEditApprovalFlow: boolean;
-    returnedFromSuccess: boolean;
-    status: PaymentStatus;
-    lang: "id" | "en";
-  }
-) {
+function getStateUI(args: {
+  isEditApprovalFlow: boolean;
+  returnedFromSuccess: boolean;
+  status: PaymentStatus;
+  lang: "id" | "en";
+}) {
   const { isEditApprovalFlow, returnedFromSuccess, status, lang } = args;
 
   if (isEditApprovalFlow) {
@@ -157,7 +200,8 @@ function getStateUI(
   if (status === "pending" || status === "checkout_created") {
     return {
       icon: "⏳",
-      title: lang === "id" ? "Pembayaran Menunggu Konfirmasi" : "Payment Pending",
+      title:
+        lang === "id" ? "Pembayaran Menunggu Konfirmasi" : "Payment Pending",
       boxClass: "bg-yellow-50 border-yellow-200 text-yellow-700",
     };
   }
@@ -368,9 +412,8 @@ export default function PemilikIklanSuksesPageClient() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [payment, setPayment] = useState<PaymentRow | null>(null);
-  const [linkedProperty, setLinkedProperty] = useState<LinkedPropertyRow | null>(
-    null
-  );
+  const [linkedProperty, setLinkedProperty] =
+    useState<LinkedPropertyRow | null>(null);
   const [pollCount, setPollCount] = useState(0);
 
   const sessionId = String(searchParams.get("session_id") || "");
@@ -620,7 +663,10 @@ export default function PemilikIklanSuksesPageClient() {
         };
       }
 
-      if (payment?.payment_type === "boost" || payment?.payment_type === "spotlight") {
+      if (
+        payment?.payment_type === "boost" ||
+        payment?.payment_type === "spotlight"
+      ) {
         return {
           description:
             currentLang === "id"
@@ -693,7 +739,10 @@ export default function PemilikIklanSuksesPageClient() {
       };
     }
 
-    if (resolvedStatus === "refunded" || resolvedStatus === "partially_refunded") {
+    if (
+      resolvedStatus === "refunded" ||
+      resolvedStatus === "partially_refunded"
+    ) {
       return {
         description: t.refundedDescription,
         points: t.refundedPoints,
@@ -722,7 +771,9 @@ export default function PemilikIklanSuksesPageClient() {
     (resolvedStatus === "pending" || resolvedStatus === "checkout_created") &&
     Boolean(payment?.checkout_url);
 
-  const listingHref = linkedProperty?.id ? `/properti/${linkedProperty.id}` : "/properti";
+  const listingHref = linkedProperty?.id
+    ? `/properti/${linkedProperty.id}`
+    : "/properti";
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -782,7 +833,7 @@ export default function PemilikIklanSuksesPageClient() {
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{t.methodLabel}</p>
               <p className="mt-1 text-sm font-semibold text-[#1C1C1E] sm:text-base">
-                {humanizePaymentMethod()}
+                {humanizePaymentMethod(payment, currentLang)}
               </p>
             </div>
 

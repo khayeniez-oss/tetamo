@@ -37,6 +37,7 @@ type PaymentRow = {
   currency: string | null;
   created_at: string | null;
   status: PaymentStatus | null;
+  metadata: Record<string, any> | null;
 };
 
 type ProfileRow = {
@@ -167,6 +168,49 @@ function visiblePageNumbers(current: number, total: number) {
   return pages;
 }
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return { isQris };
+}
+
+function sanitizePublicPaymentText(value: unknown) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment")
+    .trim();
+}
+
 function humanizePaymentType(value?: string | null) {
   const v = String(value || "").toLowerCase();
 
@@ -180,7 +224,13 @@ function humanizePaymentType(value?: string | null) {
   return "Payment";
 }
 
-function humanizeMethod() {
+function humanizeMethod(metadata: Record<string, any> | null | undefined) {
+  const info = getPaymentMetaInfo(metadata);
+
+  if (info.isQris) {
+    return "Paid by QRIS";
+  }
+
   return "Debit / Credit Card";
 }
 
@@ -220,7 +270,8 @@ export default function AdminPaymentsPage() {
             amount_total,
             currency,
             created_at,
-            status
+            status,
+            metadata
           `
         )
         .order("created_at", { ascending: false });
@@ -272,12 +323,13 @@ export default function AdminPaymentsPage() {
           (row.user_id ? profileMap.get(row.user_id)?.full_name : null)?.trim() ||
           "Unknown",
         listingKode: row.property_code_snapshot?.trim() || "-",
-        package:
+        package: sanitizePublicPaymentText(
           row.product_name_snapshot?.trim() ||
-          row.description?.trim() ||
-          humanizePaymentType(row.payment_type),
+            row.description?.trim() ||
+            humanizePaymentType(row.payment_type)
+        ),
         amount: formatAmount(row.amount_total, row.currency),
-        method: humanizeMethod(),
+        method: humanizeMethod(row.metadata),
         date: formatDate(row.created_at),
         status: normalizeStatus(row.status),
       }));

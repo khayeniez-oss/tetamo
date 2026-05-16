@@ -131,6 +131,12 @@ type HistoryItem = {
   renewHref: string;
 };
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
 function cleanText(value: unknown) {
   const v = String(value || "").trim();
   return v || "-";
@@ -145,6 +151,7 @@ function sanitizePublicPaymentText(value: unknown) {
   return String(value || "")
     .replace(/stripe/gi, "secure payment")
     .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment")
     .trim();
 }
 
@@ -165,6 +172,48 @@ function getNestedMetaString(
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return "";
   const value = (obj as Record<string, any>)[key];
   return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const qrisReference =
+    String(
+      meta.hitpay_reference_number ||
+        meta.hitpay_payment_request_id ||
+        qrisMeta.reference_number ||
+        qrisMeta.payment_request_id ||
+        qrisMeta.payment_id ||
+        ""
+    ).trim() || "";
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return {
+    isQris,
+    qrisReference,
+  };
 }
 
 function formatAmount(amount: number | null, currency: string | null) {
@@ -441,7 +490,13 @@ function buildRenewHref(item: {
   return "";
 }
 
-function getPublicPaymentMethod() {
+function getPublicPaymentMethod(row: PaymentTransactionRow, lang: string) {
+  const info = getPaymentMetaInfo(row.metadata);
+
+  if (info.isQris) {
+    return lang === "id" ? "Dibayar dengan QRIS" : "Paid by QRIS";
+  }
+
   return "Debit / Credit Card";
 }
 
@@ -495,7 +550,7 @@ function mapTransactionToHistoryItem(
     listingCode,
 
     amount: formatAmount(row.amount_total ?? row.amount_subtotal ?? 0, row.currency),
-    method: getPublicPaymentMethod(),
+    method: getPublicPaymentMethod(row, lang),
     status,
 
     createdDate: formatDate(row.created_at, lang),
@@ -812,8 +867,8 @@ export default function AgentTagihanPage() {
                     ? "Bulanan"
                     : "Monthly"
                   : isID
-                  ? "Tahunan"
-                  : "Yearly"
+                    ? "Tahunan"
+                    : "Yearly"
                 : "-"}
             </div>
           </div>
@@ -1027,8 +1082,8 @@ export default function AgentTagihanPage() {
                               ? "Perpanjang Membership"
                               : "Renew Membership"
                             : isID
-                            ? "Perpanjang Add-On"
-                            : "Renew Add-On"}
+                              ? "Perpanjang Add-On"
+                              : "Renew Add-On"}
                         </Link>
                       ) : null}
 
@@ -1043,8 +1098,8 @@ export default function AgentTagihanPage() {
                               ? "Coba Lagi"
                               : "Try Again"
                             : isID
-                            ? "Lanjutkan Bayar"
-                            : "Continue Payment"}
+                              ? "Lanjutkan Bayar"
+                              : "Continue Payment"}
                         </a>
                       ) : null}
                     </div>

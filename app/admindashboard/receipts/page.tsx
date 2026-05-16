@@ -25,6 +25,7 @@ type ReceiptRow = {
   stripe_checkout_session_id: string | null;
   stripe_invoice_id: string | null;
   product_name_snapshot: string | null;
+  metadata: Record<string, any> | null;
   status:
     | "pending"
     | "checkout_created"
@@ -45,7 +46,61 @@ type ReceiptItem = {
   invoiceNumber: string;
   amount: string;
   date: string;
+  method: string;
 };
+
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const qrisReference =
+    String(
+      meta.hitpay_reference_number ||
+        meta.hitpay_payment_request_id ||
+        qrisMeta.reference_number ||
+        qrisMeta.payment_request_id ||
+        qrisMeta.payment_id ||
+        ""
+    ).trim() || "";
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return { isQris, qrisReference };
+}
+
+function humanizePaymentMethod(metadata: Record<string, any> | null | undefined) {
+  const info = getPaymentMetaInfo(metadata);
+
+  if (info.isQris) return "Paid by QRIS";
+
+  return "Debit / Credit Card";
+}
 
 function formatAmount(value: number | null, currency: string | null) {
   const amount = Number(value ?? 0);
@@ -81,6 +136,12 @@ function formatDate(date: string | null) {
 }
 
 function getReceiptNumber(row: ReceiptRow) {
+  const info = getPaymentMetaInfo(row.metadata);
+
+  if (info.qrisReference) {
+    return `RCT-${info.qrisReference}`;
+  }
+
   if (row.stripe_charge_id?.trim()) {
     return `RCT-${row.stripe_charge_id.trim()}`;
   }
@@ -131,11 +192,11 @@ export default function AdminReceiptsPage() {
             stripe_checkout_session_id,
             stripe_invoice_id,
             product_name_snapshot,
+            metadata,
             status
           `
         )
         .eq("status", "paid")
-        .not("receipt_url", "is", null)
         .order("paid_at", { ascending: false });
 
       if (!isMounted) return;
@@ -160,6 +221,7 @@ export default function AdminReceiptsPage() {
         invoiceNumber: getInvoiceNumber(row),
         amount: formatAmount(row.amount_total ?? 0, row.currency),
         date: formatDate(row.paid_at || row.created_at),
+        method: humanizePaymentMethod(row.metadata),
       }));
 
       setReceipts(mapped);
@@ -183,6 +245,7 @@ export default function AdminReceiptsPage() {
         ${r.receiptNumber}
         ${r.owner}
         ${r.invoiceNumber}
+        ${r.method}
       `.toLowerCase();
 
       return words.every((w) => searchable.includes(w));
@@ -269,6 +332,15 @@ export default function AdminReceiptsPage() {
                       </div>
 
                       <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                          Method
+                        </p>
+                        <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                          {r.method}
+                        </p>
+                      </div>
+
+                      <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                           Date
                         </p>

@@ -157,6 +157,73 @@ function getStatusLabel(status: BillingStatus) {
   }
 }
 
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const qrisReference =
+    String(
+      meta.hitpay_reference_number ||
+        meta.hitpay_payment_request_id ||
+        qrisMeta.reference_number ||
+        qrisMeta.payment_request_id ||
+        qrisMeta.payment_id ||
+        ""
+    ).trim() || "";
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return { isQris, qrisReference };
+}
+
+function humanizePaymentMethod(invoice: AdminInvoiceRow | null) {
+  const info = getPaymentMetaInfo(invoice?.metadata);
+
+  if (info.isQris) return "Paid by QRIS";
+
+  return "Debit / Credit Card";
+}
+
+function getPaymentReference(invoice: AdminInvoiceRow | null) {
+  if (!invoice) return "-";
+
+  const info = getPaymentMetaInfo(invoice.metadata);
+  if (info.qrisReference) return info.qrisReference;
+  if (invoice.stripe_payment_intent_id?.trim()) return invoice.stripe_payment_intent_id.trim();
+  if (invoice.stripe_checkout_session_id?.trim()) return invoice.stripe_checkout_session_id.trim();
+  if (invoice.payment_id?.trim()) return invoice.payment_id.trim();
+
+  return "-";
+}
+
+function sanitizePublicPaymentText(value: unknown) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment")
+    .trim();
+}
+
 function humanizePaymentType(value?: string | null) {
   const v = String(value || "").toLowerCase();
 
@@ -350,6 +417,9 @@ export default function AdminInvoiceDetailPage() {
     .filter(Boolean)
     .join(", ");
 
+  const paymentMethod = humanizePaymentMethod(invoice);
+  const paymentReference = getPaymentReference(invoice);
+
   return (
     <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
       <div className="mb-4 flex flex-col gap-2.5 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -508,11 +578,13 @@ export default function AdminInvoiceDetailPage() {
             <div className="grid gap-4 border-b border-gray-100 px-4 py-5 sm:px-6 sm:py-6 md:grid-cols-[1fr_auto]">
               <div>
                 <p className="text-lg font-semibold leading-tight text-[#1C1C1E] sm:text-2xl">
-                  {invoice.description ||
-                    invoice.property_title_snapshot ||
-                    invoice.plan_name ||
-                    humanizePaymentType(invoice.payment_type) ||
-                    "-"}
+                  {sanitizePublicPaymentText(
+                    invoice.description ||
+                      invoice.property_title_snapshot ||
+                      invoice.plan_name ||
+                      humanizePaymentType(invoice.payment_type) ||
+                      "-"
+                  )}
                 </p>
 
                 <div className="mt-3 grid grid-cols-2 gap-2.5">
@@ -549,6 +621,24 @@ export default function AdminInvoiceDetailPage() {
                     </p>
                     <p className="mt-1 text-[12px] text-gray-600 sm:text-sm">
                       {humanizePaymentType(invoice.payment_type)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                      Payment Method
+                    </p>
+                    <p className="mt-1 text-[12px] text-gray-600 sm:text-sm">
+                      {paymentMethod}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                      Reference
+                    </p>
+                    <p className="mt-1 break-all text-[12px] text-gray-600 sm:text-sm">
+                      {paymentReference}
                     </p>
                   </div>
                 </div>
@@ -607,7 +697,7 @@ export default function AdminInvoiceDetailPage() {
               Notes
             </p>
             <p className="mt-2 whitespace-pre-line text-[12px] leading-6 text-gray-600 sm:mt-3 sm:text-base sm:leading-7">
-              {notes}
+              {sanitizePublicPaymentText(notes)}
             </p>
           </div>
 

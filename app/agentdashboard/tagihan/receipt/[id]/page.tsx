@@ -80,6 +80,12 @@ type AgentMembershipRow = {
   updated_at: string | null;
 };
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
 function toNumber(value: number | string | null | undefined) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
 
@@ -105,6 +111,7 @@ function sanitizePublicPaymentText(value: unknown) {
   return String(value || "")
     .replace(/stripe/gi, "secure payment")
     .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment")
     .trim();
 }
 
@@ -156,6 +163,48 @@ function getNestedMetaNumber(
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const qrisReference =
+    String(
+      meta.hitpay_reference_number ||
+        meta.hitpay_payment_request_id ||
+        qrisMeta.reference_number ||
+        qrisMeta.payment_request_id ||
+        qrisMeta.payment_id ||
+        ""
+    ).trim() || "";
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return {
+    isQris,
+    qrisReference,
+  };
 }
 
 function formatAmount(amount: number | null, currency: string | null) {
@@ -357,13 +406,36 @@ function getStartsAt(
   );
 }
 
-function getPaymentMethod() {
+function getPaymentMethod(
+  payment: PaymentTransactionRow | null,
+  lang: "id" | "en"
+) {
+  const info = getPaymentMetaInfo(payment?.metadata);
+
+  if (info.isQris) {
+    return lang === "id" ? "Dibayar dengan QRIS" : "Paid by QRIS";
+  }
+
   return "Debit / Credit Card";
 }
 
-function cleanReceiptPrefix(paymentId: string | null | undefined, prefix: string) {
+function cleanReceiptPrefix(
+  paymentId: string | null | undefined,
+  prefix: string
+) {
   if (!paymentId) return "-";
   return `${prefix}-${paymentId.slice(0, 8).toUpperCase()}`;
+}
+
+function getReferenceNumber(payment: PaymentTransactionRow | null) {
+  const info = getPaymentMetaInfo(payment?.metadata);
+
+  if (info.qrisReference) return info.qrisReference;
+  if (payment?.stripe_checkout_session_id) return payment.stripe_checkout_session_id;
+  if (payment?.stripe_payment_intent_id) return payment.stripe_payment_intent_id;
+  if (payment?.stripe_charge_id) return payment.stripe_charge_id;
+
+  return cleanReceiptPrefix(payment?.id, "PAY");
 }
 
 export default function AgentReceiptDetailPage() {
@@ -376,8 +448,8 @@ export default function AgentReceiptDetailPage() {
   const paymentId = Array.isArray(paymentIdRaw)
     ? paymentIdRaw[0]
     : typeof paymentIdRaw === "string"
-    ? paymentIdRaw
-    : "";
+      ? paymentIdRaw
+      : "";
 
   const [payment, setPayment] = useState<PaymentTransactionRow | null>(null);
   const [membership, setMembership] = useState<AgentMembershipRow | null>(null);
@@ -532,7 +604,10 @@ export default function AgentReceiptDetailPage() {
   }, [payment]);
 
   const discountAmount = useMemo(() => {
-    return formatAmount(payment?.amount_discount ?? 0, payment?.currency ?? "idr");
+    return formatAmount(
+      payment?.amount_discount ?? 0,
+      payment?.currency ?? "idr"
+    );
   }, [payment]);
 
   const taxAmount = useMemo(() => {
@@ -566,8 +641,8 @@ export default function AgentReceiptDetailPage() {
   ]);
 
   const referenceNumber = useMemo(() => {
-    return cleanReceiptPrefix(payment?.id, "PAY");
-  }, [payment?.id]);
+    return getReferenceNumber(payment);
+  }, [payment]);
 
   const productTitle = useMemo(() => {
     return cleanText(
@@ -605,8 +680,8 @@ export default function AgentReceiptDetailPage() {
   }, [payment, membership]);
 
   const paymentMethod = useMemo(() => {
-    return getPaymentMethod();
-  }, []);
+    return getPaymentMethod(payment, currentLang);
+  }, [payment, currentLang]);
 
   const customerName = useMemo(() => {
     return cleanText(payment?.customer_name || payment?.customer_email);
@@ -858,8 +933,8 @@ export default function AgentReceiptDetailPage() {
                               ? "Aktif"
                               : "Enabled"
                             : currentLang === "id"
-                            ? "Tidak aktif"
-                            : "Disabled"}
+                              ? "Tidak aktif"
+                              : "Disabled"}
                         </span>
                       </div>
                     </div>

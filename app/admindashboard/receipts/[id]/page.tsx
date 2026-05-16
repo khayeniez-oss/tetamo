@@ -155,6 +155,53 @@ function paymentStatusLabel(status: PaymentStatus) {
   }
 }
 
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const qrisReference =
+    String(
+      meta.hitpay_reference_number ||
+        meta.hitpay_payment_request_id ||
+        qrisMeta.reference_number ||
+        qrisMeta.payment_request_id ||
+        qrisMeta.payment_id ||
+        ""
+    ).trim() || "";
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return { isQris, qrisReference };
+}
+
+function sanitizePublicPaymentText(value: unknown) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment")
+    .trim();
+}
+
 function humanizePaymentType(value?: string | null) {
   const v = String(value || "").toLowerCase();
 
@@ -168,12 +215,22 @@ function humanizePaymentType(value?: string | null) {
   return "Payment";
 }
 
-function humanizePaymentMethod() {
+function humanizePaymentMethod(payment: PaymentTransactionRow | null) {
+  const info = getPaymentMetaInfo(payment?.metadata);
+
+  if (info.isQris) return "Paid by QRIS";
+
   return "Debit / Credit Card";
 }
 
 function getReceiptNumber(payment: PaymentTransactionRow | null) {
   if (!payment) return "-";
+
+  const info = getPaymentMetaInfo(payment.metadata);
+
+  if (info.qrisReference) {
+    return `RCT-${info.qrisReference}`;
+  }
 
   if (payment.stripe_charge_id?.trim()) {
     return `RCT-${payment.stripe_charge_id.trim()}`;
@@ -203,10 +260,14 @@ function getInvoiceNumber(payment: PaymentTransactionRow | null) {
 function getReference(payment: PaymentTransactionRow | null) {
   if (!payment) return "-";
 
+  const info = getPaymentMetaInfo(payment.metadata);
+
   return (
+    info.qrisReference ||
     payment.stripe_charge_id ||
     payment.stripe_payment_intent_id ||
     payment.stripe_checkout_session_id ||
+    payment.id ||
     "-"
   );
 }
@@ -367,11 +428,12 @@ export default function AdminReceiptDetailPage() {
     .filter(Boolean)
     .join(", ");
 
-  const paymentTitle =
+  const paymentTitle = sanitizePublicPaymentText(
     payment.product_name_snapshot ||
-    payment.description ||
-    humanizePaymentType(payment.payment_type) ||
-    "-";
+      payment.description ||
+      humanizePaymentType(payment.payment_type) ||
+      "-"
+  );
 
   const notes =
     String(
@@ -491,7 +553,7 @@ export default function AdminReceiptDetailPage() {
                   Payment Method
                 </p>
                 <p className="mt-1 break-words text-[12px] font-medium text-[#1C1C1E] sm:text-sm">
-                  {humanizePaymentMethod()}
+                  {humanizePaymentMethod(payment)}
                 </p>
               </div>
 
@@ -580,7 +642,7 @@ export default function AdminReceiptDetailPage() {
               Notes
             </p>
             <p className="mt-2 whitespace-pre-line text-[12px] leading-6 text-gray-600 sm:mt-3 sm:text-base sm:leading-7">
-              {notes}
+              {sanitizePublicPaymentText(notes)}
             </p>
           </div>
 

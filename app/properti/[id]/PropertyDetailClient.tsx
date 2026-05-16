@@ -33,6 +33,9 @@ import {
   Clock,
   Share2,
   Eye,
+  Flag,
+  ShieldAlert,
+  UserRound,
 } from "lucide-react";
 
 type RentalType = "daily" | "monthly" | "yearly" | "";
@@ -2466,6 +2469,36 @@ Is this property still available?`;
       : property.description || property.descriptionId;
 
   const structuredDescription = getStructuredDescription(activeDescription, lang);
+
+const reportLocation = `${property.area}, ${property.province}`;
+
+const reportListingHref = `/report/listing?property_id=${encodeURIComponent(
+  property.id
+)}&listing_code=${encodeURIComponent(
+  property.kodeListing || ""
+)}&title=${encodeURIComponent(activeTitle || "")}&location=${encodeURIComponent(
+  reportLocation
+)}`;
+
+const reporterRoleLabel =
+  property.postedByType === "owner"
+    ? lang === "id"
+      ? "Pemilik"
+      : "Owner"
+    : property.postedByType === "developer"
+      ? "Developer"
+      : lang === "id"
+        ? "Agen"
+        : "Agent";
+
+const reportUserHref = `/report/user?reported_user_id=${encodeURIComponent(
+  property.receiverId || ""
+)}&name=${encodeURIComponent(
+  property.receiverName || property.agentName || "Tetamo User"
+)}&role=${encodeURIComponent(
+  reporterRoleLabel
+)}&listing_code=${encodeURIComponent(property.kodeListing || "")}`;
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -2701,6 +2734,70 @@ Is this property still available?`;
               >
                 Schedule Viewing
               </button>
+
+              <div className="mt-5 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#B8860B]/30 bg-[#B8860B]/10">
+                    <ShieldAlert className="h-5 w-5 text-[#B8860B]" />
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-bold text-[#1C1C1E]">
+                      {lang === "id" ? "Keamanan & Laporan" : "Safety & Reports"}
+                    </h3>
+
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      {lang === "id"
+                        ? "Laporkan listing atau pengguna yang mencurigakan."
+                        : "Report suspicious listings or users."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  <Link
+                    href={reportListingHref}
+                    className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3 transition hover:border-[#B8860B]/50 hover:bg-white"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#B8860B]/30 bg-white text-[#B8860B]">
+                      <Flag className="h-4 w-4" />
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold text-[#1C1C1E]">
+                        {lang === "id" ? "Laporkan listing" : "Report this listing"}
+                      </div>
+
+                      <div className="mt-0.5 text-[11px] leading-4 text-gray-500">
+                        {lang === "id"
+                          ? "Listing palsu atau detail salah"
+                          : "Fake listing or wrong details"}
+                      </div>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href={reportUserHref}
+                    className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3 transition hover:border-[#B8860B]/50 hover:bg-white"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#B8860B]/30 bg-white text-[#B8860B]">
+                      <UserRound className="h-4 w-4" />
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold text-[#1C1C1E]">
+                        {lang === "id" ? "Laporkan pengguna" : "Report this user"}
+                      </div>
+
+                      <div className="mt-0.5 text-[11px] leading-4 text-gray-500">
+                        {lang === "id"
+                          ? "Agen/user mencurigakan"
+                          : "Suspicious user or agent"}
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </div>

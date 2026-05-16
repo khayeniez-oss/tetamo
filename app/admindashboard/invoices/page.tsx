@@ -57,6 +57,7 @@ type Invoice = {
   amount: string;
   date: string;
   status: InvoiceStatus;
+  method: string;
 };
 
 function formatAmount(value: number | null, currency: string | null) {
@@ -105,6 +106,57 @@ function normalizeStatus(status: string | null): InvoiceStatus {
   return "UNPAID";
 }
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
+function getPaymentMetaInfo(metadata: Record<string, any> | null | undefined) {
+  const meta = asObject(metadata);
+  const qrisMeta = asObject(meta.hitpay);
+
+  const gateway = String(
+    meta.gateway || meta.payment_gateway || qrisMeta.gateway || ""
+  ).toLowerCase();
+
+  const method = String(
+    meta.paymentMethod ||
+      meta.payment_method ||
+      qrisMeta.paymentMethod ||
+      qrisMeta.payment_method ||
+      ""
+  ).toLowerCase();
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      meta.hitpay_payment_request_id ||
+      meta.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number ||
+      qrisMeta.payment_id
+  );
+
+  return { isQris };
+}
+
+function sanitizePublicPaymentText(value: unknown) {
+  return String(value || "")
+    .replace(/stripe/gi, "secure payment")
+    .replace(/xendit/gi, "payment provider")
+    .replace(/hitpay/gi, "secure payment")
+    .trim();
+}
+
+function humanizePaymentMethod(metadata: Record<string, any> | null | undefined) {
+  const info = getPaymentMetaInfo(metadata);
+
+  if (info.isQris) return "Paid by QRIS";
+
+  return "Debit / Credit Card";
+}
+
 function humanizePaymentType(value?: string | null) {
   const v = String(value || "").toLowerCase();
 
@@ -119,11 +171,13 @@ function humanizePaymentType(value?: string | null) {
 }
 
 function getPackageLabel(row: AdminInvoiceRow) {
-  if (row.description?.trim()) return row.description.trim();
-  if (row.plan_name?.trim()) return row.plan_name.trim();
-  if (row.property_title_snapshot?.trim()) return row.property_title_snapshot.trim();
-  if (row.payment_type?.trim()) return humanizePaymentType(row.payment_type);
-  return "-";
+  const label =
+    row.description?.trim() ||
+    row.plan_name?.trim() ||
+    row.property_title_snapshot?.trim() ||
+    (row.payment_type?.trim() ? humanizePaymentType(row.payment_type) : "-");
+
+  return sanitizePublicPaymentText(label) || "-";
 }
 
 function getInvoiceNumber(row: AdminInvoiceRow) {
@@ -222,6 +276,7 @@ export default function AdminInvoicesPage() {
         amount: formatAmount(row.amount_total ?? row.amount_subtotal ?? 0, row.currency),
         date: formatDate(row.paid_at || row.issued_at),
         status: normalizeStatus(row.invoice_status),
+        method: humanizePaymentMethod(row.metadata),
       }));
 
       setInvoices(mapped);
@@ -247,6 +302,7 @@ export default function AdminInvoicesPage() {
         ${invoice.listingCode}
         ${invoice.package}
         ${invoice.status}
+        ${invoice.method}
       `.toLowerCase();
 
       return words.every((w) => searchable.includes(w));
@@ -346,7 +402,16 @@ export default function AdminInvoicesPage() {
                       </p>
                     </div>
 
-                    <div className="col-span-2 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                        Method
+                      </p>
+                      <p className="mt-1 text-[12px] font-medium text-[#1C1C1E] sm:text-[13px]">
+                        {invoice.method}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
                         Date
                       </p>

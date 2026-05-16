@@ -124,12 +124,79 @@ function formatDateTime(
   }).format(date);
 }
 
-function humanizeGateway(lang: "id" | "en") {
+function getPaymentMetaInfo(metadata: Record<string, any>) {
+  const qrisMeta = asObject(metadata.hitpay);
+
+  const gateway = String(
+    metadata.gateway ||
+      metadata.payment_gateway ||
+      qrisMeta.gateway ||
+      ""
+  ).toLowerCase();
+
+  const method = String(
+    metadata.paymentMethod ||
+      metadata.payment_method ||
+      qrisMeta.payment_method ||
+      qrisMeta.paymentMethod ||
+      ""
+  ).toLowerCase();
+
+  const qrisReference =
+    String(
+      metadata.hitpay_reference_number ||
+        metadata.hitpay_payment_request_id ||
+        qrisMeta.reference_number ||
+        qrisMeta.payment_request_id ||
+        qrisMeta.payment_id ||
+        ""
+    ).trim() || "";
+
+  const isQris = Boolean(
+    method === "qris" ||
+      gateway === "hitpay" ||
+      metadata.hitpay_payment_request_id ||
+      metadata.hitpay_reference_number ||
+      qrisMeta.payment_request_id ||
+      qrisMeta.reference_number
+  );
+
+  return {
+    isQris,
+    qrisReference,
+  };
+}
+
+function humanizeGateway(metadata: Record<string, any>, lang: "id" | "en") {
+  const info = getPaymentMetaInfo(metadata);
+
+  if (info.isQris) {
+    return "QRIS";
+  }
+
   return lang === "id" ? "Card Checkout" : "Card Checkout";
 }
 
-function humanizePaymentMethod(lang: "id" | "en") {
-  return lang === "id" ? "Debit / Credit Card" : "Debit / Credit Card";
+function humanizePaymentMethod(
+  metadata: Record<string, any>,
+  lang: "id" | "en"
+) {
+  const info = getPaymentMetaInfo(metadata);
+
+  if (info.isQris) {
+    return lang === "id" ? "Dibayar dengan QRIS" : "Paid by QRIS";
+  }
+
+  return "Debit / Credit Card";
+}
+
+function getPaymentReference(row: PaymentRow, metadata: Record<string, any>) {
+  const info = getPaymentMetaInfo(metadata);
+
+  if (info.qrisReference) return info.qrisReference;
+  if (row.stripe_checkout_session_id) return row.stripe_checkout_session_id;
+
+  return row.id;
 }
 
 function buildOwnerTitle(
@@ -312,7 +379,7 @@ export default function PemilikTagihanPage() {
           receiptMissing: "Receipt belum tersedia untuk tagihan ini.",
           invoiceMissing: "Invoice belum tersedia untuk tagihan ini.",
           paidSuccessBanner:
-            "Pembayaran berhasil. Receipt dan invoice akan tampil di sini jika sudah tersedia dari Stripe.",
+            "Pembayaran berhasil. Receipt dan invoice akan tampil di sini jika sudah tersedia.",
           cancelledBanner:
             "Pembayaran dibatalkan atau belum diselesaikan.",
           noteTitle: "Catatan",
@@ -349,7 +416,7 @@ export default function PemilikTagihanPage() {
           receiptMissing: "Receipt is not available for this billing record.",
           invoiceMissing: "Invoice is not available for this billing record.",
           paidSuccessBanner:
-            "Payment successful. Receipt and invoice will appear here once available from Stripe.",
+            "Payment successful. Receipt and invoice will appear here once available.",
           cancelledBanner:
             "The payment was cancelled or has not been completed.",
           noteTitle: "Note",
@@ -454,13 +521,13 @@ export default function PemilikTagihanPage() {
           amount: Number(row.amount_total || 0),
           currency: row.currency || "IDR",
           status: normalizeStatus(row.status),
-          gateway: humanizeGateway(currentLang),
-          paymentMethod: humanizePaymentMethod(currentLang),
+          gateway: humanizeGateway(metadata, currentLang),
+          paymentMethod: humanizePaymentMethod(metadata, currentLang),
           checkoutUrl: row.checkout_url || "",
           receiptUrl: row.receipt_url || "",
           invoiceUrl: row.hosted_invoice_url || row.invoice_pdf_url || "",
           autoRenew: Boolean(metadata.autoRenew || false),
-          reference: row.stripe_checkout_session_id || "-",
+          reference: getPaymentReference(row, metadata),
           paidAt: row.paid_at,
           expiresAt: row.checkout_expires_at,
           createdAtRaw: row.created_at,
@@ -591,7 +658,9 @@ export default function PemilikTagihanPage() {
         </div>
 
         {isLoading ? (
-          <div className="p-4 text-sm text-gray-500 sm:p-6">{t.loadingBills}</div>
+          <div className="p-4 text-sm text-gray-500 sm:p-6">
+            {t.loadingBills}
+          </div>
         ) : errorMessage ? (
           <div className="p-4 text-sm text-red-600 sm:p-6">
             {t.loadFailed} {errorMessage}
@@ -606,7 +675,7 @@ export default function PemilikTagihanPage() {
               const normalizedStatus =
                 bill.status === "checkout_created" ? "pending" : bill.status;
               const canContinue =
-                (normalizedStatus === "pending") && Boolean(bill.checkoutUrl);
+                normalizedStatus === "pending" && Boolean(bill.checkoutUrl);
               const canViewReceipt = Boolean(bill.receiptUrl);
               const canViewInvoice = Boolean(bill.invoiceUrl);
 
