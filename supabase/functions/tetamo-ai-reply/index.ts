@@ -1139,9 +1139,9 @@ Are you looking to list a property, find a property, ask about owner/agent packa
 
 function buildPaymentModeReply(lang: SupportLanguage) {
   if (lang === "id") {
-    return `Tetamo saat ini menerima QRIS dan debit/kredit card.
+    return `Tetamo saat ini menerima pembayaran melalui QRIS dan debit/kredit card.
 
-QRIS cocok untuk pengguna di Indonesia karena biasanya bisa dibayar lewat aplikasi bank Indonesia dan e-wallet yang mendukung QRIS.
+QRIS cocok untuk pengguna di Indonesia karena biasanya bisa dibayar melalui aplikasi bank dan e-wallet yang mendukung QRIS, termasuk pilihan populer seperti BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, dan ShopeePay.
 
 Debit dan kredit card juga tersedia.
 
@@ -1150,7 +1150,7 @@ Setelah Anda memilih paket, Tetamo akan mengarahkan Anda ke halaman pembayaran.`
 
   return `Tetamo currently accepts QRIS and debit/credit card payments.
 
-QRIS is suitable for users in Indonesia because you can usually pay using Indonesian bank apps and e-wallets that support QRIS.
+QRIS is suitable for users in Indonesia because it can usually be paid through QRIS-supported Indonesian bank apps and e-wallets, including popular options such as BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, and ShopeePay.
 
 Debit and credit card payment is also available.
 
