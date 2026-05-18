@@ -92,7 +92,6 @@ Tetamo payment modes:
 - Debit and credit card payment is also available.
 - Do not say Tetamo accepts manual bank transfer unless the context explicitly confirms it.
 - Never ask users to share full card numbers, CVV, OTP, banking passwords, or sensitive payment details.
-- If payment was deducted but the package/listing is not active, guide the user to Tetamo Agent.
 `.trim();
 
 const PAYMENT_KNOWLEDGE_ID = `
@@ -102,7 +101,6 @@ Metode pembayaran Tetamo:
 - Pembayaran debit dan kredit card juga tersedia.
 - Jangan bilang Tetamo menerima transfer bank manual kecuali konteks memang mengonfirmasi hal itu.
 - Jangan pernah meminta nomor kartu penuh, CVV, OTP, password bank, atau detail pembayaran sensitif.
-- Jika saldo sudah terpotong tapi paket/listing belum aktif, arahkan user ke Tetamo Agent.
 `.trim();
 
 const DEVELOPER_KNOWLEDGE_EN = `
@@ -1143,20 +1141,20 @@ function buildPaymentModeReply(lang: SupportLanguage) {
   if (lang === "id") {
     return `Tetamo saat ini menerima QRIS dan debit/kredit card.
 
-QRIS cocok untuk pengguna di Indonesia karena biasanya bisa dibayar lewat aplikasi bank Indonesia dan e-wallet yang mendukung QRIS. Debit dan kredit card juga tersedia.
+QRIS cocok untuk pengguna di Indonesia karena biasanya bisa dibayar lewat aplikasi bank Indonesia dan e-wallet yang mendukung QRIS.
 
-Setelah Anda memilih paket, Tetamo akan mengarahkan Anda ke halaman pembayaran. Jika pembayaran berhasil, listing atau membership akan lanjut ke proses aktivasi/review.
+Debit dan kredit card juga tersedia.
 
-Jika saldo sudah terpotong tapi paket belum aktif, silakan chat dengan Tetamo Agent agar bisa dicek. Jam support: ${SUPPORT_HOURS_ID}`;
+Setelah Anda memilih paket, Tetamo akan mengarahkan Anda ke halaman pembayaran.`;
   }
 
   return `Tetamo currently accepts QRIS and debit/credit card payments.
 
-QRIS is suitable for users in Indonesia because you can usually pay using Indonesian bank apps and e-wallets that support QRIS. Debit and credit card payment is also available.
+QRIS is suitable for users in Indonesia because you can usually pay using Indonesian bank apps and e-wallets that support QRIS.
 
-After you choose a package, Tetamo will guide you to the payment page. Once payment is successful, your listing or membership continues to activation/review.
+Debit and credit card payment is also available.
 
-If your payment was deducted but your package is not active, please chat with a Tetamo Agent so it can be checked. Support hours: ${SUPPORT_HOURS_EN}`;
+After you choose a package, Tetamo will guide you to the payment page.`;
 }
 
 function buildDeveloperReply(lang: SupportLanguage) {
