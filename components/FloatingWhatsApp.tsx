@@ -52,7 +52,7 @@ export default function FloatingWhatsApp() {
   const [userId, setUserId] = useState<string | null>(null);
 
   const [conversation, setConversation] = useState<SupportConversation | null>(
-    null
+    null,
   );
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [input, setInput] = useState("");
@@ -128,8 +128,10 @@ export default function FloatingWhatsApp() {
     if (!open) return;
 
     if (typeof window !== "undefined") {
-      const savedGuestSessionId = window.localStorage.getItem(GUEST_SESSION_KEY);
-      const savedGuestMessages = window.localStorage.getItem(GUEST_MESSAGES_KEY);
+      const savedGuestSessionId =
+        window.localStorage.getItem(GUEST_SESSION_KEY);
+      const savedGuestMessages =
+        window.localStorage.getItem(GUEST_MESSAGES_KEY);
 
       if (savedGuestSessionId) {
         setGuestSessionId(savedGuestSessionId);
@@ -155,7 +157,7 @@ export default function FloatingWhatsApp() {
       const { data, error } = await supabase
         .from("support_conversations")
         .select(
-          "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at"
+          "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
         )
         .eq("user_id", userId)
         .eq("status", "open")
@@ -201,19 +203,22 @@ export default function FloatingWhatsApp() {
 
   function persistGuestState(
     nextGuestSessionId: string,
-    nextMessages: SupportMessage[]
+    nextMessages: SupportMessage[],
   ) {
     if (typeof window === "undefined") return;
 
     window.localStorage.setItem(GUEST_SESSION_KEY, nextGuestSessionId);
-    window.localStorage.setItem(GUEST_MESSAGES_KEY, JSON.stringify(nextMessages));
+    window.localStorage.setItem(
+      GUEST_MESSAGES_KEY,
+      JSON.stringify(nextMessages),
+    );
   }
 
   async function refreshConversation(conversationId: string) {
     const { data, error } = await supabase
       .from("support_conversations")
       .select(
-        "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at"
+        "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
       )
       .eq("id", conversationId)
       .maybeSingle();
@@ -234,7 +239,7 @@ export default function FloatingWhatsApp() {
     const { data, error } = await supabase
       .from("support_messages")
       .select(
-        "id, conversation_id, sender_type, message_text, ai_status, suggested_action, suggested_action_label, created_at"
+        "id, conversation_id, sender_type, message_text, ai_status, suggested_action, suggested_action_label, created_at",
       )
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
@@ -259,7 +264,7 @@ export default function FloatingWhatsApp() {
       const { data: existing, error: existingError } = await supabase
         .from("support_conversations")
         .select(
-          "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at"
+          "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
         )
         .eq("user_id", userId)
         .eq("status", "open")
@@ -282,7 +287,7 @@ export default function FloatingWhatsApp() {
             handoff_status: "ai_active",
           })
           .select(
-            "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at"
+            "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
           )
           .maybeSingle();
 
@@ -305,7 +310,7 @@ export default function FloatingWhatsApp() {
         err?.message ||
           (isID
             ? "Tidak dapat memulai chat saat ini."
-            : "Unable to start chat right now.")
+            : "Unable to start chat right now."),
       );
       return null;
     } finally {
@@ -331,7 +336,7 @@ export default function FloatingWhatsApp() {
         "scorpio-assist-guest",
         {
           body,
-        }
+        },
       );
 
       if (error) throw error;
@@ -358,7 +363,7 @@ export default function FloatingWhatsApp() {
         err?.message ||
           (isID
             ? "Pesan guest gagal dikirim."
-            : "Guest message failed to send.")
+            : "Guest message failed to send."),
       );
     } finally {
       setSending(false);
@@ -405,7 +410,7 @@ export default function FloatingWhatsApp() {
       console.error("Failed to send message:", err);
       setError(
         err?.message ||
-          (isID ? "Pesan gagal dikirim." : "Message failed to send.")
+          (isID ? "Pesan gagal dikirim." : "Message failed to send."),
       );
     } finally {
       setSending(false);
@@ -453,7 +458,7 @@ export default function FloatingWhatsApp() {
         err?.message ||
           (isID
             ? "Gagal meminta bantuan Tetamo Agent."
-            : "Failed to request a Tetamo Agent.")
+            : "Failed to request a Tetamo Agent."),
       );
     } finally {
       setHandoffLoading(false);
@@ -531,7 +536,9 @@ export default function FloatingWhatsApp() {
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 px-3 py-2.5 backdrop-blur">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/70">
-                {isID ? "Jam support Tetamo Agent" : "Tetamo Agent support hours"}
+                {isID
+                  ? "Jam support Tetamo Agent"
+                  : "Tetamo Agent support hours"}
               </p>
               <p className="mt-1 text-xs leading-5 text-white/90">
                 {supportHours}
@@ -557,7 +564,8 @@ export default function FloatingWhatsApp() {
               messages.map((message) => {
                 const isUser = message.sender_type === "user";
                 const isAi = message.sender_type === "ai";
-                const isLatestAiMessage = isAi && message.id === latestAiMessageId;
+                const isLatestAiMessage =
+                  isAi && message.id === latestAiMessageId;
                 const feedbackChoice = aiFeedbackMap[message.id];
 
                 return (
@@ -585,7 +593,9 @@ export default function FloatingWhatsApp() {
                           </div>
                         ) : null}
 
-                        <p className="whitespace-pre-line">{message.message_text}</p>
+                        <p className="whitespace-pre-line">
+                          {message.message_text}
+                        </p>
                       </div>
 
                       <div
@@ -628,7 +638,9 @@ export default function FloatingWhatsApp() {
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             <button
                               type="button"
-                              onClick={() => handleAiFeedback(message.id, "yes")}
+                              onClick={() =>
+                                handleAiFeedback(message.id, "yes")
+                              }
                               className={[
                                 "rounded-2xl px-3 py-2 text-xs font-semibold transition",
                                 feedbackChoice === "yes"
@@ -649,7 +661,9 @@ export default function FloatingWhatsApp() {
                                   : "border border-[#E5E7EB] bg-white text-[#1C1C1E] hover:bg-[#FAFAFA]",
                               ].join(" ")}
                             >
-                              {isID ? "Belum, butuh bantuan" : "No, I need more help"}
+                              {isID
+                                ? "Belum, butuh bantuan"
+                                : "No, I need more help"}
                             </button>
                           </div>
 
@@ -784,9 +798,7 @@ export default function FloatingWhatsApp() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={
-                  isID
-                    ? "Tulis pertanyaan Anda..."
-                    : "Write your question..."
+                  isID ? "Tulis pertanyaan Anda..." : "Write your question..."
                 }
                 className="max-h-28 min-h-[50px] flex-1 resize-none rounded-[22px] border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#1C1C1E] outline-none placeholder:text-[#8E8E93] focus:border-[#111827] focus:ring-4 focus:ring-black/5"
               />
@@ -810,7 +822,9 @@ export default function FloatingWhatsApp() {
               <button
                 type="button"
                 onClick={() => void handleHandoff()}
-                disabled={handoffLoading || waitingForAgent || loadingConversation}
+                disabled={
+                  handoffLoading || waitingForAgent || loadingConversation
+                }
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-amber-200 bg-[linear-gradient(180deg,#FFF8E8_0%,#FFFFFF_100%)] px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:opacity-95 disabled:opacity-60"
               >
                 {handoffLoading || loadingConversation ? (
