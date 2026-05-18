@@ -78,6 +78,41 @@ function getDisplayMessageText(value: string, lang: "en" | "id") {
   return raw;
 }
 
+function LinkifiedMessageText({
+  value,
+  lang,
+}: {
+  value: string;
+  lang: "en" | "id";
+}) {
+  const displayText = getDisplayMessageText(value, lang);
+  const parts = displayText.split(/(https?:\/\/[^\s]+)/g);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        const isUrl = /^https?:\/\/[^\s]+$/.test(part);
+
+        if (!isUrl) {
+          return <span key={`text-${index}`}>{part}</span>;
+        }
+
+        return (
+          <a
+            key={`url-${index}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-800"
+          >
+            {part}
+          </a>
+        );
+      })}
+    </>
+  );
+}
+
 export default function FloatingWhatsApp() {
   const { lang } = useLanguage();
   const isID = lang === "id";
