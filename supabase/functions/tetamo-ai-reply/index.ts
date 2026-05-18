@@ -196,7 +196,7 @@ Metode pembayaran Tetamo:
 const PLATFORM_KNOWLEDGE_EN = `
 Tetamo platform knowledge:
 - Buyer/renter can browse listings, view property details, contact owner/agent through WhatsApp, and schedule viewing when available.
-- Owner/seller can sign up, choose owner package, fill property form, upload photos/videos, use AI-generated title/description, verify/pay, and listing enters review/live flow.
+- Owner/seller can sign up, choose owner package, fill property form, upload photos/videos, use AI-generated title/description, verify/pay, and listing enters go-live step.
 - Agent/agency can sign up, choose Silver/Gold/Agent Pro, complete profile, manage active listings, leads, viewing schedule, billing/receipt, analytics, commission tracking, and Boost/Spotlight.
 - Developer/project owner can use Tetamo for project exposure, developer profile, multiple project/property listings, direct inquiries, and viewing interest. Developer pricing/license should be discussed with Tetamo.
 - Tetamo has website, mobile app, marketplace, dashboards, pricing page, FAQ, blog/articles, and education content.
@@ -206,7 +206,7 @@ Tetamo platform knowledge:
 const PLATFORM_KNOWLEDGE_ID = `
 Pengetahuan platform Tetamo:
 - Buyer/renter bisa mencari listing, melihat detail properti, menghubungi owner/agent melalui WhatsApp, dan membuat jadwal viewing jika tersedia.
-- Owner/seller bisa sign up, memilih paket owner, mengisi form properti, upload foto/video, menggunakan AI-generated title/description, verifikasi/bayar, lalu listing masuk proses review/live.
+- Owner/seller bisa sign up, memilih paket owner, mengisi form properti, upload foto/video, menggunakan AI-generated title/description, verifikasi/bayar, lalu listing masuk proses go live.
 - Agent/agency bisa sign up, memilih Silver/Gold/Agent Pro, melengkapi profil, mengelola listing aktif, leads, jadwal viewing, billing/receipt, analytics, tracking komisi, dan Boost/Spotlight.
 - Developer/project owner bisa menggunakan Tetamo untuk exposure proyek, profil developer, multiple project/property listings, direct inquiries, dan viewing interest. Harga/license developer perlu dibahas dengan Tetamo.
 - Tetamo memiliki website, mobile app, marketplace, dashboard, halaman harga, FAQ, blog/artikel, dan konten edukasi.
@@ -247,12 +247,26 @@ Rules:
 - For mobile/website support chat, produce answers that can be shown in English or Indonesian.
 - For WhatsApp, reply only in the user's message language because WhatsApp has no toggle.
 - Be sales-aware: after answering pricing/package/listing questions, recommend the next step.
-- Sales flow: sign up → choose role/package → fill profile/listing form → upload photos/videos when relevant → verify/pay → listing/dashboard enters review/live flow.
+- Sales flow: sign up → choose role/package → fill profile/listing form → upload photos/videos when relevant → verify/pay → listing/dashboard enters go-live step.
 - Never guarantee leads, sales, rentals, ROI, buyers, tenants, or income.
 - Do not proactively mention refunds, deducted payments, failed payments, invoice problems, or package activation problems unless the user specifically reports a problem.
 - Never ask for OTP, CVV, full card number, banking password, or private financial credentials.
 - Suggest Tetamo Agent only for account-specific issues, private support cases, payment problems explicitly reported by the user, refund/invoice issues, developer pricing/license discussion, or when user asks for human help.
-- Keep replies clear, practical, professional, and mobile-friendly.
+- Keep replies clear, practical, professional, friendly, warm, sales-aware, and mobile-friendly.
+- Sound like a helpful human assistant, not a manual, script, robot, legal page, or internal admin system.
+- Use natural conversation. Be confident, warm, and easy to understand.
+- Avoid stiff phrases like "flow", "go-live step", "activation flow", "process flow", "enters go live", or "dashboard flow".
+- Use human wording such as:
+  - "It’s easy to get started."
+  - "After payment, your listing can go live after Tetamo’s quick review."
+  - "After payment, your agent dashboard becomes active and you can start adding listings."
+  - "Would you like to continue as an owner or agent?"
+  - "I can guide you through the next step."
+- When explaining steps, do not sound like a technical checklist. Explain naturally and guide the user forward.
+- For pricing/package answers, include a soft sales close, but do not pressure the user.
+- For support answers, be calm and reassuring.
+- For Tetamo identity/company answers, be clear and confident.
+- Never sound like you are guessing.
 `.trim();
 
 function normalize(text: string) {
@@ -849,7 +863,7 @@ Tetamo memiliki company presence / office di Sydney, Australia, dan beroperasi s
 Tetamo bukan agency properti atau broker, dan tidak mengambil komisi dari transaksi jual/sewa properti. Tetamo membantu pengguna melalui verified listings, direct WhatsApp inquiry, jadwal viewing, AI-assisted listing tools, dashboard, paket, blog/artikel, edukasi, dan marketing exposure.
 
 Jika Anda ingin mulai menggunakan Tetamo, alurnya mudah:
-Sign up → pilih role owner/agent/developer → pilih paket jika diperlukan → buat listing/profil → ikuti step verifikasi dan pembayaran → listing masuk proses review/live.`;
+Sign up → pilih role owner/agent/developer → pilih paket jika diperlukan → buat listing/profil → ikuti step verifikasi dan pembayaran → listing masuk proses go live.`;
   }
 
   return `Tetamo is an Australian-based SaaS business serving Indonesia's property market through a digital property marketplace platform.
@@ -861,7 +875,7 @@ Tetamo has company presence / office in Sydney, Australia, and operates digitall
 Tetamo is not a real estate agency or broker, and it does not take commission from property sale/rental transactions. Tetamo helps users through verified listings, direct WhatsApp inquiries, viewing schedules, AI-assisted listing tools, dashboards, packages, blog/articles, education content, and marketing exposure.
 
 If you want to start using Tetamo, the flow is simple:
-Sign up → choose owner/agent/developer role → choose a package if needed → create your listing/profile → follow verification and payment steps → listing enters review/live flow.`;
+Sign up → choose owner/agent/developer role → choose a package if needed → create your listing/profile → follow verification and payment steps → listing enters go-live step.`;
 }
 
 function buildGreetingReply(lang: SupportLanguage) {
@@ -902,7 +916,7 @@ QRIS cocok untuk pengguna di Indonesia karena biasanya bisa dibayar melalui apli
 
 Debit dan kredit card juga tersedia.
 
-Setelah Anda memilih paket, Tetamo akan mengarahkan Anda ke halaman pembayaran.`;
+Setelah Anda memilih paket, Tetamo akan mengarahkan Anda ke halaman pembayaran agar prosesnya mudah.`;
   }
 
   return `Tetamo currently accepts QRIS and debit/credit card payments.
@@ -911,7 +925,7 @@ QRIS is suitable for users in Indonesia because it can usually be paid through Q
 
 Debit and credit card payment is also available.
 
-After you choose a package, Tetamo will guide you to the payment page.`;
+Once you choose a package, Tetamo will guide you to the payment page so you can complete it easily.`;
 }
 
 function buildDeveloperReply(lang: SupportLanguage) {
@@ -920,7 +934,7 @@ function buildDeveloperReply(lang: SupportLanguage) {
 
 Harga developer tidak sama dengan paket owner atau agent karena biasanya tergantung kebutuhan proyek, volume listing, dan license/use arrangement.
 
-Alur awal:
+Untuk mulai:
 1. Hubungi Tetamo
 2. Jelaskan proyek dan volume listing
 3. Diskusikan kebutuhan exposure/marketplace
@@ -933,7 +947,7 @@ Untuk developer pricing/license, sebaiknya lanjut chat dengan Tetamo Agent. Jam 
 
 Developer pricing is not the same as owner or agent packages because it usually depends on project needs, listing volume, and license/use arrangement.
 
-Starting flow:
+To get started:
 1. Contact Tetamo
 2. Explain your project and listing volume
 3. Discuss exposure/marketplace needs
@@ -994,7 +1008,7 @@ The setup is simple:
 3. Fill in the property listing form
 4. Upload photos/videos
 5. Follow the verification and payment steps
-6. The listing enters review and can go live after approval
+6. The listing can go live after Tetamo’s quick review
 
 If you want to start simple, Basic is enough. If you want stronger exposure, Priority is better. If you want the highest visibility plus social media posting, Featured is the best choice.
 
@@ -1020,7 +1034,7 @@ Alur setup sangat mudah:
 3. Lengkapi profil agent
 4. Mulai tambah listing properti
 5. Ikuti step pembayaran
-6. Dashboard agent aktif dan listing bisa masuk proses review/live
+6. Dashboard agent aktif dan listing bisa masuk proses go live
 
 Jika Anda baru mulai, Silver cukup untuk membangun presence. Jika Anda punya banyak listing, Gold atau Agent Pro memberi value lebih besar per listing dan fitur exposure lebih kuat.
 
@@ -1044,11 +1058,11 @@ The setup is simple:
 3. Complete your agent profile
 4. Start adding property listings
 5. Follow the payment steps
-6. Your agent dashboard becomes active and listings can enter review/live flow
+6. Your agent dashboard becomes active and listings can enter go-live step
 
 If you are starting, Silver is enough to build your presence. If you manage many listings, Gold or Agent Pro gives stronger value per listing and better exposure features.
 
-Would you like to proceed with agent signup and choose a package?
+Would you like to start as an agent? I can guide you to the best package for your listings.
 
 See agent packages:
 ${PRICELIST_URL}#agent-packages`;
@@ -1457,7 +1471,7 @@ Pembayaran tersedia melalui QRIS dan debit/kredit card. QRIS biasanya bisa digun
 
 Jika ingin mulai sederhana, Basic cukup. Jika ingin exposure paling kuat, Featured adalah pilihan terbaik.
 
-Apakah Anda ingin lanjut sign up dan pilih paket owner?
+Apakah Anda ingin mulai sebagai owner? Saya bisa bantu arahkan paket yang paling cocok.
 
 Lihat paket owner:
 ${pricingUrl}`;
@@ -1477,13 +1491,13 @@ Alur setup sangat mudah:
 3. Lengkapi profil agent
 4. Mulai tambah listing properti
 5. Ikuti step pembayaran
-6. Dashboard agent aktif dan listing bisa masuk proses review/live
+6. Dashboard agent aktif dan listing bisa masuk proses go live
 
 Silver cocok untuk mulai tampil profesional. Gold cocok untuk agent aktif dengan banyak listing. Agent Pro cocok untuk agent/agency yang ingin scale lebih besar dan exposure premium.
 
 Pembayaran tersedia melalui QRIS dan debit/kredit card.
 
-Apakah Anda ingin lanjut sign up dan pilih paket agent?
+Apakah Anda ingin mulai sebagai agent? Saya bisa bantu arahkan paket terbaik sesuai jumlah listing Anda.
 
 Lihat paket agent:
 ${pricingUrl}`;
@@ -1529,8 +1543,8 @@ Paket agent:
 - Agent Pro: Rp3.999.000/tahun untuk 500 listing aktif.
 - Agent Pro opsi bulanan: Rp399.000/bulan dengan komitmen 12 bulan.
 
-Alur mudah:
-Sign up → pilih paket → isi form listing/profil → upload foto/video → bayar → listing/dashboard aktif setelah proses review.
+Mudah untuk mulai:
+Sign up → pilih paket → isi form listing/profil → upload foto/video → bayar → listing atau dashboard Anda aktif setelah pembayaran dan review singkat dari Tetamo.
 
 Pembayaran tersedia melalui QRIS dan debit/kredit card.
 
@@ -1553,13 +1567,13 @@ The setup is simple:
 3. Fill in the property listing form
 4. Upload photos/videos
 5. Follow the verification and payment steps
-6. The listing enters review and can go live after approval
+6. The listing can go live after Tetamo’s quick review
 
 Payment is available through QRIS and debit/credit card. QRIS can usually be used through QRIS-supported Indonesian bank apps and e-wallets such as BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, and ShopeePay.
 
 If you want to start simple, Basic is enough. If you want the strongest exposure, Featured is the best choice.
 
-Would you like to proceed with owner signup and choose a package?
+Would you like to start as an owner? I can guide you to the right package.
 
 See owner packages:
 ${pricingUrl}`;
@@ -1579,13 +1593,13 @@ The setup is simple:
 3. Complete your agent profile
 4. Start adding property listings
 5. Follow the payment steps
-6. Your agent dashboard becomes active and listings can enter review/live flow
+6. Your agent dashboard becomes active and listings can enter go-live step
 
 Silver is good if you are starting professionally. Gold is better for active agents with more listings. Agent Pro is best for agents/agencies that want to scale bigger with premium exposure.
 
 Payment is available through QRIS and debit/credit card.
 
-Would you like to proceed with agent signup and choose a package?
+Would you like to start as an agent? I can guide you to the best package for your listings.
 
 See agent packages:
 ${pricingUrl}`;
@@ -1631,8 +1645,8 @@ Agent packages:
 - Agent Pro: Rp3,999,000/year for 500 active listings.
 - Agent Pro monthly option: Rp399,000/month with a 12-month commitment.
 
-Easy flow:
-Sign up → choose package → fill form/profile → upload photos/videos → pay → listing/dashboard activates after review.
+It’s easy to get started:
+Sign up → choose package → fill form/profile → upload photos/videos → pay → your listing or dashboard becomes active after payment and Tetamo’s quick review.
 
 Payment is available through QRIS and debit/credit card.
 
@@ -1784,7 +1798,7 @@ Rules:
     input: userPrompt,
   });
 
-  return removeOldPricingLines(String(response.output_text || "").trim());
+  return humanizeScorpioReply(String(response.output_text || "").trim(), lang);
 }
 
 async function buildSupportReply(params: {
@@ -1847,6 +1861,52 @@ async function buildSupportReply(params: {
   }
 
   return { text: buildFallbackHelpReply(lang) };
+}
+
+function humanizeScorpioReply(text: string, lang: SupportLanguage) {
+  let value = removeOldPricingLines(String(text || "").trim());
+
+  const replacements: Array<[string, string]> = [
+    ["review/live flow", "go-live step"],
+    ["live/review flow", "go-live step"],
+    ["activation/review", "next step"],
+    ["enters review/live flow", "can move toward going live"],
+    ["can enter review/live flow", "can move toward going live"],
+    [
+      "listing/dashboard activates after review",
+      "your listing or dashboard becomes active after payment and Tetamo’s quick review",
+    ],
+    [
+      "Your agent dashboard becomes active and listings can enter review/live flow",
+      "After payment, your agent dashboard becomes active and you can start adding listings",
+    ],
+    [
+      "Dashboard agent aktif dan listing bisa masuk proses review/live",
+      "Setelah pembayaran, dashboard agent Anda aktif dan Anda bisa mulai menambahkan listing",
+    ],
+    [
+      "listing/dashboard aktif setelah proses review",
+      "listing atau dashboard Anda aktif setelah pembayaran dan review singkat dari Tetamo",
+    ],
+  ];
+
+  for (const [oldText, newText] of replacements) {
+    value = value.split(oldText).join(newText);
+  }
+
+  if (lang === "id") {
+    value = value
+      .replace("Alur mudah:", "Mudah untuk mulai:")
+      .replace("Alur setup sangat mudah:", "Mudah untuk mulai:")
+      .replace("Untuk mulai:", "Untuk mulai:");
+  } else {
+    value = value
+      .replace("Easy flow:", "It’s easy to get started:")
+      .replace("The setup is simple:", "It’s easy to get started:")
+      .replace("Starting flow:", "To get started:");
+  }
+
+  return value.trim();
 }
 
 async function generateTwilioWhatsAppReply(question: string) {
@@ -1992,8 +2052,11 @@ async function handleWebsiteSupportAi(req: Request) {
     historyText,
   });
 
-  let aiText = removeOldPricingLines(result.text);
-  let alternateAiText = removeOldPricingLines(alternateResult.text);
+  let aiText = humanizeScorpioReply(result.text, lang);
+  let alternateAiText = humanizeScorpioReply(
+    alternateResult.text,
+    alternateLang,
+  );
 
   if (!aiText) aiText = buildFallbackHelpReply(lang);
   if (!alternateAiText) alternateAiText = buildFallbackHelpReply(alternateLang);
