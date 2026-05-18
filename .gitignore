@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Supabase local temp files - never commit
 supabase/.temp/
+
+# Supabase local temp files - never commit
+supabase/.temp/
