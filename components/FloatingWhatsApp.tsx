@@ -44,6 +44,40 @@ type AiFeedbackChoice = "yes" | "no";
 const GUEST_SESSION_KEY = "scorpio_assist_guest_session_id";
 const GUEST_MESSAGES_KEY = "scorpio_assist_guest_messages";
 
+function getDisplayMessageText(value: string, lang: "en" | "id") {
+  const raw = String(value || "").trim();
+
+  if (!raw) return "";
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed[lang] === "string" &&
+      parsed[lang].trim()
+    ) {
+      return parsed[lang].trim();
+    }
+
+    const fallbackLang = lang === "id" ? "en" : "id";
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed[fallbackLang] === "string" &&
+      parsed[fallbackLang].trim()
+    ) {
+      return parsed[fallbackLang].trim();
+    }
+  } catch {
+    return raw;
+  }
+
+  return raw;
+}
+
 export default function FloatingWhatsApp() {
   const { lang } = useLanguage();
   const isID = lang === "id";
@@ -281,7 +315,7 @@ export default function FloatingWhatsApp() {
           .from("support_conversations")
           .insert({
             user_id: userId,
-            source: "website_chat",
+            source: `website_chat_${lang}`,
             status: "open",
             handoff_requested: false,
             handoff_status: "ai_active",
@@ -326,6 +360,8 @@ export default function FloatingWhatsApp() {
     try {
       const body: Record<string, string> = {
         message_text: messageText,
+        language: lang,
+        source: `website_chat_guest_${lang}`,
       };
 
       if (guestSessionId) {
