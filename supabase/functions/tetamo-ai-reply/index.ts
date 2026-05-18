@@ -12,7 +12,7 @@ type AudienceType =
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
 );
 
 const openai = new OpenAI({
@@ -23,7 +23,7 @@ const MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-5.4-mini";
 
 const SITE_URL = (Deno.env.get("SITE_URL") ?? "https://www.tetamo.com").replace(
   /\/+$/,
-  ""
+  "",
 );
 
 const PRICELIST_URL = `${SITE_URL}/pricelist`;
@@ -239,7 +239,9 @@ Style:
 `.trim();
 
 function normalize(text: string) {
-  return String(text || "").toLowerCase().trim();
+  return String(text || "")
+    .toLowerCase()
+    .trim();
 }
 
 function formatIdr(value: number | string | null | undefined) {
@@ -296,7 +298,9 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
-function sourceLanguage(source: string | null | undefined): SupportLanguage | null {
+function sourceLanguage(
+  source: string | null | undefined,
+): SupportLanguage | null {
   const value = normalize(source || "");
 
   if (
@@ -323,7 +327,7 @@ function sourceLanguage(source: string | null | undefined): SupportLanguage | nu
 
 function detectReplyLanguage(
   text: string,
-  fallbackLanguage: SupportLanguage | null = null
+  fallbackLanguage: SupportLanguage | null = null,
 ): SupportLanguage {
   const value = normalize(text);
 
@@ -406,11 +410,11 @@ function detectReplyLanguage(
   ];
 
   const indonesianHits = indonesianWords.filter((word) =>
-    value.includes(word)
+    value.includes(word),
   ).length;
 
   const englishHits = englishWords.filter((word) =>
-    value.includes(word)
+    value.includes(word),
   ).length;
 
   if (indonesianHits >= 2 && indonesianHits > englishHits) {
@@ -774,7 +778,7 @@ async function fetchFaqEntries() {
   const { data, error } = await supabase
     .from("faq_entries")
     .select(
-      "id, slug, category, question_en, question_id, answer_en, answer_id, keywords, link_url, is_published, sort_order"
+      "id, slug, category, question_en, question_id, answer_en, answer_id, keywords, link_url, is_published, sort_order",
     )
     .eq("is_published", true)
     .order("sort_order", { ascending: true });
@@ -855,7 +859,7 @@ function scoreFaqEntry(entry: any, question: string, lang: SupportLanguage) {
 function findBestFaqEntry(
   entries: any[],
   question: string,
-  lang: SupportLanguage
+  lang: SupportLanguage,
 ) {
   if (!entries.length) return null;
 
@@ -878,10 +882,14 @@ function removeOldPricingLines(text: string) {
     .filter((line) => {
       const value = normalize(line);
 
-      if (value.includes("owner basic") && value.includes("rp150")) return false;
-      if (value.includes("owner basic") && value.includes("rp 150")) return false;
-      if (value.includes("basic listing") && value.includes("rp150")) return false;
-      if (value.includes("basic listing") && value.includes("rp 150")) return false;
+      if (value.includes("owner basic") && value.includes("rp150"))
+        return false;
+      if (value.includes("owner basic") && value.includes("rp 150"))
+        return false;
+      if (value.includes("basic listing") && value.includes("rp150"))
+        return false;
+      if (value.includes("basic listing") && value.includes("rp 150"))
+        return false;
       if (value.includes("2 months") || value.includes("2 bulan")) return false;
 
       return true;
@@ -919,7 +927,7 @@ async function fetchPublishedArticles() {
   const { data, error } = await supabase
     .from("blogs")
     .select(
-      "id, slug, title, title_id, excerpt, excerpt_id, content, content_id, published_at, status, access_type"
+      "id, slug, title, title_id, excerpt, excerpt_id, content, content_id, published_at, status, access_type",
     )
     .eq("status", "published")
     .eq("access_type", "public")
@@ -971,7 +979,7 @@ function scoreArticle(article: any, question: string, lang: SupportLanguage) {
 function findBestArticle(
   articles: any[],
   question: string,
-  lang: SupportLanguage
+  lang: SupportLanguage,
 ) {
   if (!articles.length) return null;
 
@@ -1512,8 +1520,6 @@ function buildDirectReply(params: {
     return buildWhatIsTetamoReply(lang);
   }
 
-}
-
   if (isPaymentModeQuestion(question)) {
     return buildPaymentModeReply(lang);
   }
@@ -1793,7 +1799,8 @@ async function handleTwilioWhatsAppWebhook(req: Request) {
     const to = params.get("To") || "";
     const body = params.get("Body") || "";
     const profileName = params.get("ProfileName") || "";
-    const messageSid = params.get("MessageSid") || params.get("SmsMessageSid") || "";
+    const messageSid =
+      params.get("MessageSid") || params.get("SmsMessageSid") || "";
     const numMedia = params.get("NumMedia") || "0";
 
     console.log("Twilio WhatsApp inbound:", {
@@ -1819,7 +1826,7 @@ async function handleTwilioWhatsAppWebhook(req: Request) {
     console.error("Twilio WhatsApp webhook error:", error);
 
     return twimlResponse(
-      "Hi, welcome to Tetamo. We received your message. Are you looking to list a property, find a property, ask about owner/agent packages, or ask about QRIS/debit/credit payment?"
+      "Hi, welcome to Tetamo. We received your message. Are you looking to list a property, find a property, ask about owner/agent packages, or ask about QRIS/debit/credit payment?",
     );
   }
 }
@@ -1834,7 +1841,9 @@ async function handleWebsiteSupportAi(req: Request) {
 
   const { data: incomingMessage, error: incomingError } = await supabase
     .from("support_messages")
-    .select("id, conversation_id, sender_type, message_text, ai_status, created_at")
+    .select(
+      "id, conversation_id, sender_type, message_text, ai_status, created_at",
+    )
     .eq("id", messageId)
     .maybeSingle();
 
@@ -1855,7 +1864,7 @@ async function handleWebsiteSupportAi(req: Request) {
   const { data: conversation, error: conversationError } = await supabase
     .from("support_conversations")
     .select(
-      "id, user_id, property_id, guest_name, guest_email, guest_phone, source, status, handoff_requested, handoff_status"
+      "id, user_id, property_id, guest_name, guest_email, guest_phone, source, status, handoff_requested, handoff_status",
     )
     .eq("id", incomingMessage.conversation_id)
     .maybeSingle();
@@ -1879,7 +1888,7 @@ async function handleWebsiteSupportAi(req: Request) {
   const historyText = (history ?? [])
     .map(
       (item: any) =>
-        `${String(item.sender_type).toUpperCase()}: ${item.message_text}`
+        `${String(item.sender_type).toUpperCase()}: ${item.message_text}`,
     )
     .join("\n");
 
@@ -1940,7 +1949,7 @@ async function handleWebsiteSupportAi(req: Request) {
       used_current_pricing: result.usedCurrentPricing,
       payment_modes_supported: ["QRIS", "Debit/Credit Card"],
     },
-    200
+    200,
   );
 }
 
@@ -1974,7 +1983,7 @@ Deno.serve(async (req: Request) => {
         ok: false,
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      500
+      500,
     );
   }
 });
