@@ -37,8 +37,11 @@ const SITE_URL = (Deno.env.get("SITE_URL") ?? "https://www.tetamo.com").replace(
 );
 
 const PRICELIST_URL = `${SITE_URL}/pricelist`;
-const FAQ_URL = `${SITE_URL}/faq`;
 const BLOG_URL = `${SITE_URL}/blog`;
+const EDUCATION_URL = `${SITE_URL}/education`;
+const EDUCATION_DASHBOARD_GUIDE_URL = `${SITE_URL}/education/cara-menggunakan-dashboard-tetamo-untuk-owner-dan-agent`;
+const EDUCATION_POSTING_PROPERTY_URL = `${SITE_URL}/education/cara-posting-properti-di-tetamo`;
+const FAQ_URL = `${SITE_URL}/faq`;
 
 const SUPPORT_HOURS_EN = "Monday - Friday, 9:00 AM - 6:00 PM.";
 const SUPPORT_HOURS_ID = "Senin - Jumat, 9:00 pagi - 6:00 sore.";
@@ -53,8 +56,6 @@ Tetamo identity and company information:
 - Tetamo operates digitally through www.tetamo.com to serve owners, sellers, agents, agencies, developers, buyers, and renters in Indonesia.
 - Tetamo is not a real estate agency, not a broker, and does not take commission from property sale/rental transactions.
 - Tetamo helps users through verified listings, direct WhatsApp inquiries, viewing schedules, AI-assisted listing tools, dashboards, packages, education content, blog/articles, and marketing exposure.
-- If asked where Tetamo is located or where the office is, answer clearly: Tetamo is an Australian-based SaaS business with company presence / office in Sydney, Australia, serving Indonesia's property market digitally.
-- If asked whether Tetamo is legitimate, answer clearly: Tetamo is operated by Tetamo Pty Ltd, an Australian Private Company registered in NSW, with ACN 689 780 970 and ABN 18 689 780 970.
 `.trim();
 
 const TETAMO_IDENTITY_ID = `
@@ -67,8 +68,26 @@ Informasi identitas dan perusahaan Tetamo:
 - Tetamo beroperasi secara digital melalui www.tetamo.com untuk melayani owner, seller, agent, agency, developer, buyer, dan renter di Indonesia.
 - Tetamo bukan agency properti, bukan broker, dan tidak mengambil komisi dari transaksi jual/sewa properti.
 - Tetamo membantu pengguna melalui verified listings, direct WhatsApp inquiries, jadwal viewing, AI-assisted listing tools, dashboard, paket, konten edukasi, blog/artikel, dan marketing exposure.
-- Jika ditanya Tetamo berlokasi di mana atau office Tetamo di mana, jawab dengan jelas: Tetamo adalah bisnis SaaS berbasis Australia dengan company presence / office di Sydney, Australia, yang melayani pasar properti Indonesia secara digital.
-- Jika ditanya apakah Tetamo legit/resmi, jawab dengan jelas: Tetamo dioperasikan oleh Tetamo Pty Ltd, Australian Private Company yang terdaftar di NSW, dengan ACN 689 780 970 dan ABN 18 689 780 970.
+`.trim();
+
+const USEFUL_URLS_EN = `
+Useful official Tetamo links:
+- Public pricelist / packages: ${PRICELIST_URL}
+- Blog and articles: ${BLOG_URL}
+- Education hub: ${EDUCATION_URL}
+- Dashboard guide for owners and agents: ${EDUCATION_DASHBOARD_GUIDE_URL}
+- Property posting guide: ${EDUCATION_POSTING_PROPERTY_URL}
+- FAQ: ${FAQ_URL}
+`.trim();
+
+const USEFUL_URLS_ID = `
+Link resmi Tetamo yang berguna:
+- Public pricelist / paket harga: ${PRICELIST_URL}
+- Blog dan artikel: ${BLOG_URL}
+- Halaman edukasi: ${EDUCATION_URL}
+- Panduan dashboard untuk owner dan agent: ${EDUCATION_DASHBOARD_GUIDE_URL}
+- Panduan posting properti: ${EDUCATION_POSTING_PROPERTY_URL}
+- FAQ: ${FAQ_URL}
 `.trim();
 
 const OWNER_PRICING_EN = `
@@ -145,7 +164,8 @@ Important pricing rules:
 - Do not say Agent Silver is Rp399,000.
 - Do not say Owner Basic is Rp150,000.
 - Do not say owner packages are valid for 2 months.
-- For the latest pricing page, direct users to: ${PRICELIST_URL}
+- Use this public pricelist URL for all pricing links: ${PRICELIST_URL}
+- Do not invent anchor URLs like /pricelist#agent-packages or /pricelist#owner-packages.
 `.trim();
 
 const CURRENT_PRICING_ID = `
@@ -170,7 +190,8 @@ Aturan harga penting:
 - Jangan bilang Agent Silver Rp399.000.
 - Jangan bilang Owner Basic Rp150.000.
 - Jangan bilang paket owner berlaku 2 bulan.
-- Untuk halaman harga terbaru, arahkan user ke: ${PRICELIST_URL}
+- Gunakan URL public pricelist ini untuk semua link harga: ${PRICELIST_URL}
+- Jangan membuat anchor URL seperti /pricelist#agent-packages atau /pricelist#owner-packages.
 `.trim();
 
 const PAYMENT_KNOWLEDGE_EN = `
@@ -196,8 +217,9 @@ Metode pembayaran Tetamo:
 const PLATFORM_KNOWLEDGE_EN = `
 Tetamo platform knowledge:
 - Buyer/renter can browse listings, view property details, contact owner/agent through WhatsApp, and schedule viewing when available.
-- Owner/seller can sign up, choose owner package, fill property form, upload photos/videos, use AI-generated title/description, verify/pay, and listing enters go-live step.
+- Owner/seller can sign up, choose owner package, fill property form, upload photos/videos, use AI-generated title/description, verify/pay, and then the listing can go live after Tetamo's quick review.
 - Agent/agency can sign up, choose Silver/Gold/Agent Pro, complete profile, manage active listings, leads, viewing schedule, billing/receipt, analytics, commission tracking, and Boost/Spotlight.
+- After payment, an agent dashboard becomes active and the agent can start adding listings.
 - Developer/project owner can use Tetamo for project exposure, developer profile, multiple project/property listings, direct inquiries, and viewing interest. Developer pricing/license should be discussed with Tetamo.
 - Tetamo has website, mobile app, marketplace, dashboards, pricing page, FAQ, blog/articles, and education content.
 - Tetamo supports bilingual English/Indonesian communication.
@@ -206,8 +228,9 @@ Tetamo platform knowledge:
 const PLATFORM_KNOWLEDGE_ID = `
 Pengetahuan platform Tetamo:
 - Buyer/renter bisa mencari listing, melihat detail properti, menghubungi owner/agent melalui WhatsApp, dan membuat jadwal viewing jika tersedia.
-- Owner/seller bisa sign up, memilih paket owner, mengisi form properti, upload foto/video, menggunakan AI-generated title/description, verifikasi/bayar, lalu listing masuk proses go live.
+- Owner/seller bisa sign up, memilih paket owner, mengisi form properti, upload foto/video, menggunakan AI-generated title/description, verifikasi/bayar, lalu listing bisa tampil live setelah review singkat dari Tetamo.
 - Agent/agency bisa sign up, memilih Silver/Gold/Agent Pro, melengkapi profil, mengelola listing aktif, leads, jadwal viewing, billing/receipt, analytics, tracking komisi, dan Boost/Spotlight.
+- Setelah pembayaran, dashboard agent aktif dan agent bisa mulai menambahkan listing.
 - Developer/project owner bisa menggunakan Tetamo untuk exposure proyek, profil developer, multiple project/property listings, direct inquiries, dan viewing interest. Harga/license developer perlu dibahas dengan Tetamo.
 - Tetamo memiliki website, mobile app, marketplace, dashboard, halaman harga, FAQ, blog/artikel, dan konten edukasi.
 - Tetamo mendukung komunikasi bilingual English/Indonesian.
@@ -216,7 +239,7 @@ Pengetahuan platform Tetamo:
 const SYSTEM_PROMPT = `
 You are Scorpio Assist, Tetamo's AI sales, support, and knowledge assistant.
 
-Use this knowledge priority:
+Knowledge priority:
 1. Official Tetamo identity/company knowledge.
 2. Tetamo platform, website, mobile app, package, pricing, payment, and workflow knowledge.
 3. Tetamo FAQ entries.
@@ -236,37 +259,29 @@ ${CURRENT_PRICING_EN}
 Payment knowledge:
 ${PAYMENT_KNOWLEDGE_EN}
 
-Rules:
+Useful official Tetamo links:
+${USEFUL_URLS_EN}
+
+Tone and behavior:
+- Sound like a friendly, confident, helpful human assistant.
+- Be warm, clear, professional, and sales-aware.
+- Do not sound like a manual, robot, legal page, or internal admin system.
 - Do not guess.
 - Do not invent.
 - Do not say Tetamo has no office.
 - If asked where Tetamo office/location is, answer that Tetamo is an Australian-based SaaS business serving Indonesia's property market, with company presence / office in Sydney, Australia.
 - If asked whether Tetamo is legit/registered, mention Tetamo Pty Ltd, Australian Private Company registered in NSW, ACN 689 780 970, ABN 18 689 780 970.
 - Tetamo is not a real estate agency or broker and does not take commission from property sale/rental transactions.
-- Reply in the requested language.
-- For mobile/website support chat, produce answers that can be shown in English or Indonesian.
-- For WhatsApp, reply only in the user's message language because WhatsApp has no toggle.
-- Be sales-aware: after answering pricing/package/listing questions, recommend the next step.
-- Sales flow: sign up → choose role/package → fill profile/listing form → upload photos/videos when relevant → verify/pay → listing/dashboard enters go-live step.
-- Never guarantee leads, sales, rentals, ROI, buyers, tenants, or income.
+- For pricing/package questions, answer the price, explain who it fits, then guide the next step naturally.
+- For owner listing, use natural wording: after payment, the listing can go live after Tetamo's quick review.
+- For agent package, use natural wording: after payment, the agent dashboard becomes active and the agent can start adding listings.
+- Do not use robotic/internal phrases like "review/live flow", "activation flow", "process flow", or "dashboard flow".
+- For payment mode, mention QRIS and debit/credit card only.
 - Do not proactively mention refunds, deducted payments, failed payments, invoice problems, or package activation problems unless the user specifically reports a problem.
 - Never ask for OTP, CVV, full card number, banking password, or private financial credentials.
+- Never guarantee leads, sales, rentals, ROI, buyers, tenants, or income.
 - Suggest Tetamo Agent only for account-specific issues, private support cases, payment problems explicitly reported by the user, refund/invoice issues, developer pricing/license discussion, or when user asks for human help.
-- Keep replies clear, practical, professional, friendly, warm, sales-aware, and mobile-friendly.
-- Sound like a helpful human assistant, not a manual, script, robot, legal page, or internal admin system.
-- Use natural conversation. Be confident, warm, and easy to understand.
-- Avoid stiff phrases like "flow", "go-live step", "activation flow", "process flow", "enters go live", or "dashboard flow".
-- Use human wording such as:
-  - "It’s easy to get started."
-  - "After payment, your listing can go live after Tetamo’s quick review."
-  - "After payment, your agent dashboard becomes active and you can start adding listings."
-  - "Would you like to continue as an owner or agent?"
-  - "I can guide you through the next step."
-- When explaining steps, do not sound like a technical checklist. Explain naturally and guide the user forward.
-- For pricing/package answers, include a soft sales close, but do not pressure the user.
-- For support answers, be calm and reassuring.
-- For Tetamo identity/company answers, be clear and confident.
-- Never sound like you are guessing.
+- Keep replies mobile-friendly and not too long.
 `.trim();
 
 function normalize(text: string) {
@@ -324,6 +339,7 @@ function getLocalizedMessageText(value: string, lang: SupportLanguage) {
 
   try {
     const parsed = JSON.parse(raw);
+
     if (
       parsed &&
       typeof parsed === "object" &&
@@ -334,6 +350,7 @@ function getLocalizedMessageText(value: string, lang: SupportLanguage) {
     }
 
     const fallbackLang: SupportLanguage = lang === "id" ? "en" : "id";
+
     if (
       parsed &&
       typeof parsed === "object" &&
@@ -411,8 +428,6 @@ function detectReplyLanguage(
     "paket",
     "bayar",
     "pembayaran",
-    "kartu",
-    "kredit",
     "developer",
     "penjual",
     "pembeli",
@@ -430,6 +445,8 @@ function detectReplyLanguage(
     "resmi",
     "legal",
     "perusahaan",
+    "edukasi",
+    "artikel",
   ];
 
   const englishWords = [
@@ -457,8 +474,6 @@ function detectReplyLanguage(
     "payment",
     "pay",
     "card",
-    "credit",
-    "debit",
     "buyer",
     "renter",
     "seller",
@@ -472,6 +487,9 @@ function detectReplyLanguage(
     "legit",
     "registered",
     "company",
+    "education",
+    "article",
+    "blog",
   ];
 
   const indonesianHits = indonesianWords.filter((word) =>
@@ -498,6 +516,7 @@ function includesAny(text: string, keywords: string[]) {
 
 function isGreetingOrVague(text: string) {
   const value = normalize(text).replace(/[!?.]/g, "").trim();
+
   return [
     "hi",
     "hello",
@@ -779,40 +798,27 @@ function isPaymentModeQuestion(text: string) {
   ].some((word) => value.includes(word));
 }
 
-function getPricingPageUrl(question: string) {
-  const value = normalize(question);
+function isEducationOrBlogQuestion(text: string) {
+  const value = normalize(text);
 
-  if (
-    value.includes("owner") ||
-    value.includes("pemilik") ||
-    value.includes("basic") ||
-    value.includes("priority") ||
-    value.includes("featured") ||
-    value.includes("owner package") ||
-    value.includes("paket owner") ||
-    value.includes("paket pemilik")
-  ) {
-    return `${PRICELIST_URL}#owner-packages`;
-  }
-
-  if (
-    value.includes("agent") ||
-    value.includes("agen") ||
-    value.includes("silver") ||
-    value.includes("gold") ||
-    value.includes("pro") ||
-    value.includes("agent package") ||
-    value.includes("paket agen") ||
-    value.includes("membership")
-  ) {
-    return `${PRICELIST_URL}#agent-packages`;
-  }
-
-  if (value.includes("boost") || value.includes("spotlight")) {
-    return `${PRICELIST_URL}#add-ons`;
-  }
-
-  return PRICELIST_URL;
+  return [
+    "blog",
+    "article",
+    "artikel",
+    "education",
+    "edukasi",
+    "learn",
+    "belajar",
+    "tutorial",
+    "guide",
+    "panduan",
+    "cara menggunakan dashboard",
+    "dashboard tetamo",
+    "cara posting",
+    "posting properti",
+    "how to post property",
+    "how to use dashboard",
+  ].some((word) => value.includes(word));
 }
 
 function removeOldPricingLines(text: string) {
@@ -820,6 +826,7 @@ function removeOldPricingLines(text: string) {
     .split("\n")
     .filter((line) => {
       const value = normalize(line);
+
       if (value.includes("owner basic") && value.includes("rp150"))
         return false;
       if (value.includes("owner basic") && value.includes("rp 150"))
@@ -833,10 +840,64 @@ function removeOldPricingLines(text: string) {
       if (value.includes("package is not active")) return false;
       if (value.includes("saldo terpotong")) return false;
       if (value.includes("paket belum aktif")) return false;
+      if (value.includes("review/live flow")) return false;
+      if (value.includes("live/review flow")) return false;
+
       return true;
     })
     .join("\n")
     .trim();
+}
+
+function humanizeScorpioReply(text: string, lang: SupportLanguage) {
+  let value = removeOldPricingLines(String(text || "").trim());
+
+  const replacements: Array<[string, string]> = [
+    ["review/live flow", "go-live step"],
+    ["live/review flow", "go-live step"],
+    ["activation/review", "next step"],
+    ["process flow", "next step"],
+    ["dashboard flow", "dashboard"],
+    ["enters review/live flow", "can move toward going live"],
+    ["can enter review/live flow", "can move toward going live"],
+    [
+      "listing/dashboard activates after review",
+      "your listing or dashboard becomes active after payment and Tetamo’s quick review",
+    ],
+    [
+      "Your agent dashboard becomes active and listings can enter review/live flow",
+      "After payment, your agent dashboard becomes active and you can start adding listings",
+    ],
+    [
+      "Dashboard agent aktif dan listing bisa masuk proses review/live",
+      "Setelah pembayaran, dashboard agent Anda aktif dan Anda bisa mulai menambahkan listing",
+    ],
+    [
+      "listing/dashboard aktif setelah proses review",
+      "listing atau dashboard Anda aktif setelah pembayaran dan review singkat dari Tetamo",
+    ],
+    [`${PRICELIST_URL}#owner-packages`, PRICELIST_URL],
+    [`${PRICELIST_URL}#agent-packages`, PRICELIST_URL],
+    [`${PRICELIST_URL}#add-ons`, PRICELIST_URL],
+  ];
+
+  for (const [oldText, newText] of replacements) {
+    value = value.split(oldText).join(newText);
+  }
+
+  if (lang === "id") {
+    value = value
+      .replace("Alur mudah:", "Mudah untuk mulai:")
+      .replace("Alur setup sangat mudah:", "Mudah untuk mulai:")
+      .replace("Untuk mulai:", "Untuk mulai:");
+  } else {
+    value = value
+      .replace("Easy flow:", "It’s easy to get started:")
+      .replace("The setup is simple:", "It’s easy to get started:")
+      .replace("Starting flow:", "To get started:");
+  }
+
+  return value.trim();
 }
 
 function buildConversationContext(conversation: any) {
@@ -862,8 +923,7 @@ Tetamo memiliki company presence / office di Sydney, Australia, dan beroperasi s
 
 Tetamo bukan agency properti atau broker, dan tidak mengambil komisi dari transaksi jual/sewa properti. Tetamo membantu pengguna melalui verified listings, direct WhatsApp inquiry, jadwal viewing, AI-assisted listing tools, dashboard, paket, blog/artikel, edukasi, dan marketing exposure.
 
-Jika Anda ingin mulai menggunakan Tetamo, alurnya mudah:
-Sign up → pilih role owner/agent/developer → pilih paket jika diperlukan → buat listing/profil → ikuti step verifikasi dan pembayaran → listing masuk proses go live.`;
+Untuk mulai menggunakan Tetamo, caranya mudah: daftar, pilih role owner/agent/developer, pilih paket jika diperlukan, buat listing atau profil, lalu ikuti langkah pembayaran dan verifikasi.`;
   }
 
   return `Tetamo is an Australian-based SaaS business serving Indonesia's property market through a digital property marketplace platform.
@@ -874,109 +934,76 @@ Tetamo has company presence / office in Sydney, Australia, and operates digitall
 
 Tetamo is not a real estate agency or broker, and it does not take commission from property sale/rental transactions. Tetamo helps users through verified listings, direct WhatsApp inquiries, viewing schedules, AI-assisted listing tools, dashboards, packages, blog/articles, education content, and marketing exposure.
 
-If you want to start using Tetamo, the flow is simple:
-Sign up → choose owner/agent/developer role → choose a package if needed → create your listing/profile → follow verification and payment steps → listing enters go-live step.`;
+To start using Tetamo, it’s simple: sign up, choose your owner/agent/developer role, choose a package when needed, create your listing or profile, then follow the payment and verification steps.`;
 }
 
 function buildGreetingReply(lang: SupportLanguage) {
   if (lang === "id") {
     return `Halo, saya Scorpio Assist dari Tetamo.
 
-Saya bisa bantu Anda sebagai buyer/renter, owner/seller, agent, developer, atau guest.
+Saya bisa bantu Anda tentang Tetamo, cara pasang listing, paket owner/agent, QRIS, blog/artikel, edukasi, atau cara mencari properti.
 
-Anda bisa tanya tentang:
-- Apa itu Tetamo dan legalitasnya
-- Lokasi/office Tetamo
-- Cara pasang listing
-- Paket owner atau agent
-- QRIS/debit/kredit card
-- Blog, artikel, dan edukasi Tetamo
-- Cara mencari properti atau jadwal viewing`;
+Apa yang ingin Anda lakukan hari ini?`;
   }
 
   return `Hi, I’m Scorpio Assist from Tetamo.
 
-I can help you as a buyer/renter, owner/seller, agent, developer, or guest.
+I can help you with Tetamo, listing a property, owner/agent packages, QRIS payment, blog/articles, education, or finding a property.
 
-You can ask about:
-- What Tetamo is and its company legitimacy
-- Tetamo office/location
-- How to list a property
-- Owner or agent packages
-- QRIS/debit/credit card payment
-- Tetamo blog, articles, and education
-- How to find properties or schedule viewing`;
+What would you like to do today?`;
 }
 
 function buildPaymentModeReply(lang: SupportLanguage) {
   if (lang === "id") {
-    return `Tetamo saat ini menerima pembayaran melalui QRIS dan debit/kredit card.
+    return `Bisa. Tetamo saat ini menerima pembayaran melalui QRIS dan debit/kredit card.
 
 QRIS cocok untuk pengguna di Indonesia karena biasanya bisa dibayar melalui aplikasi bank dan e-wallet yang mendukung QRIS, termasuk pilihan populer seperti BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, dan ShopeePay.
-
-Debit dan kredit card juga tersedia.
 
 Setelah Anda memilih paket, Tetamo akan mengarahkan Anda ke halaman pembayaran agar prosesnya mudah.`;
   }
 
-  return `Tetamo currently accepts QRIS and debit/credit card payments.
+  return `Yes. Tetamo currently accepts QRIS and debit/credit card payments.
 
 QRIS is suitable for users in Indonesia because it can usually be paid through QRIS-supported Indonesian bank apps and e-wallets, including popular options such as BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, and ShopeePay.
-
-Debit and credit card payment is also available.
 
 Once you choose a package, Tetamo will guide you to the payment page so you can complete it easily.`;
 }
 
 function buildDeveloperReply(lang: SupportLanguage) {
   if (lang === "id") {
-    return `Untuk developer, Tetamo membantu exposure proyek, profil developer, multiple listing properti/proyek, direct WhatsApp inquiry, minat viewing, dan visibilitas marketplace.
+    return `Untuk developer, Tetamo bisa membantu exposure proyek, profil developer, multiple listing properti/proyek, direct WhatsApp inquiry, minat viewing, dan visibilitas marketplace.
 
-Harga developer tidak sama dengan paket owner atau agent karena biasanya tergantung kebutuhan proyek, volume listing, dan license/use arrangement.
+Harga developer biasanya tergantung kebutuhan proyek, volume listing, dan license/use arrangement, jadi paling tepat dibahas langsung dengan Tetamo.
 
-Untuk mulai:
-1. Hubungi Tetamo
-2. Jelaskan proyek dan volume listing
-3. Diskusikan kebutuhan exposure/marketplace
-4. Tetamo bantu arahkan package/license yang sesuai
+Untuk mulai, Anda bisa siapkan informasi proyek, jumlah listing, dan kebutuhan exposure. Setelah itu Tetamo bisa bantu arahkan package atau license yang sesuai.
 
-Untuk developer pricing/license, sebaiknya lanjut chat dengan Tetamo Agent. Jam support: ${SUPPORT_HOURS_ID}`;
+Untuk developer inquiry, Anda bisa lanjut melalui website Tetamo atau chat dengan Tetamo Agent. Jam support: ${SUPPORT_HOURS_ID}`;
   }
 
-  return `For developers, Tetamo helps with project exposure, developer profile, multiple property/project listings, direct WhatsApp inquiries, viewing interest, and marketplace visibility.
+  return `For developers, Tetamo can help with project exposure, developer profile, multiple property/project listings, direct WhatsApp inquiries, viewing interest, and marketplace visibility.
 
-Developer pricing is not the same as owner or agent packages because it usually depends on project needs, listing volume, and license/use arrangement.
+Developer pricing usually depends on project needs, listing volume, and license/use arrangement, so it is best discussed directly with Tetamo.
 
-To get started:
-1. Contact Tetamo
-2. Explain your project and listing volume
-3. Discuss exposure/marketplace needs
-4. Tetamo can guide you to the right package/license arrangement
+To start, prepare your project details, listing volume, and exposure needs. Tetamo can then guide you to the right package or license arrangement.
 
-For developer pricing/license, it is best to continue with a Tetamo Agent. Support hours: ${SUPPORT_HOURS_EN}`;
+For developer inquiries, you can continue through the Tetamo website or chat with a Tetamo Agent. Support hours: ${SUPPORT_HOURS_EN}`;
 }
 
 function buildBuyerRenterReply(lang: SupportLanguage) {
   if (lang === "id") {
-    return `Jika Anda buyer atau renter, Anda bisa mencari properti di Tetamo, cek detail listing, lalu hubungi owner/agent langsung melalui WhatsApp jika tersedia.
+    return `Jika Anda buyer atau renter, Anda bisa mencari properti di Tetamo, buka detail listing, lalu hubungi owner atau agent langsung melalui WhatsApp jika tersedia.
 
-Tetamo membantu dengan verified listing/owner/agent jika sudah disetujui, foto/video properti, informasi harga, dan jadwal viewing jika listing menyediakan schedule viewing.
+Caranya mudah: cari properti, cek foto/video, harga, lokasi, dan detail listing, lalu chat melalui WhatsApp atau gunakan jadwal viewing jika listing menyediakan fitur tersebut.
 
-Alurnya mudah:
-Cari properti → buka detail listing → cek foto/video/harga/lokasi → chat via WhatsApp → jadwalkan viewing jika tersedia.
-
-Mulai dari marketplace:
+Mulai dari marketplace Tetamo:
 ${SITE_URL}`;
   }
 
-  return `If you are a buyer or renter, you can browse properties on Tetamo, check the listing details, then contact the owner/agent directly through WhatsApp when available.
+  return `As a buyer or renter, you can browse properties on Tetamo, open the listing details, then contact the owner or agent directly through WhatsApp when available.
 
-Tetamo helps with verified listing/owner/agent status when approved, property photos/videos, price information, and viewing scheduling when the listing supports it.
+It’s simple: search for a property, check the photos/videos, price, location, and listing details, then chat through WhatsApp or use the viewing schedule when the listing supports it.
 
-The flow is simple:
-Search property → open listing detail → check photos/videos/price/location → chat via WhatsApp → schedule viewing when available.
-
-Start from the marketplace:
+Start from the Tetamo marketplace:
 ${SITE_URL}`;
 }
 
@@ -984,38 +1011,38 @@ function buildOwnerSellerReply(lang: SupportLanguage) {
   if (lang === "id") {
     return `Untuk owner/seller, Tetamo membantu properti Anda tampil lebih profesional di marketplace dan app, dengan direct WhatsApp inquiry, jadwal viewing, AI-generated title/description, foto/video, dan verification badge setelah disetujui.
 
-Alur setup sangat mudah:
-1. Sign up sebagai owner
+Mudah untuk mulai:
+1. Daftar sebagai owner
 2. Pilih paket Basic, Priority, atau Featured
-3. Isi form listing properti
-4. Upload foto/video
-5. Ikuti step verifikasi dan pembayaran
-6. Listing masuk proses review dan bisa tampil live setelah disetujui
+3. Isi detail properti
+4. Upload foto atau video
+5. Selesaikan pembayaran dan verifikasi
+6. Setelah itu, listing Anda bisa tampil live setelah review singkat dari Tetamo
 
-Jika ingin mulai sederhana, Basic sudah cukup. Jika ingin exposure lebih kuat, Priority lebih cocok. Jika ingin visibilitas tertinggi plus social media posting, Featured adalah pilihan terbaik.
+Jika ingin mulai sederhana, Basic sudah cukup. Jika ingin exposure paling kuat, Featured adalah pilihan terbaik.
 
-Apakah Anda ingin lanjut daftar sebagai owner dan pilih paket listing?
+Apakah Anda ingin mulai sebagai owner? Saya bisa bantu arahkan paket yang paling cocok.
 
-Lihat paket owner:
-${PRICELIST_URL}#owner-packages`;
+Lihat semua paket Tetamo di sini:
+${PRICELIST_URL}`;
   }
 
   return `For owners/sellers, Tetamo helps your property look more professional on the marketplace and app, with direct WhatsApp inquiries, viewing scheduling, AI-generated title/description, photos/videos, and a verification badge after approval.
 
-The setup is simple:
+It’s easy to get started:
 1. Sign up as an owner
 2. Choose Basic, Priority, or Featured
-3. Fill in the property listing form
-4. Upload photos/videos
-5. Follow the verification and payment steps
-6. The listing can go live after Tetamo’s quick review
+3. Add your property details
+4. Upload photos or video
+5. Complete payment and verification
+6. After that, your listing can go live after Tetamo’s quick review
 
-If you want to start simple, Basic is enough. If you want stronger exposure, Priority is better. If you want the highest visibility plus social media posting, Featured is the best choice.
+For a simple start, Basic is enough. For the strongest exposure, Featured is the best choice.
 
-Would you like to proceed with owner signup and choose a listing package?
+Would you like to start as an owner? I can guide you to the right package.
 
-See owner packages:
-${PRICELIST_URL}#owner-packages`;
+View all Tetamo packages here:
+${PRICELIST_URL}`;
 }
 
 function buildAgentAgencyReply(lang: SupportLanguage) {
@@ -1028,20 +1055,19 @@ Paket agent saat ini:
 - Agent Pro: Rp3.999.000/tahun untuk 500 listing aktif
 - Agent Pro juga punya opsi Rp399.000/bulan dengan komitmen 12 bulan
 
-Alur setup sangat mudah:
-1. Sign up sebagai agent
-2. Pilih paket Silver, Gold, atau Agent Pro
+Mudah untuk mulai:
+1. Daftar sebagai agent
+2. Pilih paket yang cocok
 3. Lengkapi profil agent
-4. Mulai tambah listing properti
-5. Ikuti step pembayaran
-6. Dashboard agent aktif dan listing bisa masuk proses go live
+4. Selesaikan pembayaran
+5. Setelah pembayaran, dashboard agent aktif dan Anda bisa mulai menambahkan listing
 
-Jika Anda baru mulai, Silver cukup untuk membangun presence. Jika Anda punya banyak listing, Gold atau Agent Pro memberi value lebih besar per listing dan fitur exposure lebih kuat.
+Silver cocok untuk mulai tampil profesional. Gold cocok untuk agent aktif dengan banyak listing. Agent Pro cocok untuk agent atau agency yang ingin scale lebih besar.
 
-Apakah Anda ingin lanjut daftar sebagai agent dan pilih paket?
+Apakah Anda ingin mulai sebagai agent? Saya bisa bantu arahkan paket terbaik sesuai jumlah listing Anda.
 
-Lihat paket agent:
-${PRICELIST_URL}#agent-packages`;
+Lihat semua paket Tetamo di sini:
+${PRICELIST_URL}`;
   }
 
   return `For agents/agencies, Tetamo helps you look more professional and manage listings, leads, viewings, billing, receipts, analytics, and commission tracking in one dashboard.
@@ -1052,20 +1078,105 @@ Current agent packages:
 - Agent Pro: Rp3,999,000/year for 500 active listings
 - Agent Pro also has a Rp399,000/month option with a 12-month commitment
 
-The setup is simple:
+It’s easy to get started:
 1. Sign up as an agent
-2. Choose Silver, Gold, or Agent Pro
+2. Choose the package that fits your listing volume
 3. Complete your agent profile
-4. Start adding property listings
-5. Follow the payment steps
-6. Your agent dashboard becomes active and listings can enter go-live step
+4. Complete payment
+5. After payment, your agent dashboard becomes active and you can start adding listings
 
-If you are starting, Silver is enough to build your presence. If you manage many listings, Gold or Agent Pro gives stronger value per listing and better exposure features.
+Silver is good for starting professionally. Gold is better for active agents with more listings. Agent Pro is best for agents or agencies ready to scale bigger.
 
 Would you like to start as an agent? I can guide you to the best package for your listings.
 
-See agent packages:
-${PRICELIST_URL}#agent-packages`;
+View all Tetamo packages here:
+${PRICELIST_URL}`;
+}
+
+function buildEducationOrBlogReply(question: string, lang: SupportLanguage) {
+  const value = normalize(question);
+
+  if (
+    value.includes("posting") ||
+    value.includes("post property") ||
+    value.includes("post properti") ||
+    value.includes("cara posting") ||
+    value.includes("pasang properti")
+  ) {
+    if (lang === "id") {
+      return `Untuk belajar cara posting properti di Tetamo, panduan ini paling cocok:
+
+${EDUCATION_POSTING_PROPERTY_URL}
+
+Di sana Anda bisa mengikuti langkah-langkahnya dengan lebih mudah.`;
+    }
+
+    return `For learning how to post a property on Tetamo, this guide is the best place to start:
+
+${EDUCATION_POSTING_PROPERTY_URL}
+
+It will guide you through the steps more clearly.`;
+  }
+
+  if (
+    value.includes("dashboard") ||
+    value.includes("owner dan agent") ||
+    value.includes("owner and agent")
+  ) {
+    if (lang === "id") {
+      return `Untuk memahami cara menggunakan dashboard Tetamo untuk owner dan agent, Anda bisa mulai dari panduan ini:
+
+${EDUCATION_DASHBOARD_GUIDE_URL}`;
+    }
+
+    return `To understand how to use the Tetamo dashboard for owners and agents, you can start with this guide:
+
+${EDUCATION_DASHBOARD_GUIDE_URL}`;
+  }
+
+  if (
+    value.includes("blog") ||
+    value.includes("article") ||
+    value.includes("artikel")
+  ) {
+    if (lang === "id") {
+      return `Anda bisa membaca blog dan artikel Tetamo di sini:
+
+${BLOG_URL}
+
+Di sana Tetamo membagikan informasi seputar properti, marketplace, dan edukasi yang relevan.`;
+    }
+
+    return `You can read Tetamo blogs and articles here:
+
+${BLOG_URL}
+
+Tetamo shares property, marketplace, and education-related content there.`;
+  }
+
+  if (lang === "id") {
+    return `Untuk materi edukasi Tetamo, Anda bisa mulai dari halaman ini:
+
+${EDUCATION_URL}
+
+Panduan yang sering berguna:
+- Cara menggunakan dashboard Tetamo untuk owner dan agent:
+${EDUCATION_DASHBOARD_GUIDE_URL}
+
+- Cara posting properti di Tetamo:
+${EDUCATION_POSTING_PROPERTY_URL}`;
+  }
+
+  return `For Tetamo education content, you can start here:
+
+${EDUCATION_URL}
+
+Useful guides:
+- How to use the Tetamo dashboard for owners and agents:
+${EDUCATION_DASHBOARD_GUIDE_URL}
+
+- How to post property on Tetamo:
+${EDUCATION_POSTING_PROPERTY_URL}`;
 }
 
 function buildWhatsAppFallbackReply(lang: SupportLanguage) {
@@ -1088,18 +1199,28 @@ function buildFallbackHelpReply(lang: SupportLanguage) {
   if (lang === "id") {
     return `Saya belum menemukan jawaban yang cukup pasti dari knowledge Tetamo yang tersedia.
 
-Anda bisa cek FAQ Tetamo:
+Anda bisa cek FAQ Tetamo di sini:
 ${FAQ_URL}
+
+Anda juga bisa membaca blog/artikel Tetamo:
+${BLOG_URL}
 
 Untuk pertanyaan khusus akun, pembayaran yang bermasalah, invoice/refund, developer pricing/license, atau bantuan manusia, silakan chat dengan Tetamo Agent. Jam support: ${SUPPORT_HOURS_ID}`;
   }
 
   return `I could not find a confident answer from the available Tetamo knowledge.
 
-You can check Tetamo FAQ:
+You can check Tetamo FAQ here:
 ${FAQ_URL}
 
+You can also read Tetamo blogs/articles here:
+${BLOG_URL}
+
 For account-specific questions, reported payment issues, invoice/refund, developer pricing/license, or human support, please chat with a Tetamo Agent. Support hours: ${SUPPORT_HOURS_EN}`;
+}
+
+function getPricingPageUrl() {
+  return PRICELIST_URL;
 }
 
 async function fetchFaqEntries() {
@@ -1188,18 +1309,17 @@ function buildFaqAnswer(entry: any, lang: SupportLanguage) {
   const cleanedAnswer = removeOldPricingLines(answer);
 
   const rawLink = String(entry?.link_url || "").trim();
-  if (!rawLink) return cleanedAnswer;
+
+  const usefulLine =
+    lang === "id" ? `FAQ Tetamo: ${FAQ_URL}` : `Tetamo FAQ: ${FAQ_URL}`;
+
+  if (!rawLink) return [cleanedAnswer, usefulLine].filter(Boolean).join("\n\n");
 
   const fullLink = rawLink.startsWith("http")
     ? rawLink
     : `${SITE_URL}${rawLink.startsWith("/") ? rawLink : `/${rawLink}`}`;
 
-  const linkLine =
-    lang === "id"
-      ? `Anda juga bisa baca selengkapnya di sini: ${fullLink}`
-      : `You can also read more here: ${fullLink}`;
-
-  return [cleanedAnswer, linkLine].filter(Boolean).join("\n\n");
+  return [cleanedAnswer, fullLink, usefulLine].filter(Boolean).join("\n\n");
 }
 
 async function fetchPublishedArticles() {
@@ -1238,7 +1358,7 @@ function scoreArticle(article: any, question: string, lang: SupportLanguage) {
       : `${article?.content || ""} ${article?.content_id || ""}`;
 
   return scoreTextAgainstQuestion(
-    `${title} ${excerpt} ${content.slice(0, 2500)} ${article?.slug || ""}`,
+    `${title} ${excerpt} ${String(content).slice(0, 2500)} ${article?.slug || ""}`,
     question,
   );
 }
@@ -1289,7 +1409,7 @@ Title: ${title}
 Slug: ${slug}
 Excerpt: ${excerpt}
 Content snippet: ${cleanedContent.slice(0, 1800)}
-Article URL: ${slug ? `${SITE_URL}/blog/${slug}` : BLOG_URL}
+Article URL: ${slug ? `${BLOG_URL}/${slug}` : BLOG_URL}
 `.trim();
 }
 
@@ -1318,7 +1438,7 @@ async function fetchEducationContext(question: string, lang: SupportLanguage) {
       const { data, error } = await supabase
         .from(attempt.table)
         .select(attempt.select)
-        .limit(20);
+        .limit(30);
 
       if (error || !data?.length) continue;
 
@@ -1346,6 +1466,7 @@ async function fetchEducationContext(question: string, lang: SupportLanguage) {
   if (!scored.length || scored[0].score < 4) return "";
 
   const best = scored[0].item;
+
   const title =
     lang === "id"
       ? best.title_id || best.title || ""
@@ -1375,6 +1496,7 @@ Title: ${title}
 Source table: ${best._table}
 Description: ${description}
 Content snippet: ${String(content).slice(0, 1200)}
+Education URL: ${EDUCATION_URL}
 `.trim();
 }
 
@@ -1388,6 +1510,8 @@ ${PLATFORM_KNOWLEDGE_ID}
 ${CURRENT_PRICING_ID}
 
 ${PAYMENT_KNOWLEDGE_ID}
+
+${USEFUL_URLS_ID}
 `.trim();
   }
 
@@ -1399,6 +1523,8 @@ ${PLATFORM_KNOWLEDGE_EN}
 ${CURRENT_PRICING_EN}
 
 ${PAYMENT_KNOWLEDGE_EN}
+
+${USEFUL_URLS_EN}
 `.trim();
 }
 
@@ -1408,7 +1534,7 @@ async function answerPricingQuestion(params: {
 }) {
   const { question, lang } = params;
   const value = normalize(question);
-  const pricingUrl = getPricingPageUrl(question);
+  const pricingUrl = getPricingPageUrl();
 
   const asksOwner =
     value.includes("owner") ||
@@ -1459,21 +1585,13 @@ async function answerPricingQuestion(params: {
 - Priority Listing: Rp150.000 untuk 1 tahun, dengan visibilitas lebih tinggi dari Basic.
 - Featured Listing: Rp550.000 untuk 1 tahun, dengan featured exposure, visibilitas tertinggi, social media posting, dan Tetamo Agent support.
 
-Alur setup sangat mudah:
-1. Sign up sebagai owner
-2. Pilih paket Basic, Priority, atau Featured
-3. Isi form listing properti
-4. Upload foto/video
-5. Ikuti step verifikasi dan pembayaran
-6. Listing masuk proses review dan bisa tampil live setelah disetujui
+Mudah untuk mulai: daftar sebagai owner, pilih paket yang cocok, isi detail properti, upload foto/video, lalu selesaikan pembayaran dan verifikasi. Setelah itu, listing Anda bisa tampil live setelah review singkat dari Tetamo.
 
-Pembayaran tersedia melalui QRIS dan debit/kredit card. QRIS biasanya bisa digunakan melalui aplikasi bank dan e-wallet Indonesia yang mendukung QRIS seperti BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, dan ShopeePay.
-
-Jika ingin mulai sederhana, Basic cukup. Jika ingin exposure paling kuat, Featured adalah pilihan terbaik.
+Jika ingin mulai sederhana, Basic sudah cukup. Jika ingin exposure paling kuat, Featured adalah pilihan terbaik.
 
 Apakah Anda ingin mulai sebagai owner? Saya bisa bantu arahkan paket yang paling cocok.
 
-Lihat paket owner:
+Lihat semua paket Tetamo di sini:
 ${pricingUrl}`;
     }
 
@@ -1485,21 +1603,13 @@ ${pricingUrl}`;
 - Agent Pro: Rp3.999.000/tahun untuk 500 listing aktif.
 - Agent Pro opsi bulanan: Rp399.000/bulan dengan komitmen 12 bulan.
 
-Alur setup sangat mudah:
-1. Sign up sebagai agent
-2. Pilih paket Silver, Gold, atau Agent Pro
-3. Lengkapi profil agent
-4. Mulai tambah listing properti
-5. Ikuti step pembayaran
-6. Dashboard agent aktif dan listing bisa masuk proses go live
+Mudah untuk mulai: daftar sebagai agent, pilih paket yang cocok, lengkapi profil agent, lalu selesaikan pembayaran. Setelah pembayaran, dashboard agent aktif dan Anda bisa mulai menambahkan listing.
 
-Silver cocok untuk mulai tampil profesional. Gold cocok untuk agent aktif dengan banyak listing. Agent Pro cocok untuk agent/agency yang ingin scale lebih besar dan exposure premium.
-
-Pembayaran tersedia melalui QRIS dan debit/kredit card.
+Silver cocok untuk mulai tampil profesional. Gold cocok untuk agent aktif dengan banyak listing. Agent Pro cocok untuk agent atau agency yang ingin scale lebih besar.
 
 Apakah Anda ingin mulai sebagai agent? Saya bisa bantu arahkan paket terbaik sesuai jumlah listing Anda.
 
-Lihat paket agent:
+Lihat semua paket Tetamo di sini:
 ${pricingUrl}`;
     }
 
@@ -1511,9 +1621,7 @@ ${pricingUrl}`;
 
 Add-on tersedia untuk owner dan agent. Pembayaran tersedia melalui QRIS dan debit/kredit card.
 
-Apakah Anda ingin lanjut memilih add-on untuk listing Anda?
-
-Lihat add-on:
+Lihat semua paket dan add-on Tetamo di sini:
 ${pricingUrl}`;
     }
 
@@ -1522,11 +1630,10 @@ ${pricingUrl}`;
 
 Paket ini memberikan akses premium ke video edukasi Tetamo untuk owner atau non-member agent. Paket ini tidak auto renew.
 
-Pembayaran tersedia melalui QRIS dan debit/kredit card.
+Anda juga bisa melihat halaman edukasi Tetamo di sini:
+${EDUCATION_URL}
 
-Apakah Anda ingin lanjut ke Education Pass?
-
-Lihat harga terbaru:
+Lihat semua paket Tetamo di sini:
 ${pricingUrl}`;
     }
 
@@ -1543,14 +1650,15 @@ Paket agent:
 - Agent Pro: Rp3.999.000/tahun untuk 500 listing aktif.
 - Agent Pro opsi bulanan: Rp399.000/bulan dengan komitmen 12 bulan.
 
-Mudah untuk mulai:
-Sign up → pilih paket → isi form listing/profil → upload foto/video → bayar → listing atau dashboard Anda aktif setelah pembayaran dan review singkat dari Tetamo.
+Add-on:
+- Boost Listing: Rp300.000 untuk 14 hari.
+- Homepage Spotlight: Rp200.000 untuk 7 hari.
 
 Pembayaran tersedia melalui QRIS dan debit/kredit card.
 
-Apakah Anda ingin lanjut sebagai owner atau agent?
+Apakah Anda ingin mulai sebagai owner atau agent? Saya bisa bantu arahkan paket yang paling cocok.
 
-Harga terbaru:
+Lihat semua paket Tetamo di sini:
 ${pricingUrl}`;
   }
 
@@ -1561,47 +1669,31 @@ ${pricingUrl}`;
 - Priority Listing: Rp150,000 for 1 year, with higher visibility than Basic.
 - Featured Listing: Rp550,000 for 1 year, with featured exposure, highest visibility, social media posting, and Tetamo Agent support.
 
-The setup is simple:
-1. Sign up as an owner
-2. Choose Basic, Priority, or Featured
-3. Fill in the property listing form
-4. Upload photos/videos
-5. Follow the verification and payment steps
-6. The listing can go live after Tetamo’s quick review
+It’s easy to get started: sign up as an owner, choose the package that fits you, add your property details, upload photos/videos, then complete payment and verification. After that, your listing can go live after Tetamo’s quick review.
 
-Payment is available through QRIS and debit/credit card. QRIS can usually be used through QRIS-supported Indonesian bank apps and e-wallets such as BRI, BNI, BCA, Mandiri, GoPay, OVO, DANA, and ShopeePay.
-
-If you want to start simple, Basic is enough. If you want the strongest exposure, Featured is the best choice.
+For a simple start, Basic is enough. For the strongest exposure, Featured is the best choice.
 
 Would you like to start as an owner? I can guide you to the right package.
 
-See owner packages:
+View all Tetamo packages here:
 ${pricingUrl}`;
   }
 
   if (asksAgent && !asksOwner) {
     return `Tetamo agent packages are:
 
-- Silver: Rp499,000/year for 30 active listings.
-- Gold: Rp1,800,000/year for 100 active listings.
-- Agent Pro: Rp3,999,000/year for 500 active listings.
-- Agent Pro monthly option: Rp399,000/month with a 12-month commitment.
+- Silver: Rp499,000/year for 30 active listings
+- Gold: Rp1,800,000/year for 100 active listings
+- Agent Pro: Rp3,999,000/year for 500 active listings
+- Agent Pro monthly option: Rp399,000/month with a 12-month commitment
 
-The setup is simple:
-1. Sign up as an agent
-2. Choose Silver, Gold, or Agent Pro
-3. Complete your agent profile
-4. Start adding property listings
-5. Follow the payment steps
-6. Your agent dashboard becomes active and listings can enter go-live step
+It’s easy to get started: sign up as an agent, choose the package that fits your listing volume, complete your agent profile, then complete payment. After payment, your agent dashboard becomes active and you can start adding listings.
 
-Silver is good if you are starting professionally. Gold is better for active agents with more listings. Agent Pro is best for agents/agencies that want to scale bigger with premium exposure.
-
-Payment is available through QRIS and debit/credit card.
+Silver is good for starting professionally. Gold is better for active agents with more listings. Agent Pro is best for agents or agencies ready to scale bigger.
 
 Would you like to start as an agent? I can guide you to the best package for your listings.
 
-See agent packages:
+View all Tetamo packages here:
 ${pricingUrl}`;
   }
 
@@ -1613,9 +1705,7 @@ ${pricingUrl}`;
 
 Add-ons are available for owners and agents. Payment is available through QRIS and debit/credit card.
 
-Would you like to proceed with an add-on for your listing?
-
-Latest pricing:
+View all Tetamo packages and add-ons here:
 ${pricingUrl}`;
   }
 
@@ -1624,11 +1714,10 @@ ${pricingUrl}`;
 
 It gives premium access to Tetamo educational videos for owners or non-member agents. It does not auto renew.
 
-Payment is available through QRIS and debit/credit card.
+You can also view Tetamo education here:
+${EDUCATION_URL}
 
-Would you like to proceed with Education Pass?
-
-Latest pricing:
+View all Tetamo packages here:
 ${pricingUrl}`;
   }
 
@@ -1645,14 +1734,15 @@ Agent packages:
 - Agent Pro: Rp3,999,000/year for 500 active listings.
 - Agent Pro monthly option: Rp399,000/month with a 12-month commitment.
 
-It’s easy to get started:
-Sign up → choose package → fill form/profile → upload photos/videos → pay → your listing or dashboard becomes active after payment and Tetamo’s quick review.
+Add-ons:
+- Boost Listing: Rp300,000 for 14 days.
+- Homepage Spotlight: Rp200,000 for 7 days.
 
 Payment is available through QRIS and debit/credit card.
 
-Would you like to proceed as an owner or agent?
+Would you like to start as an owner or agent? I can guide you to the right package.
 
-Latest pricing:
+View all Tetamo packages here:
 ${pricingUrl}`;
 }
 
@@ -1667,6 +1757,8 @@ function buildDirectReply(params: {
   if (isGreetingOrVague(question)) return buildGreetingReply(lang);
   if (isTetamoIdentityQuestion(question)) return buildTetamoIdentityReply(lang);
   if (isPaymentModeQuestion(question)) return buildPaymentModeReply(lang);
+  if (isEducationOrBlogQuestion(question))
+    return buildEducationOrBlogReply(question, lang);
   if (audience === "developer") return buildDeveloperReply(lang);
 
   if (
@@ -1784,11 +1876,16 @@ Rules:
 - Reply in ${lang === "id" ? "Indonesian" : "English"}.
 - Answer from Tetamo official knowledge, FAQ, blog/article, education, and platform knowledge.
 - Do not guess.
+- Use the official useful URLs only. Do not invent URL anchors.
+- For pricing links, always use ${PRICELIST_URL}.
+- For blog/article questions, use ${BLOG_URL} when no specific article is found.
+- For education questions, use ${EDUCATION_URL} and the specific guide URLs when relevant.
 - If the answer is about Tetamo identity, office, location, legitimacy, company, ACN/ABN, or what Tetamo is, use the official Tetamo identity knowledge.
 - If the user asks about packages/pricing/listing, answer clearly and include a soft next step.
 - If the user asks about QRIS/payment modes, mention QRIS and debit/credit card only.
 - Do not proactively mention payment failures, refunds, deducted payments, package activation issues, or invoice problems unless the user specifically reports that problem.
 - Do not guarantee leads, sales, rentals, ROI, buyers, tenants, or income.
+- Sound human, friendly, and professional.
 - Keep it clear, practical, and mobile-friendly.
 `.trim();
 
@@ -1842,6 +1939,14 @@ async function buildSupportReply(params: {
 
   const educationContext = await fetchEducationContext(question, lang);
 
+  if (
+    isEducationOrBlogQuestion(question) &&
+    !matchedArticle &&
+    !educationContext
+  ) {
+    return { text: buildEducationOrBlogReply(question, lang) };
+  }
+
   const aiText = await generateOpenAiReply({
     question,
     lang,
@@ -1863,52 +1968,6 @@ async function buildSupportReply(params: {
   return { text: buildFallbackHelpReply(lang) };
 }
 
-function humanizeScorpioReply(text: string, lang: SupportLanguage) {
-  let value = removeOldPricingLines(String(text || "").trim());
-
-  const replacements: Array<[string, string]> = [
-    ["review/live flow", "go-live step"],
-    ["live/review flow", "go-live step"],
-    ["activation/review", "next step"],
-    ["enters review/live flow", "can move toward going live"],
-    ["can enter review/live flow", "can move toward going live"],
-    [
-      "listing/dashboard activates after review",
-      "your listing or dashboard becomes active after payment and Tetamo’s quick review",
-    ],
-    [
-      "Your agent dashboard becomes active and listings can enter review/live flow",
-      "After payment, your agent dashboard becomes active and you can start adding listings",
-    ],
-    [
-      "Dashboard agent aktif dan listing bisa masuk proses review/live",
-      "Setelah pembayaran, dashboard agent Anda aktif dan Anda bisa mulai menambahkan listing",
-    ],
-    [
-      "listing/dashboard aktif setelah proses review",
-      "listing atau dashboard Anda aktif setelah pembayaran dan review singkat dari Tetamo",
-    ],
-  ];
-
-  for (const [oldText, newText] of replacements) {
-    value = value.split(oldText).join(newText);
-  }
-
-  if (lang === "id") {
-    value = value
-      .replace("Alur mudah:", "Mudah untuk mulai:")
-      .replace("Alur setup sangat mudah:", "Mudah untuk mulai:")
-      .replace("Untuk mulai:", "Untuk mulai:");
-  } else {
-    value = value
-      .replace("Easy flow:", "It’s easy to get started:")
-      .replace("The setup is simple:", "It’s easy to get started:")
-      .replace("Starting flow:", "To get started:");
-  }
-
-  return value.trim();
-}
-
 async function generateTwilioWhatsAppReply(question: string) {
   const cleanQuestion = String(question || "").trim();
   const lang = detectReplyLanguage(cleanQuestion);
@@ -1926,7 +1985,10 @@ async function generateTwilioWhatsAppReply(question: string) {
       historyText: `USER: ${cleanQuestion}`,
     });
 
-    return result.text || buildWhatsAppFallbackReply(lang);
+    return humanizeScorpioReply(
+      result.text || buildWhatsAppFallbackReply(lang),
+      lang,
+    );
   } catch (error) {
     console.error("Twilio WhatsApp AI reply error:", error);
     return buildWhatsAppFallbackReply(lang);
@@ -2067,6 +2129,12 @@ async function handleWebsiteSupportAi(req: Request) {
 
   const shouldHandoff = needsHumanHelp(question);
 
+  const actionLabel = shouldHandoff
+    ? lang === "id"
+      ? "Chat dengan Tetamo Agent"
+      : "Chat with Tetamo Agent"
+    : null;
+
   const { error: insertAiError } = await supabase
     .from("support_messages")
     .insert({
@@ -2075,7 +2143,7 @@ async function handleWebsiteSupportAi(req: Request) {
       message_text: storedAiText,
       ai_status: "sent",
       suggested_action: shouldHandoff ? "handoff_to_human" : null,
-      suggested_action_label: null,
+      suggested_action_label: actionLabel,
     });
 
   if (insertAiError) throw insertAiError;
@@ -2094,7 +2162,7 @@ async function handleWebsiteSupportAi(req: Request) {
       ai_reply: getLocalizedMessageText(storedAiText, lang),
       ai_reply_bilingual: JSON.parse(storedAiText),
       suggested_action: shouldHandoff ? "handoff_to_human" : null,
-      suggested_action_label: null,
+      suggested_action_label: actionLabel,
       matched_faq_slug: result.matchedFaq?.slug ?? null,
       matched_article_slug: result.matchedArticle?.slug ?? null,
       reply_language: lang,
@@ -2102,6 +2170,14 @@ async function handleWebsiteSupportAi(req: Request) {
       used_current_pricing: result.usedCurrentPricing ?? false,
       used_official_identity: result.usedOfficialIdentity ?? false,
       payment_modes_supported: ["QRIS", "Debit/Credit Card"],
+      useful_urls: {
+        pricelist: PRICELIST_URL,
+        blog: BLOG_URL,
+        education: EDUCATION_URL,
+        dashboard_guide: EDUCATION_DASHBOARD_GUIDE_URL,
+        posting_property_guide: EDUCATION_POSTING_PROPERTY_URL,
+        faq: FAQ_URL,
+      },
     },
     200,
   );
@@ -2113,8 +2189,16 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         ok: true,
         message:
-          "Tetamo AI reply function is active. Supports Scorpio Assist, official Tetamo identity, FAQ/blog/education search, package sales flow, website/mobile bilingual replies, and Twilio WhatsApp replies.",
+          "Tetamo AI reply function is active. Supports official Tetamo identity, FAQ/blog/education search, package sales flow, website/mobile bilingual replies, and Twilio WhatsApp replies.",
         payment_modes_supported: ["QRIS", "Debit/Credit Card"],
+        useful_urls: {
+          pricelist: PRICELIST_URL,
+          blog: BLOG_URL,
+          education: EDUCATION_URL,
+          dashboard_guide: EDUCATION_DASHBOARD_GUIDE_URL,
+          posting_property_guide: EDUCATION_POSTING_PROPERTY_URL,
+          faq: FAQ_URL,
+        },
       });
     }
 
