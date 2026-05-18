@@ -45,3 +45,14 @@ supabase/.temp/
 
 # Supabase local temp files - never commit
 supabase/.temp/
+
+# Environment files - never commit
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+!.env.example
+
+# Supabase local temp files - never commit
+supabase/.temp/
