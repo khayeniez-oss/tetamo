@@ -1512,17 +1512,7 @@ function buildDirectReply(params: {
     return buildWhatIsTetamoReply(lang);
   }
 
-  if (isSensitivePaymentProblem(question)) {
-    if (lang === "id") {
-      return `Untuk masalah pembayaran seperti saldo terpotong, receipt/invoice, refund, atau paket belum aktif setelah bayar, silakan chat dengan Tetamo Agent supaya bisa dicek berdasarkan akun dan transaksi Anda.
-
-Jam support Tetamo Agent: ${SUPPORT_HOURS_ID}`;
-    }
-
-    return `For payment issues such as deducted balance, receipt/invoice, refund, or package not active after payment, please chat with a Tetamo Agent so it can be checked based on your account and transaction.
-
-Tetamo Agent support hours: ${SUPPORT_HOURS_EN}`;
-  }
+}
 
   if (isPaymentModeQuestion(question)) {
     return buildPaymentModeReply(lang);
