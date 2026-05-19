@@ -5,6 +5,8 @@ import {
   getSiteUrl,
 } from "@/lib/seo-server";
 
+export const dynamic = "force-dynamic";
+
 type SEOEntry = {
   slug?: string | null;
   updated_at?: string | null;
@@ -16,6 +18,19 @@ type SitemapProperty = {
   updated_at?: string | null;
   created_at?: string | null;
 };
+
+type SitemapEntry = MetadataRoute.Sitemap[number];
+
+const FALLBACK_STATIC_SLUGS: Array<{
+  slug: string;
+  changeFrequency: SitemapEntry["changeFrequency"];
+  priority: number;
+}> = [
+  { slug: "/", changeFrequency: "daily", priority: 1 },
+  { slug: "/properti", changeFrequency: "daily", priority: 0.9 },
+  { slug: "/about-us", changeFrequency: "weekly", priority: 0.7 },
+  { slug: "/faq", changeFrequency: "weekly", priority: 0.7 },
+];
 
 function normalizeSlug(value?: string | null) {
   const raw = String(value || "").trim();
@@ -31,11 +46,58 @@ function buildAbsoluteUrl(siteUrl: string, slug: string) {
   return `${siteUrl}${slug}`;
 }
 
+function safeDate(value?: string | null) {
+  if (!value) return new Date();
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return new Date();
+
+  return date;
+}
+
+async function getSafeSitemapData() {
+  const [seoEntriesResult, propertiesResult] = await Promise.allSettled([
+    getIndexableSEOEntries(),
+    getPublicPropertiesForSitemap(),
+  ]);
+
+  const seoEntries =
+    seoEntriesResult.status === "fulfilled"
+      ? (seoEntriesResult.value as SEOEntry[])
+      : [];
+
+  const properties =
+    propertiesResult.status === "fulfilled"
+      ? (propertiesResult.value as SitemapProperty[])
+      : [];
+
+  if (seoEntriesResult.status === "rejected") {
+    console.error("sitemap seoEntries fallback:", seoEntriesResult.reason);
+  }
+
+  if (propertiesResult.status === "rejected") {
+    console.error("sitemap properties fallback:", propertiesResult.reason);
+  }
+
+  return {
+    seoEntries,
+    properties,
+  };
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = getSiteUrl();
+  const { seoEntries, properties } = await getSafeSitemapData();
 
-  const seoEntries = (await getIndexableSEOEntries()) as SEOEntry[];
-  const properties = (await getPublicPropertiesForSitemap()) as SitemapProperty[];
+  const fallbackUrls: MetadataRoute.Sitemap = FALLBACK_STATIC_SLUGS.map(
+    (entry) => ({
+      url: buildAbsoluteUrl(siteUrl, entry.slug),
+      lastModified: new Date(),
+      changeFrequency: entry.changeFrequency,
+      priority: entry.priority,
+    }),
+  );
 
   const staticUrls: MetadataRoute.Sitemap = seoEntries
     .filter((row) => {
@@ -53,7 +115,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
       return {
         url: buildAbsoluteUrl(siteUrl, slug),
-        lastModified: row.updated_at ? new Date(row.updated_at) : new Date(),
+        lastModified: safeDate(row.updated_at),
         changeFrequency: slug === "/" ? "daily" : "weekly",
         priority: slug === "/" ? 1 : 0.8,
       };
@@ -65,10 +127,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const publicPathPart = String(property.slug || property.id || "").trim();
 
       return {
-        url: `${siteUrl}/properti/${publicPathPart}`,
-        lastModified: new Date(
-          property.updated_at || property.created_at || Date.now()
-        ),
+        url: `${siteUrl}/properti/${encodeURIComponent(publicPathPart)}`,
+        lastModified: safeDate(property.updated_at || property.created_at),
         changeFrequency: "daily",
         priority: 0.7,
       };
@@ -76,7 +136,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const deduped = new Map<string, MetadataRoute.Sitemap[number]>();
 
-  for (const entry of [...staticUrls, ...listingUrls]) {
+  for (const entry of [...fallbackUrls, ...staticUrls, ...listingUrls]) {
     deduped.set(entry.url, entry);
   }
 
