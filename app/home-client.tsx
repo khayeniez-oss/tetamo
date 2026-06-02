@@ -20,6 +20,16 @@ import { supabase } from "@/lib/supabase";
 
 const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM0 -RTLO", "TTM013"];
 
+const FEATURED_AGENT_NAMES = [
+  "Ricco Bong (RJOI)",
+  "i Ketut Nur Salleh",
+  "Elly (XCTP)",
+];
+
+const TETAMO_APP_STORE_URL = "#";
+const TETAMO_PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.tetamo.mobile";
+
 /* =========================
    TYPES
 ========================= */
@@ -503,6 +513,60 @@ async function fetchHomepageProfilesByIds(ids: string[]) {
   } catch (error) {
     console.error("Failed to load homepage profile fallback:", error);
     return new Map<string, HomepageProfileRow>();
+  }
+}
+
+
+function normalizeProfileName(value?: string | null) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+async function fetchHomepageProfilesByFeaturedNames(names: string[]) {
+  const requestedNames = names.filter(Boolean);
+
+  if (requestedNames.length === 0) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        full_name,
+        photo_url,
+        address,
+        agency,
+        phone,
+        role,
+        instagram_url,
+        facebook_url,
+        tiktok_url,
+        linkedin_url
+      `);
+
+    if (error) {
+      console.error("Failed to load manual featured agents:", error);
+      return [];
+    }
+
+    const rows = (data ?? []) as HomepageProfileRow[];
+
+    return requestedNames
+      .map((name) =>
+        rows.find(
+          (profile) =>
+            normalizeProfileName(profile.full_name) ===
+            normalizeProfileName(name)
+        )
+      )
+      .filter((profile): profile is HomepageProfileRow => Boolean(profile));
+  } catch (error) {
+    console.error("Failed to load manual featured agents:", error);
+    return [];
   }
 }
 
@@ -1761,83 +1825,40 @@ function FeaturedAgentsSection() {
       try {
         setLoading(true);
 
-        const rows = await fetchHomepageProperties();
-
-        const agentRows = rows
-          .filter((row) => isListingPublic(row))
-          .filter((row) => isVerifiedListing(row))
-          .filter((row) => hasFeaturedPlacement(row))
-          .filter(
-            (row) =>
-              normalizePostedByType(row.contact_role, row.source) === "agent"
-          )
-          .sort(sortRowsByFeaturedNewest);
-
-        const uniqueRows = new Map<string, HomepagePropertyRow>();
-
-        for (const row of agentRows) {
-          const key =
-            row.contact_user_id ||
-            row.contact_name ||
-            row.contact_phone ||
-            row.id;
-
-          if (!uniqueRows.has(key)) {
-            uniqueRows.set(key, row);
-          }
-        }
-
-        const limitedRows = Array.from(uniqueRows.values()).slice(0, 3);
-
-        const profileIds = Array.from(
-          new Set(
-            limitedRows
-              .map((row) => row.contact_user_id)
-              .filter((value): value is string => Boolean(value))
-          )
+        const profiles = await fetchHomepageProfilesByFeaturedNames(
+          FEATURED_AGENT_NAMES
         );
 
-        const profilesMap = await fetchHomepageProfilesByIds(profileIds);
-
-        const mapped = limitedRows.map((row) => {
-          const profile = row.contact_user_id
-            ? profilesMap.get(row.contact_user_id)
-            : null;
+        const mapped = profiles.map((profile) => {
+          const name = profile.full_name || "Tetamo Agent";
+          const fallbackPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            name
+          )}&background=1C1C1E&color=fff`;
 
           return {
-            id: row.contact_user_id || row.id,
-            name: row.contact_name || profile?.full_name || "Tetamo Agent",
-            photo:
-              profile?.photo_url ||
-              "https://randomuser.me/api/portraits/men/32.jpg",
-            location:
-              profile?.address ||
-              row.province ||
-              row.city ||
-              row.area ||
-              "Indonesia",
-            agency:
-              row.contact_agency || profile?.agency || "Tetamo Agent Network",
+            id: profile.id,
+            name,
+            photo: profile.photo_url || fallbackPhoto,
+            location: profile.address || "Indonesia",
+            agency: profile.agency || "Tetamo Agent Network",
             experience:
               lang === "id"
-                ? "Agen Unggulan Tetamo"
-                : "Tetamo Featured Agent",
-            whatsapp: normalizeWhatsapp(
-              row.contact_phone || profile?.phone || ""
-            ),
+                ? "Agen properti pilihan Tetamo"
+                : "Selected Tetamo real estate agent",
+            whatsapp: normalizeWhatsapp(profile.phone || ""),
             agentVerified: true,
             socials: {
-              instagram: profile?.instagram_url || "",
-              facebook: profile?.facebook_url || "",
-              tiktok: profile?.tiktok_url || "",
-              linkedin: profile?.linkedin_url || "",
+              instagram: profile.instagram_url || "",
+              facebook: profile.facebook_url || "",
+              tiktok: profile.tiktok_url || "",
+              linkedin: profile.linkedin_url || "",
             },
           };
         });
 
         if (!ignore) setAgents(mapped);
       } catch (error) {
-        console.error("Failed to load featured agents:", error);
+        console.error("Failed to load manual featured agents:", error);
         if (!ignore) setAgents([]);
       } finally {
         if (!ignore) setLoading(false);
@@ -1855,13 +1876,13 @@ function FeaturedAgentsSection() {
     <section className="bg-white px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
         <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
-          {lang === "id" ? "Agen Unggulan TeTamo" : "TeTamo Featured Agents"}
+          {lang === "id" ? "Agen Unggulan Tetamo" : "Tetamo Featured Agents"}
         </h2>
 
         <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
           {lang === "id"
-            ? "Profil agen modern yang terhubung dengan media sosial, memudahkan pembeli serius menemukan dan menghubungi Anda secara langsung."
-            : "Modern agent profiles connected to social media, making it easy for serious buyers to find and contact you directly."}
+            ? "Temui agen properti pilihan Tetamo yang siap membantu pembeli, penyewa, dan pemilik properti terhubung dengan lebih mudah."
+            : "Meet selected Tetamo real estate agents ready to help buyers, renters, and property owners connect faster."}
         </p>
 
         {loading ? (
@@ -1876,50 +1897,56 @@ function FeaturedAgentsSection() {
           <SectionEmpty
             text={
               lang === "id"
-                ? "Belum ada agen unggulan."
-                : "No featured agents yet."
+                ? "Belum ada agen unggulan. Periksa nama agen manual di homepage."
+                : "No featured agents yet. Please check the manual agent names on the homepage."
             }
           />
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
             {agents.map((agent) => {
               const whatsappHref = agent.whatsapp
-                ? `https://wa.me/${agent.whatsapp}`
+                ? `https://wa.me/${agent.whatsapp}?text=${encodeURIComponent(
+                    lang === "id"
+                      ? `Halo ${agent.name}, saya melihat profil Anda di Tetamo dan ingin bertanya tentang properti.`
+                      : `Hello ${agent.name}, I saw your profile on Tetamo and would like to ask about property.`
+                  )}`
                 : "#";
 
               return (
                 <div
                   key={agent.id}
-                  className="relative rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
+                  className="relative overflow-hidden rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
                 >
-                  <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2">
+                  <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-[#1C1C1E] via-[#2A2419] to-[#B8860B]" />
+
+                  <div className="relative z-10 flex flex-wrap items-center gap-2">
                     {agent.agentVerified && (
-                      <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                      <div className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] shadow-sm sm:text-xs">
                         {lang === "id"
                           ? "Agen Terverifikasi"
                           : "Verified Agent"}
                       </div>
                     )}
 
-                    <div className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
                       <Crown className="h-3.5 w-3.5" />
                       {lang === "id" ? "Agen Unggulan" : "Featured Agent"}
                     </div>
                   </div>
 
-                  <div className="mt-10 flex items-start gap-4 sm:mt-12">
+                  <div className="relative z-10 mt-7 flex items-start gap-4">
                     <img
                       src={agent.photo}
                       alt={agent.name}
-                      className="h-24 w-24 shrink-0 rounded-2xl object-cover sm:h-28 sm:w-28"
+                      className="h-24 w-24 shrink-0 rounded-2xl border-4 border-white bg-white object-cover shadow-sm sm:h-28 sm:w-28"
                     />
 
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 pt-10 sm:pt-12">
                       <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
                         {agent.name}
                       </h3>
 
-                      <div className="mt-1 text-sm text-gray-600">
+                      <div className="mt-1 text-sm font-medium text-gray-700">
                         {agent.agency}
                       </div>
 
@@ -1927,7 +1954,7 @@ function FeaturedAgentsSection() {
                         {agent.location}
                       </div>
 
-                      <p className="mt-2 text-sm text-gray-500">
+                      <p className="mt-2 text-sm leading-6 text-gray-500">
                         {agent.experience}
                       </p>
                     </div>
@@ -2097,6 +2124,122 @@ function FeaturedOwnersSection() {
   );
 }
 
+
+function DownloadTetamoAppSection() {
+  const { lang } = useLanguage();
+
+  return (
+    <section className="bg-[#050505] px-4 py-16 text-white sm:px-6 lg:px-8 lg:py-24">
+      <div className="mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-[32px] border border-[#D8B46A]/30 bg-gradient-to-br from-[#111111] via-[#050505] to-[#2B2115] px-5 py-8 shadow-2xl sm:px-8 sm:py-10 lg:grid-cols-[1fr_470px] lg:items-center lg:px-10 lg:py-12">
+        <div>
+          <div className="inline-flex rounded-full border border-[#D8B46A]/40 bg-[#D8B46A]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-[#D8B46A]">
+            {lang === "id" ? "Aplikasi Tetamo" : "Tetamo Mobile App"}
+          </div>
+
+          <h2 className="mt-5 max-w-3xl text-3xl font-extrabold leading-tight tracking-[-0.03em] text-white sm:text-4xl lg:text-5xl">
+            {lang === "id"
+              ? "Download aplikasi Tetamo di iOS dan Android."
+              : "Download the Tetamo app on iOS and Android."}
+          </h2>
+
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+            {lang === "id"
+              ? "Cari properti terverifikasi di Indonesia, hubungi pemilik atau agen melalui WhatsApp, jadwalkan viewing, dan pasang listing langsung dari ponsel Anda."
+              : "Search verified properties in Indonesia, contact owners or agents through WhatsApp, schedule viewings, and list properties directly from your phone."}
+          </p>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-bold text-[#D8B46A]">
+                {lang === "id" ? "Untuk Pembeli & Penyewa" : "For Buyers & Renters"}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-white/65">
+                {lang === "id"
+                  ? "Cari properti, simpan favorit, hubungi WhatsApp, dan jadwalkan viewing."
+                  : "Search properties, save favourites, contact via WhatsApp, and schedule viewings."}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-bold text-[#D8B46A]">
+                {lang === "id" ? "Untuk Pemilik & Agen" : "For Owners & Agents"}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-white/65">
+                {lang === "id"
+                  ? "Pasang listing, bayar QRIS, dan kelola leads dari dashboard."
+                  : "Post listings, pay with QRIS, and manage leads from your dashboard."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <a
+              href={TETAMO_APP_STORE_URL}
+              onClick={(e) => {
+                if (TETAMO_APP_STORE_URL === "#") e.preventDefault();
+              }}
+              target="_blank"
+              rel="noreferrer"
+              className={`inline-flex min-h-[56px] items-center justify-center rounded-2xl border border-white/15 px-5 py-3 text-center text-sm font-bold transition ${
+                TETAMO_APP_STORE_URL === "#"
+                  ? "cursor-not-allowed bg-white/10 text-white/50"
+                  : "bg-white text-[#1C1C1E] hover:bg-[#D8B46A]"
+              }`}
+            >
+              {lang === "id" ? "Download di App Store" : "Download on App Store"}
+            </a>
+
+            <a
+              href={TETAMO_PLAY_STORE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-[#D8B46A] px-5 py-3 text-center text-sm font-bold text-[#1C1C1E] transition hover:brightness-110"
+            >
+              {lang === "id" ? "Dapatkan di Google Play" : "Get it on Google Play"}
+            </a>
+          </div>
+        </div>
+
+        <div className="relative mx-auto flex min-h-[520px] w-full max-w-[470px] items-center justify-center">
+          <div className="absolute left-0 top-10 h-64 w-64 rounded-full bg-[#D8B46A]/20 blur-3xl" />
+          <div className="absolute bottom-12 right-0 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+
+          <div className="relative h-[500px] w-full">
+            <div className="absolute left-0 top-8 w-[58%] rotate-[-5deg] overflow-hidden rounded-[34px] border border-[#D8B46A]/40 bg-black p-2 shadow-2xl">
+              <img
+                src="/app-showcase/tetamo-home.png"
+                alt="Tetamo mobile app homepage"
+                className="h-[470px] w-full rounded-[26px] object-cover object-top"
+              />
+            </div>
+
+            <div className="absolute right-0 top-0 w-[58%] rotate-[5deg] overflow-hidden rounded-[34px] border border-[#D8B46A]/40 bg-black p-2 shadow-2xl">
+              <img
+                src="/app-showcase/tetamo-property.png"
+                alt="Tetamo mobile app property page"
+                className="h-[470px] w-full rounded-[26px] object-cover object-top"
+              />
+            </div>
+
+            <div className="absolute bottom-0 left-1/2 w-[78%] -translate-x-1/2 rounded-3xl border border-[#D8B46A]/30 bg-[#111111]/95 p-5 text-center shadow-2xl backdrop-blur">
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#D8B46A]">
+                TETAMO APP
+              </p>
+              <p className="mt-2 text-xl font-extrabold text-white">
+                {lang === "id"
+                  ? "Properti Indonesia dalam genggaman"
+                  : "Indonesia property in your hand"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+
 /* =========================
    PAGE
 ========================= */
@@ -2224,6 +2367,7 @@ export default function HomeClient() {
       <FeaturedPropertiesSection />
       <FeaturedAgentsSection />
       <FeaturedOwnersSection />
+      <DownloadTetamoAppSection />
 
       <section className="mt-12 px-4 pb-16 sm:px-6 lg:mt-16 lg:px-8 lg:pb-20">
         <div className="mx-auto max-w-7xl">
