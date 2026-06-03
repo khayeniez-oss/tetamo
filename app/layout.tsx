@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import FloatingWhatsApp from "@/components/FloatingWhatsApp";
+import MetaPixel from "@/components/MetaPixel";
 import { LanguageProvider } from "./context/LanguageContext";
 import { CurrencyProvider } from "./context/CurrencyContext";
 
@@ -15,8 +16,7 @@ export const metadata: Metadata = {
     default: "Tetamo | Property Marketplace Indonesia",
     template: "%s | Tetamo",
   },
-  description:
-    "Browse properties for sale and rent in Indonesia with Tetamo.",
+  description: "Browse properties for sale and rent in Indonesia with Tetamo.",
   robots: {
     index: true,
     follow: true,
@@ -26,8 +26,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     title: "Tetamo | Property Marketplace Indonesia",
-    description:
-      "Browse properties for sale and rent in Indonesia with Tetamo.",
+    description: "Browse properties for sale and rent in Indonesia with Tetamo.",
     url: `${siteUrl}/`,
   },
 };
@@ -40,11 +39,16 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className="bg-white text-gray-900">
+        <MetaPixel />
+
         <LanguageProvider>
           <CurrencyProvider>
             <Navbar />
+
             {children}
+
             <FloatingWhatsApp />
+
             <footer className="border-t border-gray-100 py-10 text-center text-sm text-gray-500">
               ©️ 2025 Tetamo Pty Ltd (ABN 18 689 780 970). All rights reserved.
             </footer>
