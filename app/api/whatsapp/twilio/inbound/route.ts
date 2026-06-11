@@ -126,6 +126,7 @@ function detectLanguage(message: string) {
     "properti",
     "rumah",
     "jual",
+    "beli",
     "sewa",
     "pemilik",
     "agent",
@@ -140,6 +141,14 @@ function detectLanguage(message: string) {
     "kantor",
     "alamat",
     "perusahaan",
+    "bayar",
+    "pembayaran",
+    "jadwal",
+    "viewing",
+    "pasang",
+    "aplikasi",
+    "download",
+    "qris",
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
@@ -151,12 +160,12 @@ function getSafeFallbackReply(message: string) {
   if (lang === "id") {
     return `Halo, selamat datang di Tetamo.
 
-Apakah Anda ingin memasang listing properti, mencari properti, atau bertanya tentang paket owner/agent/developer?`;
+Apakah Anda ingin memasang listing properti, mencari properti, atau bertanya tentang paket owner, agent, atau developer?`;
   }
 
   return `Hi, welcome to Tetamo.
 
-Are you looking to list a property, find a property, or ask about owner/agent/developer packages?`;
+Are you looking to list a property, find a property, or ask about owner, agent, or developer packages?`;
 }
 
 async function sendTwilioWhatsappMessage(
@@ -271,93 +280,175 @@ async function sendReplyAndReturnXml(params: URLSearchParams, reply: string) {
   };
 }
 
-function detectHandover(message: string): HandoverResult {
+function includesAny(message: string, keywords: string[]) {
   const lower = message.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword));
+}
 
-  const handoverRules: Array<{ reason: string; keywords: string[] }> = [
-    {
-      reason: "Customer requested human/admin",
-      keywords: [
-        "admin",
-        "human",
-        "real person",
-        "orang asli",
-        "orang beneran",
-        "manusia",
-        "cs",
-        "customer service",
-        "speak to someone",
-        "bicara dengan admin",
-        "hubungi admin",
-        "mau bicara",
-      ],
-    },
-    {
-      reason: "Payment issue",
-      keywords: [
-        "i already paid",
-        "already paid",
-        "payment failed",
-        "payment problem",
-        "paid but",
-        "sudah bayar",
-        "saya sudah bayar",
-        "pembayaran gagal",
-        "masalah pembayaran",
-        "invoice",
-        "receipt",
-        "struk",
-        "bukti bayar",
-      ],
-    },
-    {
-      reason: "Refund or complaint",
-      keywords: [
-        "refund",
-        "complaint",
-        "complain",
-        "komplain",
-        "keluhan",
-        "pengembalian dana",
-        "uang kembali",
-        "laporan",
-      ],
-    },
-    {
-      reason: "Verification or document issue",
-      keywords: [
-        "verification rejected",
-        "verifikasi ditolak",
-        "dokumen ditolak",
-        "document rejected",
-        "ktp",
-        "sertifikat bermasalah",
-        "verification problem",
-        "masalah verifikasi",
-      ],
-    },
-    {
-      reason: "Custom package / proposal inquiry",
-      keywords: [
-        "custom package",
-        "special package",
-        "paket khusus",
-        "custom quotation",
-        "custom quote",
-        "proposal",
-        "partnership",
-        "kerja sama khusus",
-      ],
-    },
+function detectHandover(message: string): HandoverResult {
+  const lower = message.toLowerCase().trim();
+
+  const explicitHumanRequest = [
+    "sambungkan ke admin",
+    "hubungkan ke admin",
+    "mau bicara dengan admin",
+    "ingin bicara dengan admin",
+    "saya mau bicara dengan admin",
+    "saya ingin bicara dengan admin",
+    "mau ngomong sama admin",
+    "ingin ngomong sama admin",
+    "hubungi admin",
+    "tolong hubungi admin",
+    "minta admin",
+    "minta dihubungi admin",
+    "admin hubungi saya",
+    "bicara dengan manusia",
+    "bicara dengan orang",
+    "orang asli",
+    "orang beneran",
+    "customer service",
+    "speak to human",
+    "speak to a human",
+    "speak to someone",
+    "real person",
+    "connect me to admin",
+    "connect me to a human",
+    "connect me to support",
+    "talk to admin",
+    "talk to a human",
+    "human support",
   ];
 
-  for (const rule of handoverRules) {
-    if (rule.keywords.some((keyword) => lower.includes(keyword))) {
-      return {
-        shouldHandover: true,
-        reason: rule.reason,
-      };
-    }
+  if (
+    includesAny(lower, explicitHumanRequest) ||
+    lower === "cs" ||
+    lower === "admin please" ||
+    lower === "admin pls"
+  ) {
+    return {
+      shouldHandover: true,
+      reason: "Customer explicitly requested human/admin support",
+    };
+  }
+
+  const paymentIssue = [
+    "i already paid",
+    "already paid",
+    "payment failed",
+    "payment problem",
+    "paid but",
+    "payment not active",
+    "my payment",
+    "invoice issue",
+    "receipt issue",
+    "sudah bayar",
+    "saya sudah bayar",
+    "sudah transfer",
+    "sudah bayar tapi",
+    "pembayaran gagal",
+    "masalah pembayaran",
+    "paket belum aktif",
+    "iklan belum aktif",
+    "invoice",
+    "receipt",
+    "struk",
+    "bukti bayar",
+  ];
+
+  if (includesAny(lower, paymentIssue)) {
+    return {
+      shouldHandover: true,
+      reason: "Payment or billing issue",
+    };
+  }
+
+  const refundComplaintIssue = [
+    "refund",
+    "complaint",
+    "complain",
+    "i want to complain",
+    "bad service",
+    "not happy",
+    "angry",
+    "komplain",
+    "keluhan",
+    "kecewa",
+    "marah",
+    "pengembalian dana",
+    "uang kembali",
+    "laporan",
+  ];
+
+  if (includesAny(lower, refundComplaintIssue)) {
+    return {
+      shouldHandover: true,
+      reason: "Complaint or refund request",
+    };
+  }
+
+  const verificationIssue = [
+    "verification rejected",
+    "verifikasi ditolak",
+    "dokumen ditolak",
+    "document rejected",
+    "ktp bermasalah",
+    "sertifikat bermasalah",
+    "verification problem",
+    "masalah verifikasi",
+    "listing ditolak",
+    "iklan ditolak",
+  ];
+
+  if (includesAny(lower, verificationIssue)) {
+    return {
+      shouldHandover: true,
+      reason: "Verification or document issue",
+    };
+  }
+
+  const legalComplianceIssue = [
+    "legal advice",
+    "legal issue",
+    "lawsuit",
+    "court",
+    "notaris",
+    "ppat",
+    "pajak",
+    "tax issue",
+    "government registration",
+    "compliance issue",
+    "masalah hukum",
+    "gugatan",
+    "pengadilan",
+    "izin usaha",
+    "legalitas perusahaan",
+  ];
+
+  if (includesAny(lower, legalComplianceIssue)) {
+    return {
+      shouldHandover: true,
+      reason: "Legal, compliance, or official company matter",
+    };
+  }
+
+  const customProposalIssue = [
+    "custom package",
+    "special package",
+    "paket khusus",
+    "custom quotation",
+    "custom quote",
+    "proposal khusus",
+    "kerja sama khusus",
+    "enterprise",
+    "bulk listing",
+    "bulk upload",
+  ];
+
+  if (includesAny(lower, customProposalIssue)) {
+    return {
+      shouldHandover: true,
+      reason: "Custom package or proposal inquiry",
+    };
   }
 
   return {
@@ -370,18 +461,32 @@ function buildHandoverReply(message: string, reason: string) {
   const lang = detectLanguage(message);
 
   if (lang === "id") {
-    return `Baik, untuk hal ini admin Tetamo perlu membantu secara langsung.
+    return `Baik, untuk hal ini tim Tetamo akan membantu mengecek lebih lanjut.
 
-Saya akan tandai percakapan ini untuk ditindaklanjuti oleh admin Tetamo agar bisa dibantu dengan lebih tepat.
-
-Alasan: ${reason}`;
+Saya sudah tandai percakapan ini agar bisa ditindaklanjuti dengan lebih tepat.`;
   }
 
-  return `Sure, this needs to be checked by Tetamo admin directly.
+  return `Sure, the Tetamo team will help check this further.
 
-I’ll mark this conversation for admin follow-up so the team can assist you properly.
+I’ve marked this conversation so it can be followed up properly.`;
+}
 
-Reason: ${reason}`;
+function removeUnwantedAdminClosing(reply: string) {
+  let clean = String(reply || "").trim();
+
+  const unwantedPatterns = [
+    /(?:\n|\r|^).*?(?:apakah|apa)\s+(?:anda|kamu)\s+(?:ingin|mau).*?(?:admin|tim|human|manusia).*?\??\s*$/i,
+    /(?:\n|\r|^).*?(?:mau|ingin)\s+saya\s+(?:hubungkan|sambungkan|teruskan).*?(?:admin|tim).*?\??\s*$/i,
+    /(?:\n|\r|^).*?do\s+you\s+want\s+me\s+to\s+(?:connect|transfer|pass|assign).*?(?:admin|team|human).*?\??\s*$/i,
+    /(?:\n|\r|^).*?would\s+you\s+like\s+me\s+to\s+(?:connect|transfer|pass|assign).*?(?:admin|team|human).*?\??\s*$/i,
+    /(?:\n|\r|^).*?shall\s+i\s+(?:connect|transfer|pass|assign).*?(?:admin|team|human).*?\??\s*$/i,
+  ];
+
+  for (const pattern of unwantedPatterns) {
+    clean = clean.replace(pattern, "").trim();
+  }
+
+  return clean || reply;
 }
 
 async function upsertConversation(
@@ -598,6 +703,12 @@ function buildTetamoAiPrompt(params: {
   return `
 You are Tetamo WhatsApp AI Lead Handler and Support Assistant.
 
+Main language rule:
+- If the customer writes in Indonesian, reply in Indonesian.
+- If the customer writes in English, reply in English.
+- If the customer mixes Indonesian and English, light bilingual is okay.
+- Do not randomly switch language.
+
 Your main purpose:
 Most messages come from Instagram/Facebook/Meta advertising. You respond 24/7 to help Tetamo capture leads, answer questions, guide users, and move the conversation forward professionally.
 
@@ -614,9 +725,28 @@ Your personality:
   - "Untuk pasang listing di Tetamo..."
   - "That’s a fair question..."
 - Keep replies WhatsApp-friendly with short paragraphs.
-- Use Indonesian when the customer writes Indonesian.
-- Use English when the customer writes English.
-- If the customer mixes English and Indonesian, light bilingual is okay.
+- Keep the answer focused. Avoid long essays unless the customer asks for details.
+
+Very important admin handover rule:
+- Do NOT offer admin handover at the end of normal replies.
+- Do NOT say "Do you want me to connect you to admin?"
+- Do NOT say "Would you like me to pass you to the team?"
+- Do NOT say "Mau saya sambungkan ke admin?"
+- Do NOT say "Apakah Anda ingin saya teruskan ke admin?"
+- Only mention admin/team follow-up when the customer clearly asks for human help, has a payment/account/refund/complaint/legal issue, asks for official company/legal details, or the answer genuinely requires account-specific checking.
+- For normal sales, pricing, listing, buyer/renter, owner, agent, dashboard, app, or Tetamo feature questions, answer directly and end with a useful Tetamo CTA.
+
+Good CTA endings:
+- Indonesian examples:
+  - "Anda bisa mulai dari aplikasi Tetamo: buat listing, bayar pakai QRIS, lalu iklan bisa naik."
+  - "Silakan cek Tetamo dan kirim lokasi atau tipe properti yang Anda cari."
+  - "Kalau Anda owner atau agent, Anda bisa mulai dengan pilih paket lalu buat listing di Tetamo."
+  - "Boleh kirim tipe properti dan lokasi yang Anda cari?"
+- English examples:
+  - "You can start from the Tetamo app: create your listing, pay with QRIS, and publish your ad."
+  - "You can browse Tetamo and send the location or property type you are looking for."
+  - "If you are an owner or agent, you can choose a package and create your listing in Tetamo."
+  - "You can send the property type and location you are looking for."
 
 Official Tetamo company information:
 - Tetamo is an Australian-based SaaS/property marketplace business under Tetamo Pty Ltd.
@@ -627,9 +757,9 @@ Official Tetamo company information:
 - Tetamo does not represent itself as the seller, landlord, buyer agent, or real estate broker for listed properties.
 - Tetamo provides platform, advertising, listing, marketplace, technology, and SaaS-related services.
 - If asked where the office is, do NOT say Tetamo has no office. Say Tetamo is an Australian-based company under Tetamo Pty Ltd with a company presence/office in Sydney, Australia, and operates digitally for Indonesia's property market.
-- If asked for a walk-in appointment, physical visit, or full address, say Tetamo primarily handles support and platform inquiries online through official channels, and admin can follow up for official business matters.
+- If asked for a walk-in appointment, physical visit, or full address, say Tetamo primarily handles support and platform inquiries online through official channels, and the Tetamo team can follow up for official business matters.
 - If asked if Tetamo can operate in Indonesia even though it is Australian-based, explain that Tetamo is an online platform/SaaS business serving the Indonesian property market digitally, similar to how global online platforms can operate across countries through online services. Keep it simple and professional.
-- Do not provide legal advice. If the question is legal, licensing, government registration, tax, compliance, or formal business verification, say admin can follow up with the official company information.
+- Do not provide legal advice. If the question is legal, licensing, government registration, tax, compliance, or formal business verification, say the Tetamo team can follow up with official company information.
 
 Tetamo identity:
 Tetamo is a property marketplace platform in Indonesia for property owners, agents, agencies, developers, buyers, renters, and investors.
@@ -709,7 +839,7 @@ If user asks about developers, projects, or developer license:
 - Explain that developer exposure and licensing are handled separately from normal owner/agent listing.
 - Share:
   ${TETAMO_LINKS.developerLicense}
-- If they need custom discussion or proposal, say Tetamo admin can follow up.
+- If they need custom discussion or proposal, say the Tetamo team can follow up.
 
 Pricing answer style:
 If user asks price:
@@ -735,8 +865,10 @@ If message is only "hi", "hello", "info", "price", or unclear:
 - Reply naturally.
 - Ask whether they are an owner, agent, buyer/renter, or developer.
 - Keep it short.
-Example:
-"Hi, welcome to Tetamo. Are you looking to list a property, find a property, or ask about agent/developer packages?"
+Example Indonesian:
+"Halo, selamat datang di Tetamo. Anda ingin pasang iklan properti, cari properti, atau tanya paket owner/agent/developer?"
+Example English:
+"Hi, welcome to Tetamo. Are you looking to list a property, find a property, or ask about owner, agent, or developer packages?"
 
 Rude or arrogant customers:
 If the user is rude, arrogant, insulting, or disrespectful:
@@ -746,11 +878,12 @@ If the user is rude, arrogant, insulting, or disrespectful:
 Example:
 "I’m happy to help, but let’s keep the conversation professional so I can assist you properly."
 
-Admin handover:
-If the issue needs admin, payment check, verification check, refund, complaint, custom proposal, legal/compliance question, full company address request, or account-specific support:
+Admin/team follow-up:
+If the issue truly needs payment check, verification check, refund, complaint, custom proposal, legal/compliance question, full company address request, or account-specific support:
 - Do not pretend to solve it.
-- Say admin can follow up.
+- Say the Tetamo team can follow up.
 - Keep the reply polite and clear.
+- Do not ask whether they want admin unless they asked for admin/human first.
 
 Current conversation:
 ${conversationText || "No previous messages yet."}
@@ -780,11 +913,14 @@ async function generateTetamoAiReply(params: {
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
-      temperature: 0.5,
+      temperature: 0.45,
       max_output_tokens: 700,
     });
 
-    return limitWhatsAppReply(response.output_text || fallbackReply);
+    const rawReply = response.output_text || fallbackReply;
+    const cleanedReply = removeUnwantedAdminClosing(rawReply);
+
+    return limitWhatsAppReply(cleanedReply || fallbackReply);
   } catch (error) {
     console.error("OpenAI WhatsApp reply failed:", error);
     return fallbackReply;
@@ -841,8 +977,8 @@ export async function POST(req: Request) {
 
       const reply =
         lang === "id"
-          ? "Percakapan ini sudah ditandai untuk ditindaklanjuti oleh admin Tetamo. Tim kami akan membantu Anda lebih lanjut."
-          : "This conversation has already been marked for Tetamo admin follow-up. Our team will assist you further.";
+          ? "Percakapan ini sedang ditindaklanjuti oleh tim Tetamo. Tim kami akan membantu Anda lebih lanjut."
+          : "This conversation is being followed up by the Tetamo team. Our team will assist you further.";
 
       const { twilioSendResult, response } = await sendReplyAndReturnXml(
         params,
