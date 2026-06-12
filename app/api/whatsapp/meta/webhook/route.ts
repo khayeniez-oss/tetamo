@@ -39,20 +39,29 @@ type MetaWebhookValue = {
   statuses?: Array<Record<string, unknown>>;
 };
 
-function getVerifyToken() {
-  return process.env.META_WEBHOOK_VERIFY_TOKEN || "";
+function cleanEnv(value?: string | null) {
+  return String(value || "").trim();
+}
+
+function getVerifyTokens() {
+  return [
+    process.env.META_WEBHOOK_VERIFY_TOKEN,
+    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    process.env.META_VERIFY_TOKEN,
+  ]
+    .map((value) => cleanEnv(value))
+    .filter(Boolean);
 }
 
 function getMetaAccessToken() {
-  return process.env.META_WHATSAPP_ACCESS_TOKEN || "";
+  return cleanEnv(process.env.META_WHATSAPP_ACCESS_TOKEN);
 }
 
 function getPhoneNumberId(fallback?: string | null) {
   return (
-    fallback ||
-    process.env.META_WHATSAPP_PHONE_NUMBER_ID ||
-    process.env.WHATSAPP_PHONE_NUMBER_ID ||
-    ""
+    cleanEnv(fallback) ||
+    cleanEnv(process.env.META_WHATSAPP_PHONE_NUMBER_ID) ||
+    cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
   );
 }
 
@@ -163,7 +172,9 @@ function getFallbackReply(message: string) {
 
 function limitReply(value: string) {
   const clean = String(value || "").trim();
+
   if (clean.length <= 1700) return clean;
+
   return clean.slice(0, 1690).trim() + "...";
 }
 
@@ -501,20 +512,50 @@ function extractWebhookMessages(payload: any) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
-  const mode = url.searchParams.get("hub.mode");
-  const token = url.searchParams.get("hub.verify_token");
-  const challenge = url.searchParams.get("hub.challenge");
+  const mode = cleanEnv(url.searchParams.get("hub.mode"));
+  const providedToken = cleanEnv(url.searchParams.get("hub.verify_token"));
+  const challenge = cleanEnv(url.searchParams.get("hub.challenge"));
+  const expectedTokens = getVerifyTokens();
 
-  if (mode === "subscribe" && token === getVerifyToken() && challenge) {
+  const tokenMatches = expectedTokens.some(
+    (expectedToken) => providedToken === expectedToken
+  );
+
+  console.log("Meta WhatsApp webhook verification request:", {
+    mode,
+    hasProvidedToken: Boolean(providedToken),
+    providedTokenLength: providedToken.length,
+    expectedTokenCount: expectedTokens.length,
+    expectedTokenLengths: expectedTokens.map((value) => value.length),
+    tokenMatches,
+    hasChallenge: Boolean(challenge),
+  });
+
+  if (mode === "subscribe" && tokenMatches && challenge) {
     return new Response(challenge, {
       status: 200,
       headers: {
-        "Content-Type": "text/plain",
+        "Content-Type": "text/plain; charset=utf-8",
       },
     });
   }
 
-  return new Response("Forbidden", { status: 403 });
+  return Response.json(
+    {
+      success: false,
+      error: "Meta webhook verification failed.",
+      mode,
+      hasProvidedToken: Boolean(providedToken),
+      providedTokenLength: providedToken.length,
+      expectedTokenCount: expectedTokens.length,
+      expectedTokenLengths: expectedTokens.map((value) => value.length),
+      tokenMatches,
+      hasChallenge: Boolean(challenge),
+      note:
+        "Set META_WEBHOOK_VERIFY_TOKEN in Vercel Production env, redeploy, then use the same token value in Meta Verify token.",
+    },
+    { status: 403 }
+  );
 }
 
 export async function POST(request: Request) {
