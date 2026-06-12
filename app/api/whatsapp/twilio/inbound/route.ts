@@ -110,6 +110,11 @@ function limitWhatsAppReply(value: string) {
   return clean.slice(0, 1690).trim() + "...";
 }
 
+function includesAny(message: string, keywords: string[]) {
+  const lower = message.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword));
+}
+
 function detectLanguage(message: string) {
   const lower = message.toLowerCase();
 
@@ -149,13 +154,54 @@ function detectLanguage(message: string) {
     "aplikasi",
     "download",
     "qris",
+    "siapa",
+    "bicara",
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
 }
 
+function isIdentityQuestion(message: string) {
+  const lower = message.toLowerCase().trim();
+
+  const identityQuestions = [
+    "ini siapa",
+    "siapa ini",
+    "saya bicara dengan siapa",
+    "aku bicara dengan siapa",
+    "saya chat dengan siapa",
+    "ini admin",
+    "apakah ini admin",
+    "kamu siapa",
+    "anda siapa",
+    "ini ai",
+    "apakah ini ai",
+    "ini bot",
+    "apakah ini bot",
+    "who is this",
+    "who am i speaking with",
+    "who am i talking to",
+    "are you ai",
+    "are you a bot",
+    "are you admin",
+    "is this admin",
+    "your name",
+    "what is your name",
+  ];
+
+  return includesAny(lower, identityQuestions);
+}
+
 function getSafeFallbackReply(message: string) {
   const lang = detectLanguage(message);
+
+  if (isIdentityQuestion(message)) {
+    if (lang === "id") {
+      return `Halo, saya Mona dari Tetamo. Saya bisa bantu seputar cari properti, pasang listing, paket owner/agent, dan cara menggunakan Tetamo.`;
+    }
+
+    return `Hi, I’m Mona from Tetamo. I can help with property search, listings, owner/agent packages, and how to use Tetamo.`;
+  }
 
   if (lang === "id") {
     return `Halo, selamat datang di Tetamo.
@@ -278,11 +324,6 @@ async function sendReplyAndReturnXml(params: URLSearchParams, reply: string) {
     twilioSendResult,
     response: twimlResponse(createTwimlMessage(reply)),
   };
-}
-
-function includesAny(message: string, keywords: string[]) {
-  const lower = message.toLowerCase();
-  return keywords.some((keyword) => lower.includes(keyword));
 }
 
 function detectHandover(message: string): HandoverResult {
@@ -483,6 +524,28 @@ function removeUnwantedAdminClosing(reply: string) {
   ];
 
   for (const pattern of unwantedPatterns) {
+    clean = clean.replace(pattern, "").trim();
+  }
+
+  return clean || reply;
+}
+
+function removeUnwantedAiIdentity(reply: string, customerMessage: string) {
+  if (isIdentityQuestion(customerMessage)) return reply;
+
+  let clean = String(reply || "").trim();
+
+  const unwantedIdentityPatterns = [
+    /^halo,?\s*saya\s+(?:adalah\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+    /^hi,?\s*i(?:'|’)m\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+    /^hello,?\s*i(?:'|’)m\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+    /^saya\s+(?:adalah\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+    /^i\s+am\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+    /^sebagai\s+(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+    /^as\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
+  ];
+
+  for (const pattern of unwantedIdentityPatterns) {
     clean = clean.replace(pattern, "").trim();
   }
 
@@ -701,7 +764,21 @@ function buildTetamoAiPrompt(params: {
     .join("\n");
 
   return `
-You are Tetamo WhatsApp AI Lead Handler and Support Assistant.
+You are Mona from Tetamo.
+
+Mona identity rule:
+- Your name is Mona.
+- You represent Tetamo in WhatsApp conversations.
+- You are Tetamo's helpful digital assistant for property search, listings, packages, and platform guidance.
+- Never introduce yourself as "WhatsApp AI", "AI customer assistance", "AI support assistant", "chatbot", "bot", or "automated assistant".
+- Do not introduce yourself in every reply.
+- Only introduce yourself if the customer asks who they are speaking with, asks your name, asks if you are AI, asks if you are admin, or asks "ini siapa?"
+- If asked in Indonesian, say naturally:
+  "Halo, saya Mona dari Tetamo. Saya bisa bantu seputar cari properti, pasang listing, paket owner/agent, dan cara menggunakan Tetamo."
+- If asked in English, say naturally:
+  "Hi, I’m Mona from Tetamo. I can help with property search, listings, owner/agent packages, and how to use Tetamo."
+- After introducing yourself, continue helping with the customer's actual question if they asked one.
+- For normal sales, listing, pricing, owner, agent, buyer, renter, app, or package questions, answer directly without introducing yourself.
 
 Main language rule:
 - If the customer writes in Indonesian, reply in Indonesian.
@@ -714,7 +791,7 @@ Most messages come from Instagram/Facebook/Meta advertising. You respond 24/7 to
 
 Your personality:
 - Professional, friendly, helpful, and sales-driven.
-- Sound like a real Tetamo admin, not a robotic FAQ bot.
+- Sound like part of the Tetamo team, not a robotic FAQ bot.
 - Be warm, clear, confident, and practical.
 - Do not be too formal unless the customer is formal.
 - Do not always start with "Thank you" or "Thanks for reaching out."
@@ -768,6 +845,14 @@ Tetamo helps users advertise, discover, and inquire about properties with cleare
 
 Core Tetamo value:
 Tetamo is not just about posting a property online. Tetamo helps make property listings clearer, more transparent, easier to trust, easier to contact, and easier to act on.
+
+Ad lead positioning:
+Many users are coming from ads about listing property in Tetamo.
+If the user asks generally about Tetamo, property ads, "info", "cara pasang", or "iklan properti":
+- Explain that they can search, buy, sell, or rent property through Tetamo.
+- Explain that owners/agents can create their own listing without needing to titip iklan.
+- Mention direct WhatsApp inquiry, schedule viewing, QRIS payment, and AI support for title/description when relevant.
+- Keep it simple and action-focused.
 
 Important sales positioning:
 When users ask "Why Tetamo?", "Can Tetamo help with leads?", "Will I get inquiries?", or "Why should I advertise here?", do NOT start with "we cannot guarantee leads."
@@ -861,9 +946,9 @@ Approved links only:
 - Video: How to use owner/agent dashboard: ${TETAMO_LINKS.dashboardVideo}
 
 How to handle vague ad leads:
-If message is only "hi", "hello", "info", "price", or unclear:
+If message is only "hi", "hello", "info", "price", "mau tanya", or unclear:
 - Reply naturally.
-- Ask whether they are an owner, agent, buyer/renter, or developer.
+- Ask whether they are an owner/agent who wants to list property, buyer/renter who wants to find property, or developer who wants project exposure.
 - Keep it short.
 Example Indonesian:
 "Halo, selamat datang di Tetamo. Anda ingin pasang iklan properti, cari properti, atau tanya paket owner/agent/developer?"
@@ -918,9 +1003,13 @@ async function generateTetamoAiReply(params: {
     });
 
     const rawReply = response.output_text || fallbackReply;
-    const cleanedReply = removeUnwantedAdminClosing(rawReply);
+    const noGenericIdentity = removeUnwantedAiIdentity(
+      rawReply,
+      params.customerMessage
+    );
+    const noAdminClosing = removeUnwantedAdminClosing(noGenericIdentity);
 
-    return limitWhatsAppReply(cleanedReply || fallbackReply);
+    return limitWhatsAppReply(noAdminClosing || fallbackReply);
   } catch (error) {
     console.error("OpenAI WhatsApp reply failed:", error);
     return fallbackReply;
