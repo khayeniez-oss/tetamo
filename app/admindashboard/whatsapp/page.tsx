@@ -15,6 +15,11 @@ type Conversation = {
   handover_reason: string | null;
   last_inbound_at: string | null;
   window_expires_at: string | null;
+  free_entry_point_expires_at: string | null;
+  free_entry_point_source: string | null;
+  ad_referral_source: string | null;
+  ad_referral_payload: unknown | null;
+  ad_referral_updated_at: string | null;
   last_message: string | null;
   last_message_direction: string | null;
   last_message_at: string | null;
@@ -168,7 +173,7 @@ function getMessageSourceMeta(
   };
 }
 
-function isWindowOpen(value?: string | null) {
+function isDateOpen(value?: string | null) {
   if (!value) return false;
 
   const expiry = new Date(value).getTime();
@@ -176,6 +181,30 @@ function isWindowOpen(value?: string | null) {
   if (!Number.isFinite(expiry)) return false;
 
   return expiry > Date.now();
+}
+
+function hasDate(value?: string | null) {
+  if (!value) return false;
+
+  const expiry = new Date(value).getTime();
+
+  return Number.isFinite(expiry);
+}
+
+function getReplyWindowLabel(value?: string | null) {
+  return isDateOpen(value) ? "24h Reply Open" : "24h Reply Closed";
+}
+
+function getAdWindowLabel(value?: string | null) {
+  if (!hasDate(value)) return "No Ad Window";
+
+  return isDateOpen(value) ? "72h Ad Open" : "72h Ad Closed";
+}
+
+function getAdWindowTone(value?: string | null): BadgeTone {
+  if (!hasDate(value)) return "gray";
+
+  return isDateOpen(value) ? "blue" : "gray";
 }
 
 function Badge({
@@ -222,7 +251,12 @@ export default function AdminWhatsappInboxPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const selectedConversationId = selectedConversation?.id || "";
-  const selectedWindowOpen = isWindowOpen(selectedConversation?.window_expires_at);
+  const selectedReplyWindowOpen = isDateOpen(
+    selectedConversation?.window_expires_at
+  );
+  const selectedAdWindowOpen = isDateOpen(
+    selectedConversation?.free_entry_point_expires_at
+  );
 
   const displayedConversations = useMemo(() => {
     if (channelFilter === "all_channels") return conversations;
@@ -248,10 +282,15 @@ export default function AdminWhatsappInboxPage() {
       (item) => getChannelMeta(item.channel).key === "twilio"
     ).length;
 
+    const adWindowOpen = conversations.filter((item) =>
+      isDateOpen(item.free_entry_point_expires_at)
+    ).length;
+
     return {
       total: conversations.length,
       metaDirect,
       twilio,
+      adWindowOpen,
       needsAdmin: conversations.filter((item) => item.handover_to_admin).length,
       activeAi: conversations.filter(
         (item) => item.ai_enabled && !item.handover_to_admin
@@ -421,9 +460,9 @@ export default function AdminWhatsappInboxPage() {
       return;
     }
 
-    if (!selectedWindowOpen) {
+    if (!selectedReplyWindowOpen) {
       setError(
-        "The 24-hour WhatsApp window is closed. Use an approved template message for this customer."
+        "The 24-hour reply window is closed. Use an approved template message for this customer."
       );
       return;
     }
@@ -518,8 +557,9 @@ export default function AdminWhatsappInboxPage() {
               WhatsApp Inbox
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-              Monitor WhatsApp leads from Meta Direct and Twilio. Pause AI when
-              admin needs to reply manually, then resume AI when done.
+              Monitor WhatsApp leads from Meta Direct and Twilio. The 24-hour
+              reply window controls normal admin replies, while the 72-hour ad
+              window tracks Click-to-WhatsApp ad entry where available.
             </p>
           </div>
 
@@ -535,7 +575,7 @@ export default function AdminWhatsappInboxPage() {
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-7">
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
               Total
@@ -558,6 +598,15 @@ export default function AdminWhatsappInboxPage() {
             </p>
             <p className="mt-2 text-2xl font-bold text-emerald-700">
               {stats.twilio}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-500">
+              72h Ads Open
+            </p>
+            <p className="mt-2 text-2xl font-bold text-blue-700">
+              {stats.adWindowOpen}
             </p>
           </div>
 
@@ -667,6 +716,10 @@ export default function AdminWhatsappInboxPage() {
             {displayedConversations.map((conversation) => {
               const active = selectedConversationId === conversation.id;
               const channelMeta = getChannelMeta(conversation.channel);
+              const replyWindowOpen = isDateOpen(conversation.window_expires_at);
+              const adWindowTone = getAdWindowTone(
+                conversation.free_entry_point_expires_at
+              );
 
               return (
                 <button
@@ -748,14 +801,25 @@ export default function AdminWhatsappInboxPage() {
                         "rounded-full border px-2 py-1 text-[10px] font-bold",
                         active
                           ? "border-white/20 bg-white/10 text-white"
-                          : isWindowOpen(conversation.window_expires_at)
+                          : replyWindowOpen
                           ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                           : "border-gray-200 bg-gray-50 text-gray-600",
                       ].join(" ")}
                     >
-                      {isWindowOpen(conversation.window_expires_at)
-                        ? "24h Open"
-                        : "24h Closed"}
+                      {getReplyWindowLabel(conversation.window_expires_at)}
+                    </span>
+
+                    <span
+                      className={[
+                        "rounded-full border px-2 py-1 text-[10px] font-bold",
+                        active
+                          ? "border-white/20 bg-white/10 text-white"
+                          : adWindowTone === "blue"
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-gray-50 text-gray-600",
+                      ].join(" ")}
+                    >
+                      {getAdWindowLabel(conversation.free_entry_point_expires_at)}
                     </span>
                   </div>
 
@@ -810,11 +874,21 @@ export default function AdminWhatsappInboxPage() {
                         {getChannelMeta(selectedConversation.channel).label}
                       </Badge>
 
-                      {selectedWindowOpen ? (
-                        <Badge tone="green">24h Window Open</Badge>
+                      {selectedReplyWindowOpen ? (
+                        <Badge tone="green">24h Reply Window Open</Badge>
                       ) : (
-                        <Badge tone="gray">24h Window Closed</Badge>
+                        <Badge tone="gray">24h Reply Window Closed</Badge>
                       )}
+
+                      <Badge
+                        tone={getAdWindowTone(
+                          selectedConversation.free_entry_point_expires_at
+                        )}
+                      >
+                        {getAdWindowLabel(
+                          selectedConversation.free_entry_point_expires_at
+                        )}
+                      </Badge>
 
                       {selectedConversation.handover_to_admin ? (
                         <Badge tone="red">Needs Admin</Badge>
@@ -833,6 +907,36 @@ export default function AdminWhatsappInboxPage() {
                           {selectedConversation.handover_reason}
                         </Badge>
                       ) : null}
+                    </div>
+
+                    <div className="mt-4 grid gap-3 text-xs text-gray-500 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                        <p className="font-bold text-gray-700">
+                          24h Reply Window
+                        </p>
+                        <p className="mt-1">
+                          Expires: {formatDate(selectedConversation.window_expires_at)}
+                        </p>
+                        <p className="mt-1">
+                          Normal admin text replies use this window.
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                        <p className="font-bold text-gray-700">72h Ad Window</p>
+                        <p className="mt-1">
+                          Expires:{" "}
+                          {formatDate(
+                            selectedConversation.free_entry_point_expires_at
+                          )}
+                        </p>
+                        <p className="mt-1">
+                          Source:{" "}
+                          {selectedConversation.ad_referral_source ||
+                            selectedConversation.free_entry_point_source ||
+                            "No ad referral data"}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -987,36 +1091,44 @@ export default function AdminWhatsappInboxPage() {
                     <div>
                       <p className="text-sm font-bold">Admin Reply</p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Manual replies pause AI and keep the chat under Needs
-                        Admin until you click Resume AI.
+                        Manual replies use the 24-hour reply window. AI stays
+                        paused until you click Resume AI.
                       </p>
                     </div>
 
-                    {selectedWindowOpen ? (
+                    {selectedReplyWindowOpen ? (
                       <Badge tone="green">Free-text allowed</Badge>
                     ) : (
                       <Badge tone="gray">Template needed</Badge>
                     )}
                   </div>
 
-                  {!selectedWindowOpen ? (
+                  {!selectedReplyWindowOpen ? (
                     <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-                      The 24-hour WhatsApp window is closed. Normal text replies
-                      may be rejected. Use an approved template message for this
+                      The 24-hour reply window is closed. Normal text replies may
+                      be rejected. Use an approved template message for this
                       customer.
+                    </div>
+                  ) : null}
+
+                  {selectedAdWindowOpen && !selectedReplyWindowOpen ? (
+                    <div className="mb-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
+                      This lead still has a 72-hour ad/free-entry window, but the
+                      normal free-text reply box is controlled by the 24-hour
+                      customer reply window.
                     </div>
                   ) : null}
 
                   <textarea
                     value={replyMessage}
                     onChange={(event) => setReplyMessage(event.target.value)}
-                    disabled={!selectedWindowOpen || sendingReply}
+                    disabled={!selectedReplyWindowOpen || sendingReply}
                     rows={4}
                     maxLength={1700}
                     placeholder={
-                      selectedWindowOpen
+                      selectedReplyWindowOpen
                         ? "Write admin reply to customer..."
-                        : "24-hour window closed. Approved template needed."
+                        : "24-hour reply window closed. Approved template needed."
                     }
                     className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100 disabled:text-gray-400"
                   />
@@ -1031,7 +1143,7 @@ export default function AdminWhatsappInboxPage() {
                       onClick={sendAdminReply}
                       disabled={
                         sendingReply ||
-                        !selectedWindowOpen ||
+                        !selectedReplyWindowOpen ||
                         !replyMessage.trim()
                       }
                       className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
