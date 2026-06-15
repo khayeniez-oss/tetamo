@@ -102,6 +102,24 @@ function getRawPayload(params: URLSearchParams) {
   return payload;
 }
 
+function getInboundMessageText(params: URLSearchParams) {
+  const body = String(params.get("Body") || "").trim();
+  const mediaCount = Number(params.get("NumMedia") || 0);
+
+  if (body) return body;
+
+  if (Number.isFinite(mediaCount) && mediaCount > 0) {
+    return "[Customer sent photo, video, or non-text WhatsApp message]";
+  }
+
+  return "";
+}
+
+function hasInboundMedia(params: URLSearchParams) {
+  const mediaCount = Number(params.get("NumMedia") || 0);
+  return Number.isFinite(mediaCount) && mediaCount > 0;
+}
+
 function limitWhatsAppReply(value: string) {
   const clean = String(value || "").trim();
 
@@ -156,6 +174,10 @@ function detectLanguage(message: string) {
     "qris",
     "siapa",
     "bicara",
+    "foto",
+    "photo",
+    "video",
+    "upload",
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
@@ -192,6 +214,64 @@ function isIdentityQuestion(message: string) {
   return includesAny(lower, identityQuestions);
 }
 
+function getListingInstructionReply(language: "id" | "en") {
+  if (language === "id") {
+    return `Untuk pasang listing properti di Tetamo, listing tidak bisa dibuat melalui WhatsApp.
+
+Pemilik atau agent harus sign up / log in dan membuat listing sendiri di Tetamo supaya bisa mengelola dashboard, melihat leads, menerima WhatsApp langsung, dan mengatur schedule viewing sendiri.
+
+Alurnya:
+1. Sign up atau log in
+2. Create Listing
+3. Isi detail properti
+4. Upload minimal 3 foto properti, boleh tambah video jika ada
+5. Klik Generate untuk bantu buat Judul & Deskripsi dengan AI
+6. Lakukan verifikasi
+7. Bayar pakai QRIS
+8. Setelah itu listing otomatis tayang di marketplace Tetamo, tidak perlu menunggu lagi.
+
+Panduan posting properti:
+${TETAMO_LINKS.howToPostVideo}`;
+  }
+
+  return `To list a property on Tetamo, the listing cannot be created through WhatsApp.
+
+The owner or agent must sign up / log in and create the listing directly in Tetamo, so they can manage their dashboard, leads, direct WhatsApp inquiries, and schedule viewing requests.
+
+The flow is:
+1. Sign up or log in
+2. Create Listing
+3. Enter the property details
+4. Upload minimum 3 property photos, and add video if available
+5. Click Generate to create the title and description with AI
+6. Complete verification
+7. Pay with QRIS
+8. The listing will be automatically posted in Tetamo marketplace, no need to wait.
+
+Property posting guide:
+${TETAMO_LINKS.howToPostVideo}`;
+}
+
+function getMediaRedirectReply() {
+  return `Terima kasih, foto/video sudah diterima.
+
+Namun untuk pasang listing properti di Tetamo, foto/video tidak bisa dikirim melalui WhatsApp untuk kami upload-kan.
+
+Pemilik atau agent perlu sign up / log in dan membuat listing sendiri di Tetamo agar bisa mengelola dashboard, melihat leads, menerima WhatsApp langsung dari pembeli/penyewa, dan mengatur schedule viewing sendiri.
+
+Minimum upload: 3 foto properti.
+
+Alurnya:
+1. Sign up atau log in
+2. Create Listing
+3. Isi detail properti
+4. Upload minimal 3 foto properti, boleh tambah video jika ada
+5. Klik Generate untuk bantu buat Judul & Deskripsi dengan AI
+6. Verifikasi
+7. Bayar pakai QRIS
+8. Listing otomatis tayang di marketplace Tetamo.`;
+}
+
 function getSafeFallbackReply(message: string) {
   const lang = detectLanguage(message);
 
@@ -201,6 +281,25 @@ function getSafeFallbackReply(message: string) {
     }
 
     return `Hi, I’m Mona from Tetamo. I can help with property search, listings, owner/agent packages, and how to use Tetamo.`;
+  }
+
+  const lower = message.toLowerCase();
+
+  const listingIntent =
+    lower.includes("pasang") ||
+    lower.includes("iklan") ||
+    lower.includes("listing") ||
+    lower.includes("upload") ||
+    lower.includes("foto") ||
+    lower.includes("photo") ||
+    lower.includes("video") ||
+    lower.includes("jual rumah") ||
+    lower.includes("sewa rumah") ||
+    lower.includes("list my property") ||
+    lower.includes("advertise my property");
+
+  if (listingIntent) {
+    return getListingInstructionReply(lang);
   }
 
   if (lang === "id") {
@@ -556,8 +655,8 @@ async function upsertConversation(
   params: URLSearchParams
 ): Promise<ConversationRow | null> {
   const from = params.get("From") || "";
-  const body = params.get("Body") || "";
   const profileName = params.get("ProfileName") || "";
+  const messageText = getInboundMessageText(params);
 
   const now = new Date().toISOString();
   const windowExpiresAt = getWindowExpiry();
@@ -576,7 +675,7 @@ async function upsertConversation(
         status: "active",
         last_inbound_at: now,
         window_expires_at: windowExpiresAt,
-        last_message: body,
+        last_message: messageText,
         last_message_direction: "inbound",
         last_message_at: now,
       },
@@ -601,8 +700,8 @@ async function saveInboundMessage(
 ) {
   const from = params.get("From") || "";
   const to = params.get("To") || "";
-  const body = params.get("Body") || "";
   const profileName = params.get("ProfileName") || "";
+  const messageText = getInboundMessageText(params);
   const messageSid =
     params.get("MessageSid") || params.get("SmsMessageSid") || "";
   const mediaCount = Number(params.get("NumMedia") || 0);
@@ -621,7 +720,7 @@ async function saveInboundMessage(
           to_number: to,
           phone: from,
           profile_name: profileName || null,
-          message: body || "",
+          message: messageText,
           source: "twilio",
           ai_generated: false,
           admin_generated: false,
@@ -649,7 +748,7 @@ async function saveInboundMessage(
     to_number: to,
     phone: from,
     profile_name: profileName || null,
-    message: body || "",
+    message: messageText,
     source: "twilio",
     ai_generated: false,
     admin_generated: false,
@@ -795,12 +894,6 @@ Your personality:
 - Be warm, clear, confident, and practical.
 - Do not be too formal unless the customer is formal.
 - Do not always start with "Thank you" or "Thanks for reaching out."
-- Vary your opening naturally:
-  - "Yes, you can..."
-  - "Sure, the flow is quite simple..."
-  - "Bisa, Pak/Bu..."
-  - "Untuk pasang listing di Tetamo..."
-  - "That’s a fair question..."
 - Keep replies WhatsApp-friendly with short paragraphs.
 - Keep the answer focused. Avoid long essays unless the customer asks for details.
 
@@ -812,18 +905,6 @@ Very important admin handover rule:
 - Do NOT say "Apakah Anda ingin saya teruskan ke admin?"
 - Only mention admin/team follow-up when the customer clearly asks for human help, has a payment/account/refund/complaint/legal issue, asks for official company/legal details, or the answer genuinely requires account-specific checking.
 - For normal sales, pricing, listing, buyer/renter, owner, agent, dashboard, app, or Tetamo feature questions, answer directly and end with a useful Tetamo CTA.
-
-Good CTA endings:
-- Indonesian examples:
-  - "Anda bisa mulai dari aplikasi Tetamo: buat listing, bayar pakai QRIS, lalu iklan bisa naik."
-  - "Silakan cek Tetamo dan kirim lokasi atau tipe properti yang Anda cari."
-  - "Kalau Anda owner atau agent, Anda bisa mulai dengan pilih paket lalu buat listing di Tetamo."
-  - "Boleh kirim tipe properti dan lokasi yang Anda cari?"
-- English examples:
-  - "You can start from the Tetamo app: create your listing, pay with QRIS, and publish your ad."
-  - "You can browse Tetamo and send the location or property type you are looking for."
-  - "If you are an owner or agent, you can choose a package and create your listing in Tetamo."
-  - "You can send the property type and location you are looking for."
 
 Official Tetamo company information:
 - Tetamo is an Australian-based SaaS/property marketplace business under Tetamo Pty Ltd.
@@ -842,6 +923,35 @@ Tetamo identity:
 Tetamo is a property marketplace platform in Indonesia for property owners, agents, agencies, developers, buyers, renters, and investors.
 
 Tetamo helps users advertise, discover, and inquire about properties with clearer listing information, direct inquiry flow, and easier viewing arrangements.
+
+VERY IMPORTANT LISTING RULE:
+- Customers cannot list their property by sending photos, videos, or details through WhatsApp.
+- Do not offer to upload or create the listing for them through WhatsApp.
+- Do not say "send your photos here and we will list it."
+- From the beginning, guide owners/agents to sign up or log in and create the listing themselves.
+- Explain why: they need their own dashboard so they can manage leads, direct WhatsApp inquiries, schedule viewing requests, listing edits, and payment status themselves.
+- Minimum 3 property photos are required for listing.
+- They may add video if available.
+- AI title and description are generated inside Tetamo by clicking Generate.
+- After verification and QRIS payment, the listing is automatically posted in Tetamo marketplace. No need to wait.
+
+Correct listing steps:
+1. Sign up or log in
+2. Click Create Listing
+3. Input property details
+4. Upload minimum 3 property photos, and add video if available
+5. Click Generate to create Judul & Deskripsi with AI
+6. Complete verification
+7. Pay with QRIS
+8. Listing automatically appears in the Tetamo marketplace
+
+If customer asks how to list, how to advertise property, how to upload photos/videos, or sends property details:
+- Reply with the correct listing steps.
+- Clearly say listing must be created inside Tetamo, not through WhatsApp.
+- Mention minimum 3 photos.
+- Mention the dashboard benefit.
+- Share this guide only when relevant:
+  ${TETAMO_LINKS.howToPostVideo}
 
 Core Tetamo value:
 Tetamo is not just about posting a property online. Tetamo helps make property listings clearer, more transparent, easier to trust, easier to contact, and easier to act on.
@@ -896,12 +1006,16 @@ Explain that buyers/renters may use Tetamo because they want clarity, transparen
 
 Owner answer style:
 If owner asks how to list:
-- Explain the flow simply:
-  1. Choose the package that suits them.
-  2. Fill in property details.
-  3. Upload photos or video.
-  4. Complete verification.
-  5. Submit/list the property.
+- Explain the correct flow:
+  1. Sign up or log in
+  2. Click Create Listing
+  3. Input property details
+  4. Upload minimum 3 property photos, and add video if available
+  5. Click Generate to create Judul & Deskripsi with AI
+  6. Complete verification
+  7. Pay with QRIS
+  8. Listing automatically appears in the Tetamo marketplace
+- Clearly say listing must be created inside Tetamo, not through WhatsApp.
 - Share relevant links naturally:
   - Pricelist: ${TETAMO_LINKS.pricelist}
   - Step-by-step blog tutorial: ${TETAMO_LINKS.howToListBlog}
@@ -914,6 +1028,7 @@ If agent asks about Tetamo:
 - Do not send them to an agent benefit page because there is no agent benefit page.
 - Explain benefits inside WhatsApp.
 - Focus on lead flow, visibility, better listing presentation, direct WhatsApp inquiries, schedule viewing, AI bilingual descriptions, AI social media caption, video upload, and dashboard.
+- Make clear that agents should create and manage their own listings inside Tetamo, not send property materials through WhatsApp for Tetamo to upload.
 - If they ask how to use dashboard, share:
   ${TETAMO_LINKS.dashboardVideo}
 - If they ask pricing/packages, share:
@@ -1025,12 +1140,15 @@ export async function POST(req: Request) {
     const to = params.get("To") || "";
     const body = params.get("Body") || "";
     const profileName = params.get("ProfileName") || "";
+    const inboundHasMedia = hasInboundMedia(params);
+    const inboundMessageText = getInboundMessageText(params);
 
     console.log("Twilio WhatsApp inbound message:", {
       from,
       to,
       profileName,
       body,
+      inboundHasMedia,
     });
 
     if (
@@ -1062,7 +1180,7 @@ export async function POST(req: Request) {
     const existingAiDisabled = conversation.ai_enabled === false;
 
     if (existingHandover || existingAiDisabled) {
-      const lang = detectLanguage(body);
+      const lang = detectLanguage(inboundMessageText);
 
       const reply =
         lang === "id"
@@ -1089,10 +1207,10 @@ export async function POST(req: Request) {
       return response;
     }
 
-    const handover = detectHandover(body);
+    const handover = detectHandover(inboundMessageText);
 
     if (handover.shouldHandover) {
-      const reply = buildHandoverReply(body, handover.reason);
+      const reply = buildHandoverReply(inboundMessageText, handover.reason);
 
       const { twilioSendResult, response } = await sendReplyAndReturnXml(
         params,
@@ -1115,10 +1233,33 @@ export async function POST(req: Request) {
       return response;
     }
 
+    if (inboundHasMedia) {
+      const reply = getMediaRedirectReply();
+
+      const { twilioSendResult, response } = await sendReplyAndReturnXml(
+        params,
+        reply
+      );
+
+      await saveOutboundMessage(params, conversation.id, reply, {
+        aiGenerated: true,
+        source: twilioSendResult.success
+          ? "tetamo_ai_twilio_api"
+          : "tetamo_ai_send_failed",
+        twilioMessageSid: twilioSendResult.sid,
+        twilioSendStatus: twilioSendResult.status || null,
+        twilioSendError: twilioSendResult.success
+          ? null
+          : twilioSendResult.error || null,
+      });
+
+      return response;
+    }
+
     const recentMessages = await getRecentMessages(conversation.id);
 
     const aiReply = await generateTetamoAiReply({
-      customerMessage: body,
+      customerMessage: inboundMessageText,
       recentMessages,
     });
 
