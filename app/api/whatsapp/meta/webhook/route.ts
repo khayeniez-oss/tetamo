@@ -21,6 +21,16 @@ type MetaMessage = {
   text?: {
     body?: string;
   };
+  referral?: {
+    headline?: string;
+    body?: string;
+    source_type?: string;
+    source_id?: string;
+    source_url?: string;
+    image?: Record<string, unknown>;
+    video?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 };
 
 type MetaWebhookValue = {
@@ -80,6 +90,23 @@ function getWindowExpiry() {
   const expiry = new Date();
   expiry.setHours(expiry.getHours() + 24);
   return expiry.toISOString();
+}
+
+function getFreeEntryPointExpiry() {
+  const expiry = new Date();
+  expiry.setHours(expiry.getHours() + 72);
+  return expiry.toISOString();
+}
+
+function getAdReferralSource(referral?: MetaMessage["referral"] | null) {
+  if (!referral) return null;
+
+  return (
+    cleanEnv(referral.source_type as string) ||
+    cleanEnv(referral.source_id as string) ||
+    cleanEnv(referral.headline as string) ||
+    "meta_click_to_whatsapp_ad"
+  );
 }
 
 function normalizePhone(value?: string | null) {
@@ -481,29 +508,39 @@ async function upsertConversation(params: {
   customerPhone: string;
   profileName: string | null;
   messageText: string;
+  referral?: MetaMessage["referral"] | null;
 }) {
   const now = new Date().toISOString();
 
+  const upsertPayload: Record<string, unknown> = {
+    phone: `whatsapp:${params.customerPhone}`,
+    phone_e164: params.customerPhone,
+    profile_name: params.profileName,
+    channel: "meta_whatsapp",
+    status: "active",
+    last_inbound_at: now,
+    window_expires_at: getWindowExpiry(),
+    last_message: params.messageText,
+    last_message_direction: "inbound",
+    last_message_at: now,
+  };
+
+  if (params.referral) {
+    upsertPayload.free_entry_point_expires_at = getFreeEntryPointExpiry();
+    upsertPayload.free_entry_point_source = "meta_click_to_whatsapp_ad";
+    upsertPayload.ad_referral_source = getAdReferralSource(params.referral);
+    upsertPayload.ad_referral_payload = params.referral;
+    upsertPayload.ad_referral_updated_at = now;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("whatsapp_conversations")
-    .upsert(
-      {
-        phone: `whatsapp:${params.customerPhone}`,
-        phone_e164: params.customerPhone,
-        profile_name: params.profileName,
-        channel: "meta_whatsapp",
-        status: "active",
-        last_inbound_at: now,
-        window_expires_at: getWindowExpiry(),
-        last_message: params.messageText,
-        last_message_direction: "inbound",
-        last_message_at: now,
-      },
-      {
-        onConflict: "phone",
-      }
+    .upsert(upsertPayload, {
+      onConflict: "phone",
+    })
+    .select(
+      "id, phone, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source"
     )
-    .select("id, phone, ai_enabled, handover_to_admin, handover_reason")
     .single();
 
   if (error || !data?.id) {
@@ -517,6 +554,9 @@ async function upsertConversation(params: {
     ai_enabled?: boolean | null;
     handover_to_admin?: boolean | null;
     handover_reason?: string | null;
+    free_entry_point_expires_at?: string | null;
+    free_entry_point_source?: string | null;
+    ad_referral_source?: string | null;
   };
 }
 
@@ -528,6 +568,8 @@ async function saveInboundMessage(params: {
   messageText: string;
   metaMessageId: string | null;
   rawPayload: unknown;
+  referral?: MetaMessage["referral"] | null;
+  messageType?: string | null;
 }) {
   const { error } = await supabaseAdmin.from("whatsapp_messages").insert({
     conversation_id: params.conversationId,
@@ -540,9 +582,11 @@ async function saveInboundMessage(params: {
     source: "meta",
     ai_generated: false,
     admin_generated: false,
-    media_count: 0,
+    media_count: params.messageType && params.messageType !== "text" ? 1 : 0,
     raw_payload: {
       meta_message_id: params.metaMessageId,
+      meta_message_type: params.messageType || null,
+      meta_referral: params.referral || null,
       meta_payload: params.rawPayload,
     },
     created_at: new Date().toISOString(),
@@ -721,6 +765,7 @@ export async function POST(request: Request) {
       const textBody = String(item.message.text?.body || "").trim();
       const phoneNumberId = getPhoneNumberId(item.phoneNumberId);
       const isTextMessage = item.message.type === "text" && Boolean(textBody);
+      const referral = item.message.referral || null;
 
       if (!customerPhone) continue;
 
@@ -732,6 +777,7 @@ export async function POST(request: Request) {
         customerPhone,
         profileName: item.profileName,
         messageText,
+        referral,
       });
 
       if (!conversation?.id) continue;
@@ -744,6 +790,8 @@ export async function POST(request: Request) {
         messageText,
         metaMessageId: item.message.id || null,
         rawPayload: payload,
+        referral,
+        messageType: item.message.type || null,
       });
 
       if (conversation.handover_to_admin || conversation.ai_enabled === false) {
