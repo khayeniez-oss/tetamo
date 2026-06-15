@@ -44,6 +44,13 @@ type AiFeedbackChoice = "yes" | "no";
 const GUEST_SESSION_KEY = "scorpio_assist_guest_session_id";
 const GUEST_MESSAGES_KEY = "scorpio_assist_guest_messages";
 
+function cleanDisplayText(value: unknown) {
+  return String(value || "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .trim();
+}
+
 function getDisplayMessageText(value: string, lang: "en" | "id") {
   const raw = String(value || "").trim();
 
@@ -58,7 +65,7 @@ function getDisplayMessageText(value: string, lang: "en" | "id") {
       typeof parsed[lang] === "string" &&
       parsed[lang].trim()
     ) {
-      return parsed[lang].trim();
+      return cleanDisplayText(parsed[lang]);
     }
 
     const fallbackLang = lang === "id" ? "en" : "id";
@@ -69,13 +76,17 @@ function getDisplayMessageText(value: string, lang: "en" | "id") {
       typeof parsed[fallbackLang] === "string" &&
       parsed[fallbackLang].trim()
     ) {
-      return parsed[fallbackLang].trim();
+      return cleanDisplayText(parsed[fallbackLang]);
+    }
+
+    if (typeof parsed === "string") {
+      return cleanDisplayText(parsed);
     }
   } catch {
-    return raw;
+    return cleanDisplayText(raw);
   }
 
-  return raw;
+  return cleanDisplayText(raw);
 }
 
 function LinkifiedMessageText({
@@ -665,7 +676,10 @@ export default function FloatingWhatsApp() {
                         ) : null}
 
                         <p className="whitespace-pre-line">
-                          {message.message_text}
+                          <LinkifiedMessageText
+                            value={message.message_text}
+                            lang={lang}
+                          />
                         </p>
                       </div>
 
