@@ -39,6 +39,17 @@ type MetaWebhookValue = {
   statuses?: Array<Record<string, unknown>>;
 };
 
+const TETAMO_LINKS = {
+  pricelist: "https://www.tetamo.com/pricelist",
+  developerLicense: "https://www.tetamo.com/developer-license",
+  howToListBlog:
+    "https://www.tetamo.com/blog/how-to-list-my-property-in-tetamo",
+  howToPostVideo:
+    "https://www.tetamo.com/education/cara-posting-properti-di-tetamo",
+  dashboardVideo:
+    "https://www.tetamo.com/education/cara-menggunakan-dashboard-tetamo-untuk-owner-dan-agent",
+};
+
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
 }
@@ -116,6 +127,10 @@ function detectLanguage(message: string) {
     "qris",
     "siapa",
     "bicara",
+    "foto",
+    "photo",
+    "video",
+    "upload",
   ];
 
   return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
@@ -152,6 +167,64 @@ function isIdentityQuestion(message: string) {
   return identityQuestions.some((item) => lower.includes(item));
 }
 
+function getListingInstructionReply(language: "id" | "en") {
+  if (language === "id") {
+    return `Untuk pasang listing properti di Tetamo, listing tidak bisa dibuat melalui WhatsApp.
+
+Pemilik atau agent harus sign up / log in dan membuat listing sendiri di Tetamo supaya bisa mengelola dashboard, melihat leads, menerima WhatsApp langsung, dan mengatur schedule viewing sendiri.
+
+Alurnya:
+1. Sign up atau log in
+2. Create Listing
+3. Isi detail properti
+4. Upload minimal 3 foto properti, boleh tambah video jika ada
+5. Klik Generate untuk bantu buat Judul & Deskripsi dengan AI
+6. Lakukan verifikasi
+7. Bayar pakai QRIS
+8. Setelah itu listing otomatis tayang di marketplace Tetamo, tidak perlu menunggu lagi.
+
+Panduan posting properti:
+${TETAMO_LINKS.howToPostVideo}`;
+  }
+
+  return `To list a property on Tetamo, the listing cannot be created through WhatsApp.
+
+The owner or agent must sign up / log in and create the listing directly in Tetamo, so they can manage their dashboard, leads, direct WhatsApp inquiries, and schedule viewing requests.
+
+The flow is:
+1. Sign up or log in
+2. Create Listing
+3. Enter the property details
+4. Upload minimum 3 property photos, and add video if available
+5. Click Generate to create the title and description with AI
+6. Complete verification
+7. Pay with QRIS
+8. The listing will be automatically posted in Tetamo marketplace, no need to wait.
+
+Property posting guide:
+${TETAMO_LINKS.howToPostVideo}`;
+}
+
+function getMediaRedirectReply() {
+  return `Terima kasih, foto/video sudah diterima.
+
+Namun untuk pasang listing properti di Tetamo, foto/video tidak bisa dikirim melalui WhatsApp untuk kami upload-kan.
+
+Pemilik atau agent perlu sign up / log in dan membuat listing sendiri di Tetamo agar bisa mengelola dashboard, melihat leads, menerima WhatsApp langsung dari pembeli/penyewa, dan mengatur schedule viewing sendiri.
+
+Minimum upload: 3 foto properti.
+
+Alurnya:
+1. Sign up atau log in
+2. Create Listing
+3. Isi detail properti
+4. Upload minimal 3 foto properti, boleh tambah video jika ada
+5. Klik Generate untuk bantu buat Judul & Deskripsi dengan AI
+6. Verifikasi
+7. Bayar pakai QRIS
+8. Listing otomatis tayang di marketplace Tetamo.`;
+}
+
 function getFallbackReply(message: string) {
   const lang = detectLanguage(message);
 
@@ -161,6 +234,25 @@ function getFallbackReply(message: string) {
     }
 
     return "Hi, I’m Mona from Tetamo. I can help with property search, listings, owner/agent packages, and how to use Tetamo.";
+  }
+
+  const lower = message.toLowerCase();
+
+  const listingIntent =
+    lower.includes("pasang") ||
+    lower.includes("iklan") ||
+    lower.includes("listing") ||
+    lower.includes("upload") ||
+    lower.includes("foto") ||
+    lower.includes("photo") ||
+    lower.includes("video") ||
+    lower.includes("jual rumah") ||
+    lower.includes("sewa rumah") ||
+    lower.includes("list my property") ||
+    lower.includes("advertise my property");
+
+  if (listingIntent) {
+    return getListingInstructionReply(lang);
   }
 
   if (lang === "id") {
@@ -237,14 +329,44 @@ Language rule:
 - If the customer writes in Indonesian, reply in Indonesian.
 - If the customer writes in English, reply in English.
 - If mixed, light bilingual is okay.
+- Do not randomly switch language.
 
 Tetamo:
-- Tetamo is a property marketplace platform in Indonesia.
+- Tetamo is an Australian SaaS/property marketplace business serving the Indonesian property market.
 - Users can search, buy, sell, or rent property in Tetamo.
 - Owners and agents can create property listings.
-- Tetamo supports direct WhatsApp inquiry, schedule viewing, verified listing/owner/agent trust layer where available, QRIS payment, photo/video upload, and AI support for title/description.
+- Tetamo supports verified listings, direct WhatsApp inquiry, schedule viewing, QRIS payment, photo/video upload, and AI support for title/description.
 - Tetamo charges listing/advertising fees, not sale/rental commission unless separately agreed.
 - Do not guarantee leads, sale, rental, ROI, or legal safety.
+
+VERY IMPORTANT LISTING RULE:
+- Customers cannot list their property by sending photos, videos, or details through WhatsApp.
+- Do not offer to upload or create the listing for them through WhatsApp.
+- Do not say "send your photos here and we will list it."
+- From the beginning, guide owners/agents to sign up or log in and create the listing themselves.
+- Explain why: they need their own dashboard so they can manage leads, direct WhatsApp inquiries, schedule viewing requests, listing edits, and payment status themselves.
+- Minimum 3 property photos are required for listing.
+- They may add video if available.
+- AI title and description are generated inside Tetamo by clicking Generate.
+- After verification and QRIS payment, the listing is automatically posted in Tetamo marketplace. No need to wait.
+
+Correct listing steps:
+1. Sign up or log in
+2. Click Create Listing
+3. Input property details
+4. Upload minimum 3 property photos, and add video if available
+5. Click Generate to create Judul & Deskripsi with AI
+6. Complete verification
+7. Pay with QRIS
+8. Listing automatically appears in the Tetamo marketplace
+
+If customer asks how to list, how to advertise property, how to upload photos/videos, or sends property details:
+- Reply with the correct listing steps.
+- Clearly say listing must be created inside Tetamo, not through WhatsApp.
+- Mention minimum 3 photos.
+- Mention the dashboard benefit.
+- Share this guide only when relevant:
+  ${TETAMO_LINKS.howToPostVideo}
 
 Tone:
 - Friendly, professional, sales-smart, clear, WhatsApp-friendly.
@@ -256,17 +378,31 @@ Tone:
 If vague message like "hi", "info", "price", or "mau tanya":
 Ask if they want to pasang iklan properti, cari properti, or ask about owner/agent/developer packages.
 
+Buyer/renter:
+- If they want to search, buy, rent, or schedule viewing, ask location, budget, property type, and whether they want to buy or rent.
+- Explain they can contact owner/agent directly by WhatsApp and schedule viewing where available.
+
+Pricing:
+- If they ask price/package, share:
+  ${TETAMO_LINKS.pricelist}
+
+Developer:
+- If they ask about developer/project exposure, share:
+  ${TETAMO_LINKS.developerLicense}
+
 Customer message:
 ${customerMessage}
 
 Write only the WhatsApp reply.
+Do not return JSON.
+Do not add labels like "Tetamo:".
 `;
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
       temperature: 0.45,
-      max_output_tokens: 500,
+      max_output_tokens: 650,
     });
 
     const raw = response.output_text || fallback;
@@ -584,15 +720,13 @@ export async function POST(request: Request) {
       const customerPhone = normalizePhone(item.message.from || "");
       const textBody = String(item.message.text?.body || "").trim();
       const phoneNumberId = getPhoneNumberId(item.phoneNumberId);
+      const isTextMessage = item.message.type === "text" && Boolean(textBody);
 
       if (!customerPhone) continue;
 
-      const messageText =
-        item.message.type === "text" && textBody
-          ? textBody
-          : detectLanguage(textBody) === "id"
-          ? "Pesan Anda sudah diterima. Saat ini Mona dapat membantu paling baik melalui pesan teks."
-          : "Your message has been received. Mona can currently help best through text messages.";
+      const messageText = isTextMessage
+        ? textBody
+        : "[Customer sent photo, video, or non-text WhatsApp message]";
 
       const conversation = await upsertConversation({
         customerPhone,
@@ -616,7 +750,9 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const reply = await generateMonaReply(messageText);
+      const reply = isTextMessage
+        ? await generateMonaReply(messageText)
+        : getMediaRedirectReply();
 
       const sendResult = await sendMetaWhatsappText({
         phoneNumberId,
