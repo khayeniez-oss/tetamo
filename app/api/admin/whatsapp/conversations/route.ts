@@ -13,6 +13,46 @@ const supabaseAdmin = createClient(
   }
 );
 
+const CONVERSATION_SELECT = `
+  id,
+  phone,
+  phone_e164,
+  profile_name,
+  channel,
+  status,
+  ai_enabled,
+  handover_to_admin,
+  handover_reason,
+  last_inbound_at,
+  window_expires_at,
+  free_entry_point_expires_at,
+  free_entry_point_source,
+  ad_referral_source,
+  ad_referral_payload,
+  ad_referral_updated_at,
+  last_message,
+  last_message_direction,
+  last_message_at,
+  created_at,
+  updated_at
+`;
+
+const MESSAGE_SELECT = `
+  id,
+  conversation_id,
+  direction,
+  from_number,
+  to_number,
+  phone,
+  profile_name,
+  message,
+  source,
+  ai_generated,
+  admin_generated,
+  media_count,
+  created_at
+`;
+
 type AdminAuthResult = {
   authorized: boolean;
   userId?: string;
@@ -169,9 +209,7 @@ export async function GET(req: Request) {
     const { data: conversation, error: conversationError } =
       await supabaseAdmin
         .from("whatsapp_conversations")
-        .select(
-          "id, phone, phone_e164, profile_name, channel, status, ai_enabled, handover_to_admin, handover_reason, last_inbound_at, window_expires_at, last_message, last_message_direction, last_message_at, created_at, updated_at"
-        )
+        .select(CONVERSATION_SELECT)
         .eq("id", conversationId)
         .maybeSingle();
 
@@ -186,9 +224,7 @@ export async function GET(req: Request) {
 
     const { data: messages, error: messagesError } = await supabaseAdmin
       .from("whatsapp_messages")
-      .select(
-        "id, conversation_id, direction, from_number, to_number, phone, profile_name, message, source, ai_generated, admin_generated, media_count, created_at"
-      )
+      .select(MESSAGE_SELECT)
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
 
@@ -210,9 +246,7 @@ export async function GET(req: Request) {
 
   let query = supabaseAdmin
     .from("whatsapp_conversations")
-    .select(
-      "id, phone, phone_e164, profile_name, channel, status, ai_enabled, handover_to_admin, handover_reason, last_inbound_at, window_expires_at, last_message, last_message_direction, last_message_at, created_at, updated_at"
-    )
+    .select(CONVERSATION_SELECT)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(100);
 
@@ -277,9 +311,7 @@ export async function PATCH(req: Request) {
     .from("whatsapp_conversations")
     .update(updatePayload)
     .eq("id", conversationId)
-    .select(
-      "id, phone, phone_e164, profile_name, channel, status, ai_enabled, handover_to_admin, handover_reason, last_inbound_at, window_expires_at, last_message, last_message_direction, last_message_at, created_at, updated_at"
-    )
+    .select(CONVERSATION_SELECT)
     .maybeSingle();
 
   if (updateError) {
