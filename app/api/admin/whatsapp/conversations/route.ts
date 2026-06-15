@@ -129,9 +129,9 @@ function getActionUpdate(action: string) {
   if (action === "pause_ai") {
     return {
       status: "active",
-      handover_to_admin: false,
+      handover_to_admin: true,
       ai_enabled: false,
-      handover_reason: "AI paused by admin",
+      handover_reason: "AI paused by admin - needs admin attention",
     };
   }
 
@@ -148,7 +148,7 @@ function getSystemMessage(action: string) {
   }
 
   if (action === "pause_ai") {
-    return "Admin paused AI replies for this conversation.";
+    return "Admin paused AI replies. This conversation now needs admin attention.";
   }
 
   return "Admin updated this conversation.";

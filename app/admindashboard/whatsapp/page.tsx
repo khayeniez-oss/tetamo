@@ -40,12 +40,27 @@ type Message = {
 
 type FilterValue = "all" | "needs_admin" | "active_ai" | "paused_ai" | "handled";
 
+type ChannelFilterValue =
+  | "all_channels"
+  | "meta_whatsapp"
+  | "twilio_whatsapp"
+  | "unknown_channel";
+
+type BadgeTone = "gray" | "green" | "red" | "amber" | "blue" | "purple";
+
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "all", label: "All" },
   { value: "needs_admin", label: "Needs Admin" },
   { value: "active_ai", label: "AI Active" },
   { value: "paused_ai", label: "AI Paused" },
   { value: "handled", label: "Handled" },
+];
+
+const CHANNEL_FILTERS: { value: ChannelFilterValue; label: string }[] = [
+  { value: "all_channels", label: "All Sources" },
+  { value: "meta_whatsapp", label: "Meta Direct" },
+  { value: "twilio_whatsapp", label: "Twilio" },
+  { value: "unknown_channel", label: "Unknown" },
 ];
 
 const MESSAGE_BATCH_SIZE = 30;
@@ -72,19 +87,111 @@ function shortText(value?: string | null, length = 95) {
   return `${clean.slice(0, length).trim()}...`;
 }
 
+function normalizeChannel(value?: string | null) {
+  return String(value || "").toLowerCase().trim();
+}
+
+function getChannelMeta(channel?: string | null): {
+  key: "meta" | "twilio" | "unknown";
+  label: string;
+  tone: BadgeTone;
+} {
+  const clean = normalizeChannel(channel);
+
+  if (clean.includes("meta")) {
+    return {
+      key: "meta",
+      label: "Meta Direct",
+      tone: "blue",
+    };
+  }
+
+  if (clean.includes("twilio")) {
+    return {
+      key: "twilio",
+      label: "Twilio",
+      tone: "green",
+    };
+  }
+
+  return {
+    key: "unknown",
+    label: "Unknown Source",
+    tone: "gray",
+  };
+}
+
+function getMessageSourceMeta(
+  message: Message,
+  conversation?: Conversation | null
+): {
+  label: string;
+  tone: BadgeTone;
+} {
+  const source = String(message.source || "").toLowerCase().trim();
+  const channelMeta = getChannelMeta(conversation?.channel);
+
+  if (source === "meta") return { label: "Meta Inbound", tone: "blue" };
+  if (source === "tetamo_mona_meta")
+    return { label: "Mona via Meta", tone: "blue" };
+  if (source === "admin_meta_direct")
+    return { label: "Admin via Meta", tone: "blue" };
+  if (source.includes("meta")) return { label: "Meta Direct", tone: "blue" };
+
+  if (source === "twilio") return { label: "Twilio Inbound", tone: "green" };
+  if (source === "tetamo_ai_twilio_api")
+    return { label: "AI via Twilio", tone: "green" };
+  if (source === "admin_twilio_direct")
+    return { label: "Admin via Twilio", tone: "green" };
+  if (source.includes("twilio")) return { label: "Twilio", tone: "green" };
+
+  if (source.includes("handover")) return { label: "Handover", tone: "amber" };
+  if (source.includes("admin")) return { label: "Admin", tone: "purple" };
+
+  if (message.ai_generated) {
+    return {
+      label:
+        channelMeta.key === "meta"
+          ? "AI via Meta"
+          : channelMeta.key === "twilio"
+          ? "AI via Twilio"
+          : "AI Reply",
+      tone: channelMeta.tone,
+    };
+  }
+
+  if (message.admin_generated) return { label: "Admin Reply", tone: "purple" };
+
+  return {
+    label: source || channelMeta.label,
+    tone: channelMeta.tone,
+  };
+}
+
+function isWindowOpen(value?: string | null) {
+  if (!value) return false;
+
+  const expiry = new Date(value).getTime();
+
+  if (!Number.isFinite(expiry)) return false;
+
+  return expiry > Date.now();
+}
+
 function Badge({
   children,
   tone = "gray",
 }: {
   children: ReactNode;
-  tone?: "gray" | "green" | "red" | "amber" | "blue";
+  tone?: BadgeTone;
 }) {
-  const classes: Record<string, string> = {
+  const classes: Record<BadgeTone, string> = {
     gray: "bg-gray-100 text-gray-700 border-gray-200",
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",
     red: "bg-red-50 text-red-700 border-red-200",
     amber: "bg-amber-50 text-amber-800 border-amber-200",
     blue: "bg-blue-50 text-blue-700 border-blue-200",
+    purple: "bg-purple-50 text-purple-700 border-purple-200",
   };
 
   return (
@@ -98,6 +205,8 @@ function Badge({
 
 export default function AdminWhatsappInboxPage() {
   const [filter, setFilter] = useState<FilterValue>("all");
+  const [channelFilter, setChannelFilter] =
+    useState<ChannelFilterValue>("all_channels");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
@@ -107,13 +216,42 @@ export default function AdminWhatsappInboxPage() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replyMessage, setReplyMessage] = useState("");
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const selectedConversationId = selectedConversation?.id || "";
+  const selectedWindowOpen = isWindowOpen(selectedConversation?.window_expires_at);
+
+  const displayedConversations = useMemo(() => {
+    if (channelFilter === "all_channels") return conversations;
+
+    return conversations.filter((conversation) => {
+      const channelMeta = getChannelMeta(conversation.channel);
+
+      if (channelFilter === "meta_whatsapp") return channelMeta.key === "meta";
+      if (channelFilter === "twilio_whatsapp") return channelMeta.key === "twilio";
+      if (channelFilter === "unknown_channel")
+        return channelMeta.key === "unknown";
+
+      return true;
+    });
+  }, [conversations, channelFilter]);
 
   const stats = useMemo(() => {
+    const metaDirect = conversations.filter(
+      (item) => getChannelMeta(item.channel).key === "meta"
+    ).length;
+
+    const twilio = conversations.filter(
+      (item) => getChannelMeta(item.channel).key === "twilio"
+    ).length;
+
     return {
       total: conversations.length,
+      metaDirect,
+      twilio,
       needsAdmin: conversations.filter((item) => item.handover_to_admin).length,
       activeAi: conversations.filter(
         (item) => item.ai_enabled && !item.handover_to_admin
@@ -236,6 +374,7 @@ export default function AdminWhatsappInboxPage() {
     try {
       setActionLoading(action);
       setError("");
+      setSuccessMessage("");
 
       const token = await getAccessToken();
 
@@ -272,6 +411,70 @@ export default function AdminWhatsappInboxPage() {
     }
   }
 
+  async function sendAdminReply() {
+    if (!selectedConversationId) return;
+
+    const cleanMessage = replyMessage.trim();
+
+    if (!cleanMessage) {
+      setError("Please write a reply before sending.");
+      return;
+    }
+
+    if (!selectedWindowOpen) {
+      setError(
+        "The 24-hour WhatsApp window is closed. Use an approved template message for this customer."
+      );
+      return;
+    }
+
+    try {
+      setSendingReply(true);
+      setError("");
+      setSuccessMessage("");
+
+      const token = await getAccessToken();
+
+      if (!token) {
+        setError("Please log in as admin first.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/whatsapp/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversationId,
+          message: cleanMessage,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to send WhatsApp reply.");
+      }
+
+      setReplyMessage("");
+      setSuccessMessage(
+        `Reply sent through ${
+          result.provider === "meta" ? "Meta Direct" : "Twilio"
+        }. AI remains paused until you resume it.`
+      );
+
+      await loadConversations(filter);
+      await loadMessages(selectedConversationId);
+    } catch (err: any) {
+      console.error("Send WhatsApp reply error:", err);
+      setError(err?.message || "Failed to send WhatsApp reply.");
+    } finally {
+      setSendingReply(false);
+    }
+  }
+
   function loadMoreMessages() {
     setVisibleMessageCount((prev) => prev + MESSAGE_BATCH_SIZE);
   }
@@ -288,6 +491,21 @@ export default function AdminWhatsappInboxPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId]);
 
+  useEffect(() => {
+    if (displayedConversations.length === 0) {
+      setSelectedConversation(null);
+      setMessages([]);
+      return;
+    }
+
+    if (
+      !selectedConversationId ||
+      !displayedConversations.some((item) => item.id === selectedConversationId)
+    ) {
+      setSelectedConversation(displayedConversations[0]);
+    }
+  }, [channelFilter, displayedConversations, selectedConversationId]);
+
   return (
     <main className="min-h-screen text-[#1C1C1E]">
       <div className="rounded-[28px] border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
@@ -300,8 +518,8 @@ export default function AdminWhatsappInboxPage() {
               WhatsApp Inbox
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-              Monitor WhatsApp leads from Twilio, Meta ads, and Tetamo AI replies.
-              Use this inbox to identify conversations that need admin follow-up.
+              Monitor WhatsApp leads from Meta Direct and Twilio. Pause AI when
+              admin needs to reply manually, then resume AI when done.
             </p>
           </div>
 
@@ -317,12 +535,30 @@ export default function AdminWhatsappInboxPage() {
           </button>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
               Total
             </p>
             <p className="mt-2 text-2xl font-bold">{stats.total}</p>
+          </div>
+
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-500">
+              Meta Direct
+            </p>
+            <p className="mt-2 text-2xl font-bold text-blue-700">
+              {stats.metaDirect}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-500">
+              Twilio
+            </p>
+            <p className="mt-2 text-2xl font-bold text-emerald-700">
+              {stats.twilio}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
@@ -359,22 +595,56 @@ export default function AdminWhatsappInboxPage() {
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          {FILTERS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setFilter(item.value)}
-              className={[
-                "rounded-full border px-4 py-2 text-sm font-semibold transition",
-                filter === item.value
-                  ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-              ].join(" ")}
-            >
-              {item.label}
-            </button>
-          ))}
+        {successMessage ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {successMessage}
+          </div>
+        ) : null}
+
+        <div className="mt-6">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+            Status Filter
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setFilter(item.value)}
+                className={[
+                  "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                  filter === item.value
+                    ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                ].join(" ")}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+            Channel Source
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {CHANNEL_FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setChannelFilter(item.value)}
+                className={[
+                  "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                  channelFilter === item.value
+                    ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                ].join(" ")}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -388,20 +658,26 @@ export default function AdminWhatsappInboxPage() {
           </div>
 
           <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
-            {!loadingConversations && conversations.length === 0 ? (
+            {!loadingConversations && displayedConversations.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
                 No conversations found.
               </div>
             ) : null}
 
-            {conversations.map((conversation) => {
+            {displayedConversations.map((conversation) => {
               const active = selectedConversationId === conversation.id;
+              const channelMeta = getChannelMeta(conversation.channel);
 
               return (
                 <button
                   key={conversation.id}
                   type="button"
-                  onClick={() => setSelectedConversation(conversation)}
+                  onClick={() => {
+                    setSelectedConversation(conversation);
+                    setError("");
+                    setSuccessMessage("");
+                    setReplyMessage("");
+                  }}
                   className={[
                     "w-full rounded-2xl border p-4 text-left transition",
                     active
@@ -448,6 +724,38 @@ export default function AdminWhatsappInboxPage() {
                         : conversation.ai_enabled
                         ? "AI Active"
                         : "AI Paused"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={[
+                        "rounded-full border px-2 py-1 text-[10px] font-bold",
+                        active
+                          ? "border-white/20 bg-white/10 text-white"
+                          : channelMeta.key === "meta"
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : channelMeta.key === "twilio"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-gray-200 bg-gray-50 text-gray-600",
+                      ].join(" ")}
+                    >
+                      {channelMeta.label}
+                    </span>
+
+                    <span
+                      className={[
+                        "rounded-full border px-2 py-1 text-[10px] font-bold",
+                        active
+                          ? "border-white/20 bg-white/10 text-white"
+                          : isWindowOpen(conversation.window_expires_at)
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-gray-200 bg-gray-50 text-gray-600",
+                      ].join(" ")}
+                    >
+                      {isWindowOpen(conversation.window_expires_at)
+                        ? "24h Open"
+                        : "24h Closed"}
                     </span>
                   </div>
 
@@ -498,6 +806,16 @@ export default function AdminWhatsappInboxPage() {
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge tone={getChannelMeta(selectedConversation.channel).tone}>
+                        {getChannelMeta(selectedConversation.channel).label}
+                      </Badge>
+
+                      {selectedWindowOpen ? (
+                        <Badge tone="green">24h Window Open</Badge>
+                      ) : (
+                        <Badge tone="gray">24h Window Closed</Badge>
+                      )}
+
                       {selectedConversation.handover_to_admin ? (
                         <Badge tone="red">Needs Admin</Badge>
                       ) : selectedConversation.ai_enabled ? (
@@ -551,7 +869,7 @@ export default function AdminWhatsappInboxPage() {
                 </div>
               </div>
 
-              <div className="max-h-[720px] space-y-4 overflow-y-auto bg-gray-50 p-4 sm:p-5">
+              <div className="max-h-[640px] space-y-4 overflow-y-auto bg-gray-50 p-4 sm:p-5">
                 {loadingMessages ? (
                   <div className="rounded-2xl border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
                     Loading messages...
@@ -580,6 +898,10 @@ export default function AdminWhatsappInboxPage() {
                 {visibleMessages.map((message) => {
                   const isInbound = message.direction === "inbound";
                   const isSystem = message.direction === "system";
+                  const sourceMeta = getMessageSourceMeta(
+                    message,
+                    selectedConversation
+                  );
 
                   if (isSystem) {
                     return (
@@ -617,14 +939,107 @@ export default function AdminWhatsappInboxPage() {
                           ].join(" ")}
                         >
                           <span>{formatDate(message.created_at)}</span>
+
+                          <span
+                            className={[
+                              "rounded-full border px-2 py-0.5 font-semibold",
+                              isInbound
+                                ? "border-gray-200 bg-gray-50"
+                                : "border-white/15 bg-white/10",
+                            ].join(" ")}
+                          >
+                            {isInbound ? "Customer" : "Tetamo"}
+                          </span>
+
+                          <span
+                            className={[
+                              "rounded-full border px-2 py-0.5 font-semibold",
+                              sourceMeta.tone === "blue"
+                                ? isInbound
+                                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                                  : "border-white/15 bg-white/10 text-white/75"
+                                : sourceMeta.tone === "green"
+                                ? isInbound
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-white/15 bg-white/10 text-white/75"
+                                : sourceMeta.tone === "purple"
+                                ? isInbound
+                                  ? "border-purple-200 bg-purple-50 text-purple-700"
+                                  : "border-white/15 bg-white/10 text-white/75"
+                                : "border-gray-200 bg-gray-50",
+                            ].join(" ")}
+                          >
+                            {sourceMeta.label}
+                          </span>
+
                           {message.ai_generated ? <span>AI</span> : null}
                           {message.admin_generated ? <span>Admin</span> : null}
-                          {message.source ? <span>{message.source}</span> : null}
                         </div>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="border-t border-gray-100 bg-white p-4 sm:p-5">
+                <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-bold">Admin Reply</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Manual replies pause AI and keep the chat under Needs
+                        Admin until you click Resume AI.
+                      </p>
+                    </div>
+
+                    {selectedWindowOpen ? (
+                      <Badge tone="green">Free-text allowed</Badge>
+                    ) : (
+                      <Badge tone="gray">Template needed</Badge>
+                    )}
+                  </div>
+
+                  {!selectedWindowOpen ? (
+                    <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                      The 24-hour WhatsApp window is closed. Normal text replies
+                      may be rejected. Use an approved template message for this
+                      customer.
+                    </div>
+                  ) : null}
+
+                  <textarea
+                    value={replyMessage}
+                    onChange={(event) => setReplyMessage(event.target.value)}
+                    disabled={!selectedWindowOpen || sendingReply}
+                    rows={4}
+                    maxLength={1700}
+                    placeholder={
+                      selectedWindowOpen
+                        ? "Write admin reply to customer..."
+                        : "24-hour window closed. Approved template needed."
+                    }
+                    className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100 disabled:text-gray-400"
+                  />
+
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-gray-400">
+                      {replyMessage.trim().length}/1700 characters
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={sendAdminReply}
+                      disabled={
+                        sendingReply ||
+                        !selectedWindowOpen ||
+                        !replyMessage.trim()
+                      }
+                      className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {sendingReply ? "Sending..." : "Send Reply"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </>
           )}
