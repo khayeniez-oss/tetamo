@@ -273,6 +273,10 @@ export default function AdminDashboardLayout({
         items: [
           { href: "/admindashboard/support", label: "Support" },
           { href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
+          {
+            href: "/admindashboard/whatsapp/campaigns",
+            label: "WhatsApp Campaigns",
+          },
           { href: "/admindashboard/settings", label: "Settings" },
           { href: "/admindashboard/logs", label: "Logs" },
           { href: "/admindashboard/ai-insights", label: "AI Insights" },
