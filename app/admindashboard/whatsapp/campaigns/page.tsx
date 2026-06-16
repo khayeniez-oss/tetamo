@@ -40,42 +40,61 @@ type Recipient = {
   created_at: string;
 };
 
-const APPROVED_TEMPLATES = [
+type TemplateOption = {
+  label: string;
+  name: string;
+  language: string;
+  type: string;
+  category: "marketing" | "utility";
+  variableHint: string;
+  note: string;
+};
+
+const APPROVED_TEMPLATES: TemplateOption[] = [
   {
     label: "Agent Invite",
     name: "tetamo_agent_invite_id_01",
     language: "en",
     type: "business_initiated",
-  },
-  {
-    label: "Property Marketplace",
-    name: "tetamo_properti_marketplace_",
-    language: "en",
-    type: "business_initiated",
+    category: "marketing",
+    variableHint: "Leave empty unless this template has {{1}} in Meta.",
+    note: "Use this for agent/owner outreach and business-initiated campaign sending.",
   },
   {
     label: "Listing Follow-up 3 Day",
-    name: "tetamo_listing_followup_3_day",
+    name: "tetamo_listing_followup_3_days_id__marketing",
     language: "en",
     type: "followup_3_day",
+    category: "marketing",
+    variableHint: "No variables.",
+    note: "Use for automatic or manual 3-day listing follow-up.",
   },
   {
     label: "Listing Follow-up 14 Day",
-    name: "tetamo_listing_followup_14_day",
+    name: "tetamo_listing_followup_14_days_id",
     language: "en",
     type: "followup_14_day",
+    category: "marketing",
+    variableHint: "No variables.",
+    note: "Use for automatic or manual 14-day listing follow-up.",
   },
   {
     label: "Listing Support Follow Up",
     name: "listing_support_follow_up_id",
     language: "en",
-    type: "business_initiated",
+    type: "manual_template",
+    category: "utility",
+    variableHint: '{"1":"Bapak/Ibu"}',
+    note: "Utility template. Use when a lead/customer needs listing support follow-up.",
   },
   {
     label: "Payment QRIS Support",
     name: "payment_qris_support_id",
     language: "en",
     type: "manual_template",
+    category: "utility",
+    variableHint: '{"1":"Bapak/Ibu"}',
+    note: "Utility template. Use for payment/QRIS support cases.",
   },
 ];
 
@@ -134,6 +153,18 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
+function getPendingFromCampaign(campaign: Campaign | null) {
+  if (!campaign) return 0;
+
+  const total = Number(campaign.total_recipients || 0);
+  const done =
+    Number(campaign.total_sent || 0) +
+    Number(campaign.total_failed || 0) +
+    Number(campaign.total_skipped || 0);
+
+  return Math.max(total - done, 0);
+}
+
 export default function WhatsAppCampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(
@@ -151,22 +182,43 @@ export default function WhatsAppCampaignsPage() {
   const [success, setSuccess] = useState("");
 
   const [name, setName] = useState("");
-  const [templateName, setTemplateName] = useState("tetamo_agent_invite_id_01");
+  const [templateName, setTemplateName] = useState(
+    "tetamo_agent_invite_id_01"
+  );
   const [templateLanguage, setTemplateLanguage] = useState("en");
+  const [templateCategory, setTemplateCategory] = useState<
+    "marketing" | "utility"
+  >("marketing");
   const [campaignType, setCampaignType] = useState("business_initiated");
   const [leadType, setLeadType] = useState("agent");
   const [batchSize, setBatchSize] = useState(25);
   const [recipientText, setRecipientText] = useState("");
   const [defaultVariablesText, setDefaultVariablesText] = useState("");
 
+  const selectedTemplate = useMemo(() => {
+    return (
+      APPROVED_TEMPLATES.find((item) => item.name === templateName) ||
+      APPROVED_TEMPLATES[0]
+    );
+  }, [templateName]);
+
   const stats = useMemo(() => {
-    const pending = recipients.filter((item) => item.status === "pending").length;
+    const pending = recipients.filter(
+      (item) => item.status === "pending"
+    ).length;
     const sent = recipients.filter((item) => item.status === "sent").length;
     const failed = recipients.filter((item) => item.status === "failed").length;
-    const skipped = recipients.filter((item) => item.status === "skipped").length;
+    const skipped = recipients.filter(
+      (item) => item.status === "skipped"
+    ).length;
 
     return { pending, sent, failed, skipped };
   }, [recipients]);
+
+  const campaignPending = useMemo(() => {
+    if (recipients.length > 0) return stats.pending;
+    return getPendingFromCampaign(selectedCampaign);
+  }, [recipients.length, selectedCampaign, stats.pending]);
 
   async function getAccessToken() {
     const {
@@ -254,7 +306,14 @@ export default function WhatsAppCampaignsPage() {
 
     if (selected) {
       setTemplateLanguage(selected.language);
+      setTemplateCategory(selected.category);
       setCampaignType(selected.type);
+
+      if (selected.variableHint.startsWith("{")) {
+        setDefaultVariablesText(selected.variableHint);
+      } else {
+        setDefaultVariablesText("");
+      }
     }
   }
 
@@ -267,7 +326,7 @@ export default function WhatsAppCampaignsPage() {
       return JSON.parse(clean);
     } catch {
       throw new Error(
-        'Default variables must be valid JSON, example: {"1":"Khaye"}'
+        'Template variables must be valid JSON, example: {"1":"Bapak/Ibu"}'
       );
     }
   }
@@ -298,7 +357,7 @@ export default function WhatsAppCampaignsPage() {
           templateName,
           templateLanguage,
           campaignType,
-          category: "marketing",
+          category: templateCategory,
           leadType,
           batchSize,
           recipients: recipientText,
@@ -442,9 +501,9 @@ export default function WhatsAppCampaignsPage() {
               Template Campaigns
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-              Create business-initiated campaigns using approved Meta WhatsApp
-              templates. Send slowly in batches, track failures, and protect
-              template quality.
+              Send business-initiated WhatsApp messages using approved Meta
+              templates. Create campaigns, paste phone numbers, and send safely
+              in batches.
             </p>
           </div>
 
@@ -461,9 +520,15 @@ export default function WhatsAppCampaignsPage() {
         </div>
 
         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          Start with small batches first, for example 25–50 recipients. Do not
-          blast 1,000 numbers at once until delivery and template quality look
+          Start with small batches first, for example 10–25 recipients. Do not
+          send 1,000 numbers at once until delivery and template quality look
           healthy.
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
+          Image-header templates are not included yet. Use text-only templates
+          first: Agent Invite, 3-day follow-up, 14-day follow-up, listing
+          support, and QRIS support.
         </div>
 
         {error ? (
@@ -518,16 +583,35 @@ export default function WhatsAppCampaignsPage() {
                 placeholder="Exact Meta template name"
                 className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               />
-              <p className="mt-2 text-xs leading-5 text-gray-500">
-                The template name must match Meta exactly. If Meta shows a
-                shortened name, open the template and copy the full name.
-              </p>
+
+              <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-600">
+                <p>
+                  <span className="font-bold text-gray-800">Language:</span>{" "}
+                  {templateLanguage}
+                </p>
+                <p>
+                  <span className="font-bold text-gray-800">Category:</span>{" "}
+                  {templateCategory}
+                </p>
+                <p>
+                  <span className="font-bold text-gray-800">Type:</span>{" "}
+                  {campaignType}
+                </p>
+                <p className="mt-1">
+                  <span className="font-bold text-gray-800">Variables:</span>{" "}
+                  {selectedTemplate?.variableHint}
+                </p>
+                <p className="mt-1">
+                  <span className="font-bold text-gray-800">Note:</span>{" "}
+                  {selectedTemplate?.note}
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
-                  Language
+                  Language Code
                 </label>
                 <input
                   value={templateLanguage}
@@ -545,7 +629,9 @@ export default function WhatsAppCampaignsPage() {
                   value={batchSize}
                   min={1}
                   max={200}
-                  onChange={(event) => setBatchSize(Number(event.target.value))}
+                  onChange={(event) =>
+                    setBatchSize(Number(event.target.value))
+                  }
                   className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
                 />
               </div>
@@ -560,12 +646,26 @@ export default function WhatsAppCampaignsPage() {
                 onChange={(event) => setCampaignType(event.target.value)}
                 className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               >
-                <option value="business_initiated">
-                  Business Initiated
-                </option>
+                <option value="business_initiated">Business Initiated</option>
                 <option value="followup_3_day">3-Day Follow-up</option>
                 <option value="followup_14_day">14-Day Follow-up</option>
                 <option value="manual_template">Manual Template</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                Template Category
+              </label>
+              <select
+                value={templateCategory}
+                onChange={(event) =>
+                  setTemplateCategory(event.target.value as "marketing" | "utility")
+                }
+                className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+              >
+                <option value="marketing">Marketing</option>
+                <option value="utility">Utility</option>
               </select>
             </div>
 
@@ -609,17 +709,28 @@ export default function WhatsAppCampaignsPage() {
               </label>
               <textarea
                 value={defaultVariablesText}
-                onChange={(event) => setDefaultVariablesText(event.target.value)}
+                onChange={(event) =>
+                  setDefaultVariablesText(event.target.value)
+                }
                 rows={3}
-                placeholder={`Leave empty if template has no variables.\nExample: {"1":"Tetamo"}`}
+                placeholder={`Leave empty if template has no variables.\nExample for {{1}}: {"1":"Bapak/Ibu"}`}
                 className="mt-2 w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               />
+              <p className="mt-2 text-xs leading-5 text-gray-500">
+                Only add variables if the Meta template has variables like{" "}
+                {"{{1}}"}. For most campaign templates, leave this empty.
+              </p>
             </div>
 
             <button
               type="button"
               onClick={createCampaign}
-              disabled={creating || !name.trim() || !templateName.trim() || !recipientText.trim()}
+              disabled={
+                creating ||
+                !name.trim() ||
+                !templateName.trim() ||
+                !recipientText.trim()
+              }
               className="w-full rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {creating ? "Creating..." : "Create Campaign"}
@@ -638,7 +749,9 @@ export default function WhatsAppCampaignsPage() {
           <div className="grid gap-0 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div className="max-h-[780px] overflow-y-auto border-b border-gray-100 p-3 lg:border-b-0 lg:border-r">
               {loading ? (
-                <p className="p-4 text-sm text-gray-500">Loading campaigns...</p>
+                <p className="p-4 text-sm text-gray-500">
+                  Loading campaigns...
+                </p>
               ) : null}
 
               {!loading && campaigns.length === 0 ? (
@@ -729,8 +842,12 @@ export default function WhatsAppCampaignsPage() {
                         </span>
                       </p>
                       <p className="mt-1 text-sm text-gray-500">
-                        Language: {selectedCampaign.template_language} · Type:{" "}
+                        Language: {selectedCampaign.template_language} ·
+                        Category: {selectedCampaign.category} · Type:{" "}
                         {selectedCampaign.campaign_type}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Created: {formatDate(selectedCampaign.created_at)}
                       </p>
                     </div>
 
@@ -741,7 +858,8 @@ export default function WhatsAppCampaignsPage() {
                         disabled={
                           sendingBatch ||
                           selectedCampaign.status === "completed" ||
-                          selectedCampaign.status === "paused"
+                          selectedCampaign.status === "paused" ||
+                          campaignPending <= 0
                         }
                         className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                       >
@@ -755,9 +873,7 @@ export default function WhatsAppCampaignsPage() {
                           disabled={Boolean(actionLoading)}
                           className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                         >
-                          {actionLoading === "resume"
-                            ? "Saving..."
-                            : "Resume"}
+                          {actionLoading === "resume" ? "Saving..." : "Resume"}
                         </button>
                       ) : (
                         <button
@@ -777,7 +893,9 @@ export default function WhatsAppCampaignsPage() {
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
                         Pending
                       </p>
-                      <p className="mt-2 text-2xl font-bold">{stats.pending}</p>
+                      <p className="mt-2 text-2xl font-bold">
+                        {campaignPending}
+                      </p>
                     </div>
 
                     <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
@@ -785,7 +903,7 @@ export default function WhatsAppCampaignsPage() {
                         Sent
                       </p>
                       <p className="mt-2 text-2xl font-bold text-emerald-700">
-                        {stats.sent}
+                        {stats.sent || selectedCampaign.total_sent}
                       </p>
                     </div>
 
@@ -794,7 +912,7 @@ export default function WhatsAppCampaignsPage() {
                         Failed
                       </p>
                       <p className="mt-2 text-2xl font-bold text-red-700">
-                        {stats.failed}
+                        {stats.failed || selectedCampaign.total_failed}
                       </p>
                     </div>
 
@@ -803,7 +921,7 @@ export default function WhatsAppCampaignsPage() {
                         Skipped
                       </p>
                       <p className="mt-2 text-2xl font-bold text-amber-800">
-                        {stats.skipped}
+                        {stats.skipped || selectedCampaign.total_skipped}
                       </p>
                     </div>
                   </div>
@@ -825,6 +943,7 @@ export default function WhatsAppCampaignsPage() {
                         <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-[0.12em] text-gray-400">
                           <tr>
                             <th className="px-4 py-3">Phone</th>
+                            <th className="px-4 py-3">Name</th>
                             <th className="px-4 py-3">Lead</th>
                             <th className="px-4 py-3">Status</th>
                             <th className="px-4 py-3">Sent At</th>
@@ -835,6 +954,9 @@ export default function WhatsAppCampaignsPage() {
                             <tr key={recipient.id}>
                               <td className="px-4 py-3 font-medium text-gray-800">
                                 +{recipient.phone_e164}
+                              </td>
+                              <td className="px-4 py-3 text-gray-500">
+                                {recipient.customer_name || "-"}
                               </td>
                               <td className="px-4 py-3 text-gray-500">
                                 {recipient.lead_type || "-"}
@@ -851,7 +973,7 @@ export default function WhatsAppCampaignsPage() {
                           {recipients.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={4}
+                                colSpan={5}
                                 className="px-4 py-8 text-center text-gray-500"
                               >
                                 No recipients loaded.
