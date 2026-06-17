@@ -27,7 +27,13 @@ type ImportedRecipient = {
   variables?: Record<string, unknown> | string[] | null;
 };
 
+type SendProvider = "meta_cloud_api" | "twilio_whatsapp";
+
 function cleanText(value?: unknown) {
+  return String(value || "").trim();
+}
+
+function cleanEnv(value?: string | null) {
   return String(value || "").trim();
 }
 
@@ -143,6 +149,54 @@ function isValidPhone(phoneE164: string) {
   return phoneE164.length >= 8 && phoneE164.length <= 16;
 }
 
+function normalizeSendProvider(value?: unknown): SendProvider {
+  const clean = cleanText(value).toLowerCase();
+
+  if (
+    clean === "twilio" ||
+    clean === "twilio_whatsapp" ||
+    clean === "twilio_content"
+  ) {
+    return "twilio_whatsapp";
+  }
+
+  if (clean === "meta" || clean === "meta_cloud_api") {
+    return "meta_cloud_api";
+  }
+
+  return "twilio_whatsapp";
+}
+
+function toTwilioWhatsappAddress(value?: unknown) {
+  const raw = cleanText(value);
+
+  if (!raw) return "";
+
+  if (raw.toLowerCase().startsWith("whatsapp:")) {
+    const number = raw.slice("whatsapp:".length).trim();
+    const digits = normalizePhone(number);
+
+    return digits ? `whatsapp:+${digits}` : "";
+  }
+
+  const digits = normalizePhone(raw);
+  return digits ? `whatsapp:+${digits}` : "";
+}
+
+function getTwilioWhatsappFrom() {
+  return toTwilioWhatsappAddress(process.env.TWILIO_WHATSAPP_FROM);
+}
+
+function getTwilioContentSidForTemplate(templateName: string) {
+  const cleanTemplateName = cleanText(templateName);
+
+  if (cleanTemplateName === "tetamo_agent_invite_id_01") {
+    return cleanEnv(process.env.TWILIO_AGENT_INVITE_CONTENT_SID);
+  }
+
+  return "";
+}
+
 function normalizeVariables(value: unknown) {
   if (!value) return {};
 
@@ -179,7 +233,8 @@ function parseRecipients(value: unknown, defaultLeadType: string) {
         recipients.push({
           phone: cleanText(record.phone || record.phoneE164 || record.to),
           customerName: cleanText(record.customerName || record.name),
-          leadType: cleanText(record.leadType || record.lead_type) || defaultLeadType,
+          leadType:
+            cleanText(record.leadType || record.lead_type) || defaultLeadType,
           source: cleanText(record.source) || "campaign_import",
           variables: (record.variables ||
             record.bodyVariables ||
@@ -275,6 +330,15 @@ async function sendRecipientThroughTemplateApi(params: {
   const authorization = params.req.headers.get("authorization") || "";
   const sendUrl = new URL("/api/admin/whatsapp/template-send", params.req.url);
 
+  const sendProvider = normalizeSendProvider(params.campaign.send_provider);
+  const templateName = cleanText(params.campaign.template_name);
+  const twilioContentSid =
+    cleanText(params.campaign.twilio_content_sid) ||
+    getTwilioContentSidForTemplate(templateName);
+  const twilioFrom =
+    toTwilioWhatsappAddress(params.campaign.twilio_from) ||
+    getTwilioWhatsappFrom();
+
   const response = await fetch(sendUrl.toString(), {
     method: "POST",
     headers: {
@@ -288,10 +352,13 @@ async function sendRecipientThroughTemplateApi(params: {
       customerName: params.recipient.customer_name,
       leadType: params.recipient.lead_type || "unknown",
       source: params.recipient.source || "campaign",
-      templateName: params.campaign.template_name,
+      templateName,
       templateLanguage: params.campaign.template_language || "en",
       templateCategory: params.campaign.category || "marketing",
       sendType: params.campaign.campaign_type || "business_initiated",
+      sendProvider,
+      twilioContentSid,
+      twilioFrom,
       variables: params.recipient.variables || {},
     }),
   });
@@ -397,18 +464,56 @@ export async function POST(req: Request) {
     );
     const leadType = cleanText(body?.leadType || body?.lead_type || "unknown");
     const batchSize = Number(body?.batchSize || body?.batch_size || 100);
+    const sendProvider = normalizeSendProvider(
+      body?.sendProvider || body?.send_provider || "twilio_whatsapp"
+    );
+
     const defaultVariables = normalizeVariables(
       body?.defaultVariables || body?.default_variables || {}
     );
 
+    const twilioContentSid =
+      cleanText(body?.twilioContentSid || body?.twilio_content_sid) ||
+      getTwilioContentSidForTemplate(templateName);
+
+    const twilioFrom =
+      toTwilioWhatsappAddress(body?.twilioFrom || body?.twilio_from) ||
+      getTwilioWhatsappFrom();
+
     const parsed = parseRecipients(body?.recipients, leadType);
 
     if (!name) {
-      return Response.json({ error: "Campaign name is required." }, { status: 400 });
+      return Response.json(
+        { error: "Campaign name is required." },
+        { status: 400 }
+      );
     }
 
     if (!templateName) {
-      return Response.json({ error: "Template name is required." }, { status: 400 });
+      return Response.json(
+        { error: "Template name is required." },
+        { status: 400 }
+      );
+    }
+
+    if (sendProvider === "twilio_whatsapp" && !twilioContentSid) {
+      return Response.json(
+        {
+          error:
+            "Twilio ContentSid is required for Twilio WhatsApp campaigns.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (sendProvider === "twilio_whatsapp" && !twilioFrom) {
+      return Response.json(
+        {
+          error:
+            "Twilio WhatsApp sender is required for Twilio WhatsApp campaigns.",
+        },
+        { status: 400 }
+      );
     }
 
     if (parsed.recipients.length === 0) {
@@ -426,14 +531,23 @@ export async function POST(req: Request) {
         template_language: templateLanguage || "en",
         category,
         campaign_type: campaignType,
+        send_provider: sendProvider,
+        twilio_content_sid:
+          sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
+        twilio_from: sendProvider === "twilio_whatsapp" ? twilioFrom : null,
         status: "draft",
         total_recipients: parsed.recipients.length,
-        batch_size: Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 100,
+        batch_size:
+          Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 100,
         created_by: auth.userId,
         notes: cleanText(body?.notes) || null,
         raw_payload: {
           invalid_recipients: parsed.invalidRecipients,
           default_variables: defaultVariables,
+          send_provider: sendProvider,
+          twilio_content_sid:
+            sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
+          twilio_from: sendProvider === "twilio_whatsapp" ? twilioFrom : null,
         },
       })
       .select("*")
@@ -497,6 +611,10 @@ export async function POST(req: Request) {
     return Response.json({
       success: true,
       campaignId: campaign.id,
+      sendProvider,
+      twilioContentSid:
+        sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
+      twilioFrom: sendProvider === "twilio_whatsapp" ? twilioFrom : null,
       totalRecipients: insertedCount,
       skippedCount,
       invalidRecipients: parsed.invalidRecipients,
@@ -531,7 +649,10 @@ export async function PATCH(req: Request) {
     const requestedBatchSize = Number(body?.batchSize || body?.batch_size || 0);
 
     if (!campaignId) {
-      return Response.json({ error: "campaignId is required." }, { status: 400 });
+      return Response.json(
+        { error: "campaignId is required." },
+        { status: 400 }
+      );
     }
 
     const { data: campaign, error: campaignError } = await supabaseAdmin
@@ -656,7 +777,8 @@ export async function PATCH(req: Request) {
       .from("whatsapp_template_campaigns")
       .update({
         status: nextStatus,
-        completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
+        completed_at:
+          nextStatus === "completed" ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", campaignId);
@@ -665,6 +787,7 @@ export async function PATCH(req: Request) {
       success: true,
       campaignId,
       status: nextStatus,
+      sendProvider: normalizeSendProvider(campaign.send_provider),
       batchSize,
       processedThisBatch: pendingRecipients.length,
       sentThisBatch: results.filter((item) => item.ok).length,

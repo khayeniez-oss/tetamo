@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+type SendProvider = "twilio_whatsapp" | "meta_cloud_api";
+type TemplateCategory = "marketing" | "utility";
+
 type Campaign = {
   id: string;
   name: string;
@@ -10,6 +13,9 @@ type Campaign = {
   template_language: string;
   category: string;
   campaign_type: string;
+  send_provider?: SendProvider | string | null;
+  twilio_content_sid?: string | null;
+  twilio_from?: string | null;
   status: string;
   total_recipients: number;
   total_sent: number;
@@ -33,6 +39,7 @@ type Recipient = {
   variables: Record<string, unknown> | null;
   status: string;
   meta_message_id: string | null;
+  twilio_message_sid?: string | null;
   sent_at: string | null;
   failed_at: string | null;
   skipped_at: string | null;
@@ -45,7 +52,7 @@ type TemplateOption = {
   name: string;
   language: string;
   type: string;
-  category: "marketing" | "utility";
+  category: TemplateCategory;
   variableHint: string;
   note: string;
 };
@@ -54,16 +61,16 @@ const APPROVED_TEMPLATES: TemplateOption[] = [
   {
     label: "Agent Invite",
     name: "tetamo_agent_invite_id_01",
-    language: "en",
+    language: "id",
     type: "business_initiated",
     category: "marketing",
-    variableHint: "Leave empty unless this template has {{1}} in Meta.",
+    variableHint: "Leave empty unless this template has {{1}}.",
     note: "Use this for agent/owner outreach and business-initiated campaign sending.",
   },
   {
     label: "Listing Follow-up 3 Day",
     name: "tetamo_listing_followup_3_days_id__marketing",
-    language: "en",
+    language: "id",
     type: "followup_3_day",
     category: "marketing",
     variableHint: "No variables.",
@@ -72,7 +79,7 @@ const APPROVED_TEMPLATES: TemplateOption[] = [
   {
     label: "Listing Follow-up 14 Day",
     name: "tetamo_listing_followup_14_days_id",
-    language: "en",
+    language: "id",
     type: "followup_14_day",
     category: "marketing",
     variableHint: "No variables.",
@@ -81,7 +88,7 @@ const APPROVED_TEMPLATES: TemplateOption[] = [
   {
     label: "Listing Support Follow Up",
     name: "listing_support_follow_up_id",
-    language: "en",
+    language: "id",
     type: "manual_template",
     category: "utility",
     variableHint: '{"1":"Bapak/Ibu"}',
@@ -90,7 +97,7 @@ const APPROVED_TEMPLATES: TemplateOption[] = [
   {
     label: "Payment QRIS Support",
     name: "payment_qris_support_id",
-    language: "en",
+    language: "id",
     type: "manual_template",
     category: "utility",
     variableHint: '{"1":"Bapak/Ibu"}',
@@ -141,6 +148,19 @@ function getStatusClass(status?: string | null) {
   return "border-gray-200 bg-gray-50 text-gray-700";
 }
 
+function getProviderLabel(provider?: string | null) {
+  if (provider === "meta_cloud_api") return "Meta Cloud API";
+  return "Twilio WhatsApp";
+}
+
+function getProviderClass(provider?: string | null) {
+  if (provider === "meta_cloud_api") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  return "border-purple-200 bg-purple-50 text-purple-700";
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   return (
     <span
@@ -149,6 +169,18 @@ function StatusBadge({ status }: { status?: string | null }) {
       )}`}
     >
       {status || "draft"}
+    </span>
+  );
+}
+
+function ProviderBadge({ provider }: { provider?: string | null }) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getProviderClass(
+        provider
+      )}`}
+    >
+      {getProviderLabel(provider)}
     </span>
   );
 }
@@ -185,15 +217,19 @@ export default function WhatsAppCampaignsPage() {
   const [templateName, setTemplateName] = useState(
     "tetamo_agent_invite_id_01"
   );
-  const [templateLanguage, setTemplateLanguage] = useState("en");
-  const [templateCategory, setTemplateCategory] = useState<
-    "marketing" | "utility"
-  >("marketing");
+  const [templateLanguage, setTemplateLanguage] = useState("id");
+  const [templateCategory, setTemplateCategory] =
+    useState<TemplateCategory>("marketing");
   const [campaignType, setCampaignType] = useState("business_initiated");
   const [leadType, setLeadType] = useState("agent");
   const [batchSize, setBatchSize] = useState(25);
   const [recipientText, setRecipientText] = useState("");
   const [defaultVariablesText, setDefaultVariablesText] = useState("");
+
+  const [sendProvider, setSendProvider] =
+    useState<SendProvider>("twilio_whatsapp");
+  const [twilioContentSid, setTwilioContentSid] = useState("");
+  const [twilioFrom, setTwilioFrom] = useState("");
 
   const selectedTemplate = useMemo(() => {
     return (
@@ -201,6 +237,8 @@ export default function WhatsAppCampaignsPage() {
       APPROVED_TEMPLATES[0]
     );
   }, [templateName]);
+
+  const isTwilio = sendProvider === "twilio_whatsapp";
 
   const stats = useMemo(() => {
     const pending = recipients.filter(
@@ -362,6 +400,9 @@ export default function WhatsAppCampaignsPage() {
           batchSize,
           recipients: recipientText,
           defaultVariables,
+          sendProvider,
+          twilioContentSid: isTwilio ? twilioContentSid.trim() : "",
+          twilioFrom: isTwilio ? twilioFrom.trim() : "",
         }),
       });
 
@@ -372,7 +413,9 @@ export default function WhatsAppCampaignsPage() {
       }
 
       setSuccess(
-        `Campaign created with ${result.totalRecipients} recipient(s).`
+        `Campaign created with ${
+          result.totalRecipients || 0
+        } recipient(s) using ${getProviderLabel(result.sendProvider)}.`
       );
 
       setName("");
@@ -427,7 +470,11 @@ export default function WhatsAppCampaignsPage() {
       }
 
       setSuccess(
-        `Batch processed: ${result.sentThisBatch} sent, ${result.failedThisBatch} failed, pending left ${result.pendingLeft}.`
+        `Batch processed via ${getProviderLabel(
+          result.sendProvider
+        )}: ${result.sentThisBatch} sent, ${
+          result.failedThisBatch
+        } failed, pending left ${result.pendingLeft}.`
       );
 
       await loadCampaigns();
@@ -495,15 +542,15 @@ export default function WhatsAppCampaignsPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-400">
-              Meta WhatsApp
+              WhatsApp Templates
             </p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
               Template Campaigns
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-              Send business-initiated WhatsApp messages using approved Meta
-              templates. Create campaigns, paste phone numbers, and send safely
-              in batches.
+              Create WhatsApp template campaigns for agents, owners, listing
+              follow-ups, support messages, and QRIS support. Choose Twilio
+              WhatsApp or Meta Cloud API before sending.
             </p>
           </div>
 
@@ -525,10 +572,15 @@ export default function WhatsAppCampaignsPage() {
           healthy.
         </div>
 
+        <div className="mt-3 rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm leading-6 text-purple-900">
+          Twilio WhatsApp is now supported. For Twilio campaigns, add the
+          correct Content SID from Twilio. The sender can be left empty only if
+          TWILIO_WHATSAPP_FROM is already set in the server environment.
+        </div>
+
         <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
-          Image-header templates are not included yet. Use text-only templates
-          first: Agent Invite, 3-day follow-up, 14-day follow-up, listing
-          support, and QRIS support.
+          Meta Cloud API is also supported. Use the exact approved Meta template
+          name and correct language code.
         </div>
 
         {error ? (
@@ -563,6 +615,78 @@ export default function WhatsAppCampaignsPage() {
 
             <div>
               <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                Send Provider
+              </label>
+              <select
+                value={sendProvider}
+                onChange={(event) =>
+                  setSendProvider(event.target.value as SendProvider)
+                }
+                className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+              >
+                <option value="twilio_whatsapp">Twilio WhatsApp</option>
+                <option value="meta_cloud_api">Meta Cloud API</option>
+              </select>
+
+              <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-600">
+                {isTwilio ? (
+                  <p>
+                    This campaign will send approved WhatsApp templates through
+                    Twilio Content API.
+                  </p>
+                ) : (
+                  <p>
+                    This campaign will send approved WhatsApp templates directly
+                    through Meta Cloud API.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {isTwilio ? (
+              <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
+                <p className="text-sm font-bold text-purple-900">
+                  Twilio Settings
+                </p>
+
+                <div className="mt-4">
+                  <label className="text-xs font-bold uppercase tracking-[0.14em] text-purple-500">
+                    Twilio Content SID
+                  </label>
+                  <input
+                    value={twilioContentSid}
+                    onChange={(event) =>
+                      setTwilioContentSid(event.target.value)
+                    }
+                    placeholder="Example: HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 text-sm outline-none focus:border-purple-400"
+                  />
+                  <p className="mt-2 text-xs leading-5 text-purple-700">
+                    Required for Twilio templates unless the backend already has
+                    a matching environment variable for this template.
+                  </p>
+                </div>
+
+                <div className="mt-4">
+                  <label className="text-xs font-bold uppercase tracking-[0.14em] text-purple-500">
+                    Twilio From Number Optional
+                  </label>
+                  <input
+                    value={twilioFrom}
+                    onChange={(event) => setTwilioFrom(event.target.value)}
+                    placeholder="Example: whatsapp:+14155238886 or +14155238886"
+                    className="mt-2 w-full rounded-2xl border border-purple-100 bg-white px-4 py-3 text-sm outline-none focus:border-purple-400"
+                  />
+                  <p className="mt-2 text-xs leading-5 text-purple-700">
+                    Leave empty if TWILIO_WHATSAPP_FROM is already set in
+                    environment variables.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
                 Approved Template
               </label>
               <select
@@ -580,7 +704,7 @@ export default function WhatsAppCampaignsPage() {
               <input
                 value={templateName}
                 onChange={(event) => setTemplateName(event.target.value)}
-                placeholder="Exact Meta template name"
+                placeholder="Exact approved template name"
                 className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               />
 
@@ -599,11 +723,11 @@ export default function WhatsAppCampaignsPage() {
                 </p>
                 <p className="mt-1">
                   <span className="font-bold text-gray-800">Variables:</span>{" "}
-                  {selectedTemplate?.variableHint}
+                  {selectedTemplate.variableHint}
                 </p>
                 <p className="mt-1">
                   <span className="font-bold text-gray-800">Note:</span>{" "}
-                  {selectedTemplate?.note}
+                  {selectedTemplate.note}
                 </p>
               </div>
             </div>
@@ -616,6 +740,7 @@ export default function WhatsAppCampaignsPage() {
                 <input
                   value={templateLanguage}
                   onChange={(event) => setTemplateLanguage(event.target.value)}
+                  placeholder="id or en"
                   className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
                 />
               </div>
@@ -660,7 +785,7 @@ export default function WhatsAppCampaignsPage() {
               <select
                 value={templateCategory}
                 onChange={(event) =>
-                  setTemplateCategory(event.target.value as "marketing" | "utility")
+                  setTemplateCategory(event.target.value as TemplateCategory)
                 }
                 className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               >
@@ -699,7 +824,7 @@ export default function WhatsAppCampaignsPage() {
               />
               <p className="mt-2 text-xs leading-5 text-gray-500">
                 Indonesian numbers starting with 08 or 8 will be normalized to
-                62 automatically.
+                62 automatically by the backend.
               </p>
             </div>
 
@@ -717,8 +842,9 @@ export default function WhatsAppCampaignsPage() {
                 className="mt-2 w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               />
               <p className="mt-2 text-xs leading-5 text-gray-500">
-                Only add variables if the Meta template has variables like{" "}
-                {"{{1}}"}. For most campaign templates, leave this empty.
+                Only add variables if the approved WhatsApp template has
+                variables like {"{{1}}"}. For most campaign templates, leave
+                this empty.
               </p>
             </div>
 
@@ -803,6 +929,30 @@ export default function WhatsAppCampaignsPage() {
                         </span>
                       </div>
 
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span
+                          className={[
+                            "rounded-full px-2 py-1 text-[10px] font-bold",
+                            active
+                              ? "bg-white/10 text-white"
+                              : "bg-purple-50 text-purple-700",
+                          ].join(" ")}
+                        >
+                          {getProviderLabel(campaign.send_provider)}
+                        </span>
+
+                        <span
+                          className={[
+                            "rounded-full px-2 py-1 text-[10px] font-bold",
+                            active
+                              ? "bg-white/10 text-white"
+                              : "bg-gray-100 text-gray-700",
+                          ].join(" ")}
+                        >
+                          {campaign.category}
+                        </span>
+                      </div>
+
                       <div
                         className={[
                           "mt-3 grid grid-cols-3 gap-2 text-xs",
@@ -833,6 +983,9 @@ export default function WhatsAppCampaignsPage() {
                           {selectedCampaign.name}
                         </h3>
                         <StatusBadge status={selectedCampaign.status} />
+                        <ProviderBadge
+                          provider={selectedCampaign.send_provider}
+                        />
                       </div>
 
                       <p className="mt-2 text-sm text-gray-500">
@@ -846,6 +999,17 @@ export default function WhatsAppCampaignsPage() {
                         Category: {selectedCampaign.category} · Type:{" "}
                         {selectedCampaign.campaign_type}
                       </p>
+
+                      {selectedCampaign.send_provider ===
+                      "twilio_whatsapp" ? (
+                        <p className="mt-1 text-sm text-gray-500">
+                          Twilio Content SID:{" "}
+                          <span className="font-semibold text-gray-700">
+                            {selectedCampaign.twilio_content_sid || "From env"}
+                          </span>
+                        </p>
+                      ) : null}
+
                       <p className="mt-1 text-sm text-gray-500">
                         Created: {formatDate(selectedCampaign.created_at)}
                       </p>
@@ -946,6 +1110,7 @@ export default function WhatsAppCampaignsPage() {
                             <th className="px-4 py-3">Name</th>
                             <th className="px-4 py-3">Lead</th>
                             <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Message ID</th>
                             <th className="px-4 py-3">Sent At</th>
                           </tr>
                         </thead>
@@ -964,6 +1129,11 @@ export default function WhatsAppCampaignsPage() {
                               <td className="px-4 py-3">
                                 <StatusBadge status={recipient.status} />
                               </td>
+                              <td className="max-w-[220px] truncate px-4 py-3 text-xs text-gray-500">
+                                {recipient.twilio_message_sid ||
+                                  recipient.meta_message_id ||
+                                  "-"}
+                              </td>
                               <td className="px-4 py-3 text-gray-500">
                                 {formatDate(recipient.sent_at)}
                               </td>
@@ -973,7 +1143,7 @@ export default function WhatsAppCampaignsPage() {
                           {recipients.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={5}
+                                colSpan={6}
                                 className="px-4 py-8 text-center text-gray-500"
                               >
                                 No recipients loaded.

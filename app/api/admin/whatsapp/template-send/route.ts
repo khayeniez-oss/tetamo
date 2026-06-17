@@ -20,6 +20,17 @@ type AdminAuthResult = {
 };
 
 type TemplateSendStatus = "sent" | "failed" | "skipped";
+type SendProvider = "meta_cloud_api" | "twilio_whatsapp";
+
+type CampaignConfig = {
+  id: string;
+  send_provider?: string | null;
+  twilio_content_sid?: string | null;
+  twilio_from?: string | null;
+  template_name?: string | null;
+  template_language?: string | null;
+  template_category?: string | null;
+};
 
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
@@ -121,6 +132,24 @@ function phoneDisplay(phoneE164: string) {
   return phoneE164.startsWith("+") ? phoneE164 : `+${phoneE164}`;
 }
 
+function toTwilioWhatsappAddress(value?: string | null) {
+  const raw = cleanEnv(value);
+
+  if (!raw) return "";
+
+  if (raw.toLowerCase().startsWith("whatsapp:")) {
+    const number = raw.slice("whatsapp:".length).trim();
+    const cleanNumber = number.startsWith("+")
+      ? number
+      : `+${normalizePhone(number)}`;
+
+    return `whatsapp:${cleanNumber}`;
+  }
+
+  const digits = normalizePhone(raw);
+  return digits ? `whatsapp:+${digits}` : "";
+}
+
 function addDays(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -153,8 +182,21 @@ function normalizeBodyVariables(value: unknown): string[] {
   }
 
   const single = String(value || "").trim();
-
   return single ? [single] : [];
+}
+
+function normalizeSendProvider(value?: string | null): SendProvider {
+  const clean = cleanEnv(value).toLowerCase();
+
+  if (
+    clean === "twilio" ||
+    clean === "twilio_whatsapp" ||
+    clean === "twilio_content"
+  ) {
+    return "twilio_whatsapp";
+  }
+
+  return "meta_cloud_api";
 }
 
 function getMetaAccessToken() {
@@ -172,12 +214,37 @@ function getGraphVersion() {
   return cleanEnv(process.env.META_GRAPH_VERSION) || "v25.0";
 }
 
-function getSendSource(sendType: string) {
-  if (sendType === "followup_3_day") return "meta_template_followup_3_day";
-  if (sendType === "followup_14_day") return "meta_template_followup_14_day";
-  if (sendType === "manual_template") return "admin_meta_template";
+function getTwilioAccountSid() {
+  return cleanEnv(process.env.TWILIO_ACCOUNT_SID);
+}
 
-  return "meta_template_business_initiated";
+function getTwilioAuthToken() {
+  return cleanEnv(process.env.TWILIO_AUTH_TOKEN);
+}
+
+function getTwilioWhatsappFrom() {
+  return toTwilioWhatsappAddress(process.env.TWILIO_WHATSAPP_FROM);
+}
+
+function getTwilioContentSidForTemplate(templateName: string) {
+  const cleanTemplateName = cleanEnv(templateName);
+
+  if (cleanTemplateName === "tetamo_agent_invite_id_01") {
+    return cleanEnv(process.env.TWILIO_AGENT_INVITE_CONTENT_SID);
+  }
+
+  return "";
+}
+
+function getSendSource(sendType: string, sendProvider: SendProvider) {
+  const providerPrefix =
+    sendProvider === "twilio_whatsapp" ? "twilio_template" : "meta_template";
+
+  if (sendType === "followup_3_day") return `${providerPrefix}_followup_3_day`;
+  if (sendType === "followup_14_day") return `${providerPrefix}_followup_14_day`;
+  if (sendType === "manual_template") return `admin_${providerPrefix}`;
+
+  return `${providerPrefix}_business_initiated`;
 }
 
 function getFollowupUpdate(sendType: string) {
@@ -210,6 +277,27 @@ function getFollowupUpdate(sendType: string) {
   return {
     last_template_sent_at: now,
   };
+}
+
+async function getCampaignConfig(
+  campaignId: string | null
+): Promise<CampaignConfig | null> {
+  if (!campaignId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_template_campaigns")
+    .select(
+      "id, send_provider, twilio_content_sid, twilio_from, template_name, template_language, template_category"
+    )
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load WhatsApp template campaign config:", error);
+    return null;
+  }
+
+  return (data || null) as CampaignConfig | null;
 }
 
 async function updateCampaignTotals(
@@ -254,6 +342,7 @@ async function markRecipient(params: {
   phoneE164: string;
   status: TemplateSendStatus;
   metaMessageId?: string | null;
+  twilioMessageSid?: string | null;
   errorPayload?: unknown;
   skipReason?: string | null;
 }) {
@@ -267,6 +356,7 @@ async function markRecipient(params: {
   if (params.status === "sent") {
     updatePayload.sent_at = now;
     updatePayload.meta_message_id = params.metaMessageId || null;
+    updatePayload.twilio_message_sid = params.twilioMessageSid || null;
     updatePayload.send_error = null;
   }
 
@@ -368,6 +458,7 @@ async function getOrCreateConversation(params: {
   customerName: string | null;
   contactId: string | null;
   leadType: string;
+  sendProvider: SendProvider;
 }) {
   const candidates = Array.from(
     new Set([params.phoneE164, phoneDisplay(params.phoneE164)])
@@ -405,6 +496,10 @@ async function getOrCreateConversation(params: {
   }
 
   const now = new Date().toISOString();
+  const channel =
+    params.sendProvider === "twilio_whatsapp"
+      ? "twilio_whatsapp"
+      : "meta_whatsapp";
 
   const { data: createdConversation, error: createError } = await supabaseAdmin
     .from("whatsapp_conversations")
@@ -413,7 +508,7 @@ async function getOrCreateConversation(params: {
         phone: `whatsapp:${params.phoneE164}`,
         phone_e164: params.phoneE164,
         profile_name: params.customerName,
-        channel: "meta_whatsapp",
+        channel,
         status: "active",
         ai_enabled: true,
         handover_to_admin: false,
@@ -453,8 +548,11 @@ async function insertSendLog(params: {
   templateLanguage: string;
   templateCategory: string;
   sendType: string;
+  sendProvider: SendProvider;
   status: TemplateSendStatus;
   metaMessageId?: string | null;
+  twilioMessageSid?: string | null;
+  twilioContentSid?: string | null;
   errorPayload?: unknown;
   rawPayload?: unknown;
 }) {
@@ -470,9 +568,12 @@ async function insertSendLog(params: {
     template_language: params.templateLanguage,
     template_category: params.templateCategory,
     send_type: params.sendType,
-    provider: "meta",
+    provider: params.sendProvider === "twilio_whatsapp" ? "twilio" : "meta",
+    send_provider: params.sendProvider,
     status: params.status,
     meta_message_id: params.metaMessageId || null,
+    twilio_message_sid: params.twilioMessageSid || null,
+    twilio_content_sid: params.twilioContentSid || null,
     error_payload: params.errorPayload || null,
     sent_at: params.status === "sent" ? now : null,
     failed_at: params.status === "failed" ? now : null,
@@ -533,7 +634,7 @@ async function sendMetaTemplate(params: {
   if (!response.ok) {
     return {
       success: false,
-      metaMessageId: null,
+      messageId: null,
       result,
       payload,
     };
@@ -541,7 +642,92 @@ async function sendMetaTemplate(params: {
 
   return {
     success: true,
-    metaMessageId: result?.messages?.[0]?.id || null,
+    messageId: result?.messages?.[0]?.id || null,
+    result,
+    payload,
+  };
+}
+
+function buildTwilioContentVariables(bodyVariables: string[]) {
+  if (!bodyVariables.length) return "";
+
+  const variables: Record<string, string> = {};
+
+  bodyVariables.forEach((value, index) => {
+    variables[String(index + 1)] = value;
+  });
+
+  return JSON.stringify(variables);
+}
+
+async function sendTwilioTemplate(params: {
+  accountSid: string;
+  authToken: string;
+  from: string;
+  phoneE164: string;
+  contentSid: string;
+  bodyVariables: string[];
+}) {
+  const to = toTwilioWhatsappAddress(params.phoneE164);
+  const contentVariables = buildTwilioContentVariables(params.bodyVariables);
+
+  const form = new URLSearchParams({
+    From: params.from,
+    To: to,
+    ContentSid: params.contentSid,
+  });
+
+  if (contentVariables) {
+    form.set("ContentVariables", contentVariables);
+  }
+
+  const payload = {
+    from: params.from,
+    to,
+    contentSid: params.contentSid,
+    contentVariables: contentVariables ? JSON.parse(contentVariables) : null,
+  };
+
+  const response = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${params.accountSid}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        Authorization:
+          "Basic " +
+          Buffer.from(`${params.accountSid}:${params.authToken}`).toString(
+            "base64"
+          ),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    }
+  );
+
+  const responseText = await response.text();
+
+  let result: any = null;
+
+  try {
+    result = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    result = responseText;
+  }
+
+  if (!response.ok) {
+    return {
+      success: false,
+      messageId: null,
+      status: null,
+      result,
+      payload,
+    };
+  }
+
+  return {
+    success: true,
+    messageId: result?.sid || null,
+    status: result?.status || null,
     result,
     payload,
   };
@@ -556,22 +742,32 @@ async function saveOutboundTemplateMessage(params: {
   templateLanguage: string;
   bodyVariables: string[];
   sendType: string;
+  sendProvider: SendProvider;
   metaMessageId: string | null;
-  metaResult: unknown;
+  twilioMessageSid: string | null;
+  twilioContentSid: string | null;
+  sendResult: unknown;
 }) {
   const now = new Date().toISOString();
-  const source = getSendSource(params.sendType);
+  const source = getSendSource(params.sendType, params.sendProvider);
+
+  const providerLabel =
+    params.sendProvider === "twilio_whatsapp" ? "Twilio Template" : "Template";
+
   const message =
     params.bodyVariables.length > 0
-      ? `[Template] ${params.templateName}\nVariables: ${params.bodyVariables.join(
+      ? `[${providerLabel}] ${params.templateName}\nVariables: ${params.bodyVariables.join(
           " | "
         )}`
-      : `[Template] ${params.templateName}`;
+      : `[${providerLabel}] ${params.templateName}`;
 
   await supabaseAdmin.from("whatsapp_messages").insert({
     conversation_id: params.conversationId,
     direction: "outbound",
-    from_number: getMetaPhoneNumberId() || "meta_whatsapp",
+    from_number:
+      params.sendProvider === "twilio_whatsapp"
+        ? getTwilioWhatsappFrom() || "twilio_whatsapp"
+        : getMetaPhoneNumberId() || "meta_whatsapp",
     to_number: params.phoneE164,
     phone: `whatsapp:${params.phoneE164}`,
     profile_name: params.customerName,
@@ -585,8 +781,11 @@ async function saveOutboundTemplateMessage(params: {
       template_language: params.templateLanguage,
       body_variables: params.bodyVariables,
       send_type: params.sendType,
+      send_provider: params.sendProvider,
       meta_message_id: params.metaMessageId,
-      meta_result: params.metaResult,
+      twilio_message_sid: params.twilioMessageSid,
+      twilio_content_sid: params.twilioContentSid,
+      send_result: params.sendResult,
       contact_id: params.contactId,
     },
     created_at: now,
@@ -646,26 +845,67 @@ export async function POST(req: Request) {
     const phoneE164 = normalizePhone(
       body?.phoneE164 || body?.phone || body?.to || ""
     );
-    const templateName = cleanEnv(body?.templateName || body?.template_name);
-    const templateLanguage = cleanEnv(
-      body?.templateLanguage || body?.template_language || "en"
-    );
-    const templateCategory = cleanEnv(
-      body?.templateCategory || body?.template_category || "marketing"
-    );
-    const sendType = cleanEnv(body?.sendType || body?.send_type) ||
-      "business_initiated";
 
-    const customerName = cleanEnv(body?.customerName || body?.customer_name) ||
-      null;
-    const leadType = cleanEnv(body?.leadType || body?.lead_type) || "unknown";
-    const source = cleanEnv(body?.source) || "template_send_api";
     const campaignId = cleanEnv(body?.campaignId || body?.campaign_id) || null;
-    const recipientId = cleanEnv(body?.recipientId || body?.recipient_id) || null;
+
+    const recipientId =
+      cleanEnv(body?.recipientId || body?.recipient_id) || null;
+
+    const campaignConfig = await getCampaignConfig(campaignId);
+
+    const templateName = cleanEnv(
+      body?.templateName ||
+        body?.template_name ||
+        campaignConfig?.template_name ||
+        ""
+    );
+
+    const templateLanguage = cleanEnv(
+      body?.templateLanguage ||
+        body?.template_language ||
+        campaignConfig?.template_language ||
+        "en"
+    );
+
+    const templateCategory = cleanEnv(
+      body?.templateCategory ||
+        body?.template_category ||
+        campaignConfig?.template_category ||
+        "marketing"
+    );
+
+    const sendType =
+      cleanEnv(body?.sendType || body?.send_type) || "business_initiated";
+
+    const sendProvider = normalizeSendProvider(
+      body?.sendProvider ||
+        body?.send_provider ||
+        campaignConfig?.send_provider ||
+        "meta_cloud_api"
+    );
+
+    const customerName =
+      cleanEnv(body?.customerName || body?.customer_name) || null;
+
+    const leadType = cleanEnv(body?.leadType || body?.lead_type) || "unknown";
+
+    const source = cleanEnv(body?.source) || "template_send_api";
 
     const bodyVariables = normalizeBodyVariables(
       body?.bodyVariables || body?.body_variables || body?.variables
     );
+
+    const twilioContentSid =
+      cleanEnv(
+        body?.twilioContentSid ||
+          body?.twilio_content_sid ||
+          campaignConfig?.twilio_content_sid
+      ) || getTwilioContentSidForTemplate(templateName);
+
+    const twilioFrom =
+      toTwilioWhatsappAddress(
+        body?.twilioFrom || body?.twilio_from || campaignConfig?.twilio_from
+      ) || getTwilioWhatsappFrom();
 
     if (!phoneE164) {
       return Response.json({ error: "phoneE164 is required." }, { status: 400 });
@@ -678,17 +918,51 @@ export async function POST(req: Request) {
       );
     }
 
-    const accessToken = getMetaAccessToken();
-    const phoneNumberId = getMetaPhoneNumberId();
+    if (sendProvider === "meta_cloud_api") {
+      const accessToken = getMetaAccessToken();
+      const phoneNumberId = getMetaPhoneNumberId();
 
-    if (!accessToken || !phoneNumberId) {
-      return Response.json(
-        {
-          error:
-            "Missing Meta environment variables. Check META_WHATSAPP_ACCESS_TOKEN and META_WHATSAPP_PHONE_NUMBER_ID.",
-        },
-        { status: 500 }
-      );
+      if (!accessToken || !phoneNumberId) {
+        return Response.json(
+          {
+            error:
+              "Missing Meta environment variables. Check META_WHATSAPP_ACCESS_TOKEN and META_WHATSAPP_PHONE_NUMBER_ID.",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (sendProvider === "twilio_whatsapp") {
+      if (!getTwilioAccountSid() || !getTwilioAuthToken()) {
+        return Response.json(
+          {
+            error:
+              "Missing Twilio environment variables. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!twilioFrom) {
+        return Response.json(
+          {
+            error:
+              "Missing Twilio WhatsApp sender. Check TWILIO_WHATSAPP_FROM or campaign twilio_from.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!twilioContentSid) {
+        return Response.json(
+          {
+            error:
+              "Missing Twilio ContentSid. Check TWILIO_AGENT_INVITE_CONTENT_SID or campaign twilio_content_sid.",
+          },
+          { status: 500 }
+        );
+      }
     }
 
     const contact = await getOrCreateContact({
@@ -724,7 +998,10 @@ export async function POST(req: Request) {
         templateLanguage,
         templateCategory,
         sendType,
+        sendProvider,
         status: "skipped",
+        twilioContentSid:
+          sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
         errorPayload: { reason: "Contact opted out." },
       });
 
@@ -742,6 +1019,7 @@ export async function POST(req: Request) {
       customerName,
       contactId: contact.id,
       leadType,
+      sendProvider,
     });
 
     if (!conversation?.id) {
@@ -770,7 +1048,10 @@ export async function POST(req: Request) {
         templateLanguage,
         templateCategory,
         sendType,
+        sendProvider,
         status: "skipped",
+        twilioContentSid:
+          sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
         errorPayload: { reason: "Conversation opted out." },
       });
 
@@ -783,14 +1064,24 @@ export async function POST(req: Request) {
       });
     }
 
-    const sendResult = await sendMetaTemplate({
-      phoneNumberId,
-      accessToken,
-      phoneE164,
-      templateName,
-      templateLanguage,
-      bodyVariables,
-    });
+    const sendResult =
+      sendProvider === "twilio_whatsapp"
+        ? await sendTwilioTemplate({
+            accountSid: getTwilioAccountSid(),
+            authToken: getTwilioAuthToken(),
+            from: twilioFrom,
+            phoneE164,
+            contentSid: twilioContentSid,
+            bodyVariables,
+          })
+        : await sendMetaTemplate({
+            phoneNumberId: getMetaPhoneNumberId(),
+            accessToken: getMetaAccessToken(),
+            phoneE164,
+            templateName,
+            templateLanguage,
+            bodyVariables,
+          });
 
     if (!sendResult.success) {
       await markRecipient({
@@ -811,7 +1102,10 @@ export async function POST(req: Request) {
         templateLanguage,
         templateCategory,
         sendType,
+        sendProvider,
         status: "failed",
+        twilioContentSid:
+          sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
         errorPayload: sendResult.result,
         rawPayload: sendResult.payload,
       });
@@ -821,12 +1115,21 @@ export async function POST(req: Request) {
       return Response.json(
         {
           success: false,
-          error: "Meta template send failed.",
+          error:
+            sendProvider === "twilio_whatsapp"
+              ? "Twilio template send failed."
+              : "Meta template send failed.",
           details: sendResult.result,
         },
         { status: 502 }
       );
     }
+
+    const metaMessageId =
+      sendProvider === "meta_cloud_api" ? sendResult.messageId : null;
+
+    const twilioMessageSid =
+      sendProvider === "twilio_whatsapp" ? sendResult.messageId : null;
 
     await saveOutboundTemplateMessage({
       conversationId: conversation.id,
@@ -837,8 +1140,12 @@ export async function POST(req: Request) {
       templateLanguage,
       bodyVariables,
       sendType,
-      metaMessageId: sendResult.metaMessageId,
-      metaResult: sendResult.result,
+      sendProvider,
+      metaMessageId,
+      twilioMessageSid,
+      twilioContentSid:
+        sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
+      sendResult: sendResult.result,
     });
 
     await updateAfterSuccessfulSend({
@@ -855,7 +1162,8 @@ export async function POST(req: Request) {
       campaignId,
       phoneE164,
       status: "sent",
-      metaMessageId: sendResult.metaMessageId,
+      metaMessageId,
+      twilioMessageSid,
     });
 
     await insertSendLog({
@@ -868,29 +1176,47 @@ export async function POST(req: Request) {
       templateLanguage,
       templateCategory,
       sendType,
+      sendProvider,
       status: "sent",
-      metaMessageId: sendResult.metaMessageId,
-      rawPayload: {
-        meta_payload: sendResult.payload,
-        meta_result: sendResult.result,
-      },
+      metaMessageId,
+      twilioMessageSid,
+      twilioContentSid:
+        sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
+      rawPayload:
+        sendProvider === "twilio_whatsapp"
+          ? {
+              twilio_payload: sendResult.payload,
+              twilio_result: sendResult.result,
+            }
+          : {
+              meta_payload: sendResult.payload,
+              meta_result: sendResult.result,
+            },
     });
 
     await updateCampaignTotals(campaignId, "sent");
 
     return Response.json({
       success: true,
-      provider: "meta",
+      provider: sendProvider === "twilio_whatsapp" ? "twilio" : "meta",
+      sendProvider,
       phoneE164,
       conversationId: conversation.id,
       contactId: contact.id,
       templateName,
       templateLanguage,
       sendType,
-      metaMessageId: sendResult.metaMessageId,
+      metaMessageId,
+      twilioMessageSid,
+      twilioContentSid:
+        sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
+      twilioStatus:
+  sendProvider === "twilio_whatsapp" && "status" in sendResult
+    ? sendResult.status
+    : null,
     });
   } catch (error) {
-    console.error("Meta template send API error:", error);
+    console.error("WhatsApp template send API error:", error);
 
     return Response.json(
       {
@@ -898,7 +1224,7 @@ export async function POST(req: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to send Meta template.",
+            : "Failed to send WhatsApp template.",
       },
       { status: 500 }
     );
