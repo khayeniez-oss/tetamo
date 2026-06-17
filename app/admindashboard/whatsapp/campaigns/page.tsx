@@ -210,6 +210,7 @@ export default function WhatsAppCampaignsPage() {
   const [loadingCampaign, setLoadingCampaign] = useState(false);
   const [creating, setCreating] = useState(false);
   const [sendingBatch, setSendingBatch] = useState(false);
+  const [deletingCampaign, setDeletingCampaign] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
 
   const [error, setError] = useState("");
@@ -536,6 +537,58 @@ export default function WhatsAppCampaignsPage() {
     }
   }
 
+  async function deleteSelectedCampaign() {
+    if (!selectedCampaign?.id) return;
+
+    const confirmed = window.confirm(
+      `Delete campaign "${selectedCampaign.name}"?\n\nThis will delete the campaign, its recipients, and send logs. This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingCampaign(true);
+      setError("");
+      setSuccess("");
+
+      const token = await getAccessToken();
+
+      if (!token) {
+        setError("Please log in as admin first.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/whatsapp/template-campaigns", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "delete_campaign",
+          campaignId: selectedCampaign.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to delete campaign.");
+      }
+
+      setSuccess(`Campaign "${selectedCampaign.name}" deleted.`);
+      setSelectedCampaign(null);
+      setRecipients([]);
+
+      await loadCampaigns();
+    } catch (err: any) {
+      console.error("Delete campaign error:", err);
+      setError(err?.message || "Failed to delete campaign.");
+    } finally {
+      setDeletingCampaign(false);
+    }
+  }
+
   useEffect(() => {
     loadCampaigns();
   }, []);
@@ -820,9 +873,9 @@ export default function WhatsAppCampaignsPage() {
               <textarea
                 value={recipientText}
                 onChange={(event) => setRecipientText(event.target.value)}
-                rows={8}
+                rows={10}
                 placeholder={`Paste one phone number per line:\n628123456789\n08123456789\n+628123456789`}
-                className="mt-2 w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
+                className="mt-2 w-full resize-y rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               />
               <p className="mt-2 text-xs leading-5 text-gray-500">
                 Indonesian numbers starting with 08 or 8 will be normalized to
@@ -871,7 +924,8 @@ export default function WhatsAppCampaignsPage() {
           <div className="border-b border-gray-100 p-4 sm:p-5">
             <h2 className="text-lg font-bold">Campaigns</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Select a campaign to view recipients and send the next batch.
+              Select a campaign to view recipients, send the next batch, or
+              delete a test campaign.
             </p>
           </div>
 
@@ -1024,6 +1078,7 @@ export default function WhatsAppCampaignsPage() {
                         onClick={sendNextBatch}
                         disabled={
                           sendingBatch ||
+                          deletingCampaign ||
                           selectedCampaign.status === "completed" ||
                           selectedCampaign.status === "paused" ||
                           campaignPending <= 0
@@ -1037,7 +1092,7 @@ export default function WhatsAppCampaignsPage() {
                         <button
                           type="button"
                           onClick={() => updateCampaignStatus("resume")}
-                          disabled={Boolean(actionLoading)}
+                          disabled={Boolean(actionLoading) || deletingCampaign}
                           className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                         >
                           {actionLoading === "resume" ? "Saving..." : "Resume"}
@@ -1046,12 +1101,21 @@ export default function WhatsAppCampaignsPage() {
                         <button
                           type="button"
                           onClick={() => updateCampaignStatus("pause")}
-                          disabled={Boolean(actionLoading)}
+                          disabled={Boolean(actionLoading) || deletingCampaign}
                           className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                         >
                           {actionLoading === "pause" ? "Saving..." : "Pause"}
                         </button>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={deleteSelectedCampaign}
+                        disabled={deletingCampaign || sendingBatch}
+                        className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingCampaign ? "Deleting..." : "Delete Campaign"}
+                      </button>
                     </div>
                   </div>
 
