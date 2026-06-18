@@ -164,7 +164,7 @@ function normalizeSendProvider(value?: unknown): SendProvider {
     return "meta_cloud_api";
   }
 
-  return "twilio_whatsapp";
+  return "meta_cloud_api";
 }
 
 function toTwilioWhatsappAddress(value?: unknown) {
@@ -465,7 +465,7 @@ export async function POST(req: Request) {
     const leadType = cleanText(body?.leadType || body?.lead_type || "unknown");
     const batchSize = Number(body?.batchSize || body?.batch_size || 100);
     const sendProvider = normalizeSendProvider(
-      body?.sendProvider || body?.send_provider || "twilio_whatsapp"
+      body?.sendProvider || body?.send_provider || "meta_cloud_api"
     );
 
     const defaultVariables = normalizeVariables(
@@ -663,6 +663,50 @@ export async function PATCH(req: Request) {
 
     if (campaignError || !campaign?.id) {
       return Response.json({ error: "Campaign not found." }, { status: 404 });
+    }
+
+    if (action === "delete_campaign") {
+      const { error: recipientsDeleteError } = await supabaseAdmin
+        .from("whatsapp_template_recipients")
+        .delete()
+        .eq("campaign_id", campaignId);
+
+      if (recipientsDeleteError) {
+        console.error(
+          "Failed to delete campaign recipients:",
+          recipientsDeleteError
+        );
+
+        return Response.json(
+          {
+            success: false,
+            error: "Failed to delete campaign recipients.",
+          },
+          { status: 500 }
+        );
+      }
+
+      const { error: campaignDeleteError } = await supabaseAdmin
+        .from("whatsapp_template_campaigns")
+        .delete()
+        .eq("id", campaignId);
+
+      if (campaignDeleteError) {
+        console.error("Failed to delete campaign:", campaignDeleteError);
+
+        return Response.json(
+          {
+            success: false,
+            error: "Failed to delete campaign.",
+          },
+          { status: 500 }
+        );
+      }
+
+      return Response.json({
+        success: true,
+        deletedCampaignId: campaignId,
+      });
     }
 
     if (action === "pause") {
