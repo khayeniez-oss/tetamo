@@ -150,17 +150,12 @@ function getStatusClass(status?: string | null) {
   return "border-gray-200 bg-gray-50 text-gray-700";
 }
 
-function getProviderLabel(provider?: string | null) {
-  if (provider === "meta_cloud_api") return "Meta Cloud API";
-  return "Twilio WhatsApp";
+function getProviderLabel(_provider?: string | null) {
+  return "Meta Cloud API";
 }
 
-function getProviderClass(provider?: string | null) {
-  if (provider === "meta_cloud_api") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
-  }
-
-  return "border-purple-200 bg-purple-50 text-purple-700";
+function getProviderClass(_provider?: string | null) {
+  return "border-blue-200 bg-blue-50 text-blue-700";
 }
 
 function StatusBadge({ status }: { status?: string | null }) {
@@ -228,8 +223,7 @@ export default function WhatsAppCampaignsPage() {
   const [batchSize, setBatchSize] = useState(25);
   const [recipientText, setRecipientText] = useState("");
   const [defaultVariablesText, setDefaultVariablesText] = useState("");
-  const [sendProvider, setSendProvider] =
-    useState<SendProvider>("twilio_whatsapp");
+  const sendProvider: SendProvider = "meta_cloud_api";
 
   const selectedTemplate = useMemo(() => {
     return (
@@ -237,9 +231,6 @@ export default function WhatsAppCampaignsPage() {
       APPROVED_TEMPLATES[0]
     );
   }, [templateName]);
-
-  const isTwilio = sendProvider === "twilio_whatsapp";
-  const twilioTemplateReady = !isTwilio || Boolean(selectedTemplate.twilioEnvKey);
 
   const stats = useMemo(() => {
     const pending = recipients.filter(
@@ -375,12 +366,6 @@ export default function WhatsAppCampaignsPage() {
       setCreating(true);
       setError("");
       setSuccess("");
-
-      if (!twilioTemplateReady) {
-        throw new Error(
-          "This template is not mapped to a Twilio Content SID in the backend yet. Use Meta Cloud API for this template, or add a backend env mapping first."
-        );
-      }
 
       const token = await getAccessToken();
 
@@ -541,7 +526,7 @@ export default function WhatsAppCampaignsPage() {
     if (!selectedCampaign?.id) return;
 
     const confirmed = window.confirm(
-      `Delete campaign "${selectedCampaign.name}"?\n\nThis will delete the campaign, its recipients, and send logs. This cannot be undone.`
+      `Delete campaign "${selectedCampaign.name}"?\n\nThis will delete the campaign and its recipients. This cannot be undone.`
     );
 
     if (!confirmed) return;
@@ -605,9 +590,8 @@ export default function WhatsAppCampaignsPage() {
               Template Campaigns
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-              Create WhatsApp template campaigns for agents, owners, listing
-              follow-ups, support messages, and QRIS support. Choose Twilio
-              WhatsApp or Meta Cloud API before sending.
+              Create and send approved WhatsApp template campaigns through
+              Tetamo’s connected Meta Cloud API.
             </p>
           </div>
 
@@ -621,23 +605,6 @@ export default function WhatsAppCampaignsPage() {
           >
             Refresh
           </button>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          Start with small batches first, for example 10–25 recipients. Do not
-          send 1,000 numbers at once until delivery and template quality look
-          healthy.
-        </div>
-
-        <div className="mt-3 rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm leading-6 text-purple-900">
-          Twilio WhatsApp is supported without typing the HX Content SID in this
-          page. The backend will read the correct SID from server environment
-          variables.
-        </div>
-
-        <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900">
-          Meta Cloud API is also supported. Use the exact approved Meta template
-          name and correct language code.
         </div>
 
         {error ? (
@@ -668,37 +635,6 @@ export default function WhatsAppCampaignsPage() {
                 placeholder="Example: Agent Invite Batch 1"
                 className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
               />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
-                Send Provider
-              </label>
-              <select
-                value={sendProvider}
-                onChange={(event) =>
-                  setSendProvider(event.target.value as SendProvider)
-                }
-                className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E]"
-              >
-                <option value="twilio_whatsapp">Twilio WhatsApp</option>
-                <option value="meta_cloud_api">Meta Cloud API</option>
-              </select>
-
-              <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-600">
-                {isTwilio ? (
-                  <p>
-                    This campaign will send approved WhatsApp templates through
-                    Twilio. The Content SID is selected by the backend, not by
-                    this page.
-                  </p>
-                ) : (
-                  <p>
-                    This campaign will send approved WhatsApp templates directly
-                    through Meta Cloud API.
-                  </p>
-                )}
-              </div>
             </div>
 
             <div>
@@ -747,45 +683,6 @@ export default function WhatsAppCampaignsPage() {
                 </p>
               </div>
             </div>
-
-            {isTwilio ? (
-              <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
-                <p className="text-sm font-bold text-purple-900">
-                  Twilio Auto Mapping
-                </p>
-
-                {selectedTemplate.twilioEnvKey ? (
-                  <div className="mt-4 rounded-2xl border border-purple-100 bg-white px-4 py-3 text-sm leading-6 text-purple-800">
-                    <p className="font-semibold">Content SID Source</p>
-                    <p className="mt-1 text-xs">
-                      Backend will use this server environment variable:
-                    </p>
-                    <code className="mt-2 block rounded-xl bg-purple-50 px-3 py-2 text-xs font-bold text-purple-900">
-                      {selectedTemplate.twilioEnvKey}
-                    </code>
-                    <p className="mt-2 text-xs text-purple-700">
-                      No need to paste the HX Content SID in this page.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                    <p className="font-semibold">
-                      Twilio mapping not added yet for this template.
-                    </p>
-                    <p className="mt-1 text-xs">
-                      Use Meta Cloud API for this template, or add backend env
-                      mapping first before sending through Twilio.
-                    </p>
-                  </div>
-                )}
-
-                <p className="mt-3 text-xs leading-5 text-purple-700">
-                  Twilio sender is also read from{" "}
-                  <span className="font-bold">TWILIO_WHATSAPP_FROM</span> in
-                  the backend environment.
-                </p>
-              </div>
-            ) : null}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -910,8 +807,7 @@ export default function WhatsAppCampaignsPage() {
                 creating ||
                 !name.trim() ||
                 !templateName.trim() ||
-                !recipientText.trim() ||
-                !twilioTemplateReady
+                !recipientText.trim()
               }
               className="w-full rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -1057,15 +953,6 @@ export default function WhatsAppCampaignsPage() {
                         {selectedCampaign.campaign_type}
                       </p>
 
-                      {selectedCampaign.send_provider ===
-                      "twilio_whatsapp" ? (
-                        <p className="mt-1 text-sm text-gray-500">
-                          Twilio SID source:{" "}
-                          <span className="font-semibold text-gray-700">
-                            Backend environment
-                          </span>
-                        </p>
-                      ) : null}
 
                       <p className="mt-1 text-sm text-gray-500">
                         Created: {formatDate(selectedCampaign.created_at)}
