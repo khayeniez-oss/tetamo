@@ -667,21 +667,6 @@ export default function WhatsAppCampaignsPage() {
                 <option value="twilio_whatsapp">Twilio WhatsApp</option>
                 <option value="meta_cloud_api">Meta Cloud API</option>
               </select>
-
-              <div className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-600">
-                {isTwilio ? (
-                  <p>
-                    This campaign will send approved WhatsApp templates through
-                    Twilio. The Content SID is selected by the backend, not by
-                    this page.
-                  </p>
-                ) : (
-                  <p>
-                    This campaign will send approved WhatsApp templates directly
-                    through Meta Cloud API.
-                  </p>
-                )}
-              </div>
             </div>
 
             <div>
@@ -734,39 +719,24 @@ export default function WhatsAppCampaignsPage() {
             {isTwilio ? (
               <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
                 <p className="text-sm font-bold text-purple-900">
-                  Twilio Auto Mapping
+                  Auto Mapping
                 </p>
 
                 {selectedTemplate.twilioEnvKey ? (
                   <div className="mt-4 rounded-2xl border border-purple-100 bg-white px-4 py-3 text-sm leading-6 text-purple-800">
                     <p className="font-semibold">Content SID Source</p>
-                    <p className="mt-1 text-xs">
-                      Backend will use this server environment variable:
-                    </p>
-                    <code className="mt-2 block rounded-xl bg-purple-50 px-3 py-2 text-xs font-bold text-purple-900">
-                      {selectedTemplate.twilioEnvKey}
-                    </code>
-                    <p className="mt-2 text-xs text-purple-700">
-                      No need to paste the HX Content SID in this page.
+                    <p className="mt-2 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                      SID Connected
                     </p>
                   </div>
                 ) : (
                   <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                    <p className="font-semibold">
-                      Twilio mapping not added yet for this template.
-                    </p>
-                    <p className="mt-1 text-xs">
-                      Use Meta Cloud API for this template, or add backend env
-                      mapping first before sending through Twilio.
+                    <p className="font-semibold">Content SID Source</p>
+                    <p className="mt-2 inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-bold text-amber-800">
+                      SID Not Connected
                     </p>
                   </div>
                 )}
-
-                <p className="mt-3 text-xs leading-5 text-purple-700">
-                  Twilio sender is also read from{" "}
-                  <span className="font-bold">TWILIO_WHATSAPP_FROM</span> in
-                  the backend environment.
-                </p>
               </div>
             ) : null}
 
