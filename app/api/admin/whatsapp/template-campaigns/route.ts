@@ -28,6 +28,7 @@ type ImportedRecipient = {
 };
 
 type SendProvider = "meta_cloud_api" | "twilio_whatsapp";
+type RecipientTargetStatus = "pending" | "failed";
 
 function cleanText(value?: unknown) {
   return String(value || "").trim();
@@ -55,7 +56,10 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Supabase server environment variables are missing." },
+        {
+          success: false,
+          error: "Supabase server environment variables are missing.",
+        },
         { status: 500 }
       ),
     };
@@ -67,7 +71,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Unauthorized. Login is required." },
+        { success: false, error: "Unauthorized. Login is required." },
         { status: 401 }
       ),
     };
@@ -82,7 +86,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Unauthorized. Invalid session." },
+        { success: false, error: "Unauthorized. Invalid session." },
         { status: 401 }
       ),
     };
@@ -100,7 +104,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Unable to verify admin access." },
+        { success: false, error: "Unable to verify admin access." },
         { status: 500 }
       ),
     };
@@ -113,7 +117,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Forbidden. Admin access is required." },
+        { success: false, error: "Forbidden. Admin access is required." },
         { status: 403 }
       ),
     };
@@ -322,6 +326,155 @@ async function upsertContact(params: {
   return data as { id: string; phone_e164: string } | null;
 }
 
+function getErrorMessage(payload: unknown): string {
+  if (!payload) return "";
+
+  if (typeof payload === "string") return payload;
+
+  if (typeof payload !== "object") return String(payload);
+
+  const record = payload as Record<string, any>;
+
+  const directMessage =
+    record.message ||
+    record.error_message ||
+    record.errorDescription ||
+    record.error_description ||
+    record.reason;
+
+  if (directMessage) return cleanText(directMessage);
+
+  if (record.error && typeof record.error === "object") {
+    const error = record.error as Record<string, any>;
+
+    const parts = [
+      error.message,
+      error.error_user_msg,
+      error.type,
+      error.code ? `Code ${error.code}` : "",
+      error.error_subcode ? `Subcode ${error.error_subcode}` : "",
+    ]
+      .map(cleanText)
+      .filter(Boolean);
+
+    if (parts.length > 0) return parts.join(" · ");
+  }
+
+  if (record.details && typeof record.details === "object") {
+    return getErrorMessage(record.details);
+  }
+
+  if (record.more_info) return cleanText(record.more_info);
+
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return "Unknown error payload.";
+  }
+}
+
+function getErrorType(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+
+  const record = payload as Record<string, any>;
+
+  if (record.code) return cleanText(record.code);
+  if (record.status) return cleanText(record.status);
+  if (record.type) return cleanText(record.type);
+
+  if (record.error && typeof record.error === "object") {
+    const error = record.error as Record<string, any>;
+
+    if (error.code) return cleanText(error.code);
+    if (error.type) return cleanText(error.type);
+    if (error.error_subcode) return cleanText(error.error_subcode);
+  }
+
+  if (record.details && typeof record.details === "object") {
+    return getErrorType(record.details);
+  }
+
+  return "";
+}
+
+function enrichRecipient(recipient: any) {
+  const status = cleanText(recipient?.status).toLowerCase();
+  const sendError = recipient?.send_error || null;
+  const skipReason = cleanText(recipient?.skip_reason);
+
+  let errorSummary = "";
+
+  if (status === "failed") {
+    errorSummary = getErrorMessage(sendError) || "Failed to send.";
+  }
+
+  if (status === "skipped") {
+    errorSummary = skipReason || getErrorMessage(sendError) || "Skipped.";
+  }
+
+  if (status === "pending") {
+    errorSummary = "Not sent yet.";
+  }
+
+  return {
+    ...recipient,
+    error_type: getErrorType(sendError),
+    error_summary: errorSummary,
+  };
+}
+
+async function countRecipients(campaignId: string, status?: string) {
+  let query = supabaseAdmin
+    .from("whatsapp_template_recipients")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId);
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  const { count, error } = await query;
+
+  if (error) throw error;
+
+  return count || 0;
+}
+
+async function getRecipientCounts(campaignId: string) {
+  const [total, pending, sent, failed, skipped] = await Promise.all([
+    countRecipients(campaignId),
+    countRecipients(campaignId, "pending"),
+    countRecipients(campaignId, "sent"),
+    countRecipients(campaignId, "failed"),
+    countRecipients(campaignId, "skipped"),
+  ]);
+
+  return {
+    total,
+    pending,
+    sent,
+    failed,
+    skipped,
+  };
+}
+
+async function recalculateCampaignTotals(campaignId: string) {
+  const counts = await getRecipientCounts(campaignId);
+
+  await supabaseAdmin
+    .from("whatsapp_template_campaigns")
+    .update({
+      total_recipients: counts.total,
+      total_sent: counts.sent,
+      total_failed: counts.failed,
+      total_skipped: counts.skipped,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", campaignId);
+
+  return counts;
+}
+
 async function sendRecipientThroughTemplateApi(params: {
   req: Request;
   campaign: any;
@@ -364,9 +517,12 @@ async function sendRecipientThroughTemplateApi(params: {
   });
 
   const result = await response.json().catch(() => null);
+  const skipped = Boolean(result?.skipped);
+  const ok = response.ok && Boolean(result?.success) && !skipped;
 
   return {
-    ok: response.ok && Boolean(result?.success),
+    ok,
+    skipped,
     status: response.status,
     result,
   };
@@ -382,6 +538,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const campaignId = url.searchParams.get("campaignId") || "";
   const includeRecipients = url.searchParams.get("includeRecipients") === "true";
+  const recipientStatus = url.searchParams.get("recipientStatus") || "all";
 
   if (campaignId) {
     const { data: campaign, error: campaignError } = await supabaseAdmin
@@ -392,7 +549,7 @@ export async function GET(req: Request) {
 
     if (campaignError) {
       return Response.json(
-        { error: "Failed to load campaign." },
+        { success: false, error: "Failed to load campaign." },
         { status: 500 }
       );
     }
@@ -400,27 +557,36 @@ export async function GET(req: Request) {
     let recipients: any[] = [];
 
     if (includeRecipients) {
-      const { data, error } = await supabaseAdmin
+      let recipientsQuery = supabaseAdmin
         .from("whatsapp_template_recipients")
         .select("*")
         .eq("campaign_id", campaignId)
         .order("created_at", { ascending: true })
         .limit(5000);
 
+      if (recipientStatus !== "all") {
+        recipientsQuery = recipientsQuery.eq("status", recipientStatus);
+      }
+
+      const { data, error } = await recipientsQuery;
+
       if (error) {
         return Response.json(
-          { error: "Failed to load campaign recipients." },
+          { success: false, error: "Failed to load campaign recipients." },
           { status: 500 }
         );
       }
 
-      recipients = data || [];
+      recipients = (data || []).map(enrichRecipient);
     }
+
+    const recipientCounts = await getRecipientCounts(campaignId);
 
     return Response.json({
       success: true,
       campaign,
       recipients,
+      recipientCounts,
     });
   }
 
@@ -432,7 +598,7 @@ export async function GET(req: Request) {
 
   if (error) {
     return Response.json(
-      { error: "Failed to load campaigns." },
+      { success: false, error: "Failed to load campaigns." },
       { status: 500 }
     );
   }
@@ -484,14 +650,14 @@ export async function POST(req: Request) {
 
     if (!name) {
       return Response.json(
-        { error: "Campaign name is required." },
+        { success: false, error: "Campaign name is required." },
         { status: 400 }
       );
     }
 
     if (!templateName) {
       return Response.json(
-        { error: "Template name is required." },
+        { success: false, error: "Template name is required." },
         { status: 400 }
       );
     }
@@ -499,8 +665,8 @@ export async function POST(req: Request) {
     if (sendProvider === "twilio_whatsapp" && !twilioContentSid) {
       return Response.json(
         {
-          error:
-            "Twilio ContentSid is required for Twilio WhatsApp campaigns.",
+          success: false,
+          error: "Twilio ContentSid is required for Twilio WhatsApp campaigns.",
         },
         { status: 400 }
       );
@@ -509,6 +675,7 @@ export async function POST(req: Request) {
     if (sendProvider === "twilio_whatsapp" && !twilioFrom) {
       return Response.json(
         {
+          success: false,
           error:
             "Twilio WhatsApp sender is required for Twilio WhatsApp campaigns.",
         },
@@ -518,7 +685,10 @@ export async function POST(req: Request) {
 
     if (parsed.recipients.length === 0) {
       return Response.json(
-        { error: "At least one valid recipient phone number is required." },
+        {
+          success: false,
+          error: "At least one valid recipient phone number is required.",
+        },
         { status: 400 }
       );
     }
@@ -557,7 +727,7 @@ export async function POST(req: Request) {
       console.error("Failed to create WhatsApp campaign:", campaignError);
 
       return Response.json(
-        { error: "Failed to create campaign." },
+        { success: false, error: "Failed to create campaign." },
         { status: 500 }
       );
     }
@@ -650,7 +820,7 @@ export async function PATCH(req: Request) {
 
     if (!campaignId) {
       return Response.json(
-        { error: "campaignId is required." },
+        { success: false, error: "campaignId is required." },
         { status: 400 }
       );
     }
@@ -662,10 +832,18 @@ export async function PATCH(req: Request) {
       .maybeSingle();
 
     if (campaignError || !campaign?.id) {
-      return Response.json({ error: "Campaign not found." }, { status: 404 });
+      return Response.json(
+        { success: false, error: "Campaign not found." },
+        { status: 404 }
+      );
     }
 
     if (action === "delete_campaign") {
+      await supabaseAdmin
+        .from("whatsapp_template_send_logs")
+        .delete()
+        .eq("campaign_id", campaignId);
+
       const { error: recipientsDeleteError } = await supabaseAdmin
         .from("whatsapp_template_recipients")
         .delete()
@@ -733,9 +911,21 @@ export async function PATCH(req: Request) {
       return Response.json({ success: true, status: "draft" });
     }
 
-    if (action !== "send_next_batch" && action !== "start") {
-      return Response.json({ error: "Invalid action." }, { status: 400 });
+    const isPendingSend =
+      action === "send_next_batch" || action === "start" || action === "continue_pending";
+
+    const isRetryFailed = action === "retry_failed";
+
+    if (!isPendingSend && !isRetryFailed) {
+      return Response.json(
+        { success: false, error: "Invalid action." },
+        { status: 400 }
+      );
     }
+
+    const targetStatus: RecipientTargetStatus = isRetryFailed
+      ? "failed"
+      : "pending";
 
     const batchSize =
       Number.isFinite(requestedBatchSize) && requestedBatchSize > 0
@@ -751,71 +941,103 @@ export async function PATCH(req: Request) {
       })
       .eq("id", campaignId);
 
-    const { data: pendingRecipients, error: recipientsError } =
+    const { data: targetRecipients, error: recipientsError } =
       await supabaseAdmin
         .from("whatsapp_template_recipients")
         .select("*")
         .eq("campaign_id", campaignId)
-        .eq("status", "pending")
+        .eq("status", targetStatus)
         .order("created_at", { ascending: true })
         .limit(batchSize);
 
     if (recipientsError) {
       return Response.json(
-        { error: "Failed to load pending recipients." },
+        {
+          success: false,
+          error:
+            targetStatus === "failed"
+              ? "Failed to load failed recipients."
+              : "Failed to load pending recipients.",
+        },
         { status: 500 }
       );
     }
 
-    if (!pendingRecipients || pendingRecipients.length === 0) {
+    if (!targetRecipients || targetRecipients.length === 0) {
+      const counts = await recalculateCampaignTotals(campaignId);
+
+      const nextStatus = counts.pending > 0 ? "draft" : "completed";
+
       await supabaseAdmin
         .from("whatsapp_template_campaigns")
         .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
+          status: nextStatus,
+          completed_at:
+            nextStatus === "completed" ? new Date().toISOString() : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", campaignId);
 
       return Response.json({
         success: true,
-        status: "completed",
+        campaignId,
+        status: nextStatus,
+        action,
+        targetStatus,
         sentThisBatch: 0,
         failedThisBatch: 0,
         skippedThisBatch: 0,
-        message: "No pending recipients left.",
+        pendingLeft: counts.pending,
+        failedLeft: counts.failed,
+        recipientCounts: counts,
+        message:
+          targetStatus === "failed"
+            ? "No failed recipients to retry."
+            : "No pending recipients left.",
       });
     }
 
     const results: Array<{
+      recipientId: string;
       phoneE164: string;
       ok: boolean;
+      skipped: boolean;
       status: number;
+      finalStatus: "sent" | "failed" | "skipped";
+      errorType?: string;
+      errorSummary?: string;
       error?: unknown;
     }> = [];
 
-    for (const recipient of pendingRecipients) {
+    for (const recipient of targetRecipients) {
       const sendResult = await sendRecipientThroughTemplateApi({
         req,
         campaign,
         recipient,
       });
 
+      const finalStatus = sendResult.skipped
+        ? "skipped"
+        : sendResult.ok
+        ? "sent"
+        : "failed";
+
       results.push({
+        recipientId: recipient.id,
         phoneE164: recipient.phone_e164,
         ok: sendResult.ok,
+        skipped: sendResult.skipped,
         status: sendResult.status,
+        finalStatus,
+        errorType: sendResult.ok ? "" : getErrorType(sendResult.result),
+        errorSummary: sendResult.ok ? "" : getErrorMessage(sendResult.result),
         error: sendResult.ok ? null : sendResult.result,
       });
     }
 
-    const { count: pendingCount } = await supabaseAdmin
-      .from("whatsapp_template_recipients")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("status", "pending");
+    const counts = await recalculateCampaignTotals(campaignId);
 
-    const nextStatus = Number(pendingCount || 0) > 0 ? "draft" : "completed";
+    const nextStatus = counts.pending > 0 ? "draft" : "completed";
 
     await supabaseAdmin
       .from("whatsapp_template_campaigns")
@@ -831,12 +1053,20 @@ export async function PATCH(req: Request) {
       success: true,
       campaignId,
       status: nextStatus,
+      action,
+      targetStatus,
       sendProvider: normalizeSendProvider(campaign.send_provider),
       batchSize,
-      processedThisBatch: pendingRecipients.length,
-      sentThisBatch: results.filter((item) => item.ok).length,
-      failedThisBatch: results.filter((item) => !item.ok).length,
-      pendingLeft: Number(pendingCount || 0),
+      processedThisBatch: targetRecipients.length,
+      sentThisBatch: results.filter((item) => item.finalStatus === "sent")
+        .length,
+      failedThisBatch: results.filter((item) => item.finalStatus === "failed")
+        .length,
+      skippedThisBatch: results.filter((item) => item.finalStatus === "skipped")
+        .length,
+      pendingLeft: counts.pending,
+      failedLeft: counts.failed,
+      recipientCounts: counts,
       results,
     });
   } catch (error) {

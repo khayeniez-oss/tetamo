@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 type SendProvider = "twilio_whatsapp" | "meta_cloud_api";
 type TemplateCategory = "marketing" | "utility";
+type RecipientStatusFilter = "all" | "pending" | "sent" | "failed" | "skipped";
 
 type Campaign = {
   id: string;
@@ -40,11 +41,22 @@ type Recipient = {
   status: string;
   meta_message_id: string | null;
   twilio_message_sid?: string | null;
+  send_error?: unknown;
+  error_type?: string | null;
+  error_summary?: string | null;
   sent_at: string | null;
   failed_at: string | null;
   skipped_at: string | null;
   skip_reason: string | null;
   created_at: string;
+};
+
+type RecipientCounts = {
+  total: number;
+  pending: number;
+  sent: number;
+  failed: number;
+  skipped: number;
 };
 
 type TemplateOption = {
@@ -114,6 +126,22 @@ const LEAD_TYPES = [
   { value: "developer", label: "Developer" },
   { value: "buyer", label: "Buyer/Renter" },
 ];
+
+const RECIPIENT_FILTERS: { value: RecipientStatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "sent", label: "Sent" },
+  { value: "failed", label: "Failed" },
+  { value: "skipped", label: "Skipped" },
+];
+
+const EMPTY_COUNTS: RecipientCounts = {
+  total: 0,
+  pending: 0,
+  sent: 0,
+  failed: 0,
+  skipped: 0,
+};
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -187,16 +215,39 @@ function ProviderBadge({ provider }: { provider?: string | null }) {
   );
 }
 
-function getPendingFromCampaign(campaign: Campaign | null) {
-  if (!campaign) return 0;
+function safeJson(value: unknown) {
+  if (!value) return "";
 
-  const total = Number(campaign.total_recipients || 0);
-  const done =
-    Number(campaign.total_sent || 0) +
-    Number(campaign.total_failed || 0) +
-    Number(campaign.total_skipped || 0);
+  if (typeof value === "string") return value;
 
-  return Math.max(total - done, 0);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function getRecipientErrorText(recipient: Recipient) {
+  const status = String(recipient.status || "").toLowerCase();
+
+  if (recipient.error_summary) return recipient.error_summary;
+
+  if (status === "pending") return "Not sent yet.";
+
+  if (status === "skipped") {
+    return recipient.skip_reason || "Skipped.";
+  }
+
+  if (status === "failed") {
+    const raw = safeJson(recipient.send_error);
+    return raw || "Failed to send.";
+  }
+
+  return "-";
+}
+
+function getMessageId(recipient: Recipient) {
+  return recipient.twilio_message_sid || recipient.meta_message_id || "-";
 }
 
 export default function WhatsAppCampaignsPage() {
@@ -205,6 +256,10 @@ export default function WhatsAppCampaignsPage() {
     null
   );
   const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [recipientCounts, setRecipientCounts] =
+    useState<RecipientCounts>(EMPTY_COUNTS);
+  const [recipientStatusFilter, setRecipientStatusFilter] =
+    useState<RecipientStatusFilter>("all");
 
   const [loading, setLoading] = useState(true);
   const [loadingCampaign, setLoadingCampaign] = useState(false);
@@ -241,23 +296,8 @@ export default function WhatsAppCampaignsPage() {
   const isTwilio = sendProvider === "twilio_whatsapp";
   const twilioTemplateReady = !isTwilio || Boolean(selectedTemplate.twilioEnvKey);
 
-  const stats = useMemo(() => {
-    const pending = recipients.filter(
-      (item) => item.status === "pending"
-    ).length;
-    const sent = recipients.filter((item) => item.status === "sent").length;
-    const failed = recipients.filter((item) => item.status === "failed").length;
-    const skipped = recipients.filter(
-      (item) => item.status === "skipped"
-    ).length;
-
-    return { pending, sent, failed, skipped };
-  }, [recipients]);
-
-  const campaignPending = useMemo(() => {
-    if (recipients.length > 0) return stats.pending;
-    return getPendingFromCampaign(selectedCampaign);
-  }, [recipients.length, selectedCampaign, stats.pending]);
+  const campaignPending = recipientCounts.pending;
+  const campaignFailed = recipientCounts.failed;
 
   async function getAccessToken() {
     const {
@@ -301,7 +341,10 @@ export default function WhatsAppCampaignsPage() {
     }
   }
 
-  async function loadCampaign(campaignId: string) {
+  async function loadCampaign(
+    campaignId: string,
+    nextRecipientStatusFilter = recipientStatusFilter
+  ) {
     try {
       setLoadingCampaign(true);
       setError("");
@@ -313,8 +356,14 @@ export default function WhatsAppCampaignsPage() {
         return;
       }
 
+      const params = new URLSearchParams({
+        campaignId,
+        includeRecipients: "true",
+        recipientStatus: nextRecipientStatusFilter,
+      });
+
       const response = await fetch(
-        `/api/admin/whatsapp/template-campaigns?campaignId=${campaignId}&includeRecipients=true`,
+        `/api/admin/whatsapp/template-campaigns?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -330,11 +379,22 @@ export default function WhatsAppCampaignsPage() {
 
       setSelectedCampaign((result.campaign || null) as Campaign | null);
       setRecipients((result.recipients || []) as Recipient[]);
+      setRecipientCounts(
+        (result.recipientCounts || EMPTY_COUNTS) as RecipientCounts
+      );
     } catch (err: any) {
       console.error("Load campaign detail error:", err);
       setError(err?.message || "Failed to load campaign.");
     } finally {
       setLoadingCampaign(false);
+    }
+  }
+
+  function handleRecipientFilter(nextFilter: RecipientStatusFilter) {
+    setRecipientStatusFilter(nextFilter);
+
+    if (selectedCampaign?.id) {
+      loadCampaign(selectedCampaign.id, nextFilter);
     }
   }
 
@@ -426,11 +486,12 @@ export default function WhatsAppCampaignsPage() {
       setName("");
       setRecipientText("");
       setDefaultVariablesText("");
+      setRecipientStatusFilter("all");
 
       await loadCampaigns();
 
       if (result.campaignId) {
-        await loadCampaign(result.campaignId);
+        await loadCampaign(result.campaignId, "all");
       }
     } catch (err: any) {
       console.error("Create campaign error:", err);
@@ -440,8 +501,20 @@ export default function WhatsAppCampaignsPage() {
     }
   }
 
-  async function sendNextBatch() {
+  async function processCampaignBatch(
+    action: "continue_pending" | "retry_failed"
+  ) {
     if (!selectedCampaign?.id) return;
+
+    const isRetryFailed = action === "retry_failed";
+
+    if (isRetryFailed) {
+      const confirmed = window.confirm(
+        `Retry ${campaignFailed} failed recipient(s)?\n\nThis will only retry recipients with status "failed". It will not resend already sent recipients.`
+      );
+
+      if (!confirmed) return;
+    }
 
     try {
       setSendingBatch(true);
@@ -462,7 +535,7 @@ export default function WhatsAppCampaignsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          action: "send_next_batch",
+          action,
           campaignId: selectedCampaign.id,
           batchSize,
         }),
@@ -471,22 +544,24 @@ export default function WhatsAppCampaignsPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to send campaign batch.");
+        throw new Error(result.error || "Failed to process campaign batch.");
       }
 
       setSuccess(
-        `Batch processed via ${getProviderLabel(
+        `${isRetryFailed ? "Retry failed" : "Pending batch"} processed via ${getProviderLabel(
           result.sendProvider
-        )}: ${result.sentThisBatch} sent, ${
-          result.failedThisBatch
-        } failed, pending left ${result.pendingLeft}.`
+        )}: ${result.sentThisBatch || 0} sent, ${
+          result.failedThisBatch || 0
+        } failed, ${result.skippedThisBatch || 0} skipped, pending left ${
+          result.pendingLeft || 0
+        }, failed left ${result.failedLeft || 0}.`
       );
 
       await loadCampaigns();
-      await loadCampaign(selectedCampaign.id);
+      await loadCampaign(selectedCampaign.id, recipientStatusFilter);
     } catch (err: any) {
-      console.error("Send batch error:", err);
-      setError(err?.message || "Failed to send campaign batch.");
+      console.error("Campaign batch action error:", err);
+      setError(err?.message || "Failed to process campaign batch.");
     } finally {
       setSendingBatch(false);
     }
@@ -528,7 +603,7 @@ export default function WhatsAppCampaignsPage() {
       setSuccess(`Campaign ${action === "pause" ? "paused" : "resumed"}.`);
 
       await loadCampaigns();
-      await loadCampaign(selectedCampaign.id);
+      await loadCampaign(selectedCampaign.id, recipientStatusFilter);
     } catch (err: any) {
       console.error("Campaign status error:", err);
       setError(err?.message || `Failed to ${action} campaign.`);
@@ -579,6 +654,7 @@ export default function WhatsAppCampaignsPage() {
       setSuccess(`Campaign "${selectedCampaign.name}" deleted.`);
       setSelectedCampaign(null);
       setRecipients([]);
+      setRecipientCounts(EMPTY_COUNTS);
 
       await loadCampaigns();
     } catch (err: any) {
@@ -614,14 +690,15 @@ export default function WhatsAppCampaignsPage() {
             type="button"
             onClick={() => {
               loadCampaigns();
-              if (selectedCampaign?.id) loadCampaign(selectedCampaign.id);
+              if (selectedCampaign?.id) {
+                loadCampaign(selectedCampaign.id, recipientStatusFilter);
+              }
             }}
             className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90"
           >
             Refresh
           </button>
         </div>
-
 
         {error ? (
           <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -877,8 +954,9 @@ export default function WhatsAppCampaignsPage() {
           <div className="border-b border-gray-100 p-4 sm:p-5">
             <h2 className="text-lg font-bold">Campaigns</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Select a campaign to view recipients, send the next batch, or
-              delete a test campaign.
+              Select a campaign to view recipients, see pending/failed errors,
+              continue pending sends, retry failed recipients, or delete a test
+              campaign.
             </p>
           </div>
 
@@ -899,6 +977,13 @@ export default function WhatsAppCampaignsPage() {
               <div className="space-y-2">
                 {campaigns.map((campaign) => {
                   const active = selectedCampaign?.id === campaign.id;
+                  const pending = Math.max(
+                    Number(campaign.total_recipients || 0) -
+                      Number(campaign.total_sent || 0) -
+                      Number(campaign.total_failed || 0) -
+                      Number(campaign.total_skipped || 0),
+                    0
+                  );
 
                   return (
                     <button
@@ -965,13 +1050,14 @@ export default function WhatsAppCampaignsPage() {
 
                       <div
                         className={[
-                          "mt-3 grid grid-cols-3 gap-2 text-xs",
+                          "mt-3 grid grid-cols-2 gap-2 text-xs",
                           active ? "text-white/70" : "text-gray-500",
                         ].join(" ")}
                       >
+                        <span>Pending: {pending}</span>
                         <span>Sent: {campaign.total_sent}</span>
                         <span>Failed: {campaign.total_failed}</span>
-                        <span>Total: {campaign.total_recipients}</span>
+                        <span>Skipped: {campaign.total_skipped}</span>
                       </div>
                     </button>
                   );
@@ -1028,17 +1114,30 @@ export default function WhatsAppCampaignsPage() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={sendNextBatch}
+                        onClick={() => processCampaignBatch("continue_pending")}
                         disabled={
                           sendingBatch ||
                           deletingCampaign ||
-                          selectedCampaign.status === "completed" ||
                           selectedCampaign.status === "paused" ||
                           campaignPending <= 0
                         }
                         className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {sendingBatch ? "Sending..." : "Send Next Batch"}
+                        {sendingBatch ? "Sending..." : "Continue Pending"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => processCampaignBatch("retry_failed")}
+                        disabled={
+                          sendingBatch ||
+                          deletingCampaign ||
+                          selectedCampaign.status === "paused" ||
+                          campaignFailed <= 0
+                        }
+                        className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {sendingBatch ? "Sending..." : "Retry Failed"}
                       </button>
 
                       {selectedCampaign.status === "paused" ? (
@@ -1072,13 +1171,22 @@ export default function WhatsAppCampaignsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                        Total
+                      </p>
+                      <p className="mt-2 text-2xl font-bold">
+                        {recipientCounts.total}
+                      </p>
+                    </div>
+
                     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
                         Pending
                       </p>
                       <p className="mt-2 text-2xl font-bold">
-                        {campaignPending}
+                        {recipientCounts.pending}
                       </p>
                     </div>
 
@@ -1087,7 +1195,7 @@ export default function WhatsAppCampaignsPage() {
                         Sent
                       </p>
                       <p className="mt-2 text-2xl font-bold text-emerald-700">
-                        {stats.sent || selectedCampaign.total_sent}
+                        {recipientCounts.sent}
                       </p>
                     </div>
 
@@ -1096,7 +1204,7 @@ export default function WhatsAppCampaignsPage() {
                         Failed
                       </p>
                       <p className="mt-2 text-2xl font-bold text-red-700">
-                        {stats.failed || selectedCampaign.total_failed}
+                        {recipientCounts.failed}
                       </p>
                     </div>
 
@@ -1105,68 +1213,140 @@ export default function WhatsAppCampaignsPage() {
                         Skipped
                       </p>
                       <p className="mt-2 text-2xl font-bold text-amber-800">
-                        {stats.skipped || selectedCampaign.total_skipped}
+                        {recipientCounts.skipped}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-5 rounded-2xl border border-gray-200">
                     <div className="border-b border-gray-100 px-4 py-3">
-                      <p className="text-sm font-bold">
-                        Recipients{" "}
-                        {loadingCampaign ? (
-                          <span className="font-normal text-gray-400">
-                            Loading...
-                          </span>
-                        ) : null}
-                      </p>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <p className="text-sm font-bold">
+                            Recipients{" "}
+                            {loadingCampaign ? (
+                              <span className="font-normal text-gray-400">
+                                Loading...
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Filter and inspect pending, sent, failed, and skipped
+                            recipients. Failed rows show the provider error where
+                            available.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {RECIPIENT_FILTERS.map((item) => (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() => handleRecipientFilter(item.value)}
+                              className={[
+                                "rounded-full border px-3 py-1.5 text-xs font-semibold",
+                                recipientStatusFilter === item.value
+                                  ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+                              ].join(" ")}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="max-h-[430px] overflow-auto">
-                      <table className="min-w-full text-left text-sm">
+                    <div className="max-h-[520px] overflow-auto">
+                      <table className="min-w-[1180px] text-left text-sm">
                         <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-[0.12em] text-gray-400">
                           <tr>
                             <th className="px-4 py-3">Phone</th>
                             <th className="px-4 py-3">Name</th>
                             <th className="px-4 py-3">Lead</th>
                             <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Error / Reason</th>
                             <th className="px-4 py-3">Message ID</th>
                             <th className="px-4 py-3">Sent At</th>
+                            <th className="px-4 py-3">Failed At</th>
+                            <th className="px-4 py-3">Skipped At</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {recipients.map((recipient) => (
-                            <tr key={recipient.id}>
-                              <td className="px-4 py-3 font-medium text-gray-800">
-                                +{recipient.phone_e164}
-                              </td>
-                              <td className="px-4 py-3 text-gray-500">
-                                {recipient.customer_name || "-"}
-                              </td>
-                              <td className="px-4 py-3 text-gray-500">
-                                {recipient.lead_type || "-"}
-                              </td>
-                              <td className="px-4 py-3">
-                                <StatusBadge status={recipient.status} />
-                              </td>
-                              <td className="max-w-[220px] truncate px-4 py-3 text-xs text-gray-500">
-                                {recipient.twilio_message_sid ||
-                                  recipient.meta_message_id ||
-                                  "-"}
-                              </td>
-                              <td className="px-4 py-3 text-gray-500">
-                                {formatDate(recipient.sent_at)}
-                              </td>
-                            </tr>
-                          ))}
+                          {recipients.map((recipient) => {
+                            const errorText = getRecipientErrorText(recipient);
+                            const rawError = safeJson(recipient.send_error);
+
+                            return (
+                              <tr key={recipient.id}>
+                                <td className="px-4 py-3 font-medium text-gray-800">
+                                  +{recipient.phone_e164}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500">
+                                  {recipient.customer_name || "-"}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500">
+                                  {recipient.lead_type || "-"}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <StatusBadge status={recipient.status} />
+                                </td>
+                                <td className="max-w-[380px] px-4 py-3 text-xs text-gray-600">
+                                  <div
+                                    className={[
+                                      "rounded-2xl border px-3 py-2 leading-5",
+                                      recipient.status === "failed"
+                                        ? "border-red-200 bg-red-50 text-red-700"
+                                        : recipient.status === "skipped"
+                                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                                        : recipient.status === "pending"
+                                        ? "border-gray-200 bg-gray-50 text-gray-600"
+                                        : "border-emerald-100 bg-emerald-50 text-emerald-700",
+                                    ].join(" ")}
+                                  >
+                                    {recipient.error_type ? (
+                                      <p className="mb-1 font-bold">
+                                        Type: {recipient.error_type}
+                                      </p>
+                                    ) : null}
+
+                                    <p>{errorText}</p>
+
+                                    {rawError && recipient.status === "failed" ? (
+                                      <details className="mt-2">
+                                        <summary className="cursor-pointer font-semibold">
+                                          Raw error
+                                        </summary>
+                                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-xl bg-white/70 p-2 text-[11px]">
+                                          {rawError}
+                                        </pre>
+                                      </details>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="max-w-[220px] truncate px-4 py-3 text-xs text-gray-500">
+                                  {getMessageId(recipient)}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500">
+                                  {formatDate(recipient.sent_at)}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500">
+                                  {formatDate(recipient.failed_at)}
+                                </td>
+                                <td className="px-4 py-3 text-gray-500">
+                                  {formatDate(recipient.skipped_at)}
+                                </td>
+                              </tr>
+                            );
+                          })}
 
                           {recipients.length === 0 ? (
                             <tr>
                               <td
-                                colSpan={6}
+                                colSpan={9}
                                 className="px-4 py-8 text-center text-gray-500"
                               >
-                                No recipients loaded.
+                                No recipients loaded for this filter.
                               </td>
                             </tr>
                           ) : null}
