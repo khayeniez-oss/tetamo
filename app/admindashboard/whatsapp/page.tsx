@@ -53,6 +53,30 @@ type ChannelFilterValue =
 
 type BadgeTone = "gray" | "green" | "red" | "amber" | "blue" | "purple";
 
+type NewMessageProvider = "meta_cloud_api" | "twilio_whatsapp";
+
+type ConversationStats = {
+  total: number;
+  metaDirect: number;
+  twilio: number;
+  adWindowOpen: number;
+  needsAdmin: number;
+  activeAi: number;
+  pausedAi: number;
+  handled: number;
+};
+
+type PaginationState = {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+  from: number;
+  to: number;
+};
+
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "all", label: "All" },
   { value: "needs_admin", label: "Needs Admin" },
@@ -69,6 +93,29 @@ const CHANNEL_FILTERS: { value: ChannelFilterValue; label: string }[] = [
 ];
 
 const MESSAGE_BATCH_SIZE = 30;
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+const EMPTY_STATS: ConversationStats = {
+  total: 0,
+  metaDirect: 0,
+  twilio: 0,
+  adWindowOpen: 0,
+  needsAdmin: 0,
+  activeAi: 0,
+  pausedAi: 0,
+  handled: 0,
+};
+
+const EMPTY_PAGINATION: PaginationState = {
+  page: 1,
+  pageSize: 25,
+  totalCount: 0,
+  totalPages: 1,
+  hasPreviousPage: false,
+  hasNextPage: false,
+  from: 0,
+  to: 0,
+};
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -236,7 +283,14 @@ export default function AdminWhatsappInboxPage() {
   const [filter, setFilter] = useState<FilterValue>("all");
   const [channelFilter, setChannelFilter] =
     useState<ChannelFilterValue>("all_channels");
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [stats, setStats] = useState<ConversationStats>(EMPTY_STATS);
+  const [pagination, setPagination] =
+    useState<PaginationState>(EMPTY_PAGINATION);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -250,6 +304,19 @@ export default function AdminWhatsappInboxPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  const [newMessageOpen, setNewMessageOpen] = useState(false);
+  const [newMessagePhone, setNewMessagePhone] = useState("");
+  const [newMessageCustomerName, setNewMessageCustomerName] = useState("");
+  const [newMessageText, setNewMessageText] = useState("");
+  const [newMessageTemplateName, setNewMessageTemplateName] = useState(
+    "tetamo_agent_invite_id_01"
+  );
+  const [newMessageTemplateLanguage, setNewMessageTemplateLanguage] =
+    useState("id");
+  const [newMessageProvider, setNewMessageProvider] =
+    useState<NewMessageProvider>("meta_cloud_api");
+  const [sendingNewMessage, setSendingNewMessage] = useState(false);
+
   const selectedConversationId = selectedConversation?.id || "";
   const selectedReplyWindowOpen = isDateOpen(
     selectedConversation?.window_expires_at
@@ -257,47 +324,6 @@ export default function AdminWhatsappInboxPage() {
   const selectedAdWindowOpen = isDateOpen(
     selectedConversation?.free_entry_point_expires_at
   );
-
-  const displayedConversations = useMemo(() => {
-    if (channelFilter === "all_channels") return conversations;
-
-    return conversations.filter((conversation) => {
-      const channelMeta = getChannelMeta(conversation.channel);
-
-      if (channelFilter === "meta_whatsapp") return channelMeta.key === "meta";
-      if (channelFilter === "twilio_whatsapp") return channelMeta.key === "twilio";
-      if (channelFilter === "unknown_channel")
-        return channelMeta.key === "unknown";
-
-      return true;
-    });
-  }, [conversations, channelFilter]);
-
-  const stats = useMemo(() => {
-    const metaDirect = conversations.filter(
-      (item) => getChannelMeta(item.channel).key === "meta"
-    ).length;
-
-    const twilio = conversations.filter(
-      (item) => getChannelMeta(item.channel).key === "twilio"
-    ).length;
-
-    const adWindowOpen = conversations.filter((item) =>
-      isDateOpen(item.free_entry_point_expires_at)
-    ).length;
-
-    return {
-      total: conversations.length,
-      metaDirect,
-      twilio,
-      adWindowOpen,
-      needsAdmin: conversations.filter((item) => item.handover_to_admin).length,
-      activeAi: conversations.filter(
-        (item) => item.ai_enabled && !item.handover_to_admin
-      ).length,
-      pausedAi: conversations.filter((item) => !item.ai_enabled).length,
-    };
-  }, [conversations]);
 
   const visibleMessages = useMemo(() => {
     if (messages.length <= visibleMessageCount) return messages;
@@ -314,7 +340,12 @@ export default function AdminWhatsappInboxPage() {
     return session?.access_token || "";
   }
 
-  async function loadConversations(nextFilter = filter) {
+  async function loadConversations(
+    nextFilter = filter,
+    nextPage = page,
+    nextChannelFilter = channelFilter,
+    nextPageSize = pageSize
+  ) {
     try {
       setLoadingConversations(true);
       setError("");
@@ -324,11 +355,20 @@ export default function AdminWhatsappInboxPage() {
       if (!token) {
         setError("Please log in as admin first.");
         setConversations([]);
+        setStats(EMPTY_STATS);
+        setPagination(EMPTY_PAGINATION);
         return;
       }
 
+      const params = new URLSearchParams({
+        filter: nextFilter,
+        channelFilter: nextChannelFilter,
+        page: String(nextPage),
+        pageSize: String(nextPageSize),
+      });
+
       const response = await fetch(
-        `/api/admin/whatsapp/conversations?filter=${nextFilter}`,
+        `/api/admin/whatsapp/conversations?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -343,18 +383,22 @@ export default function AdminWhatsappInboxPage() {
       }
 
       const nextConversations = (result.conversations || []) as Conversation[];
-      setConversations(nextConversations);
 
-      if (
-        selectedConversationId &&
-        !nextConversations.some((item) => item.id === selectedConversationId)
-      ) {
+      setConversations(nextConversations);
+      setStats((result.stats || EMPTY_STATS) as ConversationStats);
+      setPagination((result.pagination || EMPTY_PAGINATION) as PaginationState);
+
+      if (nextConversations.length === 0) {
         setSelectedConversation(null);
         setMessages([]);
         setVisibleMessageCount(MESSAGE_BATCH_SIZE);
+        return;
       }
 
-      if (!selectedConversationId && nextConversations.length > 0) {
+      if (
+        !selectedConversationId ||
+        !nextConversations.some((item) => item.id === selectedConversationId)
+      ) {
         setSelectedConversation(nextConversations[0]);
       }
     } catch (err: any) {
@@ -440,7 +484,7 @@ export default function AdminWhatsappInboxPage() {
         throw new Error(result.error || "Failed to update conversation.");
       }
 
-      await loadConversations(filter);
+      await loadConversations(filter, page, channelFilter, pageSize);
       await loadMessages(selectedConversationId);
     } catch (err: any) {
       console.error("Update WhatsApp conversation error:", err);
@@ -504,7 +548,7 @@ export default function AdminWhatsappInboxPage() {
         }. AI remains paused until you resume it.`
       );
 
-      await loadConversations(filter);
+      await loadConversations(filter, page, channelFilter, pageSize);
       await loadMessages(selectedConversationId);
     } catch (err: any) {
       console.error("Send WhatsApp reply error:", err);
@@ -514,14 +558,125 @@ export default function AdminWhatsappInboxPage() {
     }
   }
 
+  async function sendNewMessage() {
+    const cleanPhone = newMessagePhone.trim();
+    const cleanTemplateName = newMessageTemplateName.trim();
+    const cleanTemplateLanguage = newMessageTemplateLanguage.trim() || "id";
+    const cleanMessage = newMessageText.trim();
+    const cleanCustomerName = newMessageCustomerName.trim();
+
+    if (!cleanPhone) {
+      setError("Please enter a WhatsApp number.");
+      return;
+    }
+
+    if (!cleanTemplateName) {
+      setError("Template name is required.");
+      return;
+    }
+
+    try {
+      setSendingNewMessage(true);
+      setError("");
+      setSuccessMessage("");
+
+      const token = await getAccessToken();
+
+      if (!token) {
+        setError("Please log in as admin first.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/whatsapp/new-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          customerName: cleanCustomerName || null,
+          message: cleanMessage,
+          templateName: cleanTemplateName,
+          templateLanguage: cleanTemplateLanguage,
+          templateCategory: "marketing",
+          sendProvider: newMessageProvider,
+          leadType: "manual_admin",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error ||
+            result.details?.error?.message ||
+            "Failed to create WhatsApp message."
+        );
+      }
+
+      setNewMessageOpen(false);
+      setNewMessagePhone("");
+      setNewMessageCustomerName("");
+      setNewMessageText("");
+
+      const providerLabel =
+        result.provider === "twilio" ? "Twilio" : "Meta Direct";
+
+      setSuccessMessage(
+        `Message sent through ${providerLabel}. The conversation is now open in the inbox.`
+      );
+
+      setFilter("all");
+      setChannelFilter("all_channels");
+      setPage(1);
+
+      await loadConversations("all", 1, "all_channels", pageSize);
+
+      if (result.conversationId) {
+        await loadMessages(result.conversationId);
+      }
+    } catch (err: any) {
+      console.error("Create WhatsApp message error:", err);
+      setError(err?.message || "Failed to create WhatsApp message.");
+    } finally {
+      setSendingNewMessage(false);
+    }
+  }
+
   function loadMoreMessages() {
     setVisibleMessageCount((prev) => prev + MESSAGE_BATCH_SIZE);
   }
 
+  function changeFilter(nextFilter: FilterValue) {
+    setFilter(nextFilter);
+    setPage(1);
+  }
+
+  function changeChannelFilter(nextChannelFilter: ChannelFilterValue) {
+    setChannelFilter(nextChannelFilter);
+    setPage(1);
+  }
+
+  function changePageSize(nextPageSize: number) {
+    setPageSize(nextPageSize);
+    setPage(1);
+  }
+
+  function goToPreviousPage() {
+    if (!pagination.hasPreviousPage) return;
+    setPage((prev) => Math.max(prev - 1, 1));
+  }
+
+  function goToNextPage() {
+    if (!pagination.hasNextPage) return;
+    setPage((prev) => prev + 1);
+  }
+
   useEffect(() => {
-    loadConversations(filter);
+    loadConversations(filter, page, channelFilter, pageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, page, channelFilter, pageSize]);
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -531,7 +686,7 @@ export default function AdminWhatsappInboxPage() {
   }, [selectedConversationId]);
 
   useEffect(() => {
-    if (displayedConversations.length === 0) {
+    if (conversations.length === 0) {
       setSelectedConversation(null);
       setMessages([]);
       return;
@@ -539,11 +694,11 @@ export default function AdminWhatsappInboxPage() {
 
     if (
       !selectedConversationId ||
-      !displayedConversations.some((item) => item.id === selectedConversationId)
+      !conversations.some((item) => item.id === selectedConversationId)
     ) {
-      setSelectedConversation(displayedConversations[0]);
+      setSelectedConversation(conversations[0]);
     }
-  }, [channelFilter, displayedConversations, selectedConversationId]);
+  }, [conversations, selectedConversationId]);
 
   return (
     <main className="min-h-screen text-[#1C1C1E]">
@@ -563,16 +718,30 @@ export default function AdminWhatsappInboxPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              loadConversations(filter);
-              if (selectedConversationId) loadMessages(selectedConversationId);
-            }}
-            className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setSuccessMessage("");
+                setNewMessageOpen(true);
+              }}
+              className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90"
+            >
+              Create Message
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                loadConversations(filter, page, channelFilter, pageSize);
+                if (selectedConversationId) loadMessages(selectedConversationId);
+              }}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-7">
@@ -659,7 +828,7 @@ export default function AdminWhatsappInboxPage() {
               <button
                 key={item.value}
                 type="button"
-                onClick={() => setFilter(item.value)}
+                onClick={() => changeFilter(item.value)}
                 className={[
                   "rounded-full border px-4 py-2 text-sm font-semibold transition",
                   filter === item.value
@@ -682,7 +851,7 @@ export default function AdminWhatsappInboxPage() {
               <button
                 key={item.value}
                 type="button"
-                onClick={() => setChannelFilter(item.value)}
+                onClick={() => changeChannelFilter(item.value)}
                 className={[
                   "rounded-full border px-4 py-2 text-sm font-semibold transition",
                   channelFilter === item.value
@@ -707,13 +876,13 @@ export default function AdminWhatsappInboxPage() {
           </div>
 
           <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
-            {!loadingConversations && displayedConversations.length === 0 ? (
+            {!loadingConversations && conversations.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
                 No conversations found.
               </div>
             ) : null}
 
-            {displayedConversations.map((conversation) => {
+            {conversations.map((conversation) => {
               const active = selectedConversationId === conversation.id;
               const channelMeta = getChannelMeta(conversation.channel);
               const replyWindowOpen = isDateOpen(conversation.window_expires_at);
@@ -843,6 +1012,55 @@ export default function AdminWhatsappInboxPage() {
                 </button>
               );
             })}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+                <span>
+                  Showing {pagination.from}-{pagination.to} of{" "}
+                  {pagination.totalCount} conversations
+                </span>
+
+                <span>
+                  Page {pagination.page} of {pagination.totalPages}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <select
+                  value={pageSize}
+                  onChange={(event) => changePageSize(Number(event.target.value))}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 outline-none"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size} per page
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={goToPreviousPage}
+                    disabled={!pagination.hasPreviousPage || loadingConversations}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={goToNextPage}
+                    disabled={!pagination.hasNextPage || loadingConversations}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1157,6 +1375,165 @@ export default function AdminWhatsappInboxPage() {
           )}
         </section>
       </div>
+
+      {newMessageOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-[28px] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                  New WhatsApp Message
+                </p>
+                <h2 className="mt-2 text-xl font-bold">Create Message</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  Send an approved WhatsApp template to a customer. When the
+                  customer replies, the conversation will appear here and Mona
+                  can continue automatically.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!sendingNewMessage) setNewMessageOpen(false);
+                }}
+                disabled={sendingNewMessage}
+                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                  WhatsApp Number
+                </label>
+                <input
+                  value={newMessagePhone}
+                  onChange={(event) => setNewMessagePhone(event.target.value)}
+                  disabled={sendingNewMessage}
+                  placeholder="Example: 628123456789"
+                  className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Use country code. Example Indonesia: 628xxxxxxxxx.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                  Customer Name Optional
+                </label>
+                <input
+                  value={newMessageCustomerName}
+                  onChange={(event) =>
+                    setNewMessageCustomerName(event.target.value)
+                  }
+                  disabled={sendingNewMessage}
+                  placeholder="Customer name"
+                  className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                  Message / Template Variable
+                </label>
+                <textarea
+                  value={newMessageText}
+                  onChange={(event) => setNewMessageText(event.target.value)}
+                  disabled={sendingNewMessage}
+                  rows={4}
+                  maxLength={1000}
+                  placeholder="Optional. If your approved template uses {{1}}, this text will be sent as the variable."
+                  className="mt-2 w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  This is not a normal free-text message. It is sent through your
+                  approved WhatsApp template.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                    Template Name
+                  </label>
+                  <input
+                    value={newMessageTemplateName}
+                    onChange={(event) =>
+                      setNewMessageTemplateName(event.target.value)
+                    }
+                    disabled={sendingNewMessage}
+                    className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                    Language
+                  </label>
+                  <input
+                    value={newMessageTemplateLanguage}
+                    onChange={(event) =>
+                      setNewMessageTemplateLanguage(event.target.value)
+                    }
+                    disabled={sendingNewMessage}
+                    placeholder="id"
+                    className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                  Send Provider
+                </label>
+                <select
+                  value={newMessageProvider}
+                  onChange={(event) =>
+                    setNewMessageProvider(
+                      event.target.value as NewMessageProvider
+                    )
+                  }
+                  disabled={sendingNewMessage}
+                  className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                >
+                  <option value="meta_cloud_api">Meta Direct</option>
+                  <option value="twilio_whatsapp">Twilio</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!sendingNewMessage) setNewMessageOpen(false);
+                }}
+                disabled={sendingNewMessage}
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={sendNewMessage}
+                disabled={
+                  sendingNewMessage ||
+                  !newMessagePhone.trim() ||
+                  !newMessageTemplateName.trim()
+                }
+                className="rounded-2xl bg-[#1C1C1E] px-5 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {sendingNewMessage ? "Sending..." : "Send Message"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

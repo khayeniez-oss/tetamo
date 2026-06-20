@@ -59,6 +59,20 @@ type AdminAuthResult = {
   response?: Response;
 };
 
+type ConversationStats = {
+  total: number;
+  metaDirect: number;
+  twilio: number;
+  adWindowOpen: number;
+  needsAdmin: number;
+  activeAi: number;
+  pausedAi: number;
+  handled: number;
+};
+
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
 function getBearerToken(req: Request) {
   const authHeader = req.headers.get("authorization") || "";
 
@@ -69,6 +83,58 @@ function getBearerToken(req: Request) {
   return authHeader.slice(7).trim();
 }
 
+function getPageNumber(value?: string | null) {
+  const page = Number(value || "1");
+
+  if (!Number.isFinite(page) || page < 1) return 1;
+
+  return Math.floor(page);
+}
+
+function getPageSize(value?: string | null) {
+  const pageSize = Number(value || String(DEFAULT_PAGE_SIZE));
+
+  if (!Number.isFinite(pageSize) || pageSize < 1) return DEFAULT_PAGE_SIZE;
+
+  return Math.min(Math.floor(pageSize), MAX_PAGE_SIZE);
+}
+
+function applyStatusFilter(query: any, filter: string) {
+  if (filter === "needs_admin") {
+    return query.eq("handover_to_admin", true);
+  }
+
+  if (filter === "active_ai") {
+    return query.eq("ai_enabled", true).eq("handover_to_admin", false);
+  }
+
+  if (filter === "paused_ai") {
+    return query.eq("ai_enabled", false);
+  }
+
+  if (filter === "handled") {
+    return query.eq("status", "handled");
+  }
+
+  return query;
+}
+
+function applyChannelFilter(query: any, channelFilter: string) {
+  if (channelFilter === "meta_whatsapp") {
+    return query.ilike("channel", "%meta%");
+  }
+
+  if (channelFilter === "twilio_whatsapp") {
+    return query.ilike("channel", "%twilio%");
+  }
+
+  if (channelFilter === "unknown_channel") {
+    return query.is("channel", null);
+  }
+
+  return query;
+}
+
 async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -77,7 +143,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Supabase server environment variables are missing." },
+        { success: false, error: "Supabase server environment variables are missing." },
         { status: 500 }
       ),
     };
@@ -89,7 +155,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Unauthorized. Login is required." },
+        { success: false, error: "Unauthorized. Login is required." },
         { status: 401 }
       ),
     };
@@ -104,7 +170,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Unauthorized. Invalid session." },
+        { success: false, error: "Unauthorized. Invalid session." },
         { status: 401 }
       ),
     };
@@ -122,7 +188,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Unable to verify admin access." },
+        { success: false, error: "Unable to verify admin access." },
         { status: 500 }
       ),
     };
@@ -135,7 +201,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { error: "Forbidden. Admin access is required." },
+        { success: false, error: "Forbidden. Admin access is required." },
         { status: 403 }
       ),
     };
@@ -144,6 +210,63 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
   return {
     authorized: true,
     userId: user.id,
+  };
+}
+
+async function countConversations(apply?: (query: any) => any) {
+  let query = supabaseAdmin
+    .from("whatsapp_conversations")
+    .select("id", { count: "exact", head: true });
+
+  if (apply) {
+    query = apply(query);
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return count || 0;
+}
+
+async function getConversationStats(): Promise<ConversationStats> {
+  const nowIso = new Date().toISOString();
+
+  const [
+    total,
+    metaDirect,
+    twilio,
+    adWindowOpen,
+    needsAdmin,
+    activeAi,
+    pausedAi,
+    handled,
+  ] = await Promise.all([
+    countConversations(),
+    countConversations((query) => query.ilike("channel", "%meta%")),
+    countConversations((query) => query.ilike("channel", "%twilio%")),
+    countConversations((query) =>
+      query.gt("free_entry_point_expires_at", nowIso)
+    ),
+    countConversations((query) => query.eq("handover_to_admin", true)),
+    countConversations((query) =>
+      query.eq("ai_enabled", true).eq("handover_to_admin", false)
+    ),
+    countConversations((query) => query.eq("ai_enabled", false)),
+    countConversations((query) => query.eq("status", "handled")),
+  ]);
+
+  return {
+    total,
+    metaDirect,
+    twilio,
+    adWindowOpen,
+    needsAdmin,
+    activeAi,
+    pausedAi,
+    handled,
   };
 }
 
@@ -204,6 +327,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const conversationId = url.searchParams.get("conversationId") || "";
   const filter = url.searchParams.get("filter") || "all";
+  const channelFilter = url.searchParams.get("channelFilter") || "all_channels";
+  const page = getPageNumber(url.searchParams.get("page"));
+  const pageSize = getPageSize(url.searchParams.get("pageSize"));
 
   if (conversationId) {
     const { data: conversation, error: conversationError } =
@@ -217,7 +343,7 @@ export async function GET(req: Request) {
       console.error("Failed to load WhatsApp conversation:", conversationError);
 
       return Response.json(
-        { error: "Failed to load WhatsApp conversation." },
+        { success: false, error: "Failed to load WhatsApp conversation." },
         { status: 500 }
       );
     }
@@ -232,7 +358,7 @@ export async function GET(req: Request) {
       console.error("Failed to load WhatsApp messages:", messagesError);
 
       return Response.json(
-        { error: "Failed to load WhatsApp messages." },
+        { success: false, error: "Failed to load WhatsApp messages." },
         { status: 500 }
       );
     }
@@ -244,43 +370,61 @@ export async function GET(req: Request) {
     });
   }
 
-  let query = supabaseAdmin
-    .from("whatsapp_conversations")
-    .select(CONVERSATION_SELECT)
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(100);
+  try {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
 
-  if (filter === "needs_admin") {
-    query = query.eq("handover_to_admin", true);
-  }
+    let query = supabaseAdmin
+      .from("whatsapp_conversations")
+      .select(CONVERSATION_SELECT, { count: "exact" });
 
-  if (filter === "active_ai") {
-    query = query.eq("ai_enabled", true).eq("handover_to_admin", false);
-  }
+    query = applyStatusFilter(query, filter);
+    query = applyChannelFilter(query, channelFilter);
 
-  if (filter === "paused_ai") {
-    query = query.eq("ai_enabled", false);
-  }
+    query = query
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .range(from, to);
 
-  if (filter === "handled") {
-    query = query.eq("status", "handled");
-  }
+    const [{ data, error, count }, stats] = await Promise.all([
+      query,
+      getConversationStats(),
+    ]);
 
-  const { data, error } = await query;
+    if (error) {
+      console.error("Failed to load WhatsApp conversations:", error);
 
-  if (error) {
-    console.error("Failed to load WhatsApp conversations:", error);
+      return Response.json(
+        { success: false, error: "Failed to load WhatsApp conversations." },
+        { status: 500 }
+      );
+    }
+
+    const totalCount = count || 0;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+    return Response.json({
+      success: true,
+      conversations: data || [],
+      stats,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+        hasPreviousPage: page > 1,
+        hasNextPage: page < totalPages,
+        from: totalCount === 0 ? 0 : from + 1,
+        to: Math.min(to + 1, totalCount),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to load WhatsApp inbox data:", error);
 
     return Response.json(
-      { error: "Failed to load WhatsApp conversations." },
+      { success: false, error: "Failed to load WhatsApp inbox data." },
       { status: 500 }
     );
   }
-
-  return Response.json({
-    success: true,
-    conversations: data || [],
-  });
 }
 
 export async function PATCH(req: Request) {
@@ -296,7 +440,7 @@ export async function PATCH(req: Request) {
 
   if (!conversationId) {
     return Response.json(
-      { error: "conversationId is required." },
+      { success: false, error: "conversationId is required." },
       { status: 400 }
     );
   }
@@ -304,7 +448,10 @@ export async function PATCH(req: Request) {
   const updatePayload = getActionUpdate(action);
 
   if (!updatePayload) {
-    return Response.json({ error: "Invalid action." }, { status: 400 });
+    return Response.json(
+      { success: false, error: "Invalid action." },
+      { status: 400 }
+    );
   }
 
   const { data: updatedConversation, error: updateError } = await supabaseAdmin
@@ -318,7 +465,7 @@ export async function PATCH(req: Request) {
     console.error("Failed to update WhatsApp conversation:", updateError);
 
     return Response.json(
-      { error: "Failed to update WhatsApp conversation." },
+      { success: false, error: "Failed to update WhatsApp conversation." },
       { status: 500 }
     );
   }
