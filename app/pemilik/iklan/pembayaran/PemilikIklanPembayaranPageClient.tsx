@@ -22,11 +22,19 @@ type GatewayType = "stripe" | "xendit" | "hitpay";
 type ExistingProperty = {
   id: string;
   title: string | null;
+  description: string | null;
   listing_type: string | null;
+  property_type: string | null;
   province: string | null;
   city: string | null;
   kode: string | null;
   plan_id: string | null;
+  status?: string | null;
+  verification_status?: string | null;
+  verified_ok?: boolean | null;
+  is_paused?: boolean | null;
+  listing_expires_at?: string | null;
+  featured_expires_at?: string | null;
   property_images: { id: string }[] | null;
 };
 
@@ -271,10 +279,16 @@ export default function PemilikIklanPembayaranPageClient() {
 
   const needsExistingProperty = isRenew || isAddon;
 
+  // Important:
+  // For new owner listings, the verification page now creates a hidden
+  // pending_payment property before Stripe. If user returns from Stripe,
+  // draft state can be empty, so this payment page must reload by URL kode.
+  const shouldLoadPropertyByKode = !isEducation && Boolean(kode);
+
   const { draft, setDraft } = usePemilikDraftListing();
 
   const [selectedGateway, setSelectedGateway] =
-    useState<GatewayType>("stripe");
+    useState<GatewayType>("hitpay");
   const [submitting, setSubmitting] = useState(false);
 
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -282,8 +296,9 @@ export default function PemilikIklanPembayaranPageClient() {
 
   const [existingProperty, setExistingProperty] =
     useState<ExistingProperty | null>(null);
-  const [loadingExistingProperty, setLoadingExistingProperty] =
-    useState(needsExistingProperty);
+  const [loadingExistingProperty, setLoadingExistingProperty] = useState(
+    shouldLoadPropertyByKode
+  );
   const [existingPropertyError, setExistingPropertyError] = useState("");
 
   const planFromUrlRaw = String(searchParams.get("plan") || "").toLowerCase();
@@ -471,7 +486,7 @@ export default function PemilikIklanPembayaranPageClient() {
     let ignore = false;
 
     async function loadExistingProperty() {
-      if (!needsExistingProperty) {
+      if (!shouldLoadPropertyByKode) {
         setLoadingExistingProperty(false);
         setExistingProperty(null);
         setExistingPropertyError("");
@@ -503,25 +518,41 @@ export default function PemilikIklanPembayaranPageClient() {
         .select(`
           id,
           title,
+          description,
           listing_type,
+          property_type,
           province,
           city,
           kode,
           plan_id,
+          status,
+          verification_status,
+          verified_ok,
+          is_paused,
+          listing_expires_at,
+          featured_expires_at,
           property_images (
             id
           )
         `)
         .eq("user_id", userId)
         .eq("kode", kode)
-        .single();
+        .maybeSingle();
 
       if (ignore) return;
 
       if (error || !data) {
         setExistingProperty(null);
         setLoadingExistingProperty(false);
-        setExistingPropertyError(error?.message || ui.listingTargetNotFound);
+
+        // For renew/add-on, the target property must exist.
+        // For new-listing, draft may still exist, so keep page usable if draft has data.
+        if (needsExistingProperty) {
+          setExistingPropertyError(error?.message || ui.listingTargetNotFound);
+        } else {
+          setExistingPropertyError("");
+        }
+
         return;
       }
 
@@ -535,6 +566,7 @@ export default function PemilikIklanPembayaranPageClient() {
       ignore = true;
     };
   }, [
+    shouldLoadPropertyByKode,
     needsExistingProperty,
     kode,
     authLoading,
@@ -632,38 +664,57 @@ export default function PemilikIklanPembayaranPageClient() {
     [localizedProduct, currentLang]
   );
 
+  const hasDraftListingData = useMemo(() => {
+    if (isEducation) return false;
+
+    return Boolean(
+      String(draft?.listingType || "").trim() ||
+        String(draft?.province || "").trim() ||
+        String(draft?.city || "").trim() ||
+        String(draft?.title || "").trim() ||
+        String(draft?.description || "").trim() ||
+        (Array.isArray(draft?.photos) && draft.photos.length > 0)
+    );
+  }, [
+    isEducation,
+    draft?.listingType,
+    draft?.province,
+    draft?.city,
+    draft?.title,
+    draft?.description,
+    draft?.photos,
+  ]);
+
   const fotoCount = useMemo(() => {
     if (isEducation) return 0;
 
-    if (needsExistingProperty) {
-      return existingProperty?.property_images?.length ?? 0;
+    const imgs = draft?.photos;
+
+    if (Array.isArray(imgs) && imgs.length > 0) {
+      return imgs.length;
     }
 
-    const imgs = draft?.photos;
-    return Array.isArray(imgs) ? imgs.length : 0;
-  }, [isEducation, draft?.photos, needsExistingProperty, existingProperty]);
+    return existingProperty?.property_images?.length ?? 0;
+  }, [isEducation, draft?.photos, existingProperty?.property_images]);
 
   const listingTypeLabel = useMemo(() => {
     if (isEducation) return "-";
 
-    if (needsExistingProperty) {
-      const lt = String(existingProperty?.listing_type || "").toLowerCase();
-      if (lt === "dijual") return ui.soldType;
-      if (lt === "disewa") return ui.rentType;
-      if (lt === "lelang") return ui.auctionType;
-      return "-";
-    }
+    const rawListingType =
+      String(draft?.listingType || "").trim() ||
+      String(existingProperty?.listing_type || "").trim();
 
-    const lt = String(draft?.listingType || "").toLowerCase();
+    const lt = rawListingType.toLowerCase();
+
     if (lt === "dijual") return ui.soldType;
     if (lt === "disewa") return ui.rentType;
     if (lt === "lelang") return ui.auctionType;
-    return "-";
+
+    return rawListingType || "-";
   }, [
     isEducation,
     draft?.listingType,
-    needsExistingProperty,
-    existingProperty,
+    existingProperty?.listing_type,
     ui.soldType,
     ui.rentType,
     ui.auctionType,
@@ -672,38 +723,35 @@ export default function PemilikIklanPembayaranPageClient() {
   const lokasiLabel = useMemo(() => {
     if (isEducation) return "-";
 
-    if (needsExistingProperty) {
-      const prov = String(existingProperty?.province || "").trim();
-      const city = String(existingProperty?.city || "").trim();
-      if (!prov && !city) return "-";
-      if (prov && city) return `${prov} • ${city}`;
-      return prov || city;
-    }
+    const prov =
+      String(draft?.province || "").trim() ||
+      String(existingProperty?.province || "").trim();
 
-    const prov = String(draft?.province || "").trim();
-    const city = String(draft?.city || "").trim();
+    const city =
+      String(draft?.city || "").trim() ||
+      String(existingProperty?.city || "").trim();
+
     if (!prov && !city) return "-";
     if (prov && city) return `${prov} • ${city}`;
+
     return prov || city;
   }, [
     isEducation,
     draft?.province,
     draft?.city,
-    needsExistingProperty,
-    existingProperty,
+    existingProperty?.province,
+    existingProperty?.city,
   ]);
 
   const judulLabel = useMemo(() => {
     if (isEducation) return "-";
 
-    if (needsExistingProperty) {
-      const t = String(existingProperty?.title || "").trim();
-      return t || "-";
-    }
+    const title =
+      String(draft?.title || "").trim() ||
+      String(existingProperty?.title || "").trim();
 
-    const t = String(draft?.title || "").trim();
-    return t || "-";
-  }, [isEducation, draft?.title, needsExistingProperty, existingProperty]);
+    return title || "-";
+  }, [isEducation, draft?.title, existingProperty?.title]);
 
   const isReadyToPay = useMemo(() => {
     if (!selectedProduct) return false;
@@ -716,25 +764,42 @@ export default function PemilikIklanPembayaranPageClient() {
       return Boolean(existingProperty?.id) && !loadingExistingProperty;
     }
 
-    const ltOk = String(draft?.listingType || "").trim().length > 0;
-    const provOk = String(draft?.province || "").trim().length > 0;
-    const titleOk = String(draft?.title || "").trim().length > 0;
-    const descOk = String(draft?.description || "").trim().length > 0;
-    const photosOk = fotoCount >= 3;
-    const verifiedOk = true;
+    const ltOk =
+      String(draft?.listingType || "").trim().length > 0 ||
+      String(existingProperty?.listing_type || "").trim().length > 0;
 
-    return ltOk && provOk && titleOk && descOk && photosOk && verifiedOk;
+    const provOk =
+      String(draft?.province || "").trim().length > 0 ||
+      String(existingProperty?.province || "").trim().length > 0 ||
+      String(existingProperty?.city || "").trim().length > 0;
+
+    const titleOk =
+      String(draft?.title || "").trim().length > 0 ||
+      String(existingProperty?.title || "").trim().length > 0;
+
+    const descOk =
+      String(draft?.description || "").trim().length > 0 ||
+      String(existingProperty?.description || "").trim().length > 0;
+
+    const photosOk = fotoCount >= 3;
+
+    return ltOk && provOk && titleOk && descOk && photosOk;
   }, [
     selectedProduct,
     isEducation,
+    needsExistingProperty,
+    existingProperty?.id,
+    existingProperty?.listing_type,
+    existingProperty?.province,
+    existingProperty?.city,
+    existingProperty?.title,
+    existingProperty?.description,
+    loadingExistingProperty,
     draft?.listingType,
     draft?.province,
     draft?.title,
     draft?.description,
     fotoCount,
-    needsExistingProperty,
-    existingProperty?.id,
-    loadingExistingProperty,
   ]);
 
   const total = selectedProduct?.priceIdr ?? 0;
@@ -832,16 +897,18 @@ export default function PemilikIklanPembayaranPageClient() {
           existingPropertyId:
             isEducation ? null : existingProperty?.id || null,
           existingPropertyCode:
-            isEducation ? null : existingProperty?.kode || null,
+            isEducation ? null : existingProperty?.kode || finalKode || null,
           existingPropertyTitle:
-            isEducation ? null : existingProperty?.title || null,
+            isEducation
+              ? null
+              : existingProperty?.title || draft?.title || null,
           listingType: isEducation
             ? null
-            : needsExistingProperty
-              ? String(existingProperty?.listing_type || "") || null
-              : String(draft?.listingType || "") || null,
+            : String(
+                draft?.listingType || existingProperty?.listing_type || ""
+              ) || null,
           draftSnapshot:
-            needsExistingProperty || isEducation
+            needsExistingProperty || isEducation || !hasDraftListingData
               ? null
               : buildDraftSnapshot(draft),
           productDurationDays: selectedProduct?.durationDays ?? null,
@@ -902,6 +969,12 @@ export default function PemilikIklanPembayaranPageClient() {
       setSubmitting(false);
     }
   }
+
+  const showCannotPayYet =
+    !isReadyToPay &&
+    !isEducation &&
+    !needsExistingProperty &&
+    !loadingExistingProperty;
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -1004,7 +1077,7 @@ export default function PemilikIklanPembayaranPageClient() {
                   </div>
                 )}
 
-                {loadingExistingProperty && needsExistingProperty && (
+                {loadingExistingProperty && shouldLoadPropertyByKode && (
                   <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                     <div className="text-sm text-gray-600">
                       {ui.loadingListing}
@@ -1023,7 +1096,7 @@ export default function PemilikIklanPembayaranPageClient() {
                   </div>
                 )}
 
-                {!isReadyToPay && !needsExistingProperty && (
+                {showCannotPayYet && (
                   <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:mt-5">
                     <div className="text-sm font-semibold sm:text-base">
                       {ui.cannotPayYet}
@@ -1145,27 +1218,39 @@ export default function PemilikIklanPembayaranPageClient() {
             </button>
 
             <button
-              onClick={() => setSelectedGateway("hitpay")}
-              type="button"
-              className={[
-                "mt-3 w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                selectedGateway === "hitpay"
-                  ? "border-[#1C1C1E] bg-black text-white"
-                  : "border-gray-200 bg-white text-[#1C1C1E] hover:border-gray-400",
-              ].join(" ")}
-            >
-              <div className="font-semibold">{ui.qrisTitle}</div>
-              <div
-                className={[
-                  "mt-1 text-xs leading-5",
-                  selectedGateway === "hitpay"
-                    ? "text-white/80"
-                    : "text-gray-500",
-                ].join(" ")}
-              >
-                {ui.qrisSubtitle}
-              </div>
-            </button>
+  onClick={() => setSelectedGateway("hitpay")}
+  type="button"
+  className={[
+    "mt-3 w-full rounded-2xl border px-4 py-4 text-left text-sm transition shadow-sm",
+    selectedGateway === "hitpay"
+      ? "border-amber-500 bg-gradient-to-br from-amber-300 via-yellow-200 to-amber-100 text-[#1C1C1E] shadow-[0_14px_30px_rgba(245,158,11,0.24)]"
+      : "border-amber-300 bg-gradient-to-br from-amber-50 via-yellow-50 to-white text-[#1C1C1E] hover:border-amber-500 hover:shadow-[0_12px_26px_rgba(245,158,11,0.18)]",
+  ].join(" ")}
+>
+  <div className="flex items-center justify-between gap-3">
+    <div className="font-semibold">{ui.qrisTitle}</div>
+
+    <span
+      className={[
+        "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em]",
+        selectedGateway === "hitpay"
+          ? "bg-white/80 text-amber-800"
+          : "bg-amber-100 text-amber-800",
+      ].join(" ")}
+    >
+      Recommended
+    </span>
+  </div>
+
+  <div
+    className={[
+      "mt-2 text-xs leading-5",
+      selectedGateway === "hitpay" ? "text-[#3F2A00]" : "text-amber-900/80",
+    ].join(" ")}
+  >
+    {ui.qrisSubtitle}
+  </div>
+</button>
 
             {localizedFeatures.length ? (
               <div className="mt-4 rounded-2xl border border-gray-200 p-4">

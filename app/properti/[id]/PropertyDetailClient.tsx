@@ -164,6 +164,7 @@ type PropertyItem = {
   featured?: boolean;
   spotlight?: boolean;
   verifiedListing: boolean;
+  pendingVerification: boolean;
   ownerApproved: boolean;
   agentVerified: boolean;
   postedByType: "owner" | "agent" | "developer";
@@ -1038,6 +1039,14 @@ const [loading, setLoading] = useState(!initialProperty);
 
       const isVerified =
         row.verification_status === "verified" || Boolean(row.verified_ok);
+        const isPendingVerification =
+  !isVerified &&
+  (
+    row.verification_status === "pending_verification" ||
+    row.verification_status === "pending_approval" ||
+    row.status === "pending" ||
+    row.status === "pending_approval"
+  );
 
       const bedroomsValue = toNumberOrNull(row.bedrooms ?? row.bed);
       const bathroomsValue = toNumberOrNull(
@@ -1131,8 +1140,9 @@ const [loading, setLoading] = useState(!initialProperty);
         spotlight,
 
         verifiedListing: isVerified,
-        ownerApproved: postedByType === "owner" && isVerified,
-        agentVerified: postedByType === "agent" && isVerified,
+pendingVerification: isPendingVerification,
+ownerApproved: postedByType === "owner" && isVerified,
+agentVerified: postedByType === "agent" && isVerified,
 
         postedByType,
         receiverId: row.contact_user_id || row.user_id || "",
@@ -2649,11 +2659,16 @@ const reportUserHref = `/report/user?reported_user_id=${encodeURIComponent(
                 </span>
               )}
 
-              {property.verifiedListing && (
-                <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-                  Verified Listing
-                </span>
-              )}
+              {property.verifiedListing ? (
+  <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+    {lang === "id" ? "Listing Terverifikasi" : "Verified Listing"}
+  </span>
+) : property.pendingVerification ? (
+  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 sm:text-xs">
+    <Clock className="h-3.5 w-3.5" />
+    {lang === "id" ? "Menunggu Verifikasi" : "Pending Verification"}
+  </span>
+) : null}
             </div>
 
             <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:text-2xl">

@@ -190,14 +190,42 @@ export default function PemilikIklanVerifikasiPageClient() {
       const today = new Date().toISOString().slice(0, 10);
       const finalKode = buildListingCode(draft?.kode);
 
-      const { data: existingProperty } = await supabase
+      const { data: existingProperty, error: existingError } = await supabase
         .from("properties")
-        .select("id, kode")
+        .select(
+          "id, kode, status, verification_status, verified_ok, is_paused, listing_expires_at, featured_expires_at"
+        )
         .eq("user_id", user.id)
         .eq("kode", finalKode)
         .maybeSingle();
 
+      if (existingError) {
+        throw existingError;
+      }
+
       if (existingProperty?.id) {
+        const alreadyHasPaidExpiry =
+          Boolean(existingProperty.listing_expires_at) ||
+          Boolean(existingProperty.featured_expires_at);
+
+        if (!alreadyHasPaidExpiry) {
+          const { error: lockExistingError } = await supabase
+            .from("properties")
+            .update({
+              status: "pending_payment",
+              verification_status: "pending_payment",
+              verified_ok: false,
+              is_paused: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingProperty.id)
+            .eq("user_id", user.id);
+
+          if (lockExistingError) {
+            throw lockExistingError;
+          }
+        }
+
         setDraft((prev) => ({
           ...(prev || {}),
           kode: existingProperty.kode || finalKode,
@@ -231,7 +259,7 @@ export default function PemilikIklanVerifikasiPageClient() {
 
         market_type: cleanText(draft?.marketType),
 
-        status: "active",
+        status: "pending_payment",
 
         country: "Indonesia",
         province: cleanText(draft?.province),
@@ -288,10 +316,11 @@ export default function PemilikIklanVerifikasiPageClient() {
         ownership_pdf_name: cleanText(verification.ownershipPdfName),
         authorization_pdf_name: cleanText(verification.authorizationPdfName),
 
-        verification_status: "approved",
+        verification_status: "pending_payment",
         verification_data: verification,
 
-        verified_ok: true,
+        verified_ok: false,
+        is_paused: true,
 
         listing_expires_at: null,
         featured_expires_at: null,

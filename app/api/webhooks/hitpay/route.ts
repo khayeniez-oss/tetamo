@@ -809,8 +809,8 @@ function buildOwnerPropertyPayloadFromDraft(
     description: nullableText(draft?.description) ?? "",
     description_id: nullableText(draft?.description_id),
 
-    status: "pending",
-    verification_status: verification.status ?? "pending_verification",
+    status: "active",
+verification_status: "pending_verification",
 
     country: "Indonesia",
     province: nullableText(draft?.province),
@@ -877,7 +877,8 @@ function buildOwnerPropertyPayloadFromDraft(
     authorization_pdf_name: verification.authorizationPdfName ?? null,
     verification_data: verification,
 
-    verified_ok: true,
+    verified_ok: false,
+is_paused: false,
 
     listing_expires_at: listingExpiresAt,
     featured_expires_at: featuredExpiresAt,
@@ -915,16 +916,18 @@ async function activateNewListing(
     );
 
     const baseUpdate: Record<string, unknown> = {
-      status: "pending",
-      verification_status: "pending_verification",
-      posted_date: new Date().toISOString().slice(0, 10),
-      listing_expires_at: extendExpiryIso(
-        existing.listing_expires_at,
-        listingDurationDays
-      ),
-      updated_at: new Date().toISOString(),
-      plan_id: getString(metadata, "selectedPlan") || payment.product_id || null,
-    };
+  status: "active",
+  verification_status: "pending_verification",
+  verified_ok: false,
+  is_paused: false,
+  posted_date: new Date().toISOString().slice(0, 10),
+  listing_expires_at: extendExpiryIso(
+    existing.listing_expires_at,
+    listingDurationDays
+  ),
+  updated_at: new Date().toISOString(),
+  plan_id: getString(metadata, "selectedPlan") || payment.product_id || null,
+};
 
     if (featuredDurationDays > 0) {
       baseUpdate.featured_expires_at = extendExpiryIso(
