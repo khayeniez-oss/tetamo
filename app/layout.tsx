@@ -29,6 +29,9 @@ export const metadata: Metadata = {
     description: "Browse properties for sale and rent in Indonesia with Tetamo.",
     url: `${siteUrl}/`,
   },
+  other: {
+    "facebook-domain-verification": "286u4enphco0icv5hwrhe82eow8h3c",
+  },
 };
 
 export default function RootLayout({
