@@ -37,6 +37,11 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "Tetamo",
       type: "website",
     },
+    verification: {
+      other: {
+        "facebook-domain-verification": "286u4enpbco0icw5hwrhe82eow8h3c",
+      },
+    },
   };
 }
 
