@@ -64,11 +64,17 @@ function cleanEnv(value?: string | null) {
   return String(value || "").trim();
 }
 
+function getGraphVersion() {
+  return cleanEnv(process.env.META_GRAPH_VERSION) || "v25.0";
+}
+
 function getVerifyTokens() {
   return [
     process.env.META_WEBHOOK_VERIFY_TOKEN,
     process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
     process.env.META_VERIFY_TOKEN,
+    process.env.META_WHATSAPP_VERIFY_TOKEN,
+    process.env.TETAMO_WHATSAPP_VERIFY_TOKEN,
   ]
     .map((value) => cleanEnv(value))
     .filter(Boolean);
@@ -84,6 +90,65 @@ function getPhoneNumberId(fallback?: string | null) {
     cleanEnv(process.env.META_WHATSAPP_PHONE_NUMBER_ID) ||
     cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
   );
+}
+
+/**
+ * IMPORTANT SAFETY GUARD
+ *
+ * Tetamo must not reply to Kolkap's WhatsApp number.
+ *
+ * This function decides which Meta phone_number_id Tetamo is allowed to process.
+ *
+ * If Tetamo Vercel has no allowed phone number ID configured, Tetamo will ignore
+ * all inbound WhatsApp webhook messages.
+ *
+ * Recommended Tetamo Vercel env:
+ *
+ * If Tetamo WhatsApp should be disabled:
+ * - Leave these blank / do not set:
+ *   TETAMO_ALLOWED_WHATSAPP_PHONE_NUMBER_IDS
+ *   META_WHATSAPP_PHONE_NUMBER_ID
+ *   WHATSAPP_PHONE_NUMBER_ID
+ *
+ * If Tetamo has its own WhatsApp number:
+ * - Add only Tetamo's real phone_number_id here:
+ *   TETAMO_ALLOWED_WHATSAPP_PHONE_NUMBER_IDS=1234567890
+ *
+ * Never put Kolkap's Australian number phone_number_id here.
+ */
+function getAllowedBusinessPhoneNumberIds() {
+  const rawValues = [
+    process.env.TETAMO_ALLOWED_WHATSAPP_PHONE_NUMBER_IDS,
+    process.env.META_WHATSAPP_PHONE_NUMBER_ID,
+    process.env.WHATSAPP_PHONE_NUMBER_ID,
+  ];
+
+  return Array.from(
+    new Set(
+      rawValues
+        .join(",")
+        .split(/[,\s]+/)
+        .map((value) => cleanEnv(value))
+        .filter(Boolean)
+    )
+  );
+}
+
+function isAllowedBusinessPhoneNumberId(phoneNumberId?: string | null) {
+  const cleanPhoneNumberId = cleanEnv(phoneNumberId);
+  const allowedIds = getAllowedBusinessPhoneNumberIds();
+
+  if (!cleanPhoneNumberId) return false;
+
+  /**
+   * Fail closed:
+   * If Tetamo has no allowed phone number ID configured, do not process any
+   * WhatsApp inbound webhook. This prevents Tetamo from accidentally replying
+   * to Kolkap if Meta routes the webhook incorrectly.
+   */
+  if (allowedIds.length === 0) return false;
+
+  return allowedIds.includes(cleanPhoneNumberId);
 }
 
 function getWindowExpiry() {
@@ -466,7 +531,7 @@ async function sendMetaWhatsappText(params: {
   }
 
   const response = await fetch(
-    `https://graph.facebook.com/v25.0/${params.phoneNumberId}/messages`,
+    `https://graph.facebook.com/${getGraphVersion()}/${params.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
@@ -760,14 +825,33 @@ export async function POST(request: Request) {
 
     const webhookMessages = extractWebhookMessages(payload);
 
+    let processedCount = 0;
+    let ignoredCount = 0;
+
     for (const item of webhookMessages) {
+      const incomingPhoneNumberId = cleanEnv(item.phoneNumberId);
+
+      if (!isAllowedBusinessPhoneNumberId(incomingPhoneNumberId)) {
+        ignoredCount += 1;
+
+        console.log("Tetamo ignored WhatsApp webhook for non-allowed phone number.", {
+          incomingPhoneNumberId: incomingPhoneNumberId || "missing",
+          allowedPhoneNumberIdCount: getAllowedBusinessPhoneNumberIds().length,
+        });
+
+        continue;
+      }
+
       const customerPhone = normalizePhone(item.message.from || "");
       const textBody = String(item.message.text?.body || "").trim();
-      const phoneNumberId = getPhoneNumberId(item.phoneNumberId);
+      const phoneNumberId = getPhoneNumberId(incomingPhoneNumberId);
       const isTextMessage = item.message.type === "text" && Boolean(textBody);
       const referral = item.message.referral || null;
 
-      if (!customerPhone) continue;
+      if (!customerPhone) {
+        ignoredCount += 1;
+        continue;
+      }
 
       const messageText = isTextMessage
         ? textBody
@@ -780,7 +864,10 @@ export async function POST(request: Request) {
         referral,
       });
 
-      if (!conversation?.id) continue;
+      if (!conversation?.id) {
+        ignoredCount += 1;
+        continue;
+      }
 
       await saveInboundMessage({
         conversationId: conversation.id,
@@ -795,6 +882,7 @@ export async function POST(request: Request) {
       });
 
       if (conversation.handover_to_admin || conversation.ai_enabled === false) {
+        processedCount += 1;
         continue;
       }
 
@@ -817,9 +905,15 @@ export async function POST(request: Request) {
         metaSendId: sendResult.id,
         metaSendError: sendResult.success ? null : sendResult.error,
       });
+
+      processedCount += 1;
     }
 
-    return Response.json({ success: true });
+    return Response.json({
+      success: true,
+      processedCount,
+      ignoredCount,
+    });
   } catch (error) {
     console.error("Meta WhatsApp webhook error:", error);
     return Response.json({ success: true, error_logged: true });
