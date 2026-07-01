@@ -800,8 +800,11 @@ Is this property still available?`;
       }
 
       const leadPayload = {
-        property_id: property.id,
-        sender_user_id: user.id,
+  property_id: property.id,
+  property_code: property.kode ?? null,
+  property_title: propertyTitle,
+
+  sender_user_id: user.id,
         sender_name:
           senderProfile?.full_name ||
           (typeof user.user_metadata?.full_name === "string"
