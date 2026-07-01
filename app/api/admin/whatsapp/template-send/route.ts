@@ -29,8 +29,11 @@ type CampaignConfig = {
   twilio_from?: string | null;
   template_name?: string | null;
   template_language?: string | null;
-  template_category?: string | null;
+  category?: string | null;
 };
+
+const TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID =
+  "HXc2fc95a69e87cf12e851d63e1e550228";
 
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
@@ -233,6 +236,13 @@ function getTwilioContentSidForTemplate(templateName: string) {
     return cleanEnv(process.env.TWILIO_AGENT_INVITE_CONTENT_SID);
   }
 
+  if (cleanTemplateName === "tetamo_inquiry_listing_follow_up") {
+    return (
+      cleanEnv(process.env.TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID) ||
+      TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID
+    );
+  }
+
   return "";
 }
 
@@ -241,7 +251,8 @@ function getSendSource(sendType: string, sendProvider: SendProvider) {
     sendProvider === "twilio_whatsapp" ? "twilio_template" : "meta_template";
 
   if (sendType === "followup_3_day") return `${providerPrefix}_followup_3_day`;
-  if (sendType === "followup_14_day") return `${providerPrefix}_followup_14_day`;
+  if (sendType === "followup_14_day")
+    return `${providerPrefix}_followup_14_day`;
   if (sendType === "manual_template") return `admin_${providerPrefix}`;
 
   return `${providerPrefix}_business_initiated`;
@@ -287,7 +298,7 @@ async function getCampaignConfig(
   const { data, error } = await supabaseAdmin
     .from("whatsapp_template_campaigns")
     .select(
-      "id, send_provider, twilio_content_sid, twilio_from, template_name, template_language, template_category"
+      "id, send_provider, twilio_content_sid, twilio_from, template_name, template_language, category"
     )
     .eq("id", campaignId)
     .maybeSingle();
@@ -870,7 +881,7 @@ export async function POST(req: Request) {
     const templateCategory = cleanEnv(
       body?.templateCategory ||
         body?.template_category ||
-        campaignConfig?.template_category ||
+        campaignConfig?.category ||
         "marketing"
     );
 
@@ -958,7 +969,7 @@ export async function POST(req: Request) {
         return Response.json(
           {
             error:
-              "Missing Twilio ContentSid. Check TWILIO_AGENT_INVITE_CONTENT_SID or campaign twilio_content_sid.",
+              "Missing Twilio ContentSid. Check TWILIO_AGENT_INVITE_CONTENT_SID, TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID, or campaign twilio_content_sid.",
           },
           { status: 500 }
         );
@@ -1211,9 +1222,9 @@ export async function POST(req: Request) {
       twilioContentSid:
         sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
       twilioStatus:
-  sendProvider === "twilio_whatsapp" && "status" in sendResult
-    ? sendResult.status
-    : null,
+        sendProvider === "twilio_whatsapp" && "status" in sendResult
+          ? sendResult.status
+          : null,
     });
   } catch (error) {
     console.error("WhatsApp template send API error:", error);

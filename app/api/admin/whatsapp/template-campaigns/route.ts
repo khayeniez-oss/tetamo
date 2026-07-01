@@ -30,6 +30,9 @@ type ImportedRecipient = {
 type SendProvider = "meta_cloud_api" | "twilio_whatsapp";
 type RecipientTargetStatus = "pending" | "failed";
 
+const TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID =
+  "HXc2fc95a69e87cf12e851d63e1e550228";
+
 function cleanText(value?: unknown) {
   return String(value || "").trim();
 }
@@ -196,6 +199,13 @@ function getTwilioContentSidForTemplate(templateName: string) {
 
   if (cleanTemplateName === "tetamo_agent_invite_id_01") {
     return cleanEnv(process.env.TWILIO_AGENT_INVITE_CONTENT_SID);
+  }
+
+  if (cleanTemplateName === "tetamo_inquiry_listing_follow_up") {
+    return (
+      cleanEnv(process.env.TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID) ||
+      TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID
+    );
   }
 
   return "";
@@ -666,7 +676,8 @@ export async function POST(req: Request) {
       return Response.json(
         {
           success: false,
-          error: "Twilio ContentSid is required for Twilio WhatsApp campaigns.",
+          error:
+            "Twilio ContentSid is required for Twilio WhatsApp campaigns.",
         },
         { status: 400 }
       );
@@ -912,7 +923,9 @@ export async function PATCH(req: Request) {
     }
 
     const isPendingSend =
-      action === "send_next_batch" || action === "start" || action === "continue_pending";
+      action === "send_next_batch" ||
+      action === "start" ||
+      action === "continue_pending";
 
     const isRetryFailed = action === "retry_failed";
 
@@ -1019,8 +1032,8 @@ export async function PATCH(req: Request) {
       const finalStatus = sendResult.skipped
         ? "skipped"
         : sendResult.ok
-        ? "sent"
-        : "failed";
+          ? "sent"
+          : "failed";
 
       results.push({
         recipientId: recipient.id,
