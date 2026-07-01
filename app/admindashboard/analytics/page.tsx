@@ -28,6 +28,7 @@ declare global {
 }
 
 type DateRangeOption = "today" | "7d" | "30d" | "all";
+type ActivityStatus = "live" | "recent" | "not_live";
 
 type AnalyticsEventRow = {
   id: string;
@@ -70,6 +71,11 @@ type LocationStat = {
   views: number;
   clicks: number;
   leads: number;
+  liveVisitors: number;
+  recentVisitors: number;
+  notLiveVisitors: number;
+  lastSeenAt: string | null;
+  status: ActivityStatus;
   lat: number | null;
   lng: number | null;
 };
@@ -85,9 +91,6 @@ type ListingInsight = {
   whatsappClicks: number;
   scheduleClicks: number;
   leads: number;
-  topCountry: string;
-  topRegion: string;
-  topCity: string;
   topLocationText: string;
 };
 
@@ -110,6 +113,9 @@ type CampaignInsight = {
 
 const GOOGLE_MAPS_SCRIPT_ID = "tetamo-google-maps-script";
 
+const LIVE_VISITOR_WINDOW_MS = 5 * 60 * 1000;
+const RECENT_VISITOR_WINDOW_MS = 30 * 60 * 1000;
+
 const DATE_FILTERS: { value: DateRangeOption; label: string }[] = [
   { value: "today", label: "Today" },
   { value: "7d", label: "7 Days" },
@@ -117,7 +123,11 @@ const DATE_FILTERS: { value: DateRangeOption; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-const VIEW_EVENTS = new Set(["property_card_view", "property_detail_view"]);
+const VIEW_EVENTS = new Set([
+  "page_view",
+  "property_card_view",
+  "property_detail_view",
+]);
 
 const CLICK_EVENTS = new Set([
   "property_view_detail_click",
@@ -143,12 +153,12 @@ const LOCATION_FALLBACKS: Record<string, { lat: number; lng: number }> = {
   "east jakarta": { lat: -6.225, lng: 106.9004 },
   "jakarta timur": { lat: -6.225, lng: 106.9004 },
   bali: { lat: -8.3405, lng: 115.092 },
+  badung: { lat: -8.5819, lng: 115.1771 },
   canggu: { lat: -8.65, lng: 115.138 },
   seminyak: { lat: -8.6913, lng: 115.1682 },
   denpasar: { lat: -8.65, lng: 115.2167 },
   ubud: { lat: -8.5069, lng: 115.2625 },
   kuta: { lat: -8.7223, lng: 115.1763 },
-  badung: { lat: -8.5819, lng: 115.1771 },
   bandung: { lat: -6.9175, lng: 107.6191 },
   bogor: { lat: -6.595, lng: 106.8166 },
   surabaya: { lat: -7.2575, lng: 112.7521 },
@@ -262,6 +272,15 @@ function cleanNumber(value: any) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function escapeHtml(value: any) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function getCountryName(countryCode: string) {
   const code = cleanUpper(countryCode);
 
@@ -273,17 +292,6 @@ function getCountryName(countryCode: string) {
   } catch {
     return code;
   }
-}
-
-function getCountryFlag(countryCode?: string) {
-  const code = cleanUpper(countryCode);
-
-  if (!code || code.length !== 2) return "🌍";
-
-  return code
-    .split("")
-    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
-    .join("");
 }
 
 function getDateRangeStart(range: DateRangeOption) {
@@ -355,6 +363,18 @@ function getPath(event: AnalyticsEventRow) {
   );
 }
 
+function isViewEvent(eventName: string) {
+  return VIEW_EVENTS.has(eventName);
+}
+
+function isClickEvent(eventName: string) {
+  return CLICK_EVENTS.has(eventName);
+}
+
+function isLeadEvent(eventName: string) {
+  return LEAD_EVENTS.has(eventName);
+}
+
 function getTrafficSourceLabel(event: AnalyticsEventRow) {
   const metadata = event.metadata || {};
   const source = cleanText(metadata.utm_source || metadata.traffic_source);
@@ -378,20 +398,10 @@ function getDeviceLabel(event: AnalyticsEventRow) {
   return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "Unknown";
 }
 
-function isViewEvent(eventName: string) {
-  return VIEW_EVENTS.has(eventName);
-}
-
-function isClickEvent(eventName: string) {
-  return CLICK_EVENTS.has(eventName);
-}
-
-function isLeadEvent(eventName: string) {
-  return LEAD_EVENTS.has(eventName);
-}
-
 function eventLabel(eventName: string) {
   switch (eventName) {
+    case "page_view":
+      return "Page View";
     case "property_card_view":
       return "Property Card View";
     case "property_detail_view":
@@ -427,7 +437,9 @@ function formatDateTime(value: string) {
   }).format(d);
 }
 
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string | null) {
+  if (!value) return "-";
+
   const now = Date.now();
   const then = new Date(value).getTime();
 
@@ -446,7 +458,7 @@ function formatRelativeTime(value: string) {
   return `${diffDay}d ago`;
 }
 
-function shorten(value: string, length = 56) {
+function shorten(value: string, length = 48) {
   if (!value) return "-";
   if (value.length <= length) return value;
   return `${value.slice(0, length - 3)}...`;
@@ -457,17 +469,9 @@ function csvCell(value: any) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function escapeHtml(value: any) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
 function detectMetaPlatform(event: AnalyticsEventRow) {
   const metadata = event.metadata || {};
+
   const sourceCheck = cleanLower(
     `${metadata.utm_source} ${metadata.utm_medium} ${metadata.utm_platform} ${metadata.traffic_source} ${metadata.referrer_domain}`
   );
@@ -507,12 +511,15 @@ function getCampaignKey(event: AnalyticsEventRow) {
   const source = cleanText(
     metadata.utm_source || metadata.traffic_source || platform
   );
+
   const medium = cleanText(
     metadata.utm_medium || metadata.traffic_medium || "referral"
   );
+
   const campaign = cleanText(metadata.utm_campaign || "No campaign tag");
   const adSet = cleanText(metadata.utm_term || "No ad set tag");
   const adName = cleanText(metadata.utm_content || "No ad tag");
+
   const tagged = Boolean(
     metadata.utm_source ||
       metadata.utm_medium ||
@@ -565,6 +572,25 @@ function hasCoordinates(
     Number.isFinite(item.lng) &&
     !(item.lat === 0 && item.lng === 0)
   );
+}
+
+function getStatusLabel(status: ActivityStatus) {
+  if (status === "live") return "Live";
+  if (status === "recent") return "Recent";
+  return "Not Live";
+}
+
+function getStatusDot(status: ActivityStatus) {
+  if (status === "live") return "🟢";
+  if (status === "recent") return "🟡";
+  return "⚪";
+}
+
+function getStatusClass(status: ActivityStatus) {
+  if (status === "live") return "bg-green-50 text-green-700 ring-green-100";
+  if (status === "recent")
+    return "bg-yellow-50 text-yellow-700 ring-yellow-100";
+  return "bg-gray-100 text-gray-600 ring-gray-200";
 }
 
 function StatCard({
@@ -640,7 +666,7 @@ function EmptyState({
   Icon: ElementType;
 }) {
   return (
-    <div className="flex min-h-[180px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+    <div className="flex min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
       <Icon className="mb-3 h-8 w-8 text-gray-400" />
       <p className="text-sm font-semibold text-[#1C1C1E]">{title}</p>
       <p className="mt-1 max-w-lg text-xs leading-5 text-gray-500">
@@ -650,94 +676,37 @@ function EmptyState({
   );
 }
 
-function Pagination({
-  currentPage,
-  totalPages,
-  onPageChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-
-  const pages: number[] = [];
-  const start = Math.max(1, currentPage - 2);
-  const end = Math.min(totalPages, currentPage + 2);
-
-  for (let page = start; page <= end; page += 1) {
-    pages.push(page);
-  }
-
-  return (
-    <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-      <button
-        type="button"
-        disabled={currentPage <= 1}
-        onClick={() => onPageChange(currentPage - 1)}
-        className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Previous
-      </button>
-
-      {pages.map((page) => (
-        <button
-          key={page}
-          type="button"
-          onClick={() => onPageChange(page)}
-          className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-            page === currentPage
-              ? "bg-[#1C1C1E] text-white"
-              : "border border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
-        >
-          {page}
-        </button>
-      ))}
-
-      <button
-        type="button"
-        disabled={currentPage >= totalPages}
-        onClick={() => onPageChange(currentPage + 1)}
-        className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Next
-      </button>
-    </div>
-  );
-}
-
 function DeviceBreakdown({ devices }: { devices: StatItem[] }) {
   const total = devices.reduce((sum, item) => sum + item.value, 0);
 
+  if (devices.length === 0) {
+    return <p className="text-sm text-gray-500">No device data yet.</p>;
+  }
+
   return (
     <div className="space-y-3">
-      {devices.length > 0 ? (
-        devices.map((device) => {
-          const pct = total > 0 ? (device.value / total) * 100 : 0;
+      {devices.map((device) => {
+        const pct = total > 0 ? (device.value / total) * 100 : 0;
 
-          return (
-            <div key={device.label}>
-              <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-                <span className="font-medium text-[#1C1C1E]">
-                  {device.label}
-                </span>
-                <span className="text-gray-500">
-                  {numberFormat(device.value)} • {percentFormat(pct)}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full bg-[#1C1C1E]"
-                  style={{ width: `${Math.max(2, pct)}%` }}
-                />
-              </div>
+        return (
+          <div key={device.label}>
+            <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-[#1C1C1E]">
+                {device.label}
+              </span>
+              <span className="text-gray-500">
+                {numberFormat(device.value)} • {percentFormat(pct)}
+              </span>
             </div>
-          );
-        })
-      ) : (
-        <p className="text-sm text-gray-500">No device data yet.</p>
-      )}
+            <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full bg-[#1C1C1E]"
+                style={{ width: `${Math.max(2, pct)}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -851,29 +820,62 @@ function BlueBubbleHeatMap({
             map,
             center: position,
             radius: innerRadius,
-            strokeColor: "#1e40af",
-            strokeOpacity: 0.62 + intensity * 0.24,
-            strokeWeight: 3,
-            fillColor: "#1d4ed8",
-            fillOpacity: 0.2 + intensity * 0.28,
+            strokeColor:
+              point.status === "live"
+                ? "#16a34a"
+                : point.status === "recent"
+                ? "#ca8a04"
+                : "#1e40af",
+            strokeOpacity: 0.7,
+            strokeWeight: 4,
+            fillColor:
+              point.status === "live"
+                ? "#22c55e"
+                : point.status === "recent"
+                ? "#eab308"
+                : "#1d4ed8",
+            fillOpacity: 0.24 + intensity * 0.28,
             clickable: true,
           });
 
           innerCircle.addListener("click", () => {
             infoWindowRef.current.setContent(`
-              <div style="font-family: Arial, sans-serif; min-width: 240px;">
+              <div style="font-family: Arial, sans-serif; min-width: 260px;">
                 <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">
                   ${escapeHtml(point.label)}
                 </div>
                 <div style="font-size: 12px; color: #555;">
                   ${escapeHtml(point.sublabel || "No sub-location saved")}
                 </div>
+
+                <div style="margin-top: 10px; display: inline-block; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700; background: ${
+                  point.status === "live"
+                    ? "#dcfce7"
+                    : point.status === "recent"
+                    ? "#fef9c3"
+                    : "#f3f4f6"
+                }; color: ${
+              point.status === "live"
+                ? "#15803d"
+                : point.status === "recent"
+                ? "#a16207"
+                : "#4b5563"
+            };">
+                  ${getStatusDot(point.status)} ${getStatusLabel(point.status)}
+                </div>
+
                 <div style="font-size: 12px; margin-top: 10px; line-height: 1.8;">
-                  <strong>${numberFormat(point.visitors)}</strong> visitors<br/>
+                  <strong>${numberFormat(point.liveVisitors)}</strong> live visitors<br/>
+                  <strong>${numberFormat(point.recentVisitors)}</strong> recent visitors<br/>
+                  <strong>${numberFormat(point.notLiveVisitors)}</strong> not live visitors<br/>
+                  <strong>${numberFormat(point.visitors)}</strong> total visitors<br/>
                   <strong>${numberFormat(point.events)}</strong> events<br/>
                   <strong>${numberFormat(point.views)}</strong> views<br/>
                   <strong>${numberFormat(point.clicks)}</strong> clicks<br/>
-                  <strong>${numberFormat(point.leads)}</strong> leads
+                  <strong>${numberFormat(point.leads)}</strong> leads<br/>
+                  <strong>Last activity:</strong> ${escapeHtml(
+                    formatRelativeTime(point.lastSeenAt)
+                  )}
                 </div>
               </div>
             `);
@@ -910,6 +912,18 @@ function BlueBubbleHeatMap({
 
   const mappedEvents = points.reduce((sum, point) => sum + point.events, 0);
   const mappedVisitors = points.reduce((sum, point) => sum + point.visitors, 0);
+  const mappedLiveVisitors = points.reduce(
+    (sum, point) => sum + point.liveVisitors,
+    0
+  );
+  const mappedRecentVisitors = points.reduce(
+    (sum, point) => sum + point.recentVisitors,
+    0
+  );
+  const mappedNotLiveVisitors = points.reduce(
+    (sum, point) => sum + point.notLiveVisitors,
+    0
+  );
 
   return (
     <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
@@ -920,8 +934,8 @@ function BlueBubbleHeatMap({
               Visitor Heat Map
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
-              Blue circles only. Bigger and darker circles mean more visitors in
-              that location.
+              Blue circles show location intensity. Green means live now, yellow
+              means recently active, gray/blue means not live.
             </p>
           </div>
 
@@ -931,6 +945,15 @@ function BlueBubbleHeatMap({
             </span>
             <span className="rounded-full bg-gray-100 px-3 py-1">
               Location visitors: {numberFormat(mappedVisitors)}
+            </span>
+            <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">
+              Live: {numberFormat(mappedLiveVisitors)}
+            </span>
+            <span className="rounded-full bg-yellow-50 px-3 py-1 text-yellow-700">
+              Recent: {numberFormat(mappedRecentVisitors)}
+            </span>
+            <span className="rounded-full bg-gray-100 px-3 py-1">
+              Not live: {numberFormat(mappedNotLiveVisitors)}
             </span>
             <span className="rounded-full bg-gray-100 px-3 py-1">
               Total events: {numberFormat(totalEvents)}
@@ -975,16 +998,6 @@ export default function AdminAnalyticsPage() {
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [events, setEvents] = useState<AnalyticsEventRow[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [campaignPage, setCampaignPage] = useState(1);
-  const [listingPage, setListingPage] = useState(1);
-  const [locationListingPage, setLocationListingPage] = useState(1);
-  const [eventsPage, setEventsPage] = useState(1);
-
-  const campaignPageSize = 6;
-  const listingPageSize = 10;
-  const locationListingPageSize = 8;
-  const eventsPageSize = 12;
 
   async function loadAnalytics() {
     setLoading(true);
@@ -1085,13 +1098,6 @@ export default function AdminAnalyticsPage() {
       supabase.removeChannel(channel);
     };
   }, []);
-
-  useEffect(() => {
-    setCampaignPage(1);
-    setListingPage(1);
-    setLocationListingPage(1);
-    setEventsPage(1);
-  }, [searchQuery, dateRange, selectedPropertyId]);
 
   const propertyMap = useMemo(() => {
     const map = new Map<string, PropertyRow>();
@@ -1196,17 +1202,8 @@ export default function AdminAnalyticsPage() {
     return set.size;
   }, [searchedEvents]);
 
-  const last30Events = useMemo(() => {
-    const start = Date.now() - 30 * 60 * 1000;
-
-    return scopedEvents.filter((event) => {
-      const time = new Date(event.created_at).getTime();
-      return !Number.isNaN(time) && time >= start;
-    });
-  }, [scopedEvents]);
-
   const liveEvents = useMemo(() => {
-    const start = Date.now() - 5 * 60 * 1000;
+    const start = Date.now() - LIVE_VISITOR_WINDOW_MS;
 
     return scopedEvents.filter((event) => {
       const time = new Date(event.created_at).getTime();
@@ -1214,15 +1211,14 @@ export default function AdminAnalyticsPage() {
     });
   }, [scopedEvents]);
 
-  const last30Visitors = useMemo(() => {
-    const set = new Set<string>();
+  const recentEvents = useMemo(() => {
+    const start = Date.now() - RECENT_VISITOR_WINDOW_MS;
 
-    for (const event of last30Events) {
-      set.add(getSessionKey(event));
-    }
-
-    return set.size;
-  }, [last30Events]);
+    return scopedEvents.filter((event) => {
+      const time = new Date(event.created_at).getTime();
+      return !Number.isNaN(time) && time >= start;
+    });
+  }, [scopedEvents]);
 
   const liveVisitors = useMemo(() => {
     const set = new Set<string>();
@@ -1234,9 +1230,37 @@ export default function AdminAnalyticsPage() {
     return set.size;
   }, [liveEvents]);
 
+  const recentVisitors = useMemo(() => {
+    const set = new Set<string>();
+
+    for (const event of recentEvents) {
+      set.add(getSessionKey(event));
+    }
+
+    return set.size;
+  }, [recentEvents]);
+
+  const lastActivityAt = useMemo(() => {
+    if (searchedEvents.length === 0) return null;
+
+    let latest = 0;
+
+    for (const event of searchedEvents) {
+      const time = new Date(event.created_at).getTime();
+
+      if (!Number.isNaN(time) && time > latest) {
+        latest = time;
+      }
+    }
+
+    return latest ? new Date(latest).toISOString() : null;
+  }, [searchedEvents]);
+
   const eventCounts = useMemo(() => {
     return {
       totalEvents: searchedEvents.length,
+      pageViews: searchedEvents.filter((event) => event.event_name === "page_view")
+        .length,
       cardViews: searchedEvents.filter(
         (event) => event.event_name === "property_card_view"
       ).length,
@@ -1353,6 +1377,7 @@ export default function AdminAnalyticsPage() {
         leads: number;
         latValues: number[];
         lngValues: number[];
+        sessionLastSeen: Map<string, number>;
       }
     >();
 
@@ -1392,13 +1417,24 @@ export default function AdminAnalyticsPage() {
           leads: 0,
           latValues: [],
           lngValues: [],
+          sessionLastSeen: new Map<string, number>(),
         });
       }
 
       const item = map.get(key)!;
+      const sessionKey = getSessionKey(event);
+      const eventTime = new Date(event.created_at).getTime();
 
-      item.sessions.add(getSessionKey(event));
+      item.sessions.add(sessionKey);
       item.events += 1;
+
+      if (!Number.isNaN(eventTime)) {
+        const currentLastSeen = item.sessionLastSeen.get(sessionKey) || 0;
+
+        if (eventTime > currentLastSeen) {
+          item.sessionLastSeen.set(sessionKey, eventTime);
+        }
+      }
 
       if (isViewEvent(event.event_name)) item.views += 1;
       if (isClickEvent(event.event_name)) item.clicks += 1;
@@ -1438,8 +1474,43 @@ export default function AdminAnalyticsPage() {
           }
         }
 
+        const now = Date.now();
+
+        let liveVisitorsByLocation = 0;
+        let recentVisitorsByLocation = 0;
+        let notLiveVisitorsByLocation = 0;
+        let latestSeenTime = 0;
+
+        item.sessionLastSeen.forEach((lastSeenTime) => {
+          if (lastSeenTime > latestSeenTime) {
+            latestSeenTime = lastSeenTime;
+          }
+
+          const ageMs = now - lastSeenTime;
+
+          if (ageMs <= LIVE_VISITOR_WINDOW_MS) {
+            liveVisitorsByLocation += 1;
+          } else if (ageMs <= RECENT_VISITOR_WINDOW_MS) {
+            recentVisitorsByLocation += 1;
+          } else {
+            notLiveVisitorsByLocation += 1;
+          }
+        });
+
+        const status: ActivityStatus =
+          liveVisitorsByLocation > 0
+            ? "live"
+            : recentVisitorsByLocation > 0
+            ? "recent"
+            : "not_live";
+
+        const lastSeenAt = latestSeenTime
+          ? new Date(latestSeenTime).toISOString()
+          : null;
+
         const label =
           item.city || item.region || item.country || "Unknown Location";
+
         const sublabel = [
           item.region && item.region !== label ? item.region : "",
           item.country,
@@ -1460,93 +1531,29 @@ export default function AdminAnalyticsPage() {
           views: item.views,
           clicks: item.clicks,
           leads: item.leads,
+          liveVisitors: liveVisitorsByLocation,
+          recentVisitors: recentVisitorsByLocation,
+          notLiveVisitors: notLiveVisitorsByLocation,
+          lastSeenAt,
+          status,
           lat,
           lng,
         };
       })
-      .sort((a, b) => b.visitors - a.visitors || b.events - a.events);
+      .sort((a, b) => {
+        if (a.status !== b.status) {
+          const rank: Record<ActivityStatus, number> = {
+            live: 3,
+            recent: 2,
+            not_live: 1,
+          };
+
+          return rank[b.status] - rank[a.status];
+        }
+
+        return b.visitors - a.visitors || b.events - a.events;
+      });
   }, [searchedEvents]);
-
-  const countries = useMemo<LocationStat[]>(() => {
-    const map = new Map<
-      string,
-      {
-        countryCode: string;
-        country: string;
-        sessions: Set<string>;
-        events: number;
-        views: number;
-        clicks: number;
-        leads: number;
-        lat: number | null;
-        lng: number | null;
-      }
-    >();
-
-    for (const event of searchedEvents) {
-      const countryCode = getEventCountryCode(event);
-      const country = countryCode ? getCountryName(countryCode) : "";
-
-      if (!countryCode && !country) continue;
-
-      const key = countryCode || country || "unknown";
-
-      if (!map.has(key)) {
-        const fallback = getFallbackCoordinates({
-          countryCode,
-          country,
-          region: "",
-          city: "",
-        });
-
-        map.set(key, {
-          countryCode,
-          country: country || "Unknown Country",
-          sessions: new Set<string>(),
-          events: 0,
-          views: 0,
-          clicks: 0,
-          leads: 0,
-          lat: fallback?.lat || null,
-          lng: fallback?.lng || null,
-        });
-      }
-
-      const item = map.get(key)!;
-
-      item.sessions.add(getSessionKey(event));
-      item.events += 1;
-
-      if (isViewEvent(event.event_name)) item.views += 1;
-      if (isClickEvent(event.event_name)) item.clicks += 1;
-      if (isLeadEvent(event.event_name)) item.leads += 1;
-    }
-
-    return Array.from(map.entries())
-      .map(([key, item]) => ({
-        key,
-        countryCode: item.countryCode,
-        country: item.country,
-        region: "",
-        city: "",
-        label: item.country,
-        sublabel: item.countryCode,
-        visitors: item.sessions.size,
-        events: item.events,
-        views: item.views,
-        clicks: item.clicks,
-        leads: item.leads,
-        lat: item.lat,
-        lng: item.lng,
-      }))
-      .sort((a, b) => b.visitors - a.visitors || b.events - a.events);
-  }, [searchedEvents]);
-
-  const citiesRegions = useMemo(() => {
-    return locations
-      .filter((item) => item.city || item.region)
-      .sort((a, b) => b.visitors - a.visitors || b.events - a.events);
-  }, [locations]);
 
   const listingInsights = useMemo<ListingInsight[]>(() => {
     const map = new Map<
@@ -1607,11 +1614,10 @@ export default function AdminAnalyticsPage() {
       const country = countryCode ? getCountryName(countryCode) : "";
       const region = getEventRegion(event);
       const city = getEventCity(event);
-      const locationKey = [
-        country || "Unknown Country",
-        region,
-        city,
-      ].join("|");
+
+      const locationKey = [country || "Unknown Country", region, city].join(
+        "|"
+      );
 
       if (!item.locationSessions.has(locationKey)) {
         item.locationSessions.set(locationKey, new Set<string>());
@@ -1635,20 +1641,19 @@ export default function AdminAnalyticsPage() {
           })
           .sort((a, b) => b.visitors - a.visitors);
 
-        const top = locationRows[0];
+        const topLocationText =
+          locationRows
+            .slice(0, 4)
+            .map((location) => {
+              const parts = [
+                location.country,
+                location.region,
+                location.city,
+              ].filter(Boolean);
 
-        const topLocationText = locationRows
-          .slice(0, 4)
-          .map((location) => {
-            const parts = [
-              location.country,
-              location.region,
-              location.city,
-            ].filter(Boolean);
-
-            return `${parts.join(" / ")} (${location.visitors})`;
-          })
-          .join(", ");
+              return `${parts.join(" / ")} (${location.visitors})`;
+            })
+            .join(", ") || "-";
 
         return {
           propertyId: item.propertyId,
@@ -1661,10 +1666,7 @@ export default function AdminAnalyticsPage() {
           whatsappClicks: item.whatsappClicks,
           scheduleClicks: item.scheduleClicks,
           leads: item.leads,
-          topCountry: top?.country || "-",
-          topRegion: top?.region || "-",
-          topCity: top?.city || "-",
-          topLocationText: topLocationText || "-",
+          topLocationText,
         };
       })
       .filter(
@@ -1773,44 +1775,9 @@ export default function AdminAnalyticsPage() {
       .sort((a, b) => b.visitors - a.visitors || b.clicks - a.clicks);
   }, [searchedEvents]);
 
-  const latestEvents = useMemo(() => searchedEvents, [searchedEvents]);
-
-  const campaignTotalPages = Math.max(
-    1,
-    Math.ceil(campaignInsights.length / campaignPageSize)
-  );
-  const listingTotalPages = Math.max(
-    1,
-    Math.ceil(listingInsights.length / listingPageSize)
-  );
-  const locationListingTotalPages = Math.max(
-    1,
-    Math.ceil(listingInsights.length / locationListingPageSize)
-  );
-  const eventsTotalPages = Math.max(
-    1,
-    Math.ceil(latestEvents.length / eventsPageSize)
-  );
-
-  const pagedCampaigns = campaignInsights.slice(
-    (campaignPage - 1) * campaignPageSize,
-    campaignPage * campaignPageSize
-  );
-
-  const pagedListings = listingInsights.slice(
-    (listingPage - 1) * listingPageSize,
-    listingPage * listingPageSize
-  );
-
-  const pagedLocationListings = listingInsights.slice(
-    (locationListingPage - 1) * locationListingPageSize,
-    locationListingPage * locationListingPageSize
-  );
-
-  const pagedEvents = latestEvents.slice(
-    (eventsPage - 1) * eventsPageSize,
-    eventsPage * eventsPageSize
-  );
+  const latestEvents = useMemo(() => {
+    return searchedEvents.slice(0, 20);
+  }, [searchedEvents]);
 
   function handleExportReport() {
     const rows: string[][] = [];
@@ -1825,19 +1792,61 @@ export default function AdminAnalyticsPage() {
     rows.push(["Metric", "Value"]);
     rows.push(["Total Events", String(eventCounts.totalEvents)]);
     rows.push(["Unique Visitors", String(visitors)]);
+    rows.push(["Page Views", String(eventCounts.pageViews)]);
     rows.push(["Property Card Views", String(eventCounts.cardViews)]);
     rows.push(["Property Detail Views", String(eventCounts.detailViews)]);
     rows.push(["Detail Clicks", String(eventCounts.detailClicks)]);
     rows.push(["WhatsApp Clicks", String(eventCounts.whatsappClicks)]);
     rows.push(["Schedule Clicks", String(eventCounts.scheduleClicks)]);
     rows.push(["Leads", String(eventCounts.leads)]);
+    rows.push(["Live Visitors", String(liveVisitors)]);
+    rows.push(["Recent Visitors", String(recentVisitors)]);
+    rows.push(["Last Activity", String(lastActivityAt || "-")]);
     rows.push([
-      "View To Detail Rate",
+      "Detail Click / Card View",
       percentFormat(conversion.viewToDetailRate),
     ]);
-    rows.push(["Lead Action Rate", percentFormat(conversion.leadActionRate)]);
+    rows.push(["Lead Action / Detail View", percentFormat(conversion.leadActionRate)]);
     rows.push([]);
 
+    rows.push(["Locations"]);
+    rows.push([
+      "Location",
+      "Country",
+      "Region",
+      "City",
+      "Status",
+      "Live Visitors",
+      "Recent Visitors",
+      "Not Live Visitors",
+      "Total Visitors",
+      "Events",
+      "Views",
+      "Clicks",
+      "Leads",
+      "Last Activity",
+    ]);
+
+    locations.forEach((item) => {
+      rows.push([
+        item.label,
+        item.country,
+        item.region,
+        item.city,
+        getStatusLabel(item.status),
+        String(item.liveVisitors),
+        String(item.recentVisitors),
+        String(item.notLiveVisitors),
+        String(item.visitors),
+        String(item.events),
+        String(item.views),
+        String(item.clicks),
+        String(item.leads),
+        item.lastSeenAt || "-",
+      ]);
+    });
+
+    rows.push([]);
     rows.push(["Meta / UTM Campaigns"]);
     rows.push([
       "Platform",
@@ -1885,9 +1894,6 @@ export default function AdminAnalyticsPage() {
       "WhatsApp Clicks",
       "Schedule Clicks",
       "Leads",
-      "Top Country",
-      "Top Region",
-      "Top City",
       "Top Locations",
     ]);
 
@@ -1902,36 +1908,7 @@ export default function AdminAnalyticsPage() {
         String(item.whatsappClicks),
         String(item.scheduleClicks),
         String(item.leads),
-        item.topCountry,
-        item.topRegion,
-        item.topCity,
         item.topLocationText,
-      ]);
-    });
-
-    rows.push([]);
-    rows.push(["Top Locations"]);
-    rows.push([
-      "Country",
-      "Region",
-      "City",
-      "Visitors",
-      "Events",
-      "Views",
-      "Clicks",
-      "Leads",
-    ]);
-
-    locations.forEach((item) => {
-      rows.push([
-        item.country,
-        item.region,
-        item.city,
-        String(item.visitors),
-        String(item.events),
-        String(item.views),
-        String(item.clicks),
-        String(item.leads),
       ]);
     });
 
@@ -1959,8 +1936,8 @@ export default function AdminAnalyticsPage() {
             Tetamo Analytics
           </h1>
           <p className="mt-1 text-[12px] leading-5 text-gray-500 sm:text-sm">
-            Internal website analytics from Supabase. The map shows blue
-            location intensity without numbered pins.
+            Internal website analytics from Supabase. The map now shows live,
+            recent, and not-live visitor activity by location.
           </p>
         </div>
 
@@ -2047,6 +2024,12 @@ export default function AdminAnalyticsPage() {
             Mapped locations:{" "}
             {numberFormat(locations.filter(hasCoordinates).length)}
           </span>
+          <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">
+            Live = last 5 minutes
+          </span>
+          <span className="rounded-full bg-yellow-50 px-3 py-1 text-yellow-700">
+            Recent = last 30 minutes
+          </span>
         </div>
       </div>
 
@@ -2068,10 +2051,14 @@ export default function AdminAnalyticsPage() {
           value={
             loading
               ? "..."
-              : numberFormat(eventCounts.cardViews + eventCounts.detailViews)
+              : numberFormat(
+                  eventCounts.pageViews +
+                    eventCounts.cardViews +
+                    eventCounts.detailViews
+                )
           }
           Icon={Eye}
-          caption="Property card views + detail views."
+          caption="Page views + card views + detail views."
         />
         <StatCard
           title="Lead Actions"
@@ -2091,18 +2078,18 @@ export default function AdminAnalyticsPage() {
 
       <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
         <StatCard
-          title="Last 30 Minutes"
-          value={loading ? "..." : numberFormat(last30Visitors)}
-          Icon={Activity}
-          caption={`${numberFormat(
-            last30Events.length
-          )} events in last 30 minutes.`}
-        />
-        <StatCard
           title="Live Visitors"
           value={loading ? "..." : numberFormat(liveVisitors)}
           Icon={Flame}
           caption={`${numberFormat(liveEvents.length)} events in last 5 minutes.`}
+        />
+        <StatCard
+          title="Recent Visitors"
+          value={loading ? "..." : numberFormat(recentVisitors)}
+          Icon={Activity}
+          caption={`${numberFormat(
+            recentEvents.length
+          )} events in last 30 minutes.`}
         />
         <StatCard
           title="WhatsApp Clicks"
@@ -2111,10 +2098,14 @@ export default function AdminAnalyticsPage() {
           caption="Direct WhatsApp intent from listings."
         />
         <StatCard
-          title="Schedule Clicks"
-          value={loading ? "..." : numberFormat(eventCounts.scheduleClicks)}
+          title="Last Activity"
+          value={loading ? "..." : formatRelativeTime(lastActivityAt)}
           Icon={TrendingUp}
-          caption="Schedule viewing button clicks."
+          caption={
+            lastActivityAt
+              ? `Latest event: ${formatDateTime(lastActivityAt)}`
+              : "No activity yet."
+          }
         />
       </div>
 
@@ -2185,7 +2176,16 @@ export default function AdminAnalyticsPage() {
         title="Conversion Insight"
         description="Separated by real Tetamo actions so views, clicks, WhatsApp, schedule, and leads are easier to understand."
       >
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
+          <div className="rounded-2xl bg-gray-50 p-4">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+              Page Views
+            </p>
+            <p className="mt-1 text-xl font-bold text-[#1C1C1E]">
+              {numberFormat(eventCounts.pageViews)}
+            </p>
+          </div>
+
           <div className="rounded-2xl bg-gray-50 p-4">
             <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
               Card Views
@@ -2266,254 +2266,264 @@ export default function AdminAnalyticsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Meta / Facebook / Instagram Tracking"
-        description="This reads referral and UTM data from analytics_events. To show all ads separately, each ad needs its own UTM campaign/ad name."
+        title="Location Activity"
+        description="Shows whether location traffic is live now, recently active, or not live."
+      >
+        {locations.length > 0 ? (
+          <div className="space-y-3">
+            {locations.slice(0, 20).map((item) => (
+              <div
+                key={item.key}
+                className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 lg:grid-cols-[minmax(0,1fr)_110px_110px_110px_110px_130px] lg:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-[#1C1C1E]">
+                      {item.label}
+                    </p>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ${getStatusClass(
+                        item.status
+                      )}`}
+                    >
+                      {getStatusDot(item.status)} {getStatusLabel(item.status)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {item.sublabel || "No sub-location saved"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center text-xs lg:contents lg:text-right">
+                  <div>
+                    <p className="text-[10px] text-gray-400 lg:hidden">Live</p>
+                    <p className="font-semibold text-green-700">
+                      {numberFormat(item.liveVisitors)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 lg:hidden">
+                      Recent
+                    </p>
+                    <p className="font-semibold text-yellow-700">
+                      {numberFormat(item.recentVisitors)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 lg:hidden">
+                      Not Live
+                    </p>
+                    <p className="font-semibold text-gray-600">
+                      {numberFormat(item.notLiveVisitors)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 lg:hidden">
+                      Visitors
+                    </p>
+                    <p className="font-semibold text-[#1C1C1E]">
+                      {numberFormat(item.visitors)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 lg:hidden">
+                      Last Seen
+                    </p>
+                    <p className="font-semibold text-[#1C1C1E]">
+                      {formatRelativeTime(item.lastSeenAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No location data found"
+            description="No analytics events with country, region, city, or coordinates match the selected filters."
+            Icon={MapPin}
+          />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Meta / UTM Campaigns"
+        description="This only shows Meta traffic that reached Tetamo and carried UTM or referrer data. It is not Meta reach or impressions."
       >
         {campaignInsights.length > 0 ? (
-          <>
-            <div className="space-y-3">
-              {pagedCampaigns.map((item) => (
+          <div className="overflow-hidden rounded-2xl border border-gray-100">
+            <div className="hidden grid-cols-[130px_minmax(0,1fr)_100px_100px_100px_100px] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-500 lg:grid">
+              <div>Platform</div>
+              <div>Campaign</div>
+              <div className="text-right">Visitors</div>
+              <div className="text-right">Views</div>
+              <div className="text-right">Clicks</div>
+              <div className="text-right">Leads</div>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {campaignInsights.slice(0, 12).map((item) => (
                 <div
                   key={item.key}
-                  className="rounded-2xl border border-gray-100 bg-gray-50 p-4"
+                  className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[130px_minmax(0,1fr)_100px_100px_100px_100px] lg:items-center"
                 >
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-center">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-[#1C1C1E] px-2.5 py-1 text-[10px] font-semibold text-white">
-                          {item.platform}
-                        </span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                            item.tagged
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-amber-50 text-amber-700"
-                          }`}
-                        >
-                          {item.tagged ? "UTM Tagged" : "Referral / Untagged"}
-                        </span>
-                      </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#1C1C1E]">
+                      {item.platform}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-gray-500">
+                      {item.source} / {item.medium}
+                    </p>
+                  </div>
 
-                      <p className="mt-2 truncate text-sm font-semibold text-[#1C1C1E]">
-                        Campaign: {item.campaign}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#1C1C1E]">
+                      {item.campaign}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-gray-500">
+                      {item.adSet} • {item.adName}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-gray-400">
+                      {item.countries || "No country saved"} •{" "}
+                      {item.tagged ? "Tagged" : "Not tagged"}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs lg:contents lg:text-right">
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Visitors
                       </p>
-                      <p className="mt-1 truncate text-xs text-gray-500">
-                        Source: {item.source} / {item.medium}
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.visitors)}
                       </p>
-                      <p className="mt-1 truncate text-xs text-gray-500">
-                        Ad Set: {item.adSet}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-gray-500">
-                        Ad: {item.adName}
-                      </p>
-                      {item.countries ? (
-                        <p className="mt-1 truncate text-[11px] text-gray-400">
-                          Countries: {item.countries}
-                        </p>
-                      ) : null}
                     </div>
-
-                    <div className="grid grid-cols-5 gap-2 text-center">
-                      {[
-                        ["Visitors", item.visitors],
-                        ["Events", item.events],
-                        ["Views", item.views],
-                        ["Clicks", item.clicks],
-                        ["Leads", item.leads],
-                      ].map(([label, value]) => (
-                        <div
-                          key={String(label)}
-                          className="rounded-2xl border border-gray-100 bg-white p-3"
-                        >
-                          <p className="text-[10px] text-gray-400">{label}</p>
-                          <p className="mt-1 text-sm font-bold text-[#1C1C1E]">
-                            {numberFormat(Number(value))}
-                          </p>
-                        </div>
-                      ))}
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Views
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.views)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Clicks
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.clicks)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Leads
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.leads)}
+                      </p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-
-            <Pagination
-              currentPage={campaignPage}
-              totalPages={campaignTotalPages}
-              onPageChange={setCampaignPage}
-            />
-          </>
+          </div>
         ) : (
           <EmptyState
-            title="No Meta ad traffic detected yet"
-            description="This does not mean your ads are not running. It means the website events do not yet contain Meta referral or UTM campaign data for this selected filter."
+            title="No Meta / UTM campaign data found"
+            description="Add UTM tags to Meta ad destination URLs so Tetamo can group campaign traffic."
             Icon={Globe}
           />
         )}
       </SectionCard>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <SectionCard title="Top Countries">
-          {countries.length > 0 ? (
-            <div className="space-y-3">
-              {countries.slice(0, 10).map((item) => (
-                <div
-                  key={item.key}
-                  className="grid grid-cols-[minmax(0,1fr)_80px] gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#1C1C1E]">
-                      {getCountryFlag(item.countryCode)} {item.label}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-gray-500">
-                      {item.sublabel || "No country code saved"}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-[#1C1C1E]">
-                      {numberFormat(item.visitors)}
-                    </p>
-                    <p className="text-[10px] text-gray-500">visitors</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">No country data saved yet.</p>
-          )}
-        </SectionCard>
-
-        <SectionCard title="Top Cities / Regions">
-          {citiesRegions.length > 0 ? (
-            <div className="space-y-3">
-              {citiesRegions.slice(0, 10).map((item) => (
-                <div
-                  key={item.key}
-                  className="grid grid-cols-[minmax(0,1fr)_80px] gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#1C1C1E]">
-                      {item.label}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-gray-500">
-                      {item.sublabel || "No country/region saved"}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-[#1C1C1E]">
-                      {numberFormat(item.visitors)}
-                    </p>
-                    <p className="text-[10px] text-gray-500">visitors</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">
-              No city or region data saved yet.
-            </p>
-          )}
-        </SectionCard>
-      </div>
-
       <SectionCard
         title="Listing Performance"
-        description="Shows which listings get views, detail clicks, WhatsApp clicks, schedule clicks, and leads."
+        description="Shows listing views, detail views, clicks, WhatsApp, schedule, leads, and top viewer location."
       >
         {listingInsights.length > 0 ? (
-          <>
-            <div className="overflow-hidden rounded-2xl border border-gray-100">
-              <div className="hidden grid-cols-[minmax(0,1fr)_90px_90px_90px_90px_90px_90px] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-500 lg:grid">
-                <div>Listing</div>
-                <div className="text-right">Views</div>
-                <div className="text-right">Details</div>
-                <div className="text-right">Clicks</div>
-                <div className="text-right">WhatsApp</div>
-                <div className="text-right">Schedule</div>
-                <div className="text-right">Leads</div>
-              </div>
-
-              <div className="divide-y divide-gray-100">
-                {pagedListings.map((item) => (
-                  <div
-                    key={item.propertyId}
-                    className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_90px_90px_90px_90px_90px_90px] lg:items-center"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-gray-500">
-                        {item.kode} • {item.city}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#1C1C1E]">
-                        {item.title}
-                      </p>
-                      <p className="mt-1 line-clamp-1 text-[11px] text-gray-400">
-                        Top location: {item.topLocationText}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs lg:contents lg:text-right">
-                      <div>
-                        <p className="text-[10px] text-gray-400 lg:hidden">
-                          Views
-                        </p>
-                        <p className="font-semibold text-[#1C1C1E]">
-                          {numberFormat(item.views)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 lg:hidden">
-                          Details
-                        </p>
-                        <p className="font-semibold text-[#1C1C1E]">
-                          {numberFormat(item.detailViews)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 lg:hidden">
-                          Clicks
-                        </p>
-                        <p className="font-semibold text-[#1C1C1E]">
-                          {numberFormat(item.detailClicks)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 lg:hidden">
-                          WhatsApp
-                        </p>
-                        <p className="font-semibold text-[#1C1C1E]">
-                          {numberFormat(item.whatsappClicks)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 lg:hidden">
-                          Schedule
-                        </p>
-                        <p className="font-semibold text-[#1C1C1E]">
-                          {numberFormat(item.scheduleClicks)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 lg:hidden">
-                          Leads
-                        </p>
-                        <p className="font-semibold text-[#1C1C1E]">
-                          {numberFormat(item.leads)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="overflow-hidden rounded-2xl border border-gray-100">
+            <div className="hidden grid-cols-[minmax(0,1fr)_90px_90px_90px_90px_90px_90px] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-500 lg:grid">
+              <div>Listing</div>
+              <div className="text-right">Views</div>
+              <div className="text-right">Details</div>
+              <div className="text-right">Clicks</div>
+              <div className="text-right">WhatsApp</div>
+              <div className="text-right">Schedule</div>
+              <div className="text-right">Leads</div>
             </div>
 
-            <Pagination
-              currentPage={listingPage}
-              totalPages={listingTotalPages}
-              onPageChange={setListingPage}
-            />
-          </>
+            <div className="divide-y divide-gray-100">
+              {listingInsights.slice(0, 20).map((item) => (
+                <div
+                  key={item.propertyId}
+                  className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_90px_90px_90px_90px_90px_90px] lg:items-center"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-gray-500">
+                      {item.kode} • {item.city}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#1C1C1E]">
+                      {item.title}
+                    </p>
+                    <p className="mt-1 line-clamp-1 text-[11px] text-gray-400">
+                      Top location: {item.topLocationText}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs lg:contents lg:text-right">
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Views
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.views)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Details
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.detailViews)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Clicks
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.detailClicks)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        WhatsApp
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.whatsappClicks)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Schedule
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.scheduleClicks)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400 lg:hidden">
+                        Leads
+                      </p>
+                      <p className="font-semibold text-[#1C1C1E]">
+                        {numberFormat(item.leads)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <EmptyState
             title="No listing analytics found"
@@ -2524,141 +2534,67 @@ export default function AdminAnalyticsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Viewer Locations Per Listing"
-        description="Shows country, region, city, and top viewer location per listing."
-      >
-        {listingInsights.length > 0 ? (
-          <>
-            <div className="space-y-3">
-              {pagedLocationListings.map((item) => (
-                <div
-                  key={`${item.propertyId}-location`}
-                  className="rounded-2xl border border-gray-100 bg-gray-50 p-4"
-                >
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-gray-500">
-                        {item.kode} • {item.city}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#1C1C1E]">
-                        {item.title}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-gray-100 bg-white p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
-                        Top Viewer Location
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
-                        {item.topCity !== "-"
-                          ? item.topCity
-                          : item.topRegion !== "-"
-                          ? item.topRegion
-                          : item.topCountry}
-                      </p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {[
-                          item.topRegion !== "-" ? item.topRegion : "",
-                          item.topCountry !== "-" ? item.topCountry : "",
-                        ]
-                          .filter(Boolean)
-                          .join(", ") || "No location saved"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 line-clamp-2 text-xs text-gray-500">
-                    Full location breakdown: {item.topLocationText}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <Pagination
-              currentPage={locationListingPage}
-              totalPages={locationListingTotalPages}
-              onPageChange={setLocationListingPage}
-            />
-          </>
-        ) : (
-          <EmptyState
-            title="No viewer location per listing yet"
-            description="Once listing events contain country/region/city metadata, they will appear here."
-            Icon={MapPin}
-          />
-        )}
-      </SectionCard>
-
-      <SectionCard
         title="Real-Time Events"
         description="Shows the latest analytics events, not only leads."
       >
         {latestEvents.length > 0 ? (
-          <>
-            <div className="divide-y divide-gray-100 rounded-2xl border border-gray-100">
-              {pagedEvents.map((event) => {
-                const property = event.property_id
-                  ? propertyMap.get(event.property_id)
-                  : null;
+          <div className="divide-y divide-gray-100 rounded-2xl border border-gray-100">
+            {latestEvents.map((event) => {
+              const property = event.property_id
+                ? propertyMap.get(event.property_id)
+                : null;
 
-                const countryCode = getEventCountryCode(event);
-                const country = countryCode ? getCountryName(countryCode) : "";
-                const region = getEventRegion(event);
-                const city = getEventCity(event);
+              const countryCode = getEventCountryCode(event);
+              const country = countryCode ? getCountryName(countryCode) : "";
+              const region = getEventRegion(event);
+              const city = getEventCity(event);
 
-                return (
-                  <div
-                    key={event.id}
-                    className="grid grid-cols-1 gap-3 px-4 py-3 text-sm lg:grid-cols-[180px_minmax(0,1fr)_220px_140px] lg:items-center"
-                  >
-                    <div>
-                      <p className="font-semibold text-[#1C1C1E]">
-                        {eventLabel(event.event_name)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {formatRelativeTime(event.created_at)}
-                      </p>
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[#1C1C1E]">
-                        {property?.title ||
-                          cleanText(event.metadata?.property_title) ||
-                          getPath(event)}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-gray-500">
-                        {property?.kode ||
-                          cleanText(event.metadata?.property_code) ||
-                          "-"}{" "}
-                        • {getPath(event)}
-                      </p>
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate text-xs text-gray-500">
-                        {city || region || country || "No location saved"}
-                      </p>
-                      <p className="mt-0.5 truncate text-[11px] text-gray-400">
-                        {[region && region !== city ? region : "", country]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
-                    </div>
-
-                    <div className="text-xs text-gray-500 lg:text-right">
-                      {formatDateTime(event.created_at)}
-                    </div>
+              return (
+                <div
+                  key={event.id}
+                  className="grid grid-cols-1 gap-3 px-4 py-3 text-sm lg:grid-cols-[180px_minmax(0,1fr)_220px_140px] lg:items-center"
+                >
+                  <div>
+                    <p className="font-semibold text-[#1C1C1E]">
+                      {eventLabel(event.event_name)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {formatRelativeTime(event.created_at)}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
 
-            <Pagination
-              currentPage={eventsPage}
-              totalPages={eventsTotalPages}
-              onPageChange={setEventsPage}
-            />
-          </>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-[#1C1C1E]">
+                      {property?.title ||
+                        cleanText(event.metadata?.property_title) ||
+                        getPath(event)}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-gray-500">
+                      {property?.kode ||
+                        cleanText(event.metadata?.property_code) ||
+                        "-"}{" "}
+                      • {getPath(event)}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-xs text-gray-500">
+                      {city || region || country || "No location saved"}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-gray-400">
+                      {[region && region !== city ? region : "", country]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </div>
+
+                  <div className="text-xs text-gray-500 lg:text-right">
+                    {formatDateTime(event.created_at)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <EmptyState
             title="No events found"
