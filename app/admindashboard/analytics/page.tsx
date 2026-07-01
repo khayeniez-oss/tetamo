@@ -111,7 +111,17 @@ type CampaignInsight = {
   tagged: boolean;
 };
 
+type AnalyticsFetchResult = {
+  rows: AnalyticsEventRow[];
+  totalCount: number | null;
+  truncated: boolean;
+  error: any;
+};
+
 const GOOGLE_MAPS_SCRIPT_ID = "tetamo-google-maps-script";
+
+const ANALYTICS_PAGE_SIZE = 1000;
+const ANALYTICS_MAX_ROWS = 50000;
 
 const LIVE_VISITOR_WINDOW_MS = 5 * 60 * 1000;
 const RECENT_VISITOR_WINDOW_MS = 30 * 60 * 1000;
@@ -178,6 +188,63 @@ const LOCATION_FALLBACKS: Record<string, { lat: number; lng: number }> = {
   ph: { lat: 12.8797, lng: 121.774 },
   manila: { lat: 14.5995, lng: 120.9842 },
 };
+
+const ANALYTICS_SELECT =
+  "id, created_at, event_name, property_id, user_id, source_page, session_id, visitor_id, lead_id, buyer_request_id, metadata";
+
+async function fetchAnalyticsEventsPaged(): Promise<AnalyticsFetchResult> {
+  const allRows: AnalyticsEventRow[] = [];
+
+  let totalCount: number | null = null;
+  let lastError: any = null;
+
+  const countResult = await supabase
+    .from("analytics_events")
+    .select("id", { count: "exact", head: true });
+
+  if (countResult.error) {
+    console.error("Failed to count analytics events:", countResult.error);
+  } else {
+    totalCount = countResult.count ?? null;
+  }
+
+  for (let from = 0; from < ANALYTICS_MAX_ROWS; from += ANALYTICS_PAGE_SIZE) {
+    const to = from + ANALYTICS_PAGE_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from("analytics_events")
+      .select(ANALYTICS_SELECT)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      lastError = error;
+      console.error("Failed to load analytics events page:", {
+        from,
+        to,
+        error,
+      });
+      break;
+    }
+
+    const rows = (data || []) as AnalyticsEventRow[];
+    allRows.push(...rows);
+
+    if (rows.length < ANALYTICS_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return {
+    rows: allRows,
+    totalCount,
+    truncated:
+      totalCount !== null
+        ? allRows.length < totalCount
+        : allRows.length >= ANALYTICS_MAX_ROWS,
+    error: lastError,
+  };
+}
 
 function loadGoogleMapsScript() {
   if (typeof window === "undefined") {
@@ -424,7 +491,9 @@ function eventLabel(eventName: string) {
   }
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
+
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
 
@@ -935,7 +1004,7 @@ function BlueBubbleHeatMap({
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
               Blue circles show location intensity. Green means live now, yellow
-              means recently active, gray/blue means not live.
+              means recently active, and blue means not live.
             </p>
           </div>
 
@@ -997,38 +1066,34 @@ export default function AdminAnalyticsPage() {
 
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [events, setEvents] = useState<AnalyticsEventRow[]>([]);
+  const [dbTotalEvents, setDbTotalEvents] = useState<number | null>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function loadAnalytics() {
     setLoading(true);
 
-    const [
-      { data: propertyRows, error: propertyError },
-      { data: eventRows, error: eventError },
-    ] = await Promise.all([
-      supabase
-        .from("properties")
-        .select("id, kode, title, city, province, area")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("analytics_events")
-        .select(
-          "id, created_at, event_name, property_id, user_id, source_page, session_id, visitor_id, lead_id, buyer_request_id, metadata"
-        )
-        .order("created_at", { ascending: false })
-        .limit(20000),
-    ]);
+    const [{ data: propertyRows, error: propertyError }, analyticsResult] =
+      await Promise.all([
+        supabase
+          .from("properties")
+          .select("id, kode, title, city, province, area")
+          .order("created_at", { ascending: false }),
+        fetchAnalyticsEventsPaged(),
+      ]);
 
     if (propertyError) {
       console.error("Failed to load analytics properties:", propertyError);
     }
 
-    if (eventError) {
-      console.error("Failed to load analytics events:", eventError);
+    if (analyticsResult.error) {
+      console.error("Failed to load analytics events:", analyticsResult.error);
     }
 
     setProperties((propertyRows || []) as PropertyRow[]);
-    setEvents((eventRows || []) as AnalyticsEventRow[]);
+    setEvents(analyticsResult.rows);
+    setDbTotalEvents(analyticsResult.totalCount);
+    setIsTruncated(analyticsResult.truncated);
     setLoading(false);
   }
 
@@ -1038,34 +1103,31 @@ export default function AdminAnalyticsPage() {
     async function safeLoad() {
       setLoading(true);
 
-      const [
-        { data: propertyRows, error: propertyError },
-        { data: eventRows, error: eventError },
-      ] = await Promise.all([
-        supabase
-          .from("properties")
-          .select("id, kode, title, city, province, area")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("analytics_events")
-          .select(
-            "id, created_at, event_name, property_id, user_id, source_page, session_id, visitor_id, lead_id, buyer_request_id, metadata"
-          )
-          .order("created_at", { ascending: false })
-          .limit(20000),
-      ]);
+      const [{ data: propertyRows, error: propertyError }, analyticsResult] =
+        await Promise.all([
+          supabase
+            .from("properties")
+            .select("id, kode, title, city, province, area")
+            .order("created_at", { ascending: false }),
+          fetchAnalyticsEventsPaged(),
+        ]);
 
       if (propertyError) {
         console.error("Failed to load analytics properties:", propertyError);
       }
 
-      if (eventError) {
-        console.error("Failed to load analytics events:", eventError);
+      if (analyticsResult.error) {
+        console.error(
+          "Failed to load analytics events:",
+          analyticsResult.error
+        );
       }
 
       if (!ignore) {
         setProperties((propertyRows || []) as PropertyRow[]);
-        setEvents((eventRows || []) as AnalyticsEventRow[]);
+        setEvents(analyticsResult.rows);
+        setDbTotalEvents(analyticsResult.totalCount);
+        setIsTruncated(analyticsResult.truncated);
         setLoading(false);
       }
     }
@@ -1089,7 +1151,9 @@ export default function AdminAnalyticsPage() {
         },
         (payload) => {
           const nextEvent = payload.new as AnalyticsEventRow;
-          setEvents((prev) => [nextEvent, ...prev].slice(0, 20000));
+
+          setEvents((prev) => [nextEvent, ...prev].slice(0, ANALYTICS_MAX_ROWS));
+          setDbTotalEvents((prev) => (prev === null ? prev : prev + 1));
         }
       )
       .subscribe();
@@ -1192,75 +1256,84 @@ export default function AdminAnalyticsPage() {
     return property?.title || "Selected Property";
   }, [selectedPropertyId, propertyMap]);
 
-  const visitors = useMemo(() => {
-    const set = new Set<string>();
+  const visitorActivity = useMemo(() => {
+    const sessionLastSeen = new Map<string, number>();
 
     for (const event of searchedEvents) {
-      set.add(getSessionKey(event));
-    }
+      const sessionKey = getSessionKey(event);
+      const eventTime = new Date(event.created_at).getTime();
 
-    return set.size;
-  }, [searchedEvents]);
+      if (Number.isNaN(eventTime)) continue;
 
-  const liveEvents = useMemo(() => {
-    const start = Date.now() - LIVE_VISITOR_WINDOW_MS;
+      const current = sessionLastSeen.get(sessionKey) || 0;
 
-    return scopedEvents.filter((event) => {
-      const time = new Date(event.created_at).getTime();
-      return !Number.isNaN(time) && time >= start;
-    });
-  }, [scopedEvents]);
-
-  const recentEvents = useMemo(() => {
-    const start = Date.now() - RECENT_VISITOR_WINDOW_MS;
-
-    return scopedEvents.filter((event) => {
-      const time = new Date(event.created_at).getTime();
-      return !Number.isNaN(time) && time >= start;
-    });
-  }, [scopedEvents]);
-
-  const liveVisitors = useMemo(() => {
-    const set = new Set<string>();
-
-    for (const event of liveEvents) {
-      set.add(getSessionKey(event));
-    }
-
-    return set.size;
-  }, [liveEvents]);
-
-  const recentVisitors = useMemo(() => {
-    const set = new Set<string>();
-
-    for (const event of recentEvents) {
-      set.add(getSessionKey(event));
-    }
-
-    return set.size;
-  }, [recentEvents]);
-
-  const lastActivityAt = useMemo(() => {
-    if (searchedEvents.length === 0) return null;
-
-    let latest = 0;
-
-    for (const event of searchedEvents) {
-      const time = new Date(event.created_at).getTime();
-
-      if (!Number.isNaN(time) && time > latest) {
-        latest = time;
+      if (eventTime > current) {
+        sessionLastSeen.set(sessionKey, eventTime);
       }
     }
 
-    return latest ? new Date(latest).toISOString() : null;
+    let liveVisitors = 0;
+    let recentVisitors = 0;
+    let notLiveVisitors = 0;
+    let latestSeenTime = 0;
+
+    const now = Date.now();
+
+    sessionLastSeen.forEach((lastSeenTime) => {
+      if (lastSeenTime > latestSeenTime) {
+        latestSeenTime = lastSeenTime;
+      }
+
+      const ageMs = now - lastSeenTime;
+
+      if (ageMs <= LIVE_VISITOR_WINDOW_MS) {
+        liveVisitors += 1;
+      } else if (ageMs <= RECENT_VISITOR_WINDOW_MS) {
+        recentVisitors += 1;
+      } else {
+        notLiveVisitors += 1;
+      }
+    });
+
+    return {
+      visitors: sessionLastSeen.size,
+      liveVisitors,
+      recentVisitors,
+      notLiveVisitors,
+      lastActivityAt: latestSeenTime
+        ? new Date(latestSeenTime).toISOString()
+        : null,
+    };
+  }, [searchedEvents]);
+
+  const eventWindowCounts = useMemo(() => {
+    const now = Date.now();
+    const liveStart = now - LIVE_VISITOR_WINDOW_MS;
+    const recentStart = now - RECENT_VISITOR_WINDOW_MS;
+
+    let liveEvents = 0;
+    let recentEvents = 0;
+
+    for (const event of searchedEvents) {
+      const time = new Date(event.created_at).getTime();
+      if (Number.isNaN(time)) continue;
+
+      if (time >= liveStart) liveEvents += 1;
+      if (time >= recentStart) recentEvents += 1;
+    }
+
+    return {
+      liveEvents,
+      recentEvents,
+    };
   }, [searchedEvents]);
 
   const eventCounts = useMemo(() => {
     return {
       totalEvents: searchedEvents.length,
-      pageViews: searchedEvents.filter((event) => event.event_name === "page_view")
-        .length,
+      pageViews: searchedEvents.filter(
+        (event) => event.event_name === "page_view"
+      ).length,
       cardViews: searchedEvents.filter(
         (event) => event.event_name === "property_card_view"
       ).length,
@@ -1785,13 +1858,16 @@ export default function AdminAnalyticsPage() {
     rows.push(["Tetamo Analytics Report"]);
     rows.push(["Date Range", getDateRangeLabel(dateRange)]);
     rows.push(["Scope", selectedPropertyLabel]);
+    rows.push(["Loaded Rows", String(events.length)]);
+    rows.push(["Database Total Rows", String(dbTotalEvents ?? "-")]);
+    rows.push(["Truncated", isTruncated ? "Yes" : "No"]);
     rows.push(["Generated At", new Date().toISOString()]);
     rows.push([]);
 
     rows.push(["Overview"]);
     rows.push(["Metric", "Value"]);
-    rows.push(["Total Events", String(eventCounts.totalEvents)]);
-    rows.push(["Unique Visitors", String(visitors)]);
+    rows.push(["Total Events In Current Filter", String(eventCounts.totalEvents)]);
+    rows.push(["Unique Visitors", String(visitorActivity.visitors)]);
     rows.push(["Page Views", String(eventCounts.pageViews)]);
     rows.push(["Property Card Views", String(eventCounts.cardViews)]);
     rows.push(["Property Detail Views", String(eventCounts.detailViews)]);
@@ -1799,14 +1875,18 @@ export default function AdminAnalyticsPage() {
     rows.push(["WhatsApp Clicks", String(eventCounts.whatsappClicks)]);
     rows.push(["Schedule Clicks", String(eventCounts.scheduleClicks)]);
     rows.push(["Leads", String(eventCounts.leads)]);
-    rows.push(["Live Visitors", String(liveVisitors)]);
-    rows.push(["Recent Visitors", String(recentVisitors)]);
-    rows.push(["Last Activity", String(lastActivityAt || "-")]);
+    rows.push(["Live Visitors", String(visitorActivity.liveVisitors)]);
+    rows.push(["Recent Visitors", String(visitorActivity.recentVisitors)]);
+    rows.push(["Not Live Visitors", String(visitorActivity.notLiveVisitors)]);
+    rows.push(["Last Activity", String(visitorActivity.lastActivityAt || "-")]);
     rows.push([
       "Detail Click / Card View",
       percentFormat(conversion.viewToDetailRate),
     ]);
-    rows.push(["Lead Action / Detail View", percentFormat(conversion.leadActionRate)]);
+    rows.push([
+      "Lead Action / Detail View",
+      percentFormat(conversion.leadActionRate),
+    ]);
     rows.push([]);
 
     rows.push(["Locations"]);
@@ -1936,8 +2016,8 @@ export default function AdminAnalyticsPage() {
             Tetamo Analytics
           </h1>
           <p className="mt-1 text-[12px] leading-5 text-gray-500 sm:text-sm">
-            Internal website analytics from Supabase. The map now shows live,
-            recent, and not-live visitor activity by location.
+            Internal website analytics from Supabase. This page now loads
+            analytics in paged batches, so it does not stop at 1,000 rows.
           </p>
         </div>
 
@@ -2021,6 +2101,9 @@ export default function AdminAnalyticsPage() {
             Loaded rows: {numberFormat(events.length)}
           </span>
           <span className="rounded-full bg-gray-100 px-3 py-1">
+            Database rows: {numberFormat(dbTotalEvents ?? events.length)}
+          </span>
+          <span className="rounded-full bg-gray-100 px-3 py-1">
             Mapped locations:{" "}
             {numberFormat(locations.filter(hasCoordinates).length)}
           </span>
@@ -2030,6 +2113,11 @@ export default function AdminAnalyticsPage() {
           <span className="rounded-full bg-yellow-50 px-3 py-1 text-yellow-700">
             Recent = last 30 minutes
           </span>
+          {isTruncated ? (
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+              Showing latest {numberFormat(ANALYTICS_MAX_ROWS)} rows only
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -2038,11 +2126,11 @@ export default function AdminAnalyticsPage() {
           title="Total Events"
           value={loading ? "..." : numberFormat(eventCounts.totalEvents)}
           Icon={BarChart3}
-          caption="All tracked analytics events in selected range."
+          caption="Events loaded into this dashboard after selected filters."
         />
         <StatCard
           title="Unique Visitors"
-          value={loading ? "..." : numberFormat(visitors)}
+          value={loading ? "..." : numberFormat(visitorActivity.visitors)}
           Icon={Users}
           caption="Unique visitor/session IDs."
         />
@@ -2079,18 +2167,41 @@ export default function AdminAnalyticsPage() {
       <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
         <StatCard
           title="Live Visitors"
-          value={loading ? "..." : numberFormat(liveVisitors)}
+          value={loading ? "..." : numberFormat(visitorActivity.liveVisitors)}
           Icon={Flame}
-          caption={`${numberFormat(liveEvents.length)} events in last 5 minutes.`}
+          caption={`${numberFormat(
+            eventWindowCounts.liveEvents
+          )} events in last 5 minutes.`}
         />
         <StatCard
           title="Recent Visitors"
-          value={loading ? "..." : numberFormat(recentVisitors)}
+          value={loading ? "..." : numberFormat(visitorActivity.recentVisitors)}
           Icon={Activity}
-          caption={`${numberFormat(
-            recentEvents.length
-          )} events in last 30 minutes.`}
+          caption="Active 5–30 minutes ago."
         />
+        <StatCard
+          title="Not Live Visitors"
+          value={
+            loading ? "..." : numberFormat(visitorActivity.notLiveVisitors)
+          }
+          Icon={Users}
+          caption="Visitors older than 30 minutes."
+        />
+        <StatCard
+          title="Last Activity"
+          value={loading ? "..." : formatRelativeTime(visitorActivity.lastActivityAt)}
+          Icon={TrendingUp}
+          caption={
+            visitorActivity.lastActivityAt
+              ? `Latest event: ${formatDateTime(
+                  visitorActivity.lastActivityAt
+                )}`
+              : "No activity yet."
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
         <StatCard
           title="WhatsApp Clicks"
           value={loading ? "..." : numberFormat(eventCounts.whatsappClicks)}
@@ -2098,13 +2209,25 @@ export default function AdminAnalyticsPage() {
           caption="Direct WhatsApp intent from listings."
         />
         <StatCard
-          title="Last Activity"
-          value={loading ? "..." : formatRelativeTime(lastActivityAt)}
+          title="Schedule Clicks"
+          value={loading ? "..." : numberFormat(eventCounts.scheduleClicks)}
           Icon={TrendingUp}
+          caption="Schedule viewing button clicks."
+        />
+        <StatCard
+          title="Database Events"
+          value={loading ? "..." : numberFormat(dbTotalEvents ?? events.length)}
+          Icon={BarChart3}
+          caption="Exact Supabase row count where available."
+        />
+        <StatCard
+          title="Loaded Into Page"
+          value={loading ? "..." : numberFormat(events.length)}
+          Icon={RefreshCw}
           caption={
-            lastActivityAt
-              ? `Latest event: ${formatDateTime(lastActivityAt)}`
-              : "No activity yet."
+            isTruncated
+              ? `Limited to latest ${numberFormat(ANALYTICS_MAX_ROWS)} rows.`
+              : "All available rows loaded."
           }
         />
       </div>
