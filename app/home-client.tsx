@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
+import { trackEvent } from "@/lib/trackEvent";
 
 /* =========================
    MANUAL HOMEPAGE PICKS
@@ -415,6 +416,170 @@ async function ensureHomepageAuth(
 
   router.push(`/login?next=${encodeURIComponent(next)}`);
   return null;
+}
+
+type HomepageWhatsappLeadInput = {
+  propertyId: string;
+  propertyTitle: string;
+  propertyCode?: string | null;
+  receiverWhatsapp: string;
+  receiverId: string;
+  receiverName: string;
+  receiverRole: string;
+  price: string;
+  location: string;
+  lang: string;
+  source: string;
+};
+
+async function createHomepageWhatsappLeadAndOpen({
+  propertyId,
+  propertyTitle,
+  propertyCode,
+  receiverWhatsapp,
+  receiverId,
+  receiverName,
+  receiverRole,
+  price,
+  location,
+  lang,
+  source,
+}: HomepageWhatsappLeadInput) {
+  if (!receiverWhatsapp) return;
+
+  const message =
+    lang === "id"
+      ? `Halo ${receiverName || ""}, saya melihat properti ini di TETAMO dan tertarik.
+
+Properti: ${propertyTitle}
+Kode: ${propertyCode || "-"}
+Lokasi: ${location}
+Harga: ${price}
+
+Apakah properti ini masih tersedia?`
+      : `Hello ${receiverName || ""}, I saw this property on TETAMO and I am interested.
+
+Property: ${propertyTitle}
+Code: ${propertyCode || "-"}
+Location: ${location}
+Price: ${price}
+
+Is this property still available?`;
+
+  const whatsappUrl = `https://wa.me/${receiverWhatsapp}?text=${encodeURIComponent(
+    message
+  )}`;
+
+  const popup = typeof window !== "undefined" ? window.open("about:blank", "_blank") : null;
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    await trackEvent({
+      event_name: "property_whatsapp_click",
+      property_id: propertyId,
+      user_id: user?.id ?? null,
+      source_page: "homepage",
+      metadata: {
+        button: "whatsapp",
+        source,
+        property_title: propertyTitle,
+        property_code: propertyCode || null,
+        posted_by_type: receiverRole || "owner",
+        receiver_id: receiverId || null,
+        receiver_name: receiverName || null,
+      },
+    });
+
+    let senderProfile:
+      | {
+          full_name: string | null;
+          phone: string | null;
+          email: string | null;
+        }
+      | null = null;
+
+    if (user?.id) {
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("full_name, phone, email")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Homepage WhatsApp sender profile error:", profileError);
+      } else {
+        senderProfile = profileData;
+      }
+    }
+
+    const { data: insertedLead, error } = await supabase
+      .from("leads")
+      .insert({
+        property_id: propertyId,
+        property_code: propertyCode || null,
+        property_title: propertyTitle,
+
+        sender_user_id: user?.id || null,
+        sender_name:
+          senderProfile?.full_name ||
+          (typeof user?.user_metadata?.full_name === "string"
+            ? user.user_metadata.full_name
+            : "Guest"),
+        sender_email: senderProfile?.email || user?.email || null,
+        sender_phone: senderProfile?.phone || null,
+
+        receiver_user_id: receiverId || null,
+        receiver_name: receiverName || null,
+        receiver_role: receiverRole || "owner",
+
+        assigned_admin_user_id: null,
+        admin_visible: true,
+
+        lead_type: "whatsapp",
+        source,
+        message,
+        viewing_date: null,
+        viewing_time: null,
+
+        status: "new",
+        priority: "normal",
+        notes: null,
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Homepage WhatsApp lead insert error:", error);
+    } else if (insertedLead?.id) {
+      await trackEvent({
+        event_name: "lead_created",
+        property_id: propertyId,
+        user_id: user?.id ?? null,
+        source_page: "homepage",
+        lead_id: String(insertedLead.id),
+        metadata: {
+          lead_type: "whatsapp",
+          source,
+          property_title: propertyTitle,
+          property_code: propertyCode || null,
+          receiver_id: receiverId || null,
+          receiver_name: receiverName || null,
+          receiver_role: receiverRole || "owner",
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Failed to create homepage WhatsApp lead:", error);
+  } finally {
+    if (popup) {
+      popup.location.href = whatsappUrl;
+    } else if (typeof window !== "undefined") {
+      window.location.href = whatsappUrl;
+    }
+  }
 }
 
 /* =========================
@@ -1171,6 +1336,8 @@ function ScheduleViewingButton({
 
       const { error } = await supabase.from("leads").insert({
         property_id: propertyId,
+        property_code: propertyCode || null,
+        property_title: propertyTitle,
         sender_user_id: userId,
         sender_name:
           senderProfile?.full_name ||
@@ -1342,25 +1509,29 @@ function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
       prev === 0 ? property.images.length - 1 : prev - 1
     );
 
-  const whatsappHref = property.whatsapp
-    ? `https://wa.me/${property.whatsapp}?text=${encodeURIComponent(
-        lang === "id"
-          ? `Halo, saya melihat properti ini di TETAMO dan tertarik.
+  const whatsappHref = property.whatsapp ? `https://wa.me/${property.whatsapp}` : "#";
 
-Kode: ${property.kode || "-"}
-Lokasi: ${property.province}
-Harga: ${property.price}
+  async function handleHomepageWhatsappClick(
+    event: MouseEvent<HTMLAnchorElement>
+  ) {
+    event.preventDefault();
 
-Apakah properti ini masih tersedia?`
-          : `Hello, I saw this property on TETAMO and I am interested.
+    if (!property.whatsapp) return;
 
-Code: ${property.kode || "-"}
-Location: ${property.province}
-Price: ${property.price}
-
-Is this property still available?`
-      )}`
-    : "#";
+    await createHomepageWhatsappLeadAndOpen({
+      propertyId: property.id,
+      propertyTitle: property.title,
+      propertyCode: property.kode || null,
+      receiverWhatsapp: property.whatsapp,
+      receiverId: property.receiverId,
+      receiverName: property.receiverName,
+      receiverRole: property.receiverRole || property.postedByType || "owner",
+      price: property.price,
+      location: property.province,
+      lang,
+      source: "homepage_featured_property_whatsapp",
+    });
+  }
 
   function getVerifiedBadgeText() {
     if (property.postedByType === "owner") {
@@ -1487,9 +1658,7 @@ Is this property still available?`
         <div className="mt-4 grid grid-cols-2 gap-3">
           <a
             href={whatsappHref}
-            onClick={(e) => {
-              if (!property.whatsapp) e.preventDefault();
-            }}
+            onClick={handleHomepageWhatsappClick}
             target="_blank"
             rel="noreferrer"
             className={`flex min-h-[48px] items-center justify-center rounded-2xl px-3 py-3 text-center text-[13px] font-semibold text-white transition sm:text-sm ${
@@ -1549,6 +1718,28 @@ function FeaturedOwnerPropertyCard({
   const whatsappHref = property.ownerWhatsapp
     ? `https://wa.me/${property.ownerWhatsapp}`
     : "#";
+
+  async function handleHomepageOwnerWhatsappClick(
+    event: MouseEvent<HTMLAnchorElement>
+  ) {
+    event.preventDefault();
+
+    if (!property.ownerWhatsapp) return;
+
+    await createHomepageWhatsappLeadAndOpen({
+      propertyId: property.id,
+      propertyTitle: property.title,
+      propertyCode: property.kode || null,
+      receiverWhatsapp: property.ownerWhatsapp,
+      receiverId: property.receiverId,
+      receiverName: property.receiverName,
+      receiverRole: property.receiverRole || "owner",
+      price: property.price,
+      location: property.province,
+      lang,
+      source: "homepage_featured_owner_whatsapp",
+    });
+  }
 
   return (
     <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
@@ -1651,9 +1842,7 @@ function FeaturedOwnerPropertyCard({
         <div className="mt-4 grid grid-cols-2 gap-3">
           <a
             href={whatsappHref}
-            onClick={(e) => {
-              if (!property.ownerWhatsapp) e.preventDefault();
-            }}
+            onClick={handleHomepageOwnerWhatsappClick}
             target="_blank"
             rel="noreferrer"
             className={`flex min-h-[48px] items-center justify-center rounded-2xl px-3 py-3 text-center text-[13px] font-semibold text-white transition sm:text-sm ${
