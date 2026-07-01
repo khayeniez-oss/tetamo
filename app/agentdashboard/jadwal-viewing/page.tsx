@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ElementType } from "react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
 import {
+  AlertCircle,
   CalendarDays,
   CheckCircle2,
   Clock3,
   MessageCircle,
   Phone,
+  RefreshCw,
   RotateCcw,
   Search,
   UserCheck,
@@ -24,6 +26,8 @@ type FilterStatus = "all" | ViewingStatus;
 type LeadRow = {
   id: string;
   property_id: string | null;
+  property_code: string | null;
+  property_title: string | null;
   sender_name: string | null;
   sender_phone: string | null;
   sender_email: string | null;
@@ -31,6 +35,7 @@ type LeadRow = {
   created_at: string | null;
   status: string | null;
   lead_type: string | null;
+  source: string | null;
   viewing_date: string | null;
   viewing_time: string | null;
   viewing_status: string | null;
@@ -45,6 +50,9 @@ type PropertyRow = {
   city: string | null;
   area: string | null;
   province: string | null;
+  contact_user_id: string | null;
+  contact_role: string | null;
+  source: string | null;
 };
 
 type Viewing = {
@@ -62,15 +70,28 @@ type Viewing = {
   location: string;
   status: ViewingStatus;
   dbStatus: LeadDbStatus;
+  source: string;
+  leadType: string;
+  matchedBy: "direct" | "property";
 };
+
+const ITEMS_PER_PAGE = 12;
+const LEADS_PAGE_SIZE = 1000;
+const LEADS_MAX_ROWS = 20000;
+
+const LEADS_SELECT =
+  "id, property_id, property_code, property_title, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, source, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role";
+
+const PROPERTIES_SELECT =
+  "id, kode, title, city, area, province, contact_user_id, contact_role, source";
 
 function normalizeLeadDbStatus(value?: string | null): LeadDbStatus {
   const v = (value || "").trim().toLowerCase();
 
   if (v === "contacted") return "contacted";
-  if (v === "viewing") return "viewing";
+  if (v === "viewing" || v === "scheduled") return "viewing";
   if (v === "interested") return "interested";
-  if (v === "closed") return "closed";
+  if (v === "closed" || v === "completed" || v === "done") return "closed";
 
   return "new";
 }
@@ -83,6 +104,39 @@ function normalizeViewingStatus(value?: string | null): ViewingStatus {
   if (v === "no_show") return "no_show";
 
   return "scheduled";
+}
+
+function isViewingLead(row: LeadRow) {
+  const combined = `${row.lead_type || ""} ${row.source || ""} ${
+    row.viewing_status || ""
+  }`
+    .trim()
+    .toLowerCase();
+
+  if (combined.includes("viewing")) return true;
+  if (combined.includes("schedule")) return true;
+  if (combined.includes("appointment")) return true;
+  if (row.viewing_date || row.viewing_time) return true;
+
+  return false;
+}
+
+function isAgentViewingRow(
+  row: LeadRow,
+  agentPropertyIds: Set<string>,
+  directMatch: boolean
+) {
+  if (!isViewingLead(row)) return false;
+
+  const role = String(row.receiver_role || "").trim().toLowerCase();
+  const propertyId = row.property_id || "";
+  const propertyMatched = Boolean(propertyId && agentPropertyIds.has(propertyId));
+
+  if (propertyMatched) return true;
+  if (role === "agent") return true;
+  if (directMatch && !role) return true;
+
+  return false;
 }
 
 function viewingStatusUI(status: ViewingStatus, lang: string) {
@@ -111,9 +165,7 @@ function viewingStatusUI(status: ViewingStatus, lang: string) {
   if (status === "done") {
     return {
       label: isID ? "Selesai" : "Done",
-      description: isID
-        ? "Viewing sudah dilakukan."
-        : "Viewing has been completed.",
+      description: isID ? "Viewing sudah dilakukan." : "Viewing has been completed.",
       badgeClass: "bg-green-50 text-green-700 border-green-200",
     };
   }
@@ -159,7 +211,7 @@ function leadStatusUI(status: LeadDbStatus, lang: string) {
   }
 
   return {
-    label: isID ? "Closed" : "Closed",
+    label: "Closed",
     badgeClass: "bg-black text-white border-black",
   };
 }
@@ -277,6 +329,115 @@ function buildPropertyUrl(viewing: Viewing) {
   return "https://www.tetamo.com";
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  return pages;
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+async function fetchAgentProperties(userId: string) {
+  const { data, error } = await supabase
+    .from("properties")
+    .select(PROPERTIES_SELECT)
+    .eq("contact_user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []) as PropertyRow[];
+}
+
+async function fetchPropertiesByIds(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+
+  if (uniqueIds.length === 0) return [];
+
+  const rows: PropertyRow[] = [];
+
+  for (const chunk of chunkArray(uniqueIds, 80)) {
+    const { data, error } = await supabase
+      .from("properties")
+      .select(PROPERTIES_SELECT)
+      .in("id", chunk);
+
+    if (error) throw error;
+
+    rows.push(...((data || []) as PropertyRow[]));
+  }
+
+  return rows;
+}
+
+async function fetchLeadRowsByReceiver(userId: string) {
+  const rows: LeadRow[] = [];
+
+  for (let from = 0; from < LEADS_MAX_ROWS; from += LEADS_PAGE_SIZE) {
+    const to = from + LEADS_PAGE_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from("leads")
+      .select(LEADS_SELECT)
+      .eq("receiver_user_id", userId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    const batch = (data || []) as LeadRow[];
+    rows.push(...batch);
+
+    if (batch.length < LEADS_PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
+async function fetchLeadRowsByPropertyIds(propertyIds: string[]) {
+  const uniqueIds = Array.from(new Set(propertyIds.filter(Boolean)));
+
+  if (uniqueIds.length === 0) return [];
+
+  const rows: LeadRow[] = [];
+
+  for (const chunk of chunkArray(uniqueIds, 80)) {
+    for (let from = 0; from < LEADS_MAX_ROWS; from += LEADS_PAGE_SIZE) {
+      const to = from + LEADS_PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("leads")
+        .select(LEADS_SELECT)
+        .in("property_id", chunk)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      const batch = (data || []) as LeadRow[];
+      rows.push(...batch);
+
+      if (batch.length < LEADS_PAGE_SIZE) break;
+    }
+  }
+
+  return rows;
+}
+
 export default function AgentJadwalViewingPage() {
   const { lang } = useLanguage();
   const isID = lang === "id";
@@ -291,10 +452,12 @@ export default function AgentJadwalViewingPage() {
             errorLogin: "Silakan login sebagai agent terlebih dahulu.",
             loading: "Memuat jadwal viewing...",
             empty: "Belum ada jadwal viewing untuk agent ini.",
+            statsTotal: "Total Viewing",
             statsScheduled: "Terjadwal",
             statsRescheduled: "Dijadwalkan Ulang",
             statsDone: "Selesai",
             statsNoShow: "Tidak Hadir",
+            statsProperties: "Properti Agent",
             listTitle: "Daftar Viewing",
             searchPlaceholder:
               "Cari nama buyer, telepon, judul properti, kode listing, atau lokasi...",
@@ -310,6 +473,7 @@ export default function AgentJadwalViewingPage() {
             viewingStatus: "Status Viewing",
             leadStatus: "Status Lead",
             noPhone: "Nomor tidak tersedia",
+            refresh: "Refresh",
             showing: (start: number, end: number, total: number) =>
               `Menampilkan ${start}–${end} dari ${total} viewing`,
             prev: "Sebelumnya",
@@ -343,10 +507,12 @@ Apakah jadwal ini masih sesuai untuk Anda?`,
             errorLogin: "Please log in as an agent first.",
             loading: "Loading viewing schedule...",
             empty: "No viewing schedule found for this agent yet.",
+            statsTotal: "Total Viewings",
             statsScheduled: "Scheduled",
             statsRescheduled: "Rescheduled",
             statsDone: "Done",
             statsNoShow: "No Show",
+            statsProperties: "Agent Properties",
             listTitle: "Viewing List",
             searchPlaceholder:
               "Search buyer name, phone, property title, listing code, or location...",
@@ -362,6 +528,7 @@ Apakah jadwal ini masih sesuai untuk Anda?`,
             viewingStatus: "Viewing Status",
             leadStatus: "Lead Status",
             noPhone: "Phone number unavailable",
+            refresh: "Refresh",
             showing: (start: number, end: number, total: number) =>
               `Showing ${start}–${end} of ${total} viewings`,
             prev: "Previous",
@@ -397,6 +564,9 @@ Is this schedule still suitable for you?`,
   const [errorMessage, setErrorMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [agentPropertyCount, setAgentPropertyCount] = useState(0);
+  const [directViewingCount, setDirectViewingCount] = useState(0);
+  const [propertyViewingCount, setPropertyViewingCount] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<FilterStatus>("all");
@@ -405,124 +575,139 @@ Is this schedule still suitable for you?`,
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleTime, setRescheduleTime] = useState("");
 
-  const ITEMS_PER_PAGE = 12;
+  const loadViewings = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage("");
 
-  useEffect(() => {
-    let isMounted = true;
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    async function loadViewings() {
-      setLoading(true);
-      setErrorMessage("");
+    if (authError || !user) {
+      setViewings([]);
+      setLoading(false);
+      setErrorMessage(ui.errorLogin);
+      return;
+    }
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (!isMounted) return;
-
-      if (authError || !user) {
-        setViewings([]);
-        setLoading(false);
-        setErrorMessage(ui.errorLogin);
-        return;
-      }
-
-      const [{ data: profileData }, { data: leadsData, error: leadsError }] =
-        await Promise.all([
-          supabase
-            .from("profiles")
-            .select("full_name")
-            .eq("id", user.id)
-            .maybeSingle(),
-          supabase
-            .from("leads")
-            .select(
-              "id, property_id, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role"
-            )
-            .eq("receiver_user_id", user.id)
-            .eq("receiver_role", "agent")
-            .eq("lead_type", "viewing")
-            .order("created_at", { ascending: false }),
-        ]);
-
-      if (!isMounted) return;
+    try {
+      const [{ data: profileData }, agentProperties] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle(),
+        fetchAgentProperties(user.id),
+      ]);
 
       if (profileData?.full_name) {
         setAgentName(profileData.full_name);
       }
 
-      if (leadsError) {
-        setViewings([]);
-        setLoading(false);
-        setErrorMessage(leadsError.message);
-        return;
+      setAgentPropertyCount(agentProperties.length);
+
+      const agentPropertyIds = new Set(agentProperties.map((item) => item.id));
+
+      const [directRowsRaw, propertyRowsRaw] = await Promise.all([
+        fetchLeadRowsByReceiver(user.id),
+        fetchLeadRowsByPropertyIds(Array.from(agentPropertyIds)),
+      ]);
+
+      const directRows = directRowsRaw.filter((row) =>
+        isAgentViewingRow(row, agentPropertyIds, true)
+      );
+
+      const propertyRows = propertyRowsRaw.filter((row) =>
+        isAgentViewingRow(row, agentPropertyIds, false)
+      );
+
+      setDirectViewingCount(directRows.length);
+      setPropertyViewingCount(propertyRows.length);
+
+      const mergedMap = new Map<
+        string,
+        { row: LeadRow; matchedBy: "direct" | "property" }
+      >();
+
+      for (const row of propertyRows) {
+        mergedMap.set(row.id, { row, matchedBy: "property" });
       }
 
-      const leadRows = (leadsData || []) as LeadRow[];
+      for (const row of directRows) {
+        mergedMap.set(row.id, { row, matchedBy: "direct" });
+      }
 
-      const propertyIds = Array.from(
-        new Set(leadRows.map((lead) => lead.property_id).filter(Boolean))
-      ) as string[];
+      const mergedRows = Array.from(mergedMap.values());
 
-      let propertyMap = new Map<string, PropertyRow>();
+      const allPropertyIds = Array.from(
+        new Set(
+          mergedRows
+            .map((item) => item.row.property_id)
+            .filter((value): value is string => Boolean(value))
+        )
+      );
 
-      if (propertyIds.length > 0) {
-        const { data: propertiesData, error: propertiesError } = await supabase
-          .from("properties")
-          .select("id, kode, title, city, area, province")
-          .in("id", propertyIds);
+      const missingPropertyIds = allPropertyIds.filter(
+        (propertyId) => !agentPropertyIds.has(propertyId)
+      );
 
-        if (!isMounted) return;
+      const extraProperties = await fetchPropertiesByIds(missingPropertyIds);
 
-        if (propertiesError) {
-          setViewings([]);
-          setLoading(false);
-          setErrorMessage(propertiesError.message);
-          return;
-        }
+      const propertyMap = new Map<string, PropertyRow>();
 
-        propertyMap = new Map(
-          ((propertiesData || []) as PropertyRow[]).map((item) => [item.id, item])
-        );
+      for (const property of agentProperties) {
+        propertyMap.set(property.id, property);
+      }
+
+      for (const property of extraProperties) {
+        propertyMap.set(property.id, property);
       }
 
       const mapped = sortViewingItems(
-        leadRows.map((lead) => {
-          const property = lead.property_id
-            ? propertyMap.get(lead.property_id)
+        mergedRows.map(({ row, matchedBy }) => {
+          const property = row.property_id
+            ? propertyMap.get(row.property_id)
             : null;
 
           return {
-            id: lead.id,
-            propertyId: lead.property_id || "",
-            listingKode: property?.kode || "-",
+            id: row.id,
+            propertyId: row.property_id || "",
+            listingKode: property?.kode || row.property_code || "-",
             propertyTitle:
-              property?.title || (isID ? "Properti Tanpa Judul" : "Untitled Property"),
-            buyerName: lead.sender_name || (isID ? "Tanpa Nama" : "No Name"),
-            buyerPhone: lead.sender_phone || "-",
-            buyerEmail: lead.sender_email || "-",
-            viewingDate: formatDate(lead.viewing_date, lang),
-            viewingTime: formatTime(lead.viewing_time),
-            viewingDateRaw: lead.viewing_date,
-            viewingTimeRaw: lead.viewing_time,
+              property?.title ||
+              row.property_title ||
+              (isID ? "Properti Tanpa Judul" : "Untitled Property"),
+            buyerName: row.sender_name || (isID ? "Tanpa Nama" : "No Name"),
+            buyerPhone: row.sender_phone || "-",
+            buyerEmail: row.sender_email || "-",
+            viewingDate: formatDate(row.viewing_date, lang),
+            viewingTime: formatTime(row.viewing_time),
+            viewingDateRaw: row.viewing_date,
+            viewingTimeRaw: row.viewing_time,
             location: buildLocation(property),
-            status: normalizeViewingStatus(lead.viewing_status),
-            dbStatus: normalizeLeadDbStatus(lead.status),
+            status: normalizeViewingStatus(row.viewing_status),
+            dbStatus: normalizeLeadDbStatus(row.status),
+            source: row.source || "-",
+            leadType: row.lead_type || "-",
+            matchedBy,
           } satisfies Viewing;
         })
       );
 
       setViewings(mapped);
+    } catch (error: any) {
+      console.error("Failed to load agent viewing schedule:", error);
+      setViewings([]);
+      setErrorMessage(error?.message || ui.updateFailed);
+    } finally {
       setLoading(false);
     }
+  }, [lang, isID, ui.errorLogin, ui.updateFailed]);
 
+  useEffect(() => {
     loadViewings();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [lang, isID, ui.errorLogin]);
+  }, [loadViewings]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -530,10 +715,14 @@ Is this schedule still suitable for you?`,
 
   const summary = useMemo(() => {
     return {
-      scheduled: viewings.filter((v) => v.status === "scheduled").length,
-      rescheduled: viewings.filter((v) => v.status === "rescheduled").length,
-      done: viewings.filter((v) => v.status === "done").length,
-      noShow: viewings.filter((v) => v.status === "no_show").length,
+      total: viewings.length,
+      scheduled: viewings.filter((viewing) => viewing.status === "scheduled")
+        .length,
+      rescheduled: viewings.filter(
+        (viewing) => viewing.status === "rescheduled"
+      ).length,
+      done: viewings.filter((viewing) => viewing.status === "done").length,
+      noShow: viewings.filter((viewing) => viewing.status === "no_show").length,
     };
   }, [viewings]);
 
@@ -559,6 +748,9 @@ Is this schedule still suitable for you?`,
         ${viewing.viewingTime}
         ${viewing.status}
         ${viewing.dbStatus}
+        ${viewing.source}
+        ${viewing.leadType}
+        ${viewing.matchedBy}
       `.toLowerCase();
 
       return searchable.includes(query);
@@ -580,7 +772,13 @@ Is this schedule still suitable for you?`,
 
   const startItem =
     filteredViewings.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+
   const endItem = Math.min(safePage * ITEMS_PER_PAGE, filteredViewings.length);
+
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(safePage, totalPages),
+    [safePage, totalPages]
+  );
 
   async function updateViewingInDb(
     viewingId: string,
@@ -595,7 +793,10 @@ Is this schedule still suitable for you?`,
 
     const { error } = await supabase
       .from("leads")
-      .update(payload)
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", viewingId);
 
     if (error) {
@@ -745,20 +946,38 @@ Is this schedule still suitable for you?`,
 
   return (
     <div className="px-0">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
-          {ui.pageTitle}
-        </h1>
-        <p className="mt-1 text-sm leading-6 text-gray-500">{ui.pageDesc}</p>
+      <div className="mb-6 flex flex-col gap-3 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+            {ui.pageTitle}
+          </h1>
+          <p className="mt-1 text-sm leading-6 text-gray-500">{ui.pageDesc}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={loadViewings}
+          disabled={loading}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {ui.refresh}
+        </button>
       </div>
 
       {errorMessage ? (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {errorMessage}
+        <div className="mb-6 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{errorMessage}</span>
         </div>
       ) : null}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          title={ui.statsTotal}
+          value={loading ? "..." : summary.total}
+          Icon={Users}
+        />
         <StatCard
           title={ui.statsScheduled}
           value={loading ? "..." : summary.scheduled}
@@ -781,13 +1000,31 @@ Is this schedule still suitable for you?`,
         />
       </div>
 
+      <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <StatCard
+          title={ui.statsProperties}
+          value={loading ? "..." : agentPropertyCount}
+          Icon={Users}
+        />
+        <StatCard
+          title="Direct Viewings"
+          value={loading ? "..." : directViewingCount}
+          Icon={UserCheck}
+        />
+        <StatCard
+          title="Property Viewings"
+          value={loading ? "..." : propertyViewingCount}
+          Icon={CalendarDays}
+        />
+      </div>
+
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               placeholder={ui.searchPlaceholder}
               className="w-full rounded-2xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#1C1C1E]"
             />
@@ -864,6 +1101,12 @@ Is this schedule still suitable for you?`,
                           {leadBadge.label}
                         </span>
 
+                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-500">
+                          {viewing.matchedBy === "direct"
+                            ? "Direct"
+                            : "Property Match"}
+                        </span>
+
                         <div className="text-xs text-gray-500">
                           {viewing.viewingDate} • {viewing.viewingTime}
                         </div>
@@ -875,6 +1118,10 @@ Is this schedule still suitable for you?`,
 
                       <p className="mt-1 text-sm text-gray-500">
                         {ui.kode}: {viewing.listingKode}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-400">
+                        Source: {viewing.source} • Type: {viewing.leadType}
                       </p>
 
                       <div className="mt-4 grid grid-cols-1 gap-3 text-sm text-gray-500 sm:grid-cols-2">
@@ -998,7 +1245,7 @@ Is this schedule still suitable for you?`,
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={safePage === 1}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1006,29 +1253,27 @@ Is this schedule still suitable for you?`,
               </button>
 
               <div className="flex flex-wrap items-center gap-2">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (page) => (
-                    <button
-                      key={page}
-                      type="button"
-                      onClick={() => setCurrentPage(page)}
-                      className={[
-                        "rounded-xl border px-3 py-2 text-sm",
-                        safePage === page
-                          ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                          : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
-                      ].join(" ")}
-                    >
-                      {page}
-                    </button>
-                  )
-                )}
+                {visiblePages.map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={[
+                      "rounded-xl border px-3 py-2 text-sm",
+                      safePage === page
+                        ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                        : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    {page}
+                  </button>
+                ))}
               </div>
 
               <button
                 type="button"
                 onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
                 }
                 disabled={safePage === totalPages}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1081,7 +1326,7 @@ Is this schedule still suitable for you?`,
                 <input
                   type="date"
                   value={rescheduleDate}
-                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  onChange={(event) => setRescheduleDate(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 outline-none focus:border-[#1C1C1E]"
                 />
               </div>
@@ -1093,7 +1338,7 @@ Is this schedule still suitable for you?`,
                 <input
                   type="time"
                   value={rescheduleTime}
-                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  onChange={(event) => setRescheduleTime(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 outline-none focus:border-[#1C1C1E]"
                 />
               </div>
