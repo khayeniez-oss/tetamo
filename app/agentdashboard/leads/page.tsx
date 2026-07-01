@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   CalendarDays,
   MessageCircle,
   Phone,
+  RefreshCw,
   Search,
   UserCheck,
 } from "lucide-react";
@@ -44,6 +46,11 @@ type PropertyRow = {
   city: string | null;
   area: string | null;
   province: string | null;
+  contact_user_id?: string | null;
+  user_id?: string | null;
+  created_by_user_id?: string | null;
+  contact_role?: string | null;
+  source?: string | null;
 };
 
 type Lead = {
@@ -58,6 +65,7 @@ type Lead = {
   buyerEmail: string;
   message: string;
   createdAt: string;
+  rawCreatedAt: string | null;
   status: LeadStatus;
   leadType: string;
   source: string;
@@ -65,25 +73,40 @@ type Lead = {
   viewingDate: string | null;
   viewingTime: string | null;
   viewingStatus: ViewingStatus;
+  receiverRole: string;
+  matchedBy: "direct" | "property";
 };
+
+const ITEMS_PER_PAGE = 12;
+const LEADS_PAGE_SIZE = 1000;
+const LEADS_MAX_ROWS = 20000;
+
+const LEADS_SELECT =
+  "id, property_id, property_code, property_title, source, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role";
+
+const PROPERTIES_SELECT =
+  "id, kode, title, price, city, area, province, contact_user_id, user_id, created_by_user_id, contact_role, source";
 
 function normalizeLeadStatus(value?: string | null): LeadStatus {
   const v = (value || "").trim().toLowerCase();
 
   if (v === "contacted") return "contacted";
-  if (v === "viewing") return "viewing";
+  if (v === "viewing" || v === "scheduled") return "viewing";
   if (v === "interested") return "interested";
-  if (v === "closed") return "closed";
+  if (v === "closed" || v === "completed" || v === "done") return "closed";
 
   return "new";
 }
 
-function normalizeSourceType(leadType?: string | null, source?: string | null): SourceFilter {
+function normalizeSourceType(
+  leadType?: string | null,
+  source?: string | null
+): SourceFilter {
   const combined = `${leadType || ""} ${source || ""}`.trim().toLowerCase();
 
   if (
     combined.includes("whatsapp") ||
-    combined.includes("wa") ||
+    combined.includes("wa.me") ||
     combined.includes("chat")
   ) {
     return "whatsapp";
@@ -280,6 +303,155 @@ function buildPropertyUrl(lead: Lead) {
   return "https://www.tetamo.com";
 }
 
+function visiblePageNumbers(current: number, total: number) {
+  const pages: number[] = [];
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  return pages;
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+async function fetchLeadRowsByReceiver(userId: string) {
+  const rows: LeadRow[] = [];
+
+  for (let from = 0; from < LEADS_MAX_ROWS; from += LEADS_PAGE_SIZE) {
+    const to = from + LEADS_PAGE_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from("leads")
+      .select(LEADS_SELECT)
+      .eq("receiver_user_id", userId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    const batch = (data || []) as LeadRow[];
+    rows.push(...batch);
+
+    if (batch.length < LEADS_PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
+async function fetchLeadRowsByPropertyIds(propertyIds: string[]) {
+  const uniqueIds = Array.from(new Set(propertyIds.filter(Boolean)));
+
+  if (uniqueIds.length === 0) return [];
+
+  const rows: LeadRow[] = [];
+  const chunks = chunkArray(uniqueIds, 80);
+
+  for (const chunk of chunks) {
+    for (let from = 0; from < LEADS_MAX_ROWS; from += LEADS_PAGE_SIZE) {
+      const to = from + LEADS_PAGE_SIZE - 1;
+
+      const { data, error } = await supabase
+        .from("leads")
+        .select(LEADS_SELECT)
+        .in("property_id", chunk)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      const batch = (data || []) as LeadRow[];
+      rows.push(...batch);
+
+      if (batch.length < LEADS_PAGE_SIZE) break;
+    }
+  }
+
+  return rows;
+}
+
+async function fetchAgentProperties(userId: string) {
+  const { data, error } = await supabase
+    .from("properties")
+    .select(PROPERTIES_SELECT)
+    .or(
+      `contact_user_id.eq.${userId},user_id.eq.${userId},created_by_user_id.eq.${userId}`
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []) as PropertyRow[];
+}
+
+async function fetchPropertiesByIds(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+
+  if (uniqueIds.length === 0) return [];
+
+  const rows: PropertyRow[] = [];
+
+  for (const chunk of chunkArray(uniqueIds, 80)) {
+    const { data, error } = await supabase
+      .from("properties")
+      .select(PROPERTIES_SELECT)
+      .in("id", chunk);
+
+    if (error) throw error;
+
+    rows.push(...(((data || []) as PropertyRow[]) || []));
+  }
+
+  return rows;
+}
+
+function isProbablyAgentLead(row: LeadRow, agentPropertyIds: Set<string>) {
+  const role = String(row.receiver_role || "").toLowerCase();
+  const propertyId = row.property_id || "";
+
+  if (agentPropertyIds.has(propertyId)) return true;
+  if (role === "agent") return true;
+  if (!role && propertyId && agentPropertyIds.has(propertyId)) return true;
+
+  return false;
+}
+
+function SummaryCard({
+  title,
+  value,
+  caption,
+}: {
+  title: string;
+  value: number | string;
+  caption?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 sm:text-[11px]">
+        {title}
+      </p>
+      <p className="mt-1.5 text-lg font-bold text-[#1C1C1E] sm:text-xl">
+        {value}
+      </p>
+      {caption ? (
+        <p className="mt-1 text-[10px] leading-4 text-gray-500 sm:text-[11px]">
+          {caption}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AgentLeadsPage() {
   const { lang } = useLanguage();
   const isID = lang === "id";
@@ -290,7 +462,7 @@ export default function AgentLeadsPage() {
         ? {
             pageTitle: "Leads",
             pageDesc:
-              "Kelola semua leads buyer berdasarkan sumber, status follow-up, dan progres viewing.",
+              "Kelola semua leads buyer dari WhatsApp, homepage, marketplace, detail properti, dan request viewing.",
             searchPlaceholder:
               "Cari buyer, nomor, email, kode listing, lokasi, harga, atau pesan...",
             listTitle: "Daftar Leads",
@@ -319,6 +491,8 @@ export default function AgentLeadsPage() {
             requestedSchedule: "Jadwal diminta",
             leadSource: "Sumber Lead",
             leadStage: "Tahap Lead",
+            loadedFrom: "Dimuat Dari",
+            refresh: "Refresh",
             show: (start: number, end: number, total: number) =>
               `Menampilkan ${start}–${end} dari ${total} leads`,
             prev: "Sebelumnya",
@@ -349,7 +523,7 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`,
         : {
             pageTitle: "Leads",
             pageDesc:
-              "Manage buyer leads by source, follow-up status, and viewing progress.",
+              "Manage all buyer leads from WhatsApp, homepage, marketplace, property detail, and viewing requests.",
             searchPlaceholder:
               "Search buyer, phone, email, listing code, location, price, or message...",
             listTitle: "Lead List",
@@ -378,6 +552,8 @@ Silakan beri tahu waktu yang paling nyaman untuk Anda.`,
             requestedSchedule: "Requested schedule",
             leadSource: "Lead Source",
             leadStage: "Lead Stage",
+            loadedFrom: "Loaded From",
+            refresh: "Refresh",
             show: (start: number, end: number, total: number) =>
               `Showing ${start}–${end} of ${total} leads`,
             prev: "Previous",
@@ -417,134 +593,149 @@ Please let me know the most convenient time for you.`,
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [agentPropertyCount, setAgentPropertyCount] = useState(0);
+  const [directLeadCount, setDirectLeadCount] = useState(0);
+  const [propertyMatchedLeadCount, setPropertyMatchedLeadCount] = useState(0);
 
-  const ITEMS_PER_PAGE = 12;
+  const loadLeads = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage("");
 
-  useEffect(() => {
-    let isMounted = true;
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    async function loadLeads() {
-      setLoading(true);
-      setErrorMessage("");
+    if (authError || !user) {
+      setLeads([]);
+      setLoading(false);
+      setErrorMessage(ui.loginError);
+      return;
+    }
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (!isMounted) return;
-
-      if (authError || !user) {
-        setLeads([]);
-        setLoading(false);
-        setErrorMessage(ui.loginError);
-        return;
-      }
-
-      const [{ data: profileData }, { data: leadsData, error: leadsError }] =
-        await Promise.all([
-          supabase
-            .from("profiles")
-            .select("full_name")
-            .eq("id", user.id)
-            .maybeSingle(),
-          supabase
-            .from("leads")
-            .select(
-              "id, property_id, property_code, property_title, source, sender_name, sender_phone, sender_email, message, created_at, status, lead_type, viewing_date, viewing_time, viewing_status, receiver_user_id, receiver_role"
-            )
-            .eq("receiver_user_id", user.id)
-            .eq("receiver_role", "agent")
-            .order("created_at", { ascending: false }),
-        ]);
-
-      if (!isMounted) return;
+    try {
+      const [{ data: profileData }, agentProperties] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle(),
+        fetchAgentProperties(user.id),
+      ]);
 
       if (profileData?.full_name) {
         setAgentName(profileData.full_name);
       }
 
-      if (leadsError) {
-        setLeads([]);
-        setLoading(false);
-        setErrorMessage(leadsError.message);
-        return;
+      setAgentPropertyCount(agentProperties.length);
+
+      const agentPropertyIds = new Set(agentProperties.map((item) => item.id));
+
+      const [directRows, propertyRows] = await Promise.all([
+        fetchLeadRowsByReceiver(user.id),
+        fetchLeadRowsByPropertyIds(Array.from(agentPropertyIds)),
+      ]);
+
+      setDirectLeadCount(directRows.length);
+      setPropertyMatchedLeadCount(propertyRows.length);
+
+      const mergedMap = new Map<
+        string,
+        { row: LeadRow; matchedBy: "direct" | "property" }
+      >();
+
+      for (const row of propertyRows) {
+        if (!isProbablyAgentLead(row, agentPropertyIds)) continue;
+        mergedMap.set(row.id, { row, matchedBy: "property" });
       }
 
-      const leadRows = (leadsData || []) as LeadRow[];
-
-      const propertyIds = Array.from(
-        new Set(leadRows.map((lead) => lead.property_id).filter(Boolean))
-      ) as string[];
-
-      let propertyMap = new Map<string, PropertyRow>();
-
-      if (propertyIds.length > 0) {
-        const { data: propertyData, error: propertyError } = await supabase
-          .from("properties")
-          .select("id, kode, title, price, city, area, province")
-          .in("id", propertyIds);
-
-        if (!isMounted) return;
-
-        if (propertyError) {
-          setLeads([]);
-          setLoading(false);
-          setErrorMessage(propertyError.message);
-          return;
-        }
-
-        propertyMap = new Map(
-          ((propertyData || []) as PropertyRow[]).map((item) => [
-            item.id,
-            item,
-          ])
-        );
+      for (const row of directRows) {
+        mergedMap.set(row.id, { row, matchedBy: "direct" });
       }
 
-      const mapped: Lead[] = leadRows.map((lead) => {
-        const property = lead.property_id
-          ? propertyMap.get(lead.property_id)
-          : null;
+      const mergedRows = Array.from(mergedMap.values());
 
-        const sourceType = normalizeSourceType(lead.lead_type, lead.source);
-        const viewingStatus = normalizeViewingStatus(
-          lead.viewing_status,
-          sourceType
-        );
+      const allPropertyIds = Array.from(
+        new Set(
+          mergedRows
+            .map((item) => item.row.property_id)
+            .filter((value): value is string => Boolean(value))
+        )
+      );
 
-        return {
-          id: lead.id,
-          propertyId: lead.property_id,
-          listingKode: property?.kode || lead.property_code || "-",
-          propertyTitle: property?.title || lead.property_title || ui.noProperty,
-          propertyPrice: formatCurrency(property?.price || 0),
-          propertyLocation: buildPropertyLocation(property),
-          buyerName: lead.sender_name || ui.noName,
-          buyerPhone: lead.sender_phone || "-",
-          buyerEmail: lead.sender_email || "-",
-          message: lead.message || "-",
-          createdAt: formatDate(lead.created_at, lang),
-          status: normalizeLeadStatus(lead.status),
-          leadType: lead.lead_type || "lead",
-          source: lead.source || "-",
-          sourceType,
-          viewingDate: lead.viewing_date,
-          viewingTime: lead.viewing_time,
-          viewingStatus,
-        };
-      });
+      const missingPropertyIds = allPropertyIds.filter(
+        (propertyId) => !agentPropertyIds.has(propertyId)
+      );
+
+      const extraProperties = await fetchPropertiesByIds(missingPropertyIds);
+
+      const propertyMap = new Map<string, PropertyRow>();
+
+      for (const property of agentProperties) {
+        propertyMap.set(property.id, property);
+      }
+
+      for (const property of extraProperties) {
+        propertyMap.set(property.id, property);
+      }
+
+      const mapped: Lead[] = mergedRows
+        .map(({ row, matchedBy }) => {
+          const property = row.property_id
+            ? propertyMap.get(row.property_id)
+            : null;
+
+          const sourceType = normalizeSourceType(row.lead_type, row.source);
+          const viewingStatus = normalizeViewingStatus(
+            row.viewing_status,
+            sourceType
+          );
+
+          return {
+            id: row.id,
+            propertyId: row.property_id,
+            listingKode: property?.kode || row.property_code || "-",
+            propertyTitle:
+              property?.title || row.property_title || ui.noProperty,
+            propertyPrice: formatCurrency(property?.price || 0),
+            propertyLocation: buildPropertyLocation(property),
+            buyerName: row.sender_name || ui.noName,
+            buyerPhone: row.sender_phone || "-",
+            buyerEmail: row.sender_email || "-",
+            message: row.message || "-",
+            createdAt: formatDate(row.created_at, lang),
+            rawCreatedAt: row.created_at,
+            status: normalizeLeadStatus(row.status),
+            leadType: row.lead_type || "lead",
+            source: row.source || "-",
+            sourceType,
+            viewingDate: row.viewing_date,
+            viewingTime: row.viewing_time,
+            viewingStatus,
+            receiverRole: row.receiver_role || "-",
+            matchedBy,
+          };
+        })
+        .sort((a, b) => {
+          const aTime = a.rawCreatedAt ? new Date(a.rawCreatedAt).getTime() : 0;
+          const bTime = b.rawCreatedAt ? new Date(b.rawCreatedAt).getTime() : 0;
+
+          return bTime - aTime;
+        });
 
       setLeads(mapped);
+    } catch (error: any) {
+      console.error("Failed to load agent leads:", error);
+      setLeads([]);
+      setErrorMessage(error?.message || ui.updateError);
+    } finally {
       setLoading(false);
     }
+  }, [lang, ui.loginError, ui.noName, ui.noProperty, ui.updateError]);
 
+  useEffect(() => {
     loadLeads();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [lang, ui.loginError, ui.noName, ui.noProperty]);
+  }, [loadLeads]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -640,6 +831,8 @@ Please let me know the most convenient time for you.`,
         ${lead.sourceType}
         ${lead.status}
         ${lead.viewingStatus || ""}
+        ${lead.receiverRole}
+        ${lead.matchedBy}
       `.toLowerCase();
 
       const matchesSearch = !q || searchable.includes(q);
@@ -647,6 +840,17 @@ Please let me know the most convenient time for you.`,
       return matchesStatus && matchesSource && matchesSearch;
     });
   }, [leads, search, statusFilter, sourceFilter]);
+
+  const stats = useMemo(() => {
+    return {
+      total: leads.length,
+      whatsapp: leads.filter((lead) => lead.sourceType === "whatsapp").length,
+      viewing: leads.filter((lead) => lead.sourceType === "viewing").length,
+      newCount: leads.filter((lead) => lead.status === "new").length,
+      interested: leads.filter((lead) => lead.status === "interested").length,
+      closed: leads.filter((lead) => lead.status === "closed").length,
+    };
+  }, [leads]);
 
   const totalPages = Math.max(
     1,
@@ -666,6 +870,11 @@ Please let me know the most convenient time for you.`,
 
   const endItem = Math.min(safePage * ITEMS_PER_PAGE, filteredLeads.length);
 
+  const visiblePages = useMemo(
+    () => visiblePageNumbers(safePage, totalPages),
+    [safePage, totalPages]
+  );
+
   const statusOptions: Array<{ key: StatusFilter; label: string }> = [
     { key: "all", label: ui.all },
     { key: "new", label: ui.new },
@@ -684,12 +893,58 @@ Please let me know the most convenient time for you.`,
 
   return (
     <div className="min-w-0">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
-          {ui.pageTitle}
-        </h1>
-        <p className="mt-1 text-sm leading-6 text-gray-500">{ui.pageDesc}</p>
+      <div className="mb-6 flex flex-col gap-3 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-[#1C1C1E] sm:text-2xl">
+            {ui.pageTitle}
+          </h1>
+          <p className="mt-1 text-sm leading-6 text-gray-500">{ui.pageDesc}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={loadLeads}
+          disabled={loading}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          {ui.refresh}
+        </button>
       </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+        <SummaryCard title="Total" value={stats.total} />
+        <SummaryCard title="WhatsApp" value={stats.whatsapp} />
+        <SummaryCard title="Viewing" value={stats.viewing} />
+        <SummaryCard title={ui.new} value={stats.newCount} />
+        <SummaryCard title={ui.interested} value={stats.interested} />
+        <SummaryCard title={ui.closed} value={stats.closed} />
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-2.5 lg:grid-cols-3">
+        <SummaryCard
+          title="Agent Properties"
+          value={agentPropertyCount}
+          caption="Properties matched to this agent."
+        />
+        <SummaryCard
+          title="Direct Leads"
+          value={directLeadCount}
+          caption="receiver_user_id matched agent login."
+        />
+        <SummaryCard
+          title="Property Leads"
+          value={propertyMatchedLeadCount}
+          caption="Leads attached to this agent’s properties."
+        />
+      </div>
+
+      {errorMessage ? (
+        <div className="mb-6 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      ) : null}
 
       <div className="mb-6 space-y-3">
         <div className="relative w-full">
@@ -697,7 +952,7 @@ Please let me know the most convenient time for you.`,
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
             placeholder={ui.searchPlaceholder}
             className="w-full rounded-2xl border border-gray-300 py-3 pl-11 pr-4 text-sm outline-none focus:border-[#1C1C1E]"
           />
@@ -753,12 +1008,6 @@ Please let me know the most convenient time for you.`,
           </div>
         </div>
       </div>
-
-      {errorMessage ? (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {errorMessage}
-        </div>
-      ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-4 sm:p-6">
@@ -825,6 +1074,12 @@ Please let me know the most convenient time for you.`,
                             {appointmentBadge.label}
                           </span>
                         ) : null}
+
+                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-500">
+                          {lead.matchedBy === "direct"
+                            ? "Direct"
+                            : "Property Match"}
+                        </span>
 
                         <div className="text-xs text-gray-500">
                           {lead.createdAt}
@@ -997,35 +1252,33 @@ Please let me know the most convenient time for you.`,
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={safePage === 1}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {ui.prev}
               </button>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    type="button"
-                    onClick={() => setCurrentPage(page)}
-                    className={[
-                      "rounded-xl border px-3 py-2 text-sm",
-                      safePage === page
-                        ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                        : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
-                    ].join(" ")}
-                  >
-                    {page}
-                  </button>
-                )
-              )}
+              {visiblePages.map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setCurrentPage(page)}
+                  className={[
+                    "rounded-xl border px-3 py-2 text-sm",
+                    safePage === page
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                      : "border-gray-200 text-[#1C1C1E] hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  {page}
+                </button>
+              ))}
 
               <button
                 type="button"
                 onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
                 }
                 disabled={safePage === totalPages}
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
