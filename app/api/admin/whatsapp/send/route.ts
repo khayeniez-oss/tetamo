@@ -47,6 +47,33 @@ function normalizePhone(value?: string | null) {
     .replace(/\D/g, "");
 }
 
+function toTwilioWhatsappAddress(value?: string | null) {
+  const digits = normalizePhone(value);
+  return digits ? `whatsapp:+${digits}` : "";
+}
+
+function getGraphVersion() {
+  return cleanEnv(process.env.META_GRAPH_VERSION) || "v25.0";
+}
+
+function getMetaDirectPhoneNumberId() {
+  return cleanEnv(process.env.META_DIRECT_WHATSAPP_PHONE_NUMBER_ID);
+}
+
+function getMetaDirectBusinessSenderKey() {
+  const phoneNumberId = getMetaDirectPhoneNumberId();
+  return phoneNumberId ? `meta:${phoneNumberId}` : "";
+}
+
+function getTwilioFromAddress() {
+  return toTwilioWhatsappAddress(process.env.TWILIO_WHATSAPP_FROM);
+}
+
+function getTwilioBusinessSenderKey() {
+  const digits = normalizePhone(getTwilioFromAddress());
+  return digits ? `twilio:${digits}` : "";
+}
+
 function isWindowOpen(value?: string | null) {
   if (!value) return false;
 
@@ -140,7 +167,7 @@ async function sendMetaText(params: {
   to: string;
   message: string;
 }): Promise<SendResult> {
-  const accessToken = cleanEnv(process.env.META_WHATSAPP_ACCESS_TOKEN);
+  const accessToken = cleanEnv(process.env.META_DIRECT_WHATSAPP_ACCESS_TOKEN);
 
   if (!accessToken || !params.phoneNumberId || !params.to || !params.message) {
     return {
@@ -148,7 +175,7 @@ async function sendMetaText(params: {
       provider: "meta",
       messageId: null,
       error: {
-        message: "Missing Meta WhatsApp send configuration.",
+        message: "Missing Meta Direct WhatsApp send configuration.",
         hasAccessToken: Boolean(accessToken),
         hasPhoneNumberId: Boolean(params.phoneNumberId),
         hasTo: Boolean(params.to),
@@ -158,7 +185,7 @@ async function sendMetaText(params: {
   }
 
   const response = await fetch(
-    `https://graph.facebook.com/v25.0/${params.phoneNumberId}/messages`,
+    `https://graph.facebook.com/${getGraphVersion()}/${params.phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
@@ -203,7 +230,7 @@ async function sendTwilioText(params: {
 }): Promise<SendResult> {
   const accountSid = cleanEnv(process.env.TWILIO_ACCOUNT_SID);
   const authToken = cleanEnv(process.env.TWILIO_AUTH_TOKEN);
-  const from = cleanEnv(process.env.TWILIO_WHATSAPP_FROM);
+  const from = getTwilioFromAddress();
 
   if (!accountSid || !authToken || !from || !params.to || !params.message) {
     return {
@@ -221,9 +248,7 @@ async function sendTwilioText(params: {
     };
   }
 
-  const to = params.to.toLowerCase().startsWith("whatsapp:")
-    ? params.to
-    : `whatsapp:${params.to}`;
+  const to = toTwilioWhatsappAddress(params.to);
 
   const response = await fetch(
     `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
@@ -305,7 +330,7 @@ export async function POST(req: Request) {
       await supabaseAdmin
         .from("whatsapp_conversations")
         .select(
-          "id, phone, phone_e164, profile_name, channel, window_expires_at, status, ai_enabled, handover_to_admin"
+          "id, phone, phone_e164, profile_name, channel, business_sender_key, conversation_key, window_expires_at, status, ai_enabled, handover_to_admin"
         )
         .eq("id", conversationId)
         .maybeSingle();
@@ -333,6 +358,10 @@ export async function POST(req: Request) {
       .toLowerCase()
       .trim();
 
+    const businessSenderKey = String(
+      (conversation as any).business_sender_key || ""
+    ).trim();
+
     const phone =
       normalizePhone((conversation as any).phone_e164) ||
       normalizePhone((conversation as any).phone);
@@ -345,24 +374,74 @@ export async function POST(req: Request) {
     }
 
     let sendResult: SendResult;
+    let fromNumber = "";
+    let toNumber = "";
 
-    if (channel.includes("meta")) {
-      const phoneNumberId =
-        cleanEnv(process.env.META_WHATSAPP_PHONE_NUMBER_ID) ||
-        cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID);
+    if (channel === "meta_whatsapp") {
+      const phoneNumberId = getMetaDirectPhoneNumberId();
+      const expectedSenderKey = getMetaDirectBusinessSenderKey();
+
+      if (!phoneNumberId || !expectedSenderKey) {
+        return Response.json(
+          {
+            error:
+              "Meta Direct WhatsApp configuration is missing. Check META_DIRECT_* variables.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!businessSenderKey || businessSenderKey !== expectedSenderKey) {
+        return Response.json(
+          {
+            error:
+              "This Meta conversation is not tied to the configured Meta Direct business sender. Complete the WhatsApp conversation migration before replying.",
+          },
+          { status: 409 }
+        );
+      }
 
       sendResult = await sendMetaText({
         phoneNumberId,
         to: phone,
         message,
       });
-    } else if (channel.includes("twilio")) {
-      const twilioTo = (conversation as any).phone || `whatsapp:${phone}`;
+
+      fromNumber = phoneNumberId;
+      toNumber = phone;
+    } else if (channel === "twilio_whatsapp") {
+      const twilioFrom = getTwilioFromAddress();
+      const expectedSenderKey = getTwilioBusinessSenderKey();
+
+      if (!twilioFrom || !expectedSenderKey) {
+        return Response.json(
+          {
+            error:
+              "Twilio WhatsApp configuration is missing. Check TWILIO_* variables.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!businessSenderKey || businessSenderKey !== expectedSenderKey) {
+        return Response.json(
+          {
+            error:
+              "This Twilio conversation is not tied to the configured Tetamo Twilio sender. Complete the WhatsApp conversation migration before replying.",
+          },
+          { status: 409 }
+        );
+      }
+
+      const twilioTo = toTwilioWhatsappAddress(phone);
 
       sendResult = await sendTwilioText({
         to: twilioTo,
         message,
       });
+
+      fromNumber = twilioFrom;
+      toNumber = twilioTo;
     } else {
       return Response.json(
         {
@@ -392,26 +471,21 @@ export async function POST(req: Request) {
         ? "admin_meta_direct"
         : "admin_twilio_direct";
 
-    const fromNumber =
-      sendResult.provider === "meta"
-        ? cleanEnv(process.env.META_WHATSAPP_PHONE_NUMBER_ID) ||
-          cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
-        : cleanEnv(process.env.TWILIO_WHATSAPP_FROM);
-
-    const toNumber =
-      sendResult.provider === "meta" ? phone : (conversation as any).phone;
-
     const { error: messageError } = await supabaseAdmin
       .from("whatsapp_messages")
       .insert({
         conversation_id: conversationId,
+        twilio_message_sid:
+          sendResult.provider === "twilio" ? sendResult.messageId : null,
         direction: "outbound",
         from_number: fromNumber || null,
         to_number: toNumber || null,
-        phone: (conversation as any).phone || `whatsapp:${phone}`,
+        phone: `whatsapp:+${phone}`,
         profile_name: (conversation as any).profile_name || null,
         message,
         source,
+        provider: sendResult.provider,
+        provider_message_id: sendResult.messageId,
         ai_generated: false,
         admin_generated: true,
         media_count: 0,

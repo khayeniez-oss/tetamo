@@ -203,14 +203,11 @@ function normalizeSendProvider(value?: string | null): SendProvider {
 }
 
 function getMetaAccessToken() {
-  return cleanEnv(process.env.META_WHATSAPP_ACCESS_TOKEN);
+  return cleanEnv(process.env.META_DIRECT_WHATSAPP_ACCESS_TOKEN);
 }
 
 function getMetaPhoneNumberId() {
-  return (
-    cleanEnv(process.env.META_WHATSAPP_PHONE_NUMBER_ID) ||
-    cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
-  );
+  return cleanEnv(process.env.META_DIRECT_WHATSAPP_PHONE_NUMBER_ID);
 }
 
 function getGraphVersion() {
@@ -227,6 +224,28 @@ function getTwilioAuthToken() {
 
 function getTwilioWhatsappFrom() {
   return toTwilioWhatsappAddress(process.env.TWILIO_WHATSAPP_FROM);
+}
+
+function getMetaBusinessSenderKey(phoneNumberId?: string | null) {
+  const cleanPhoneNumberId = cleanEnv(phoneNumberId);
+  return cleanPhoneNumberId ? `meta:${cleanPhoneNumberId}` : "";
+}
+
+function getTwilioBusinessSenderKey(from?: string | null) {
+  const digits = normalizePhone(from || getTwilioWhatsappFrom());
+  return digits ? `twilio:${digits}` : "";
+}
+
+function getConversationKey(
+  businessSenderKey: string,
+  customerPhoneE164: string
+) {
+  const cleanSenderKey = cleanEnv(businessSenderKey);
+  const cleanCustomerPhone = normalizePhone(customerPhoneE164);
+
+  if (!cleanSenderKey || !cleanCustomerPhone) return "";
+
+  return `${cleanSenderKey}:${cleanCustomerPhone}`;
 }
 
 function getTwilioContentSidForTemplate(templateName: string) {
@@ -470,80 +489,64 @@ async function getOrCreateConversation(params: {
   contactId: string | null;
   leadType: string;
   sendProvider: SendProvider;
+  businessSenderKey: string;
 }) {
-  const candidates = Array.from(
-    new Set([params.phoneE164, phoneDisplay(params.phoneE164)])
-  );
-
-  const { data: existingConversation } = await supabaseAdmin
-    .from("whatsapp_conversations")
-    .select(
-      "id, phone, phone_e164, profile_name, business_initiated_count, opted_out_at"
-    )
-    .in("phone_e164", candidates)
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existingConversation?.id) {
-    const updatePayload: Record<string, unknown> = {
-      contact_id: params.contactId,
-      lead_type: params.leadType || "unknown",
-      updated_at: new Date().toISOString(),
-    };
-
-    if (params.customerName) updatePayload.profile_name = params.customerName;
-
-    await supabaseAdmin
-      .from("whatsapp_conversations")
-      .update(updatePayload)
-      .eq("id", existingConversation.id);
-
-    return existingConversation as {
-      id: string;
-      business_initiated_count?: number | null;
-      opted_out_at?: string | null;
-    };
-  }
-
   const now = new Date().toISOString();
   const channel =
     params.sendProvider === "twilio_whatsapp"
       ? "twilio_whatsapp"
       : "meta_whatsapp";
 
-  const { data: createdConversation, error: createError } = await supabaseAdmin
-    .from("whatsapp_conversations")
-    .upsert(
-      {
-        phone: `whatsapp:${params.phoneE164}`,
-        phone_e164: params.phoneE164,
-        profile_name: params.customerName,
-        channel,
-        status: "active",
-        ai_enabled: true,
-        handover_to_admin: false,
-        contact_id: params.contactId,
-        lead_type: params.leadType || "unknown",
-        created_at: now,
-        updated_at: now,
-      },
-      {
-        onConflict: "phone",
-      }
-    )
-    .select(
-      "id, phone, phone_e164, profile_name, business_initiated_count, opted_out_at"
-    )
-    .maybeSingle();
+  const conversationKey = getConversationKey(
+    params.businessSenderKey,
+    params.phoneE164
+  );
 
-  if (createError || !createdConversation?.id) {
-    console.error("Failed to create WhatsApp conversation:", createError);
+  if (!conversationKey) {
+    console.error("Failed to build WhatsApp conversation identity.", {
+      sendProvider: params.sendProvider,
+      hasBusinessSenderKey: Boolean(params.businessSenderKey),
+      hasPhoneE164: Boolean(params.phoneE164),
+    });
     return null;
   }
 
-  return createdConversation as {
+  const { data: conversation, error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .upsert(
+      {
+        phone: `whatsapp:+${params.phoneE164}`,
+        phone_e164: params.phoneE164,
+        profile_name: params.customerName,
+        channel,
+        business_sender_key: params.businessSenderKey,
+        conversation_key: conversationKey,
+        status: "active",
+        contact_id: params.contactId,
+        lead_type: params.leadType || "unknown",
+        updated_at: now,
+      },
+      {
+        onConflict: "conversation_key",
+      }
+    )
+    .select(
+      "id, phone, phone_e164, profile_name, channel, business_sender_key, conversation_key, business_initiated_count, opted_out_at"
+    )
+    .maybeSingle();
+
+  if (error || !conversation?.id) {
+    console.error("Failed to create or load WhatsApp conversation:", error);
+    return null;
+  }
+
+  return conversation as {
     id: string;
+    phone?: string | null;
+    phone_e164?: string | null;
+    channel?: string | null;
+    business_sender_key?: string | null;
+    conversation_key?: string | null;
     business_initiated_count?: number | null;
     opted_out_at?: string | null;
   };
@@ -754,6 +757,7 @@ async function saveOutboundTemplateMessage(params: {
   bodyVariables: string[];
   sendType: string;
   sendProvider: SendProvider;
+  businessSender: string;
   metaMessageId: string | null;
   twilioMessageSid: string | null;
   twilioContentSid: string | null;
@@ -761,9 +765,17 @@ async function saveOutboundTemplateMessage(params: {
 }) {
   const now = new Date().toISOString();
   const source = getSendSource(params.sendType, params.sendProvider);
+  const provider =
+    params.sendProvider === "twilio_whatsapp" ? "twilio" : "meta";
+  const providerMessageId =
+    params.sendProvider === "twilio_whatsapp"
+      ? params.twilioMessageSid
+      : params.metaMessageId;
 
   const providerLabel =
-    params.sendProvider === "twilio_whatsapp" ? "Twilio Template" : "Template";
+    params.sendProvider === "twilio_whatsapp"
+      ? "Twilio Template"
+      : "Meta Direct Template";
 
   const message =
     params.bodyVariables.length > 0
@@ -772,18 +784,23 @@ async function saveOutboundTemplateMessage(params: {
         )}`
       : `[${providerLabel}] ${params.templateName}`;
 
-  await supabaseAdmin.from("whatsapp_messages").insert({
+  const toNumber =
+    params.sendProvider === "twilio_whatsapp"
+      ? toTwilioWhatsappAddress(params.phoneE164)
+      : params.phoneE164;
+
+  const { error } = await supabaseAdmin.from("whatsapp_messages").insert({
     conversation_id: params.conversationId,
+    twilio_message_sid: params.twilioMessageSid || null,
     direction: "outbound",
-    from_number:
-      params.sendProvider === "twilio_whatsapp"
-        ? getTwilioWhatsappFrom() || "twilio_whatsapp"
-        : getMetaPhoneNumberId() || "meta_whatsapp",
-    to_number: params.phoneE164,
-    phone: `whatsapp:${params.phoneE164}`,
+    from_number: params.businessSender,
+    to_number: toNumber,
+    phone: `whatsapp:+${params.phoneE164}`,
     profile_name: params.customerName,
     message,
     source,
+    provider,
+    provider_message_id: providerMessageId,
     ai_generated: false,
     admin_generated: true,
     media_count: 0,
@@ -793,6 +810,7 @@ async function saveOutboundTemplateMessage(params: {
       body_variables: params.bodyVariables,
       send_type: params.sendType,
       send_provider: params.sendProvider,
+      business_sender: params.businessSender,
       meta_message_id: params.metaMessageId,
       twilio_message_sid: params.twilioMessageSid,
       twilio_content_sid: params.twilioContentSid,
@@ -801,6 +819,10 @@ async function saveOutboundTemplateMessage(params: {
     },
     created_at: now,
   });
+
+  if (error) {
+    console.error("Failed to save outbound WhatsApp template message:", error);
+  }
 }
 
 async function updateAfterSuccessfulSend(params: {
@@ -929,19 +951,26 @@ export async function POST(req: Request) {
       );
     }
 
-    if (sendProvider === "meta_cloud_api") {
-      const accessToken = getMetaAccessToken();
-      const phoneNumberId = getMetaPhoneNumberId();
+    const metaAccessToken = getMetaAccessToken();
+    const metaPhoneNumberId = getMetaPhoneNumberId();
+    const configuredTwilioFrom = getTwilioWhatsappFrom();
 
-      if (!accessToken || !phoneNumberId) {
+    let businessSender = "";
+    let businessSenderKey = "";
+
+    if (sendProvider === "meta_cloud_api") {
+      if (!metaAccessToken || !metaPhoneNumberId) {
         return Response.json(
           {
             error:
-              "Missing Meta environment variables. Check META_WHATSAPP_ACCESS_TOKEN and META_WHATSAPP_PHONE_NUMBER_ID.",
+              "Missing Meta Direct environment variables. Check META_DIRECT_WHATSAPP_ACCESS_TOKEN and META_DIRECT_WHATSAPP_PHONE_NUMBER_ID.",
           },
           { status: 500 }
         );
       }
+
+      businessSender = metaPhoneNumberId;
+      businessSenderKey = getMetaBusinessSenderKey(metaPhoneNumberId);
     }
 
     if (sendProvider === "twilio_whatsapp") {
@@ -964,6 +993,29 @@ export async function POST(req: Request) {
           { status: 500 }
         );
       }
+
+      if (!configuredTwilioFrom) {
+        return Response.json(
+          {
+            error:
+              "TWILIO_WHATSAPP_FROM is missing from the Tetamo environment.",
+          },
+          { status: 500 }
+        );
+      }
+
+      if (twilioFrom !== configuredTwilioFrom) {
+        return Response.json(
+          {
+            error:
+              "The campaign Twilio sender does not match Tetamo's configured TWILIO_WHATSAPP_FROM.",
+          },
+          { status: 409 }
+        );
+      }
+
+      businessSender = twilioFrom;
+      businessSenderKey = getTwilioBusinessSenderKey(twilioFrom);
 
       if (!twilioContentSid) {
         return Response.json(
@@ -1031,6 +1083,7 @@ export async function POST(req: Request) {
       contactId: contact.id,
       leadType,
       sendProvider,
+      businessSenderKey,
     });
 
     if (!conversation?.id) {
@@ -1086,8 +1139,8 @@ export async function POST(req: Request) {
             bodyVariables,
           })
         : await sendMetaTemplate({
-            phoneNumberId: getMetaPhoneNumberId(),
-            accessToken: getMetaAccessToken(),
+            phoneNumberId: metaPhoneNumberId,
+            accessToken: metaAccessToken,
             phoneE164,
             templateName,
             templateLanguage,
@@ -1152,6 +1205,7 @@ export async function POST(req: Request) {
       bodyVariables,
       sendType,
       sendProvider,
+      businessSender,
       metaMessageId,
       twilioMessageSid,
       twilioContentSid:

@@ -16,6 +16,10 @@ const supabaseAdmin = createClient(
 type ConversationRow = {
   id: string;
   phone: string;
+  phone_e164?: string | null;
+  channel?: string | null;
+  business_sender_key?: string | null;
+  conversation_key?: string | null;
   ai_enabled?: boolean | null;
   handover_to_admin?: boolean | null;
   handover_reason?: string | null;
@@ -82,8 +86,41 @@ function twimlResponse(xml: string) {
   });
 }
 
-function cleanWhatsappPhone(value: string) {
-  return String(value || "").replace(/^whatsapp:/i, "").trim();
+function cleanEnv(value?: string | null) {
+  return String(value || "").trim();
+}
+
+function normalizePhone(value?: string | null) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function toTwilioWhatsappAddress(value?: string | null) {
+  const digits = normalizePhone(value);
+  return digits ? `whatsapp:+${digits}` : "";
+}
+
+function getConfiguredTwilioFrom() {
+  return toTwilioWhatsappAddress(process.env.TWILIO_WHATSAPP_FROM);
+}
+
+function isAllowedTwilioBusinessNumber(value?: string | null) {
+  const incomingDigits = normalizePhone(value);
+  const configuredDigits = normalizePhone(getConfiguredTwilioFrom());
+
+  if (!incomingDigits || !configuredDigits) return false;
+
+  return incomingDigits === configuredDigits;
+}
+
+function getTwilioBusinessSenderKey(businessPhone: string) {
+  return `twilio:${businessPhone}`;
+}
+
+function getTwilioConversationKey(
+  businessPhone: string,
+  customerPhone: string
+) {
+  return `${getTwilioBusinessSenderKey(businessPhone)}:${customerPhone}`;
 }
 
 function getWindowExpiry() {
@@ -319,7 +356,7 @@ async function sendTwilioWhatsappMessage(
 ): Promise<TwilioSendResult> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_WHATSAPP_FROM;
+  const from = getConfiguredTwilioFrom();
 
   if (!to) {
     console.error("Twilio WhatsApp send skipped. Missing recipient number.");
@@ -655,23 +692,39 @@ async function upsertConversation(
   params: URLSearchParams
 ): Promise<ConversationRow | null> {
   const from = params.get("From") || "";
+  const to = params.get("To") || "";
   const profileName = params.get("ProfileName") || "";
   const messageText = getInboundMessageText(params);
 
+  const customerPhone = normalizePhone(from);
+  const businessPhone = normalizePhone(to || getConfiguredTwilioFrom());
+
+  if (!customerPhone || !businessPhone) {
+    console.error("Twilio conversation upsert skipped. Missing phone identity.", {
+      hasCustomerPhone: Boolean(customerPhone),
+      hasBusinessPhone: Boolean(businessPhone),
+    });
+    return null;
+  }
+
   const now = new Date().toISOString();
   const windowExpiresAt = getWindowExpiry();
-
-  const phone = from;
-  const phoneE164 = cleanWhatsappPhone(from);
+  const businessSenderKey = getTwilioBusinessSenderKey(businessPhone);
+  const conversationKey = getTwilioConversationKey(
+    businessPhone,
+    customerPhone
+  );
 
   const { data, error } = await supabaseAdmin
     .from("whatsapp_conversations")
     .upsert(
       {
-        phone,
-        phone_e164: phoneE164,
+        phone: `whatsapp:+${customerPhone}`,
+        phone_e164: customerPhone,
         profile_name: profileName || null,
         channel: "twilio_whatsapp",
+        business_sender_key: businessSenderKey,
+        conversation_key: conversationKey,
         status: "active",
         last_inbound_at: now,
         window_expires_at: windowExpiresAt,
@@ -680,18 +733,40 @@ async function upsertConversation(
         last_message_at: now,
       },
       {
-        onConflict: "phone",
+        onConflict: "conversation_key",
       }
     )
-    .select("id, phone, ai_enabled, handover_to_admin, handover_reason")
+    .select(
+      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason"
+    )
     .single();
 
   if (error || !data?.id) {
-    console.error("Failed to upsert WhatsApp conversation:", error);
+    console.error("Failed to upsert Twilio WhatsApp conversation:", error);
     return null;
   }
 
   return data as ConversationRow;
+}
+
+async function hasProcessedTwilioInboundMessage(messageSid?: string | null) {
+  const cleanMessageSid = cleanEnv(messageSid);
+
+  if (!cleanMessageSid) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("id")
+    .eq("twilio_message_sid", cleanMessageSid)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to check Twilio message deduplication:", error);
+    return false;
+  }
+
+  return Boolean(data?.id);
 }
 
 async function saveInboundMessage(
@@ -707,49 +782,20 @@ async function saveInboundMessage(
   const mediaCount = Number(params.get("NumMedia") || 0);
   const now = new Date().toISOString();
   const rawPayload = getRawPayload(params);
-
-  if (messageSid) {
-    const { error } = await supabaseAdmin
-      .from("whatsapp_messages")
-      .upsert(
-        {
-          conversation_id: conversationId,
-          twilio_message_sid: messageSid,
-          direction: "inbound",
-          from_number: from,
-          to_number: to,
-          phone: from,
-          profile_name: profileName || null,
-          message: messageText,
-          source: "twilio",
-          ai_generated: false,
-          admin_generated: false,
-          media_count: Number.isFinite(mediaCount) ? mediaCount : 0,
-          raw_payload: rawPayload,
-          created_at: now,
-        },
-        {
-          onConflict: "twilio_message_sid",
-          ignoreDuplicates: true,
-        }
-      );
-
-    if (error) {
-      console.error("Failed to save inbound WhatsApp message:", error);
-    }
-
-    return;
-  }
+  const customerPhone = normalizePhone(from);
 
   const { error } = await supabaseAdmin.from("whatsapp_messages").insert({
     conversation_id: conversationId,
+    twilio_message_sid: messageSid || null,
     direction: "inbound",
-    from_number: from,
-    to_number: to,
-    phone: from,
+    from_number: toTwilioWhatsappAddress(from),
+    to_number: toTwilioWhatsappAddress(to),
+    phone: customerPhone ? `whatsapp:+${customerPhone}` : from,
     profile_name: profileName || null,
     message: messageText,
     source: "twilio",
+    provider: "twilio",
+    provider_message_id: messageSid || null,
     ai_generated: false,
     admin_generated: false,
     media_count: Number.isFinite(mediaCount) ? mediaCount : 0,
@@ -757,9 +803,25 @@ async function saveInboundMessage(
     created_at: now,
   });
 
-  if (error) {
-    console.error("Failed to save inbound WhatsApp message:", error);
+  if (error?.code === "23505") {
+    return {
+      stored: false,
+      duplicate: true,
+    };
   }
+
+  if (error) {
+    console.error("Failed to save inbound Twilio WhatsApp message:", error);
+    return {
+      stored: false,
+      duplicate: false,
+    };
+  }
+
+  return {
+    stored: true,
+    duplicate: false,
+  };
 }
 
 async function getRecentMessages(conversationId: string) {
@@ -801,13 +863,18 @@ async function saveOutboundMessage(
     .from("whatsapp_messages")
     .insert({
       conversation_id: conversationId,
+      twilio_message_sid: options?.twilioMessageSid || null,
       direction: "outbound",
-      from_number: to,
-      to_number: from,
-      phone: from,
+      from_number: toTwilioWhatsappAddress(to),
+      to_number: toTwilioWhatsappAddress(from),
+      phone: normalizePhone(from)
+        ? `whatsapp:+${normalizePhone(from)}`
+        : from,
       profile_name: profileName || null,
       message: reply,
       source: options?.source || "tetamo_ai",
+      provider: "twilio",
+      provider_message_id: options?.twilioMessageSid || null,
       ai_generated: Boolean(options?.aiGenerated),
       admin_generated: Boolean(options?.adminGenerated),
       media_count: 0,
@@ -1204,6 +1271,28 @@ export async function POST(req: Request) {
     const profileName = params.get("ProfileName") || "";
     const inboundHasMedia = hasInboundMedia(params);
     const inboundMessageText = getInboundMessageText(params);
+    const inboundMessageSid =
+      params.get("MessageSid") || params.get("SmsMessageSid") || "";
+
+    if (!isAllowedTwilioBusinessNumber(to)) {
+      console.log(
+        "Tetamo ignored Twilio webhook for non-allowed business number.",
+        {
+          incomingBusinessNumber: normalizePhone(to) || "missing",
+          hasConfiguredBusinessNumber: Boolean(getConfiguredTwilioFrom()),
+        }
+      );
+
+      return twimlResponse(createEmptyTwimlResponse());
+    }
+
+    if (await hasProcessedTwilioInboundMessage(inboundMessageSid)) {
+      console.log("Tetamo ignored duplicate Twilio inbound message.", {
+        hasMessageSid: Boolean(inboundMessageSid),
+      });
+
+      return twimlResponse(createEmptyTwimlResponse());
+    }
 
     console.log("Twilio WhatsApp inbound message:", {
       from,
@@ -1236,7 +1325,22 @@ export async function POST(req: Request) {
       return response;
     }
 
-    await saveInboundMessage(params, conversation.id);
+    const inboundSave = await saveInboundMessage(
+      params,
+      conversation.id
+    );
+
+    if (inboundSave.duplicate) {
+      return twimlResponse(createEmptyTwimlResponse());
+    }
+
+    if (!inboundSave.stored) {
+      const reply =
+        "Hi, Tetamo received your message. Please try again shortly.";
+
+      const { response } = await sendReplyAndReturnXml(params, reply);
+      return response;
+    }
 
     const existingHandover = Boolean(conversation.handover_to_admin);
     const existingAiDisabled = conversation.ai_enabled === false;

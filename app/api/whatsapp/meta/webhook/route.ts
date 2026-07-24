@@ -81,46 +81,35 @@ function getVerifyTokens() {
 }
 
 function getMetaAccessToken() {
-  return cleanEnv(process.env.META_WHATSAPP_ACCESS_TOKEN);
+  return cleanEnv(process.env.META_DIRECT_WHATSAPP_ACCESS_TOKEN);
 }
 
 function getPhoneNumberId(fallback?: string | null) {
   return (
     cleanEnv(fallback) ||
-    cleanEnv(process.env.META_WHATSAPP_PHONE_NUMBER_ID) ||
-    cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
+    cleanEnv(process.env.META_DIRECT_WHATSAPP_PHONE_NUMBER_ID)
   );
 }
 
 /**
  * IMPORTANT SAFETY GUARD
  *
- * Tetamo must not reply to Kolkap's WhatsApp number.
+ * Tetamo Meta Direct must process only the dedicated Meta Direct phone number.
+ * The main Tetamo WhatsApp number remains on Twilio and must never be processed
+ * by this route.
  *
- * This function decides which Meta phone_number_id Tetamo is allowed to process.
+ * If no Meta Direct phone number ID is configured, this route fails closed and
+ * ignores every inbound WhatsApp message.
  *
- * If Tetamo Vercel has no allowed phone number ID configured, Tetamo will ignore
- * all inbound WhatsApp webhook messages.
- *
- * Recommended Tetamo Vercel env:
- *
- * If Tetamo WhatsApp should be disabled:
- * - Leave these blank / do not set:
- *   TETAMO_ALLOWED_WHATSAPP_PHONE_NUMBER_IDS
- *   META_WHATSAPP_PHONE_NUMBER_ID
- *   WHATSAPP_PHONE_NUMBER_ID
- *
- * If Tetamo has its own WhatsApp number:
- * - Add only Tetamo's real phone_number_id here:
- *   TETAMO_ALLOWED_WHATSAPP_PHONE_NUMBER_IDS=1234567890
- *
- * Never put Kolkap's Australian number phone_number_id here.
+ * Required Tetamo Vercel env:
+ * - META_DIRECT_WHATSAPP_ACCESS_TOKEN
+ * - META_DIRECT_WHATSAPP_PHONE_NUMBER_ID
+ * - META_DIRECT_ALLOWED_PHONE_NUMBER_IDS
  */
 function getAllowedBusinessPhoneNumberIds() {
   const rawValues = [
-    process.env.TETAMO_ALLOWED_WHATSAPP_PHONE_NUMBER_IDS,
-    process.env.META_WHATSAPP_PHONE_NUMBER_ID,
-    process.env.WHATSAPP_PHONE_NUMBER_ID,
+    process.env.META_DIRECT_ALLOWED_PHONE_NUMBER_IDS,
+    process.env.META_DIRECT_WHATSAPP_PHONE_NUMBER_ID,
   ];
 
   return Array.from(
@@ -176,6 +165,14 @@ function getAdReferralSource(referral?: MetaMessage["referral"] | null) {
 
 function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
+}
+
+function getMetaBusinessSenderKey(phoneNumberId: string) {
+  return `meta:${phoneNumberId}`;
+}
+
+function getMetaConversationKey(phoneNumberId: string, customerPhone: string) {
+  return `${getMetaBusinessSenderKey(phoneNumberId)}:${customerPhone}`;
 }
 
 function detectLanguage(message: string) {
@@ -565,7 +562,7 @@ Do not add labels like "Tetamo:".
 
     return limitReply(noAdminClosing || fallback);
   } catch (error) {
-    console.error("Meta WhatsApp AI generation failed:", error);
+    console.error("Meta Direct WhatsApp AI generation failed:", error);
     return fallback;
   }
 }
@@ -578,7 +575,7 @@ async function sendMetaWhatsappText(params: {
   const accessToken = getMetaAccessToken();
 
   if (!accessToken || !params.phoneNumberId || !params.to || !params.message) {
-    console.error("Meta send skipped. Missing required data.", {
+    console.error("Meta Direct send skipped. Missing required data.", {
       hasAccessToken: Boolean(accessToken),
       hasPhoneNumberId: Boolean(params.phoneNumberId),
       hasTo: Boolean(params.to),
@@ -615,7 +612,7 @@ async function sendMetaWhatsappText(params: {
   const result = await response.json().catch(() => null);
 
   if (!response.ok) {
-    console.error("Meta WhatsApp send failed:", result);
+    console.error("Meta Direct WhatsApp send failed:", result);
 
     return {
       success: false,
@@ -633,17 +630,27 @@ async function sendMetaWhatsappText(params: {
 
 async function upsertConversation(params: {
   customerPhone: string;
+  businessPhoneNumberId: string;
   profileName: string | null;
   messageText: string;
   referral?: MetaMessage["referral"] | null;
 }) {
   const now = new Date().toISOString();
+  const businessSenderKey = getMetaBusinessSenderKey(
+    params.businessPhoneNumberId
+  );
+  const conversationKey = getMetaConversationKey(
+    params.businessPhoneNumberId,
+    params.customerPhone
+  );
 
   const upsertPayload: Record<string, unknown> = {
-    phone: `whatsapp:${params.customerPhone}`,
+    phone: `whatsapp:+${params.customerPhone}`,
     phone_e164: params.customerPhone,
     profile_name: params.profileName,
     channel: "meta_whatsapp",
+    business_sender_key: businessSenderKey,
+    conversation_key: conversationKey,
     status: "active",
     last_inbound_at: now,
     window_expires_at: getWindowExpiry(),
@@ -663,21 +670,25 @@ async function upsertConversation(params: {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_conversations")
     .upsert(upsertPayload, {
-      onConflict: "phone",
+      onConflict: "conversation_key",
     })
     .select(
-      "id, phone, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source"
+      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source"
     )
     .single();
 
   if (error || !data?.id) {
-    console.error("Failed to upsert Meta WhatsApp conversation:", error);
+    console.error("Failed to upsert Meta Direct WhatsApp conversation:", error);
     return null;
   }
 
   return data as {
     id: string;
     phone: string;
+    phone_e164?: string | null;
+    channel: string;
+    business_sender_key?: string | null;
+    conversation_key?: string | null;
     ai_enabled?: boolean | null;
     handover_to_admin?: boolean | null;
     handover_reason?: string | null;
@@ -687,10 +698,36 @@ async function upsertConversation(params: {
   };
 }
 
+async function hasProcessedMetaInboundMessage(
+  metaMessageId?: string | null
+) {
+  const cleanMessageId = cleanEnv(metaMessageId);
+
+  if (!cleanMessageId) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("id")
+    .eq("provider", "meta")
+    .eq("provider_message_id", cleanMessageId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "Failed to check Meta Direct WhatsApp message deduplication:",
+      error
+    );
+    return false;
+  }
+
+  return Boolean(data?.id);
+}
+
 async function saveInboundMessage(params: {
   conversationId: string;
   customerPhone: string;
-  businessPhoneNumberId: string | null;
+  businessPhoneNumberId: string;
   profileName: string | null;
   messageText: string;
   metaMessageId: string | null;
@@ -703,10 +740,12 @@ async function saveInboundMessage(params: {
     direction: "inbound",
     from_number: params.customerPhone,
     to_number: params.businessPhoneNumberId,
-    phone: `whatsapp:${params.customerPhone}`,
+    phone: `whatsapp:+${params.customerPhone}`,
     profile_name: params.profileName,
     message: params.messageText,
     source: "meta",
+    provider: "meta",
+    provider_message_id: params.metaMessageId,
     ai_generated: false,
     admin_generated: false,
     media_count: params.messageType && params.messageType !== "text" ? 1 : 0,
@@ -719,9 +758,25 @@ async function saveInboundMessage(params: {
     created_at: new Date().toISOString(),
   });
 
-  if (error) {
-    console.error("Failed to save Meta inbound WhatsApp message:", error);
+  if (error?.code === "23505") {
+    return {
+      stored: false,
+      duplicate: true,
+    };
   }
+
+  if (error) {
+    console.error("Failed to save Meta Direct inbound WhatsApp message:", error);
+    return {
+      stored: false,
+      duplicate: false,
+    };
+  }
+
+  return {
+    stored: true,
+    duplicate: false,
+  };
 }
 
 async function saveOutboundMessage(params: {
@@ -742,10 +797,12 @@ async function saveOutboundMessage(params: {
       direction: "outbound",
       from_number: params.businessPhoneNumberId,
       to_number: params.customerPhone,
-      phone: `whatsapp:${params.customerPhone}`,
+      phone: `whatsapp:+${params.customerPhone}`,
       profile_name: params.profileName,
       message: params.reply,
       source: "tetamo_mona_meta",
+      provider: "meta",
+      provider_message_id: params.metaSendId,
       ai_generated: true,
       admin_generated: false,
       media_count: 0,
@@ -757,7 +814,7 @@ async function saveOutboundMessage(params: {
     });
 
   if (messageError) {
-    console.error("Failed to save Meta outbound WhatsApp message:", messageError);
+    console.error("Failed to save Meta Direct outbound WhatsApp message:", messageError);
   }
 
   const { error: conversationError } = await supabaseAdmin
@@ -771,7 +828,7 @@ async function saveOutboundMessage(params: {
 
   if (conversationError) {
     console.error(
-      "Failed to update Meta WhatsApp conversation after reply:",
+      "Failed to update Meta Direct WhatsApp conversation after reply:",
       conversationError
     );
   }
@@ -828,7 +885,7 @@ export async function GET(request: Request) {
     (expectedToken) => providedToken === expectedToken
   );
 
-  console.log("Meta WhatsApp webhook verification request:", {
+  console.log("Meta Direct WhatsApp webhook verification request:", {
     mode,
     hasProvidedToken: Boolean(providedToken),
     providedTokenLength: providedToken.length,
@@ -881,7 +938,7 @@ export async function POST(request: Request) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.SUPABASE_SERVICE_ROLE_KEY
     ) {
-      console.error("Missing Supabase env vars for Meta WhatsApp webhook.");
+      console.error("Missing Supabase env vars for Meta Direct WhatsApp webhook.");
       return Response.json({ success: true, stored: false });
     }
 
@@ -889,6 +946,7 @@ export async function POST(request: Request) {
 
     let processedCount = 0;
     let ignoredCount = 0;
+    let duplicateCount = 0;
 
     for (const item of webhookMessages) {
       const incomingPhoneNumberId = cleanEnv(item.phoneNumberId);
@@ -896,10 +954,14 @@ export async function POST(request: Request) {
       if (!isAllowedBusinessPhoneNumberId(incomingPhoneNumberId)) {
         ignoredCount += 1;
 
-        console.log("Tetamo ignored WhatsApp webhook for non-allowed phone number.", {
-          incomingPhoneNumberId: incomingPhoneNumberId || "missing",
-          allowedPhoneNumberIdCount: getAllowedBusinessPhoneNumberIds().length,
-        });
+        console.log(
+          "Tetamo ignored Meta Direct webhook for non-allowed phone number.",
+          {
+            incomingPhoneNumberId: incomingPhoneNumberId || "missing",
+            allowedPhoneNumberIdCount:
+              getAllowedBusinessPhoneNumberIds().length,
+          }
+        );
 
         continue;
       }
@@ -907,11 +969,17 @@ export async function POST(request: Request) {
       const customerPhone = normalizePhone(item.message.from || "");
       const textBody = String(item.message.text?.body || "").trim();
       const phoneNumberId = getPhoneNumberId(incomingPhoneNumberId);
+      const metaMessageId = cleanEnv(item.message.id);
       const isTextMessage = item.message.type === "text" && Boolean(textBody);
       const referral = item.message.referral || null;
 
-      if (!customerPhone) {
+      if (!customerPhone || !phoneNumberId) {
         ignoredCount += 1;
+        continue;
+      }
+
+      if (await hasProcessedMetaInboundMessage(metaMessageId)) {
+        duplicateCount += 1;
         continue;
       }
 
@@ -921,6 +989,7 @@ export async function POST(request: Request) {
 
       const conversation = await upsertConversation({
         customerPhone,
+        businessPhoneNumberId: phoneNumberId,
         profileName: item.profileName,
         messageText,
         referral,
@@ -931,17 +1000,27 @@ export async function POST(request: Request) {
         continue;
       }
 
-      await saveInboundMessage({
+      const inboundSave = await saveInboundMessage({
         conversationId: conversation.id,
         customerPhone,
         businessPhoneNumberId: phoneNumberId,
         profileName: item.profileName,
         messageText,
-        metaMessageId: item.message.id || null,
+        metaMessageId: metaMessageId || null,
         rawPayload: payload,
         referral,
         messageType: item.message.type || null,
       });
+
+      if (inboundSave.duplicate) {
+        duplicateCount += 1;
+        continue;
+      }
+
+      if (!inboundSave.stored) {
+        ignoredCount += 1;
+        continue;
+      }
 
       if (conversation.handover_to_admin || conversation.ai_enabled === false) {
         processedCount += 1;
@@ -975,9 +1054,10 @@ export async function POST(request: Request) {
       success: true,
       processedCount,
       ignoredCount,
+      duplicateCount,
     });
   } catch (error) {
-    console.error("Meta WhatsApp webhook error:", error);
+    console.error("Meta Direct WhatsApp webhook error:", error);
     return Response.json({ success: true, error_logged: true });
   }
 }
