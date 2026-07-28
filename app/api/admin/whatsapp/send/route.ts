@@ -1,3 +1,6 @@
+
+
+
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -341,6 +344,20 @@ export async function POST(req: Request) {
       return Response.json(
         { error: "WhatsApp conversation was not found." },
         { status: 404 }
+      );
+    }
+
+    if (
+      String((conversation as any).status || "")
+        .toLowerCase()
+        .trim() === "blocked"
+    ) {
+      return Response.json(
+        {
+          error:
+            "This WhatsApp number is blocked. Unblock the number before sending a reply.",
+        },
+        { status: 403 }
       );
     }
 

@@ -434,63 +434,285 @@ export async function PATCH(req: Request) {
     return auth.response!;
   }
 
-  const body = await req.json();
-  const conversationId = String(body?.conversationId || "");
-  const action = String(body?.action || "");
+  try {
+    const body = await req.json();
+    const conversationId = String(body?.conversationId || "").trim();
+    const action = String(body?.action || "").trim();
+    const reason = String(body?.reason || "").trim();
 
-  if (!conversationId) {
+    if (!conversationId) {
+      return Response.json(
+        { success: false, error: "conversationId is required." },
+        { status: 400 }
+      );
+    }
+
+    const { data: existingConversation, error: conversationError } =
+      await supabaseAdmin
+        .from("whatsapp_conversations")
+        .select(CONVERSATION_SELECT)
+        .eq("id", conversationId)
+        .maybeSingle();
+
+    if (conversationError) {
+      console.error(
+        "Failed to load WhatsApp conversation:",
+        conversationError
+      );
+
+      return Response.json(
+        { success: false, error: "Failed to load WhatsApp conversation." },
+        { status: 500 }
+      );
+    }
+
+    if (!existingConversation) {
+      return Response.json(
+        { success: false, error: "WhatsApp conversation was not found." },
+        { status: 404 }
+      );
+    }
+
+    const phoneE164 = String(
+      existingConversation.phone_e164 ||
+        existingConversation.phone ||
+        ""
+    ).trim();
+
+    if (action === "block_number") {
+      if (!phoneE164) {
+        return Response.json(
+          {
+            success: false,
+            error: "This conversation does not have a valid phone number.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const { error: blockError } = await supabaseAdmin
+        .from("whatsapp_blocked_numbers")
+        .upsert(
+          {
+            phone_e164: phoneE164,
+            reason: reason || "Blocked by admin from WhatsApp Inbox",
+            blocked_by: auth.userId || null,
+            blocked_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "phone_e164",
+          }
+        );
+
+      if (blockError) {
+        console.error("Failed to block WhatsApp number:", blockError);
+
+        return Response.json(
+          { success: false, error: "Failed to block WhatsApp number." },
+          { status: 500 }
+        );
+      }
+
+      const { data: updatedConversation, error: updateError } =
+        await supabaseAdmin
+          .from("whatsapp_conversations")
+          .update({
+            status: "blocked",
+            handover_to_admin: false,
+            ai_enabled: false,
+            handover_reason: "Number blocked by admin",
+          })
+          .eq("id", conversationId)
+          .select(CONVERSATION_SELECT)
+          .maybeSingle();
+
+      if (updateError) {
+        console.error(
+          "Failed to update blocked conversation:",
+          updateError
+        );
+
+        return Response.json(
+          {
+            success: false,
+            error: "The number was blocked, but the conversation update failed.",
+          },
+          { status: 500 }
+        );
+      }
+
+      await supabaseAdmin.from("whatsapp_messages").insert({
+        conversation_id: conversationId,
+        direction: "system",
+        from_number: "tetamo_admin_dashboard",
+        to_number: phoneE164,
+        phone: phoneE164,
+        profile_name: existingConversation.profile_name || null,
+        message: "Admin blocked this WhatsApp number.",
+        source: "admin_dashboard",
+        ai_generated: false,
+        admin_generated: true,
+        media_count: 0,
+        raw_payload: {
+          action,
+          reason: reason || "Blocked by admin from WhatsApp Inbox",
+          admin_user_id: auth.userId,
+        },
+        created_at: new Date().toISOString(),
+      });
+
+      return Response.json({
+        success: true,
+        blocked: true,
+        conversation: updatedConversation,
+      });
+    }
+
+    if (action === "unblock_number") {
+      if (!phoneE164) {
+        return Response.json(
+          {
+            success: false,
+            error: "This conversation does not have a valid phone number.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const { error: unblockError } = await supabaseAdmin
+        .from("whatsapp_blocked_numbers")
+        .delete()
+        .eq("phone_e164", phoneE164);
+
+      if (unblockError) {
+        console.error("Failed to unblock WhatsApp number:", unblockError);
+
+        return Response.json(
+          { success: false, error: "Failed to unblock WhatsApp number." },
+          { status: 500 }
+        );
+      }
+
+      const { data: updatedConversation, error: updateError } =
+        await supabaseAdmin
+          .from("whatsapp_conversations")
+          .update({
+            status: "active",
+            handover_to_admin: false,
+            ai_enabled: false,
+            handover_reason: null,
+          })
+          .eq("id", conversationId)
+          .select(CONVERSATION_SELECT)
+          .maybeSingle();
+
+      if (updateError) {
+        console.error(
+          "Failed to update unblocked conversation:",
+          updateError
+        );
+
+        return Response.json(
+          {
+            success: false,
+            error:
+              "The number was unblocked, but the conversation update failed.",
+          },
+          { status: 500 }
+        );
+      }
+
+      await supabaseAdmin.from("whatsapp_messages").insert({
+        conversation_id: conversationId,
+        direction: "system",
+        from_number: "tetamo_admin_dashboard",
+        to_number: phoneE164,
+        phone: phoneE164,
+        profile_name: existingConversation.profile_name || null,
+        message:
+          "Admin unblocked this WhatsApp number. AI remains paused until manually resumed.",
+        source: "admin_dashboard",
+        ai_generated: false,
+        admin_generated: true,
+        media_count: 0,
+        raw_payload: {
+          action,
+          admin_user_id: auth.userId,
+        },
+        created_at: new Date().toISOString(),
+      });
+
+      return Response.json({
+        success: true,
+        blocked: false,
+        conversation: updatedConversation,
+      });
+    }
+
+    const updatePayload = getActionUpdate(action);
+
+    if (!updatePayload) {
+      return Response.json(
+        { success: false, error: "Invalid action." },
+        { status: 400 }
+      );
+    }
+
+    const { data: updatedConversation, error: updateError } =
+      await supabaseAdmin
+        .from("whatsapp_conversations")
+        .update(updatePayload)
+        .eq("id", conversationId)
+        .select(CONVERSATION_SELECT)
+        .maybeSingle();
+
+    if (updateError) {
+      console.error(
+        "Failed to update WhatsApp conversation:",
+        updateError
+      );
+
+      return Response.json(
+        {
+          success: false,
+          error: "Failed to update WhatsApp conversation.",
+        },
+        { status: 500 }
+      );
+    }
+
+    await supabaseAdmin.from("whatsapp_messages").insert({
+      conversation_id: conversationId,
+      direction: "system",
+      from_number: "tetamo_admin_dashboard",
+      to_number: updatedConversation?.phone || null,
+      phone: updatedConversation?.phone || null,
+      profile_name: updatedConversation?.profile_name || null,
+      message: getSystemMessage(action),
+      source: "admin_dashboard",
+      ai_generated: false,
+      admin_generated: true,
+      media_count: 0,
+      raw_payload: {
+        action,
+        admin_user_id: auth.userId,
+      },
+      created_at: new Date().toISOString(),
+    });
+
+    return Response.json({
+      success: true,
+      conversation: updatedConversation,
+    });
+  } catch (error) {
+    console.error("Update WhatsApp conversation error:", error);
+
     return Response.json(
-      { success: false, error: "conversationId is required." },
-      { status: 400 }
-    );
-  }
-
-  const updatePayload = getActionUpdate(action);
-
-  if (!updatePayload) {
-    return Response.json(
-      { success: false, error: "Invalid action." },
-      { status: 400 }
-    );
-  }
-
-  const { data: updatedConversation, error: updateError } = await supabaseAdmin
-    .from("whatsapp_conversations")
-    .update(updatePayload)
-    .eq("id", conversationId)
-    .select(CONVERSATION_SELECT)
-    .maybeSingle();
-
-  if (updateError) {
-    console.error("Failed to update WhatsApp conversation:", updateError);
-
-    return Response.json(
-      { success: false, error: "Failed to update WhatsApp conversation." },
+      {
+        success: false,
+        error: "Failed to update WhatsApp conversation.",
+      },
       { status: 500 }
     );
   }
-
-  await supabaseAdmin.from("whatsapp_messages").insert({
-    conversation_id: conversationId,
-    direction: "system",
-    from_number: "tetamo_admin_dashboard",
-    to_number: updatedConversation?.phone || null,
-    phone: updatedConversation?.phone || null,
-    profile_name: updatedConversation?.profile_name || null,
-    message: getSystemMessage(action),
-    source: "admin_dashboard",
-    ai_generated: false,
-    admin_generated: true,
-    media_count: 0,
-    raw_payload: {
-      action,
-      admin_user_id: auth.userId,
-    },
-    created_at: new Date().toISOString(),
-  });
-
-  return Response.json({
-    success: true,
-    conversation: updatedConversation,
-  });
 }

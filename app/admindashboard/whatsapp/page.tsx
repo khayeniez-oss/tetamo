@@ -325,6 +325,9 @@ export default function AdminWhatsappInboxPage() {
     selectedConversation?.free_entry_point_expires_at
   );
 
+  const selectedNumberBlocked =
+  String(selectedConversation?.status || "").toLowerCase() === "blocked";
+
   const visibleMessages = useMemo(() => {
     if (messages.length <= visibleMessageCount) return messages;
     return messages.slice(messages.length - visibleMessageCount);
@@ -499,6 +502,13 @@ export default function AdminWhatsappInboxPage() {
 
     const cleanMessage = replyMessage.trim();
 
+    if (selectedNumberBlocked) {
+      setError(
+        "This WhatsApp number is blocked. Unblock the number before sending a reply."
+      );
+      return;
+    }
+
     if (!cleanMessage) {
       setError("Please write a reply before sending.");
       return;
@@ -538,7 +548,8 @@ export default function AdminWhatsappInboxPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to send WhatsApp reply.");
+        setError(result.error || "Failed to send WhatsApp reply.");
+        return;
       }
 
       setReplyMessage("");
@@ -551,12 +562,12 @@ export default function AdminWhatsappInboxPage() {
       await loadConversations(filter, page, channelFilter, pageSize);
       await loadMessages(selectedConversationId);
     } catch (err: any) {
-      console.error("Send WhatsApp reply error:", err);
       setError(err?.message || "Failed to send WhatsApp reply.");
     } finally {
       setSendingReply(false);
     }
   }
+
 
   async function sendNewMessage() {
     const cleanPhone = newMessagePhone.trim();
@@ -1187,6 +1198,46 @@ export default function AdminWhatsappInboxPage() {
                     >
                       {actionLoading === "pause_ai" ? "Saving..." : "Pause AI"}
                     </button>
+
+                    {selectedNumberBlocked ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            "Unblock this WhatsApp number?"
+                          );
+
+                          if (confirmed) {
+                            updateConversation("unblock_number");
+                          }
+                        }}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {actionLoading === "unblock_number"
+                          ? "Unblocking..."
+                          : "Unblock Number"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            "Block this WhatsApp number? Mona and admin replies will be disabled."
+                          );
+
+                          if (confirmed) {
+                            updateConversation("block_number");
+                          }
+                        }}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        {actionLoading === "block_number"
+                          ? "Blocking..."
+                          : "Block Number"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1321,6 +1372,13 @@ export default function AdminWhatsappInboxPage() {
                     )}
                   </div>
 
+                  {selectedNumberBlocked ? (
+                    <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs leading-5 text-red-700">
+                      This WhatsApp number is blocked. Mona and admin replies are
+                      disabled until you click Unblock Number.
+                    </div>
+                  ) : null}
+
                   {!selectedReplyWindowOpen ? (
                     <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
                       The 24-hour reply window is closed. Normal text replies may
@@ -1340,11 +1398,13 @@ export default function AdminWhatsappInboxPage() {
                   <textarea
                     value={replyMessage}
                     onChange={(event) => setReplyMessage(event.target.value)}
-                    disabled={!selectedReplyWindowOpen || sendingReply}
+                    disabled={selectedNumberBlocked || !selectedReplyWindowOpen || sendingReply}
                     rows={4}
                     maxLength={1700}
                     placeholder={
-                      selectedReplyWindowOpen
+                      selectedNumberBlocked
+                        ? "This WhatsApp number is blocked. Unblock it before replying."
+                        : selectedReplyWindowOpen
                         ? "Write admin reply to customer..."
                         : "24-hour reply window closed. Approved template needed."
                     }
@@ -1361,6 +1421,7 @@ export default function AdminWhatsappInboxPage() {
                       onClick={sendAdminReply}
                       disabled={
                         sendingReply ||
+                        selectedNumberBlocked ||
                         !selectedReplyWindowOpen ||
                         !replyMessage.trim()
                       }

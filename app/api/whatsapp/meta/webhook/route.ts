@@ -156,6 +156,32 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
+async function isWhatsappNumberBlocked(customerPhone: string) {
+  const normalizedPhone = normalizePhone(customerPhone);
+
+  if (!normalizedPhone) return false;
+
+  const phoneVariants = [
+    normalizedPhone,
+    `+${normalizedPhone}`,
+    `whatsapp:+${normalizedPhone}`,
+  ];
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_blocked_numbers")
+    .select("id")
+    .in("phone_e164", phoneVariants)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to check WhatsApp blocked number:", error);
+    return false;
+  }
+
+  return Boolean(data?.id);
+}
+
 function getMetaBusinessSenderKey(phoneNumberId: string) {
   return `meta:${phoneNumberId}`;
 }
@@ -381,6 +407,7 @@ async function upsertConversation(params: {
   profileName: string | null;
   messageText: string;
   referral?: MetaMessage["referral"] | null;
+  isBlocked: boolean;
 }) {
   const now = new Date().toISOString();
   const businessSenderKey = getMetaBusinessSenderKey(
@@ -398,13 +425,19 @@ async function upsertConversation(params: {
     channel: "meta_whatsapp",
     business_sender_key: businessSenderKey,
     conversation_key: conversationKey,
-    status: "active",
+    status: params.isBlocked ? "blocked" : "active",
     last_inbound_at: now,
     window_expires_at: getWindowExpiry(),
     last_message: params.messageText,
     last_message_direction: "inbound",
     last_message_at: now,
   };
+
+  if (params.isBlocked) {
+    upsertPayload.ai_enabled = false;
+    upsertPayload.handover_to_admin = false;
+    upsertPayload.handover_reason = "Number blocked by admin";
+  }
 
   if (params.referral) {
     upsertPayload.free_entry_point_expires_at = getFreeEntryPointExpiry();
@@ -734,12 +767,15 @@ export async function POST(request: Request) {
         ? textBody
         : "[Customer sent photo, video, or non-text WhatsApp message]";
 
+      const blockedNumber = await isWhatsappNumberBlocked(customerPhone);
+
       const conversation = await upsertConversation({
         customerPhone,
         businessPhoneNumberId: phoneNumberId,
         profileName: item.profileName,
         messageText,
         referral,
+        isBlocked: blockedNumber,
       });
 
       if (!conversation?.id) {
@@ -766,6 +802,11 @@ export async function POST(request: Request) {
 
       if (!inboundSave.stored) {
         ignoredCount += 1;
+        continue;
+      }
+
+      if (blockedNumber) {
+        processedCount += 1;
         continue;
       }
 

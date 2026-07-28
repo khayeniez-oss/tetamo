@@ -129,6 +129,60 @@ function getWindowExpiry() {
   return expiry.toISOString();
 }
 
+async function isBlockedWhatsappNumber(value?: string | null) {
+  const phone = normalizePhone(value);
+
+  if (!phone) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_blocked_numbers")
+    .select("id")
+    .eq("phone_e164", phone)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to check Twilio WhatsApp blocklist:", error);
+    return false;
+  }
+
+  return Boolean(data?.id);
+}
+
+async function getExistingTwilioConversation(
+  params: URLSearchParams
+): Promise<ConversationRow | null> {
+  const customerPhone = normalizePhone(params.get("From") || "");
+  const businessPhone = normalizePhone(
+    params.get("To") || getConfiguredTwilioFrom()
+  );
+
+  if (!customerPhone || !businessPhone) return null;
+
+  const conversationKey = getTwilioConversationKey(
+    businessPhone,
+    customerPhone
+  );
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .select(
+      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason"
+    )
+    .eq("conversation_key", conversationKey)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "Failed to load blocked Twilio WhatsApp conversation:",
+      error
+    );
+    return null;
+  }
+
+  return (data as ConversationRow | null) || null;
+}
+
 function getRawPayload(params: URLSearchParams) {
   const payload: Record<string, string> = {};
 
@@ -1313,6 +1367,31 @@ export async function POST(req: Request) {
 
       const { response } = await sendReplyAndReturnXml(params, reply);
       return response;
+    }
+
+    const customerPhone = normalizePhone(from);
+
+    if (await isBlockedWhatsappNumber(customerPhone)) {
+      const existingConversation = await getExistingTwilioConversation(params);
+
+      if (existingConversation?.id) {
+        const blockedInboundSave = await saveInboundMessage(
+          params,
+          existingConversation.id
+        );
+
+        if (!blockedInboundSave.stored && !blockedInboundSave.duplicate) {
+          console.error(
+            "Failed to store inbound message from blocked Twilio number."
+          );
+        }
+      }
+
+      console.log("Tetamo ignored blocked Twilio WhatsApp number.", {
+        customerPhone: customerPhone || "missing",
+      });
+
+      return twimlResponse(createEmptyTwimlResponse());
     }
 
     const conversation = await upsertConversation(params);
