@@ -71,9 +71,26 @@ const EMPTY_FORM: KnowledgeForm = {
   approvedAnswer: "",
   category: "general",
   language: "id",
-  status: "draft",
-  priority: 0,
+  status: "active",
+  priority: 50,
 };
+
+const CATEGORY_OPTIONS = [
+  { value: "general", label: "General" },
+  { value: "payments", label: "Payments" },
+  { value: "membership", label: "Agent Membership" },
+  { value: "listings", label: "Property Listings" },
+  { value: "pricing", label: "Pricing & Packages" },
+  { value: "verification", label: "Verification" },
+  { value: "viewings", label: "Property Viewings" },
+  { value: "agents", label: "Agents" },
+  { value: "owners", label: "Property Owners" },
+  { value: "property-search", label: "Property Search" },
+  { value: "accounts", label: "Accounts & Login" },
+  { value: "technical", label: "Technical Help" },
+  { value: "legal", label: "Legal & Documents" },
+  { value: "support", label: "Human Support" },
+] as const;
 
 const TABS: {
   value: TabValue;
@@ -209,6 +226,24 @@ export default function MonaKnowledgePage() {
   const [saving, setSaving] = useState(false);
 
   const drawerTitle = form.id ? "Edit Knowledge" : "Add Knowledge";
+
+  const categoryOptions = useMemo(() => {
+    const fixed = CATEGORY_OPTIONS.map((option) => option.value);
+    const custom = categories.filter(
+      (category) => category && !fixed.includes(category as any)
+    );
+
+    return [
+      ...CATEGORY_OPTIONS,
+      ...custom.map((category) => ({
+        value: category,
+        label: category
+          .split("-")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" "),
+      })),
+    ];
+  }, [categories]);
 
   const filteredEntries = useMemo(() => {
     return entries;
@@ -633,6 +668,7 @@ export default function MonaKnowledgePage() {
                 <option value="all">All languages</option>
                 <option value="id">Indonesian</option>
                 <option value="en">English</option>
+                <option value="both">Indonesian & English</option>
               </select>
 
               <select
@@ -704,6 +740,8 @@ export default function MonaKnowledgePage() {
                           <Badge tone="blue">
                             {entry.language === "en"
                               ? "English"
+                              : entry.language === "both"
+                              ? "Indonesian & English"
                               : "Indonesian"}
                           </Badge>
 
@@ -720,9 +758,26 @@ export default function MonaKnowledgePage() {
                           </Badge>
                         </div>
 
-                        <h2 className="mt-4 text-lg font-bold leading-7 text-gray-900">
-                          {entry.canonical_question}
-                        </h2>
+                        <div className="mt-4">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                            Customer questions
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {entry.canonical_question
+                              .split("\n")
+                              .map((question) => question.trim())
+                              .filter(Boolean)
+                              .map((question, index) => (
+                                <span
+                                  key={`${entry.id}-question-${index}`}
+                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold leading-5 text-gray-800"
+                                >
+                                  {question}
+                                </span>
+                              ))}
+                          </div>
+                        </div>
 
                         <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
                           <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
@@ -912,9 +967,28 @@ export default function MonaKnowledgePage() {
 
               <div className="space-y-5 px-5 py-6 sm:px-7">
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
-                    Customer Question
-                  </label>
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">
+                        Customer Questions
+                      </label>
+
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        Add the main question and other ways a customer may ask
+                        the same thing. Put one question on each line.
+                      </p>
+                    </div>
+
+                    <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1 text-[11px] font-bold text-gray-500">
+                      {
+                        form.canonicalQuestion
+                          .split("\n")
+                          .map((question) => question.trim())
+                          .filter(Boolean).length
+                      }{" "}
+                      question(s)
+                    </span>
+                  </div>
 
                   <textarea
                     value={form.canonicalQuestion}
@@ -925,15 +999,25 @@ export default function MonaKnowledgePage() {
                       }))
                     }
                     disabled={saving}
-                    rows={3}
-                    maxLength={600}
-                    placeholder="Example: Bagaimana cara pasang iklan properti di Tetamo?"
-                    className="mt-2 w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 text-sm leading-6 outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                    rows={6}
+                    maxLength={1800}
+                    placeholder={`Kenapa saya menerima pengingat pembayaran?
+Saya belum menyelesaikan pembayaran
+Bagaimana cara melanjutkan pembayaran?
+Saya sudah bayar tetapi masih menerima pesan`}
+                    className="mt-3 w-full resize-y rounded-2xl border border-gray-200 px-4 py-3 text-sm leading-7 outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
                   />
 
-                  <p className="mt-1 text-right text-xs text-gray-400">
-                    {form.canonicalQuestion.length}/600
-                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-4 text-xs">
+                    <p className="text-gray-500">
+                      Mona can match any of these question variations to the
+                      approved answer below.
+                    </p>
+
+                    <p className="shrink-0 text-gray-400">
+                      {form.canonicalQuestion.length}/1800
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -967,7 +1051,7 @@ export default function MonaKnowledgePage() {
                       Category
                     </label>
 
-                    <input
+                    <select
                       value={form.category}
                       onChange={(event) =>
                         setForm((prev) => ({
@@ -976,27 +1060,18 @@ export default function MonaKnowledgePage() {
                         }))
                       }
                       disabled={saving}
-                      list="mona-knowledge-categories"
-                      placeholder="Example: listings"
-                      className="mt-2 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
-                    />
-
-                    <datalist id="mona-knowledge-categories">
-                      <option value="general" />
-                      <option value="listings" />
-                      <option value="pricing" />
-                      <option value="membership" />
-                      <option value="payments" />
-                      <option value="viewings" />
-                      <option value="agents" />
-                      <option value="owners" />
-                      <option value="property-search" />
-                      <option value="support" />
-
-                      {categories.map((category) => (
-                        <option key={category} value={category} />
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#1C1C1E] disabled:bg-gray-100"
+                    >
+                      {categoryOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
                       ))}
-                    </datalist>
+                    </select>
+
+                    <p className="mt-1 text-xs leading-5 text-gray-400">
+                      Choose the topic that best matches this answer.
+                    </p>
                   </div>
 
                   <div>
@@ -1017,6 +1092,7 @@ export default function MonaKnowledgePage() {
                     >
                       <option value="id">Indonesian</option>
                       <option value="en">English</option>
+                      <option value="both">Indonesian & English</option>
                     </select>
                   </div>
                 </div>
