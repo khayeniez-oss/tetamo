@@ -1,6 +1,17 @@
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
+import {
+  cleanMonaAdminClosing,
+  cleanMonaIdentityIntroduction,
+  detectMonaLanguage,
+  isMonaIdentityQuestion,
+  limitMonaReply,
+  type MonaLanguage,
+} from "@/lib/mona/behaviour";
+import { searchApprovedMonaKnowledge } from "@/lib/mona/knowledge";
+import { buildMonaPrompt } from "@/lib/mona/prompt";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -49,17 +60,6 @@ type MetaWebhookValue = {
   statuses?: Array<Record<string, unknown>>;
 };
 
-const TETAMO_LINKS = {
-  pricelist: "https://www.tetamo.com/pricelist",
-  developerLicense: "https://www.tetamo.com/developer-license",
-  howToListBlog:
-    "https://www.tetamo.com/blog/how-to-list-my-property-in-tetamo",
-  howToPostVideo:
-    "https://www.tetamo.com/education/cara-posting-properti-di-tetamo",
-  dashboardVideo:
-    "https://www.tetamo.com/education/cara-menggunakan-dashboard-tetamo-untuk-owner-dan-agent",
-};
-
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
 }
@@ -92,19 +92,8 @@ function getPhoneNumberId(fallback?: string | null) {
 }
 
 /**
- * IMPORTANT SAFETY GUARD
- *
- * Tetamo Meta Direct must process only the dedicated Meta Direct phone number.
- * The main Tetamo WhatsApp number remains on Twilio and must never be processed
- * by this route.
- *
- * If no Meta Direct phone number ID is configured, this route fails closed and
- * ignores every inbound WhatsApp message.
- *
- * Required Tetamo Vercel env:
- * - META_DIRECT_WHATSAPP_ACCESS_TOKEN
- * - META_DIRECT_WHATSAPP_PHONE_NUMBER_ID
- * - META_DIRECT_ALLOWED_PHONE_NUMBER_IDS
+ * Process only the WhatsApp business phone number IDs explicitly configured
+ * for this Meta Direct webhook. If none are configured, fail closed.
  */
 function getAllowedBusinessPhoneNumberIds() {
   const rawValues = [
@@ -175,392 +164,150 @@ function getMetaConversationKey(phoneNumberId: string, customerPhone: string) {
   return `${getMetaBusinessSenderKey(phoneNumberId)}:${customerPhone}`;
 }
 
-function detectLanguage(message: string) {
-  const lower = message.toLowerCase();
-
-  const indonesianHints = [
-    "saya",
-    "aku",
-    "mau",
-    "ingin",
-    "gimana",
-    "bagaimana",
-    "berapa",
-    "harga",
-    "iklan",
-    "properti",
-    "rumah",
-    "jual",
-    "beli",
-    "sewa",
-    "pemilik",
-    "agent",
-    "agen",
-    "bisa",
-    "admin",
-    "tolong",
-    "cara",
-    "paket",
-    "dashboard",
-    "listing",
-    "kantor",
-    "alamat",
-    "perusahaan",
-    "bayar",
-    "pembayaran",
-    "jadwal",
-    "viewing",
-    "pasang",
-    "aplikasi",
-    "download",
-    "qris",
-    "siapa",
-    "bicara",
-    "foto",
-    "photo",
-    "video",
-    "upload",
-  ];
-
-  return indonesianHints.some((word) => lower.includes(word)) ? "id" : "en";
+function sleep(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
-function isIdentityQuestion(message: string) {
-  const lower = message.toLowerCase().trim();
-
-  const identityQuestions = [
-    "ini siapa",
-    "siapa ini",
-    "saya bicara dengan siapa",
-    "aku bicara dengan siapa",
-    "saya chat dengan siapa",
-    "ini admin",
-    "apakah ini admin",
-    "kamu siapa",
-    "anda siapa",
-    "ini ai",
-    "apakah ini ai",
-    "ini bot",
-    "apakah ini bot",
-    "who is this",
-    "who am i speaking with",
-    "who am i talking to",
-    "are you ai",
-    "are you a bot",
-    "are you admin",
-    "is this admin",
-    "your name",
-    "what is your name",
-  ];
-
-  return identityQuestions.some((item) => lower.includes(item));
+function randomNumberBetween(minimum: number, maximum: number) {
+  return Math.floor(
+    Math.random() * (maximum - minimum + 1) + minimum
+  );
 }
 
-function getListingInstructionReply(language: "id" | "en") {
-  if (language === "id") {
-    return `Untuk pasang listing properti di Tetamo, listing tidak bisa dibuat melalui WhatsApp.
+function getMonaResponseDelay(reply: string) {
+  const characterCount = String(reply || "").trim().length;
 
-Pemilik atau agent harus sign up / log in dan membuat listing sendiri di Tetamo supaya bisa mengelola dashboard, melihat leads, menerima WhatsApp langsung, dan mengatur schedule viewing sendiri.
-
-Alurnya:
-1. Sign up atau log in
-2. Create Listing
-3. Isi detail properti
-4. Upload minimal 3 foto properti, boleh tambah video jika ada
-5. Klik Generate untuk bantu buat Judul & Deskripsi dengan AI
-6. Lakukan verifikasi
-7. Bayar pakai QRIS
-8. Setelah itu listing otomatis tayang di marketplace Tetamo, tidak perlu menunggu lagi.
-
-Panduan posting properti:
-${TETAMO_LINKS.howToPostVideo}`;
+  if (characterCount <= 120) {
+    return randomNumberBetween(2300, 2900);
   }
 
-  return `To list a property on Tetamo, the listing cannot be created through WhatsApp.
-
-The owner or agent must sign up / log in and create the listing directly in Tetamo, so they can manage their dashboard, leads, direct WhatsApp inquiries, and schedule viewing requests.
-
-The flow is:
-1. Sign up or log in
-2. Create Listing
-3. Enter the property details
-4. Upload minimum 3 property photos, and add video if available
-5. Click Generate to create the title and description with AI
-6. Complete verification
-7. Pay with QRIS
-8. The listing will be automatically posted in Tetamo marketplace, no need to wait.
-
-Property posting guide:
-${TETAMO_LINKS.howToPostVideo}`;
-}
-
-function getMediaRedirectReply() {
-  return `Terima kasih, foto/video sudah diterima.
-
-Namun untuk pasang listing properti di Tetamo, foto/video tidak bisa dikirim melalui WhatsApp untuk kami upload-kan.
-
-Pemilik atau agent perlu sign up / log in dan membuat listing sendiri di Tetamo agar bisa mengelola dashboard, melihat leads, menerima WhatsApp langsung dari pembeli/penyewa, dan mengatur schedule viewing sendiri.
-
-Minimum upload: 3 foto properti.
-
-Alurnya:
-1. Sign up atau log in
-2. Create Listing
-3. Isi detail properti
-4. Upload minimal 3 foto properti, boleh tambah video jika ada
-5. Klik Generate untuk bantu buat Judul & Deskripsi dengan AI
-6. Verifikasi
-7. Bayar pakai QRIS
-8. Listing otomatis tayang di marketplace Tetamo.`;
-}
-
-function getFallbackReply(message: string) {
-  const lang = detectLanguage(message);
-
-  if (isIdentityQuestion(message)) {
-    if (lang === "id") {
-      return "Halo, saya Mona dari Tetamo. Saya bisa bantu seputar cari properti, pasang listing, paket owner/agent, dan cara menggunakan Tetamo.";
-    }
-
-    return "Hi, I’m Mona from Tetamo. I can help with property search, listings, owner/agent packages, and how to use Tetamo.";
+  if (characterCount <= 600) {
+    return randomNumberBetween(6000, 8000);
   }
 
-  const lower = message.toLowerCase();
-
-  const listingIntent =
-    lower.includes("pasang") ||
-    lower.includes("iklan") ||
-    lower.includes("listing") ||
-    lower.includes("upload") ||
-    lower.includes("foto") ||
-    lower.includes("photo") ||
-    lower.includes("video") ||
-    lower.includes("jual rumah") ||
-    lower.includes("sewa rumah") ||
-    lower.includes("list my property") ||
-    lower.includes("advertise my property");
-
-  if (listingIntent) {
-    return getListingInstructionReply(lang);
-  }
-
-  if (lang === "id") {
-    return "Halo, selamat datang di Tetamo. Anda ingin pasang iklan properti, cari properti, atau tanya paket owner/agent/developer?";
-  }
-
-  return "Hi, welcome to Tetamo. Are you looking to list a property, find a property, or ask about owner, agent, or developer packages?";
+  return randomNumberBetween(10000, 12000);
 }
 
-function limitReply(value: string) {
-  const clean = String(value || "").trim();
-
-  if (clean.length <= 1700) return clean;
-
-  return clean.slice(0, 1690).trim() + "...";
-}
-
-function removeUnwantedIdentity(reply: string, customerMessage: string) {
-  if (isIdentityQuestion(customerMessage)) return reply;
-
-  let clean = String(reply || "").trim();
-
-  const patterns = [
-    /^halo,?\s*saya\s+(?:adalah\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
-    /^hi,?\s*i(?:'|’)m\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
-    /^hello,?\s*i(?:'|’)m\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
-    /^saya\s+(?:adalah\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
-    /^i\s+am\s+(?:a\s+)?(?:whatsapp\s+)?ai.*?(?:\.|\n)/i,
-  ];
-
-  for (const pattern of patterns) {
-    clean = clean.replace(pattern, "").trim();
+function getFallbackReply(
+  customerMessage: string,
+  language: MonaLanguage
+) {
+  if (isMonaIdentityQuestion(customerMessage)) {
+    return language === "id"
+      ? "Halo, saya Mona dari Tetamo. Saya bisa bantu seputar Tetamo dan properti."
+      : "Hi, I’m Mona from Tetamo. I can help with Tetamo and property-related questions.";
   }
 
-  return clean || reply;
+  return language === "id"
+    ? "Maaf, saya belum memiliki informasi terkonfirmasi untuk menjawab pertanyaan itu. Bisa jelaskan sedikit lebih spesifik tentang bantuan yang Anda butuhkan?"
+    : "Sorry, I don’t currently have confirmed information to answer that. Could you briefly clarify what you need help with?";
 }
 
-function removeUnwantedAdminClosing(reply: string) {
-  let clean = String(reply || "").trim();
+function getMediaRedirectReply(language: MonaLanguage) {
+  if (language === "en") {
+    return `Thanks, your photo or video has been received.
 
-  const patterns = [
-    /(?:\n|\r|^).*?(?:apakah|apa)\s+(?:anda|kamu)\s+(?:ingin|mau).*?(?:admin|tim|human|manusia).*?\??\s*$/i,
-    /(?:\n|\r|^).*?(?:mau|ingin)\s+saya\s+(?:hubungkan|sambungkan|teruskan).*?(?:admin|tim).*?\??\s*$/i,
-    /(?:\n|\r|^).*?do\s+you\s+want\s+me\s+to\s+(?:connect|transfer|pass|assign).*?(?:admin|team|human).*?\??\s*$/i,
-    /(?:\n|\r|^).*?would\s+you\s+like\s+me\s+to\s+(?:connect|transfer|pass|assign).*?(?:admin|team|human).*?\??\s*$/i,
-  ];
+Property listings cannot be created by sending media through WhatsApp. Owners and agents need to sign up or log in to Tetamo and create the listing from their own dashboard.
 
-  for (const pattern of patterns) {
-    clean = clean.replace(pattern, "").trim();
+Upload at least 3 property photos. You may also add a video if available.`;
   }
 
-  return clean || reply;
+  return `Terima kasih, foto atau video sudah diterima.
+
+Listing properti tidak dapat dibuat dengan mengirim media melalui WhatsApp. Pemilik dan agen perlu sign up atau log in ke Tetamo lalu membuat listing melalui dashboard mereka sendiri.
+
+Upload minimal 3 foto properti. Video juga dapat ditambahkan jika tersedia.`;
 }
 
-async function generateMonaReply(customerMessage: string) {
-  const fallback = getFallbackReply(customerMessage);
+async function getConversationContext(
+  conversationId: string,
+  currentCustomerMessage: string
+) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("direction, message, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .limit(8);
 
-  if (!process.env.OPENAI_API_KEY) return fallback;
+  if (error) {
+    console.error("Failed to load Mona conversation context:", error);
+    return null;
+  }
+
+  const orderedMessages = (data || []).slice().reverse();
+
+  const latestMessage = orderedMessages.at(-1);
+  if (
+    latestMessage?.direction === "inbound" &&
+    String(latestMessage.message || "").trim() ===
+      String(currentCustomerMessage || "").trim()
+  ) {
+    orderedMessages.pop();
+  }
+
+  const messages = orderedMessages
+    .map((item) => {
+      const speaker = item.direction === "outbound" ? "Mona" : "Customer";
+      return `${speaker}: ${String(item.message || "").trim()}`;
+    })
+    .filter((item) => !item.endsWith(": "));
+
+  if (!messages.length) {
+    return null;
+  }
+
+  return messages.join("\n").slice(-6000);
+}
+
+async function generateMonaReply(params: {
+  customerMessage: string;
+  conversationId: string;
+}) {
+  const language = detectMonaLanguage(params.customerMessage);
+  const fallback = getFallbackReply(params.customerMessage, language);
+
+  if (!process.env.OPENAI_API_KEY) {
+    return fallback;
+  }
 
   try {
-    const prompt = `
-You are Mona from Tetamo.
+    const [knowledgeEntries, conversationContext] = await Promise.all([
+      searchApprovedMonaKnowledge({
+        supabase: supabaseAdmin,
+        customerMessage: params.customerMessage,
+        language,
+      }),
+      getConversationContext(
+        params.conversationId,
+        params.customerMessage
+      ),
+    ]);
 
-Identity rule:
-- Your name is Mona.
-- You represent Tetamo in WhatsApp conversations.
-- Never introduce yourself as WhatsApp AI, AI customer assistance, chatbot, bot, or automated assistant.
-- Do not introduce yourself in every reply.
-- Only introduce yourself if the customer asks who they are speaking with, asks your name, asks if you are AI, asks if you are admin, or asks "ini siapa?"
-- If asked in Indonesian, say: "Halo, saya Mona dari Tetamo. Saya bisa bantu seputar cari properti, pasang listing, paket owner/agent, dan cara menggunakan Tetamo."
-- If asked in English, say: "Hi, I’m Mona from Tetamo. I can help with property search, listings, owner/agent packages, and how to use Tetamo."
-
-Language rule:
-- If the customer writes in Indonesian, reply in Indonesian.
-- If the customer writes in English, reply in English.
-- If mixed, light bilingual is okay.
-- Do not randomly switch language.
-
-Tetamo:
-- Tetamo is an Australian SaaS/property marketplace business serving the Indonesian property market.
-- Users can search, buy, sell, or rent property in Tetamo.
-- Owners and agents can create property listings.
-- Tetamo supports verified listings, direct WhatsApp inquiry, schedule viewing, QRIS payment, photo/video upload, and AI support for title/description.
-- Tetamo charges listing/advertising fees, not sale/rental commission unless separately agreed.
-- Do not guarantee leads, sale, rental, ROI, or legal safety.
-
-VERY IMPORTANT LISTING RULE:
-- Customers cannot list their property by sending photos, videos, or details through WhatsApp.
-- Do not offer to upload or create the listing for them through WhatsApp.
-- Do not say "send your photos here and we will list it."
-- From the beginning, guide owners/agents to sign up or log in and create the listing themselves.
-- Explain why: they need their own dashboard so they can manage leads, direct WhatsApp inquiries, schedule viewing requests, listing edits, and payment status themselves.
-- Minimum 3 property photos are required for listing.
-- They may add video if available.
-- AI title and description are generated inside Tetamo by clicking Generate.
-- After verification and QRIS payment, the listing is automatically posted in Tetamo marketplace. No need to wait.
-
-Correct listing steps:
-1. Sign up or log in
-2. Click Create Listing
-3. Input property details
-4. Upload minimum 3 property photos, and add video if available
-5. Click Generate to create Judul & Deskripsi with AI
-6. Complete verification
-7. Pay with QRIS
-8. Listing automatically appears in the Tetamo marketplace
-
-If customer asks how to list, how to advertise property, how to upload photos/videos, or sends property details:
-- Reply with the correct listing steps.
-- Clearly say listing must be created inside Tetamo, not through WhatsApp.
-- Mention minimum 3 photos.
-- Mention the dashboard benefit.
-- Share this guide only when relevant:
-  ${TETAMO_LINKS.howToPostVideo}
-
-Tone:
-- Friendly, professional, sales-smart, clear, WhatsApp-friendly.
-- Short paragraphs.
-- No long essay unless asked.
-- Do not offer admin handover at the end of normal replies.
-- Only mention Tetamo team follow-up for payment/account/refund/complaint/legal/custom proposal or account-specific issue.
-
-If vague message like "hi", "info", "price", or "mau tanya":
-Ask if they want to pasang iklan properti, cari properti, or ask about owner/agent/developer packages.
-
-Buyer/renter:
-- If they want to search, buy, rent, or schedule viewing, ask location, budget, property type, and whether they want to buy or rent.
-- Explain they can contact owner/agent directly by WhatsApp and schedule viewing where available.
-
-Official Tetamo package knowledge:
-Use ONLY these official Tetamo package names when talking about packages.
-
-Owner packages are for property owners / pemilik who want to advertise their own property listing:
-1. Basic Listing
-   - For owners who want to display 1 active property on Tetamo marketplace.
-   - 1 active listing.
-   - Active for 1 year.
-   - Includes AI-generated title & description, verification badge after approval, direct WhatsApp buyer/renter, viewing scheduling, and marketplace/app visibility.
-   - Price: Rp50.000.
-
-2. Priority Listing
-   - For owners who want better visibility than Basic Listing.
-   - 1 active listing.
-   - Active for 1 year.
-   - Includes everything in Basic Listing plus higher marketplace visibility and priority display.
-   - Price: Rp150.000.
-
-3. Featured Listing
-   - For owners who want the strongest owner listing exposure.
-   - 1 active listing.
-   - Active and featured for 1 year.
-   - Includes everything in owner listing plus Featured Badge, highest marketplace visibility, social media posting on FB / IG / TikTok, and Tetamo Agent Support.
-   - Price: Rp550.000.
-
-Agent packages are memberships for property agents / agen / agencies who want to manage multiple listings and use the agent dashboard:
-1. Silver
-   - For agents starting professionally on Tetamo.
-   - 30 active listings.
-   - 1-year membership.
-   - Includes Agent Profile Website, Social Media Integration, Leads Dashboard, Viewing Schedule, Packages & Billing, Payments / Receipts, Analytics / Insights, Commission Tracking, and Boost & Spotlight access.
-   - Price: Rp499.000 per year.
-
-2. Gold
-   - For active agents who want stronger branding and listing visibility.
-   - 100 active listings.
-   - 1-year membership.
-   - Includes Silver features plus 1 AI Avatar Introduction Video, 3 free Featured Listings for 90 days each, and priority listing visibility.
-   - Price: Rp1.800.000 per year.
-
-3. Agent Pro
-   - For serious agents or agencies that want to scale bigger.
-   - 500 active listings.
-   - 1-year membership.
-   - Includes Gold-style benefits plus eligibility for Featured Agent placement, premium exposure opportunity, limited Featured Agent slots, and monthly payment option.
-   - Price: Rp3.999.000 per year, or Rp399.000/month with 12-month commitment.
-
-Developer:
-- Developer is NOT a normal owner or agent package.
-- Do NOT say "Paket Developer" as if it is a normal checkout package.
-- For developers, project owners, or property companies, call it Developer License / quotation.
-- Explain that developer exposure and licensing are handled separately from normal owner/agent listing.
-- Share:
-  ${TETAMO_LINKS.developerLicense}
-
-Pricing answer style:
-If user asks about price, paket, pricing, package details, "detailnya", or "boleh dijelaskan":
-- Do not invent package names.
-- Do not say "Paket Premium" as a package name.
-- Do not say "Paket Developer" as a normal package name.
-- Use the official names above.
-- If the customer is vague, first ask whether they are a pemilik/owner, agen/agent, or developer/project owner.
-- Give a short summary of the correct category first, then offer to explain the full difference.
-- If the customer clearly says they are an owner/pemilik, explain only Basic Listing, Priority Listing, and Featured Listing.
-- If the customer clearly says they are an agent/agen, explain only Silver, Gold, and Agent Pro.
-- If the customer clearly says they are a developer/project owner, explain Developer License / quotation and share the developer license link.
-- Always share the pricelist when relevant:
-  ${TETAMO_LINKS.pricelist}
-- Mention that prices/package details should be checked on the pricelist page for the latest information.
-
-Customer message:
-${customerMessage}
-
-Write only the WhatsApp reply.
-Do not return JSON.
-Do not add labels like "Tetamo:".
-`;
+    const prompt = buildMonaPrompt({
+      customerMessage: params.customerMessage,
+      language,
+      knowledgeEntries,
+      conversationContext,
+    });
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
-      temperature: 0.45,
+      temperature: 0.35,
       max_output_tokens: 650,
     });
 
-    const raw = response.output_text || fallback;
-    const noIdentity = removeUnwantedIdentity(raw, customerMessage);
-    const noAdminClosing = removeUnwantedAdminClosing(noIdentity);
+    const rawReply = response.output_text || fallback;
+    const withoutIdentity = cleanMonaIdentityIntroduction(
+      rawReply,
+      params.customerMessage
+    );
+    const withoutAdminClosing = cleanMonaAdminClosing(withoutIdentity);
 
-    return limitReply(noAdminClosing || fallback);
+    return limitMonaReply(withoutAdminClosing || fallback);
   } catch (error) {
     console.error("Meta Direct WhatsApp AI generation failed:", error);
     return fallback;
@@ -1028,8 +775,13 @@ export async function POST(request: Request) {
       }
 
       const reply = isTextMessage
-        ? await generateMonaReply(messageText)
-        : getMediaRedirectReply();
+        ? await generateMonaReply({
+            customerMessage: messageText,
+            conversationId: conversation.id,
+          })
+        : getMediaRedirectReply("id");
+
+      await sleep(getMonaResponseDelay(reply));
 
       const sendResult = await sendMetaWhatsappText({
         phoneNumberId,
