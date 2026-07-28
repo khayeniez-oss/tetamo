@@ -1158,8 +1158,8 @@ Saya sudah bayar tetapi masih menerima pesan`}
                 </div>
               </div>
 
-              <div className="sticky bottom-0 border-t border-gray-100 bg-white px-5 py-4 sm:px-7">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sticky bottom-0 z-20 border-t border-gray-100 bg-white px-5 py-4 pb-24 sm:px-7 sm:pb-6">
+                <div className="flex flex-col gap-3 pr-20 sm:flex-row sm:items-center sm:justify-between sm:pr-24">
                   <button
                     type="button"
                     onClick={closeDrawer}
