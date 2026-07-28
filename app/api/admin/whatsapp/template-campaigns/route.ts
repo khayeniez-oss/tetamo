@@ -27,17 +27,53 @@ type ImportedRecipient = {
   variables?: Record<string, unknown> | string[] | null;
 };
 
-type SendProvider = "meta_cloud_api" | "twilio_whatsapp";
 type RecipientTargetStatus = "pending" | "failed";
 
-const TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID =
-  "HXc2fc95a69e87cf12e851d63e1e550228";
+type MetaTemplate = {
+  id: string;
+  template_name: string;
+  display_name: string;
+  category: string;
+  language_code: string;
+  meta_status: string;
+  quality_status: string;
+  body_text: string | null;
+  variable_count: number;
+  variable_examples: Record<string, unknown> | null;
+  variable_definitions: Array<Record<string, unknown>> | null;
+  header_type: string | null;
+  footer_text: string | null;
+  website_button_text: string | null;
+  website_url: string | null;
+  quick_reply_text: string | null;
+  buttons: unknown;
+  is_active: boolean;
+};
+
+const META_PROVIDER = "meta_cloud_api";
+
+const TEMPLATE_SELECT = `
+  id,
+  template_name,
+  display_name,
+  category,
+  language_code,
+  meta_status,
+  quality_status,
+  body_text,
+  variable_count,
+  variable_examples,
+  variable_definitions,
+  header_type,
+  footer_text,
+  website_button_text,
+  website_url,
+  quick_reply_text,
+  buttons,
+  is_active
+`;
 
 function cleanText(value?: unknown) {
-  return String(value || "").trim();
-}
-
-function cleanEnv(value?: string | null) {
   return String(value || "").trim();
 }
 
@@ -74,7 +110,10 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { success: false, error: "Unauthorized. Login is required." },
+        {
+          success: false,
+          error: "Unauthorized. Login is required.",
+        },
         { status: 401 }
       ),
     };
@@ -89,7 +128,10 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { success: false, error: "Unauthorized. Invalid session." },
+        {
+          success: false,
+          error: "Unauthorized. Invalid session.",
+        },
         { status: 401 }
       ),
     };
@@ -107,20 +149,25 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     return {
       authorized: false,
       response: Response.json(
-        { success: false, error: "Unable to verify admin access." },
+        {
+          success: false,
+          error: "Unable to verify admin access.",
+        },
         { status: 500 }
       ),
     };
   }
 
-  const role = String((profile as any)?.role || "").toLowerCase();
-  const isAdmin = role.includes("admin");
+  const role = cleanText((profile as any)?.role).toLowerCase();
 
-  if (!isAdmin) {
+  if (!role.includes("admin")) {
     return {
       authorized: false,
       response: Response.json(
-        { success: false, error: "Forbidden. Admin access is required." },
+        {
+          success: false,
+          error: "Forbidden. Admin access is required.",
+        },
         { status: 403 }
       ),
     };
@@ -133,7 +180,7 @@ async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
 }
 
 function normalizePhone(value?: unknown) {
-  let phone = String(value || "").replace(/\D/g, "");
+  let phone = cleanText(value).replace(/\D/g, "");
 
   if (!phone) return "";
 
@@ -156,74 +203,40 @@ function isValidPhone(phoneE164: string) {
   return phoneE164.length >= 8 && phoneE164.length <= 16;
 }
 
-function normalizeSendProvider(value?: unknown): SendProvider {
-  const clean = cleanText(value).toLowerCase();
-
-  if (
-    clean === "twilio" ||
-    clean === "twilio_whatsapp" ||
-    clean === "twilio_content"
-  ) {
-    return "twilio_whatsapp";
-  }
-
-  if (clean === "meta" || clean === "meta_cloud_api") {
-    return "meta_cloud_api";
-  }
-
-  return "meta_cloud_api";
-}
-
-function toTwilioWhatsappAddress(value?: unknown) {
-  const raw = cleanText(value);
-
-  if (!raw) return "";
-
-  if (raw.toLowerCase().startsWith("whatsapp:")) {
-    const number = raw.slice("whatsapp:".length).trim();
-    const digits = normalizePhone(number);
-
-    return digits ? `whatsapp:+${digits}` : "";
-  }
-
-  const digits = normalizePhone(raw);
-  return digits ? `whatsapp:+${digits}` : "";
-}
-
-function getTwilioWhatsappFrom() {
-  return toTwilioWhatsappAddress(process.env.TWILIO_WHATSAPP_FROM);
-}
-
-function getTwilioContentSidForTemplate(templateName: string) {
-  const cleanTemplateName = cleanText(templateName);
-
-  if (cleanTemplateName === "tetamo_agent_invite_id_01") {
-    return cleanEnv(process.env.TWILIO_AGENT_INVITE_CONTENT_SID);
-  }
-
-  if (cleanTemplateName === "tetamo_inquiry_listing_follow_up") {
-    return (
-      cleanEnv(process.env.TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID) ||
-      TWILIO_INQUIRY_LISTING_FOLLOW_UP_CONTENT_SID
-    );
-  }
-
-  return "";
-}
-
-function normalizeVariables(value: unknown) {
+function normalizeVariables(
+  value: unknown
+): Record<string, string> {
   if (!value) return {};
 
   if (Array.isArray(value)) {
-    return value.reduce<Record<string, string>>((acc, item, index) => {
-      const clean = cleanText(item);
-      if (clean) acc[String(index + 1)] = clean;
-      return acc;
-    }, {});
+    return value.reduce<Record<string, string>>(
+      (acc, item, index) => {
+        const clean = cleanText(item);
+
+        if (clean) {
+          acc[String(index + 1)] = clean;
+        }
+
+        return acc;
+      },
+      {}
+    );
   }
 
   if (typeof value === "object") {
-    return value as Record<string, unknown>;
+    const record = value as Record<string, unknown>;
+    const normalized: Record<string, string> = {};
+
+    for (const [key, item] of Object.entries(record)) {
+      const cleanKey = cleanText(key);
+      const cleanValue = cleanText(item);
+
+      if (cleanKey && cleanValue) {
+        normalized[cleanKey] = cleanValue;
+      }
+    }
+
+    return normalized;
   }
 
   const clean = cleanText(value);
@@ -231,7 +244,25 @@ function normalizeVariables(value: unknown) {
   return clean ? { "1": clean } : {};
 }
 
-function parseRecipients(value: unknown, defaultLeadType: string) {
+function validateVariables(
+  variables: Record<string, string>,
+  variableCount: number
+) {
+  const missing: number[] = [];
+
+  for (let position = 1; position <= variableCount; position += 1) {
+    if (!cleanText(variables[String(position)])) {
+      missing.push(position);
+    }
+  }
+
+  return missing;
+}
+
+function parseRecipients(
+  value: unknown,
+  defaultLeadType: string
+) {
   const recipients: ImportedRecipient[] = [];
 
   if (Array.isArray(value)) {
@@ -241,19 +272,39 @@ function parseRecipients(value: unknown, defaultLeadType: string) {
           phone: item,
           leadType: defaultLeadType,
         });
-      } else if (item && typeof item === "object") {
+
+        continue;
+      }
+
+      if (item && typeof item === "object") {
         const record = item as Record<string, unknown>;
 
         recipients.push({
-          phone: cleanText(record.phone || record.phoneE164 || record.to),
-          customerName: cleanText(record.customerName || record.name),
+          phone: cleanText(
+            record.phone ||
+              record.phoneE164 ||
+              record.phone_e164 ||
+              record.to
+          ),
+          customerName: cleanText(
+            record.customerName ||
+              record.customer_name ||
+              record.name
+          ),
           leadType:
-            cleanText(record.leadType || record.lead_type) || defaultLeadType,
-          source: cleanText(record.source) || "campaign_import",
-          variables: (record.variables ||
+            cleanText(
+              record.leadType ||
+                record.lead_type
+            ) || defaultLeadType,
+          source:
+            cleanText(record.source) ||
+            "campaign_import",
+          variables: (
+            record.variables ||
             record.bodyVariables ||
             record.body_variables ||
-            null) as Record<string, unknown> | string[] | null,
+            null
+          ) as Record<string, unknown> | string[] | null,
         });
       }
     }
@@ -285,15 +336,22 @@ function parseRecipients(value: unknown, defaultLeadType: string) {
       continue;
     }
 
-    if (seen.has(phoneE164)) continue;
+    if (seen.has(phoneE164)) {
+      continue;
+    }
 
     seen.add(phoneE164);
 
     cleanRecipients.push({
       ...recipient,
       phone: phoneE164,
-      leadType: recipient.leadType || defaultLeadType || "unknown",
-      source: recipient.source || "campaign_import",
+      leadType:
+        recipient.leadType ||
+        defaultLeadType ||
+        "unknown",
+      source:
+        recipient.source ||
+        "campaign_import",
     });
   }
 
@@ -301,6 +359,51 @@ function parseRecipients(value: unknown, defaultLeadType: string) {
     recipients: cleanRecipients,
     invalidRecipients,
   };
+}
+
+async function loadActiveTemplates() {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_templates")
+    .select(TEMPLATE_SELECT)
+    .eq("is_active", true)
+    .eq("meta_status", "active")
+    .order("display_name", { ascending: true });
+
+  if (error) {
+    console.error(
+      "Failed to load active Meta templates:",
+      error
+    );
+
+    throw new Error(
+      "Failed to load approved Meta templates."
+    );
+  }
+
+  return (data || []) as MetaTemplate[];
+}
+
+async function loadActiveTemplate(
+  templateName: string
+): Promise<MetaTemplate | null> {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_templates")
+    .select(TEMPLATE_SELECT)
+    .eq("template_name", templateName)
+    .eq("is_active", true)
+    .eq("meta_status", "active")
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "Failed to load Meta template:",
+      error
+    );
+
+    return null;
+  }
+
+  return (data || null) as MetaTemplate | null;
 }
 
 async function upsertContact(params: {
@@ -314,10 +417,14 @@ async function upsertContact(params: {
     .upsert(
       {
         phone_e164: params.phoneE164,
-        phone_display: phoneDisplay(params.phoneE164),
+        phone_display: phoneDisplay(
+          params.phoneE164
+        ),
         profile_name: params.customerName,
-        lead_type: params.leadType || "unknown",
-        source: params.source || "campaign_import",
+        lead_type:
+          params.leadType || "unknown",
+        source:
+          params.source || "campaign_import",
         status: "active",
         updated_at: new Date().toISOString(),
       },
@@ -329,19 +436,30 @@ async function upsertContact(params: {
     .maybeSingle();
 
   if (error) {
-    console.error("Failed to upsert WhatsApp contact:", error);
+    console.error(
+      "Failed to upsert WhatsApp contact:",
+      error
+    );
+
     return null;
   }
 
-  return data as { id: string; phone_e164: string } | null;
+  return data as {
+    id: string;
+    phone_e164: string;
+  } | null;
 }
 
 function getErrorMessage(payload: unknown): string {
   if (!payload) return "";
 
-  if (typeof payload === "string") return payload;
+  if (typeof payload === "string") {
+    return payload;
+  }
 
-  if (typeof payload !== "object") return String(payload);
+  if (typeof payload !== "object") {
+    return String(payload);
+  }
 
   const record = payload as Record<string, any>;
 
@@ -352,29 +470,48 @@ function getErrorMessage(payload: unknown): string {
     record.error_description ||
     record.reason;
 
-  if (directMessage) return cleanText(directMessage);
+  if (directMessage) {
+    return cleanText(directMessage);
+  }
 
-  if (record.error && typeof record.error === "object") {
-    const error = record.error as Record<string, any>;
+  if (
+    record.error &&
+    typeof record.error === "object"
+  ) {
+    const error = record.error as Record<
+      string,
+      any
+    >;
 
     const parts = [
       error.message,
       error.error_user_msg,
       error.type,
-      error.code ? `Code ${error.code}` : "",
-      error.error_subcode ? `Subcode ${error.error_subcode}` : "",
+      error.code
+        ? `Code ${error.code}`
+        : "",
+      error.error_subcode
+        ? `Subcode ${error.error_subcode}`
+        : "",
     ]
       .map(cleanText)
       .filter(Boolean);
 
-    if (parts.length > 0) return parts.join(" · ");
+    if (parts.length > 0) {
+      return parts.join(" · ");
+    }
   }
 
-  if (record.details && typeof record.details === "object") {
+  if (
+    record.details &&
+    typeof record.details === "object"
+  ) {
     return getErrorMessage(record.details);
   }
 
-  if (record.more_info) return cleanText(record.more_info);
+  if (record.more_info) {
+    return cleanText(record.more_info);
+  }
 
   try {
     return JSON.stringify(payload);
@@ -384,7 +521,12 @@ function getErrorMessage(payload: unknown): string {
 }
 
 function getErrorType(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
+  if (
+    !payload ||
+    typeof payload !== "object"
+  ) {
+    return "";
+  }
 
   const record = payload as Record<string, any>;
 
@@ -392,15 +534,32 @@ function getErrorType(payload: unknown): string {
   if (record.status) return cleanText(record.status);
   if (record.type) return cleanText(record.type);
 
-  if (record.error && typeof record.error === "object") {
-    const error = record.error as Record<string, any>;
+  if (
+    record.error &&
+    typeof record.error === "object"
+  ) {
+    const error = record.error as Record<
+      string,
+      any
+    >;
 
-    if (error.code) return cleanText(error.code);
-    if (error.type) return cleanText(error.type);
-    if (error.error_subcode) return cleanText(error.error_subcode);
+    if (error.code) {
+      return cleanText(error.code);
+    }
+
+    if (error.type) {
+      return cleanText(error.type);
+    }
+
+    if (error.error_subcode) {
+      return cleanText(error.error_subcode);
+    }
   }
 
-  if (record.details && typeof record.details === "object") {
+  if (
+    record.details &&
+    typeof record.details === "object"
+  ) {
     return getErrorType(record.details);
   }
 
@@ -408,18 +567,30 @@ function getErrorType(payload: unknown): string {
 }
 
 function enrichRecipient(recipient: any) {
-  const status = cleanText(recipient?.status).toLowerCase();
-  const sendError = recipient?.send_error || null;
-  const skipReason = cleanText(recipient?.skip_reason);
+  const status = cleanText(
+    recipient?.status
+  ).toLowerCase();
+
+  const sendError =
+    recipient?.send_error || null;
+
+  const skipReason = cleanText(
+    recipient?.skip_reason
+  );
 
   let errorSummary = "";
 
   if (status === "failed") {
-    errorSummary = getErrorMessage(sendError) || "Failed to send.";
+    errorSummary =
+      getErrorMessage(sendError) ||
+      "Failed to send.";
   }
 
   if (status === "skipped") {
-    errorSummary = skipReason || getErrorMessage(sendError) || "Skipped.";
+    errorSummary =
+      skipReason ||
+      getErrorMessage(sendError) ||
+      "Skipped.";
   }
 
   if (status === "pending") {
@@ -433,10 +604,16 @@ function enrichRecipient(recipient: any) {
   };
 }
 
-async function countRecipients(campaignId: string, status?: string) {
+async function countRecipients(
+  campaignId: string,
+  status?: string
+) {
   let query = supabaseAdmin
     .from("whatsapp_template_recipients")
-    .select("id", { count: "exact", head: true })
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
     .eq("campaign_id", campaignId);
 
   if (status) {
@@ -445,13 +622,23 @@ async function countRecipients(campaignId: string, status?: string) {
 
   const { count, error } = await query;
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
 
   return count || 0;
 }
 
-async function getRecipientCounts(campaignId: string) {
-  const [total, pending, sent, failed, skipped] = await Promise.all([
+async function getRecipientCounts(
+  campaignId: string
+) {
+  const [
+    total,
+    pending,
+    sent,
+    failed,
+    skipped,
+  ] = await Promise.all([
     countRecipients(campaignId),
     countRecipients(campaignId, "pending"),
     countRecipients(campaignId, "sent"),
@@ -468,8 +655,11 @@ async function getRecipientCounts(campaignId: string) {
   };
 }
 
-async function recalculateCampaignTotals(campaignId: string) {
-  const counts = await getRecipientCounts(campaignId);
+async function recalculateCampaignTotals(
+  campaignId: string
+) {
+  const counts =
+    await getRecipientCounts(campaignId);
 
   await supabaseAdmin
     .from("whatsapp_template_campaigns")
@@ -485,50 +675,70 @@ async function recalculateCampaignTotals(campaignId: string) {
   return counts;
 }
 
-async function sendRecipientThroughTemplateApi(params: {
-  req: Request;
-  campaign: any;
-  recipient: any;
-}) {
-  const authorization = params.req.headers.get("authorization") || "";
-  const sendUrl = new URL("/api/admin/whatsapp/template-send", params.req.url);
+async function sendRecipientThroughTemplateApi(
+  params: {
+    req: Request;
+    campaign: any;
+    recipient: any;
+  }
+) {
+  const authorization =
+    params.req.headers.get("authorization") || "";
 
-  const sendProvider = normalizeSendProvider(params.campaign.send_provider);
-  const templateName = cleanText(params.campaign.template_name);
-  const twilioContentSid =
-    cleanText(params.campaign.twilio_content_sid) ||
-    getTwilioContentSidForTemplate(templateName);
-  const twilioFrom =
-    toTwilioWhatsappAddress(params.campaign.twilio_from) ||
-    getTwilioWhatsappFrom();
+  const sendUrl = new URL(
+    "/api/admin/whatsapp/template-send",
+    params.req.url
+  );
 
-  const response = await fetch(sendUrl.toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authorization,
-    },
-    body: JSON.stringify({
-      campaignId: params.campaign.id,
-      recipientId: params.recipient.id,
-      phoneE164: params.recipient.phone_e164,
-      customerName: params.recipient.customer_name,
-      leadType: params.recipient.lead_type || "unknown",
-      source: params.recipient.source || "campaign",
-      templateName,
-      templateLanguage: params.campaign.template_language || "en",
-      templateCategory: params.campaign.category || "marketing",
-      sendType: params.campaign.campaign_type || "business_initiated",
-      sendProvider,
-      twilioContentSid,
-      twilioFrom,
-      variables: params.recipient.variables || {},
-    }),
-  });
+  const response = await fetch(
+    sendUrl.toString(),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authorization,
+      },
+      body: JSON.stringify({
+        campaignId: params.campaign.id,
+        recipientId: params.recipient.id,
+        phoneE164:
+          params.recipient.phone_e164,
+        customerName:
+          params.recipient.customer_name,
+        leadType:
+          params.recipient.lead_type ||
+          "unknown",
+        source:
+          params.recipient.source ||
+          "campaign",
+        templateName:
+          params.campaign.template_name,
+        templateLanguage:
+          params.campaign.template_language ||
+          "id",
+        templateCategory:
+          params.campaign.category ||
+          "marketing",
+        sendType:
+          params.campaign.campaign_type ||
+          "business_initiated",
+        sendProvider: META_PROVIDER,
+        variables:
+          params.recipient.variables || {},
+      }),
+    }
+  );
 
-  const result = await response.json().catch(() => null);
+  const result = await response
+    .json()
+    .catch(() => null);
+
   const skipped = Boolean(result?.skipped);
-  const ok = response.ok && Boolean(result?.success) && !skipped;
+
+  const ok =
+    response.ok &&
+    Boolean(result?.success) &&
+    !skipped;
 
   return {
     ok,
@@ -545,78 +755,184 @@ export async function GET(req: Request) {
     return auth.response!;
   }
 
-  const url = new URL(req.url);
-  const campaignId = url.searchParams.get("campaignId") || "";
-  const includeRecipients = url.searchParams.get("includeRecipients") === "true";
-  const recipientStatus = url.searchParams.get("recipientStatus") || "all";
+  try {
+    const url = new URL(req.url);
 
-  if (campaignId) {
-    const { data: campaign, error: campaignError } = await supabaseAdmin
-      .from("whatsapp_template_campaigns")
-      .select("*")
-      .eq("id", campaignId)
-      .maybeSingle();
+    const campaignId =
+      url.searchParams.get("campaignId") || "";
 
-    if (campaignError) {
-      return Response.json(
-        { success: false, error: "Failed to load campaign." },
-        { status: 500 }
-      );
-    }
+    const includeRecipients =
+      url.searchParams.get(
+        "includeRecipients"
+      ) === "true";
 
-    let recipients: any[] = [];
+    const recipientStatus =
+      url.searchParams.get(
+        "recipientStatus"
+      ) || "all";
 
-    if (includeRecipients) {
-      let recipientsQuery = supabaseAdmin
-        .from("whatsapp_template_recipients")
+    if (campaignId) {
+      const {
+        data: campaign,
+        error: campaignError,
+      } = await supabaseAdmin
+        .from(
+          "whatsapp_template_campaigns"
+        )
         .select("*")
-        .eq("campaign_id", campaignId)
-        .order("created_at", { ascending: true })
-        .limit(5000);
+        .eq("id", campaignId)
+        .maybeSingle();
 
-      if (recipientStatus !== "all") {
-        recipientsQuery = recipientsQuery.eq("status", recipientStatus);
-      }
+      if (campaignError) {
+        console.error(
+          "Failed to load campaign:",
+          campaignError
+        );
 
-      const { data, error } = await recipientsQuery;
-
-      if (error) {
         return Response.json(
-          { success: false, error: "Failed to load campaign recipients." },
+          {
+            success: false,
+            error:
+              "Failed to load campaign.",
+          },
           { status: 500 }
         );
       }
 
-      recipients = (data || []).map(enrichRecipient);
+      if (!campaign) {
+        return Response.json(
+          {
+            success: false,
+            error: "Campaign not found.",
+          },
+          { status: 404 }
+        );
+      }
+
+      let recipients: any[] = [];
+
+      if (includeRecipients) {
+        let recipientsQuery =
+          supabaseAdmin
+            .from(
+              "whatsapp_template_recipients"
+            )
+            .select("*")
+            .eq(
+              "campaign_id",
+              campaignId
+            )
+            .order("created_at", {
+              ascending: true,
+            })
+            .limit(5000);
+
+        if (recipientStatus !== "all") {
+          recipientsQuery =
+            recipientsQuery.eq(
+              "status",
+              recipientStatus
+            );
+        }
+
+        const {
+          data,
+          error,
+        } = await recipientsQuery;
+
+        if (error) {
+          console.error(
+            "Failed to load campaign recipients:",
+            error
+          );
+
+          return Response.json(
+            {
+              success: false,
+              error:
+                "Failed to load campaign recipients.",
+            },
+            { status: 500 }
+          );
+        }
+
+        recipients = (data || []).map(
+          enrichRecipient
+        );
+      }
+
+      const [
+        recipientCounts,
+        templates,
+      ] = await Promise.all([
+        getRecipientCounts(campaignId),
+        loadActiveTemplates(),
+      ]);
+
+      return Response.json({
+        success: true,
+        campaign,
+        recipients,
+        recipientCounts,
+        templates,
+        sendProvider: META_PROVIDER,
+      });
     }
 
-    const recipientCounts = await getRecipientCounts(campaignId);
+    const [campaignsResult, templates] =
+      await Promise.all([
+        supabaseAdmin
+          .from(
+            "whatsapp_template_campaigns"
+          )
+          .select("*")
+          .order("created_at", {
+            ascending: false,
+          })
+          .limit(100),
+        loadActiveTemplates(),
+      ]);
+
+    if (campaignsResult.error) {
+      console.error(
+        "Failed to load campaigns:",
+        campaignsResult.error
+      );
+
+      return Response.json(
+        {
+          success: false,
+          error:
+            "Failed to load campaigns.",
+        },
+        { status: 500 }
+      );
+    }
 
     return Response.json({
       success: true,
-      campaign,
-      recipients,
-      recipientCounts,
+      campaigns:
+        campaignsResult.data || [],
+      templates,
+      sendProvider: META_PROVIDER,
     });
-  }
+  } catch (error) {
+    console.error(
+      "Load WhatsApp campaigns API error:",
+      error
+    );
 
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_template_campaigns")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (error) {
     return Response.json(
-      { success: false, error: "Failed to load campaigns." },
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load campaigns.",
+      },
       { status: 500 }
     );
   }
-
-  return Response.json({
-    success: true,
-    campaigns: data || [],
-  });
 }
 
 export async function POST(req: Request) {
@@ -627,181 +943,360 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json().catch(() => null);
+    const body = await req
+      .json()
+      .catch(() => null);
 
     const name = cleanText(body?.name);
-    const templateName = cleanText(body?.templateName || body?.template_name);
-    const templateLanguage = cleanText(
-      body?.templateLanguage || body?.template_language || "en"
-    );
-    const category = cleanText(body?.category || "marketing");
-    const campaignType = cleanText(
-      body?.campaignType || body?.campaign_type || "business_initiated"
-    );
-    const leadType = cleanText(body?.leadType || body?.lead_type || "unknown");
-    const batchSize = Number(body?.batchSize || body?.batch_size || 100);
-    const sendProvider = normalizeSendProvider(
-      body?.sendProvider || body?.send_provider || "meta_cloud_api"
+
+    const templateName = cleanText(
+      body?.templateName ||
+        body?.template_name
     );
 
-    const defaultVariables = normalizeVariables(
-      body?.defaultVariables || body?.default_variables || {}
+    const leadType = cleanText(
+      body?.leadType ||
+        body?.lead_type ||
+        "unknown"
     );
 
-    const twilioContentSid =
-      cleanText(body?.twilioContentSid || body?.twilio_content_sid) ||
-      getTwilioContentSidForTemplate(templateName);
+    const requestedBatchSize = Number(
+      body?.batchSize ||
+        body?.batch_size ||
+        100
+    );
 
-    const twilioFrom =
-      toTwilioWhatsappAddress(body?.twilioFrom || body?.twilio_from) ||
-      getTwilioWhatsappFrom();
+    const batchSize =
+      Number.isFinite(requestedBatchSize) &&
+      requestedBatchSize > 0
+        ? Math.min(
+            Math.floor(
+              requestedBatchSize
+            ),
+            500
+          )
+        : 100;
 
-    const parsed = parseRecipients(body?.recipients, leadType);
+    const defaultVariables =
+      normalizeVariables(
+        body?.defaultVariables ||
+          body?.default_variables ||
+          {}
+      );
 
     if (!name) {
       return Response.json(
-        { success: false, error: "Campaign name is required." },
+        {
+          success: false,
+          error:
+            "Campaign name is required.",
+        },
         { status: 400 }
       );
     }
 
     if (!templateName) {
       return Response.json(
-        { success: false, error: "Template name is required." },
+        {
+          success: false,
+          error:
+            "An approved Meta template is required.",
+        },
         { status: 400 }
       );
     }
 
-    if (sendProvider === "twilio_whatsapp" && !twilioContentSid) {
+    const template =
+      await loadActiveTemplate(
+        templateName
+      );
+
+    if (!template) {
       return Response.json(
         {
           success: false,
           error:
-            "Twilio ContentSid is required for Twilio WhatsApp campaigns.",
+            "The selected Meta template is not active or does not exist.",
         },
         { status: 400 }
       );
     }
 
-    if (sendProvider === "twilio_whatsapp" && !twilioFrom) {
+    const parsed = parseRecipients(
+      body?.recipients,
+      leadType
+    );
+
+    if (
+      parsed.recipients.length === 0
+    ) {
       return Response.json(
         {
           success: false,
           error:
-            "Twilio WhatsApp sender is required for Twilio WhatsApp campaigns.",
+            "At least one valid recipient phone number is required.",
         },
         { status: 400 }
       );
     }
 
-    if (parsed.recipients.length === 0) {
+    const variableCount = Math.max(
+      0,
+      Number(
+        template.variable_count || 0
+      )
+    );
+
+    const defaultMissingVariables =
+      validateVariables(
+        defaultVariables,
+        variableCount
+      );
+
+    const recipientsWithMissingVariables: Array<{
+      phone: string;
+      missing: number[];
+    }> = [];
+
+    const preparedRecipients =
+      parsed.recipients.map(
+        (recipient) => {
+          const recipientVariables =
+            normalizeVariables(
+              recipient.variables
+            );
+
+          const mergedVariables = {
+            ...defaultVariables,
+            ...recipientVariables,
+          };
+
+          if (
+            variableCount > 0 &&
+            recipient.customerName &&
+            !mergedVariables["1"]
+          ) {
+            mergedVariables["1"] =
+              recipient.customerName;
+          }
+
+          const missing =
+            validateVariables(
+              mergedVariables,
+              variableCount
+            );
+
+          if (missing.length > 0) {
+            recipientsWithMissingVariables.push(
+              {
+                phone: recipient.phone,
+                missing,
+              }
+            );
+          }
+
+          return {
+            recipient,
+            mergedVariables,
+          };
+        }
+      );
+
+    if (
+      variableCount > 0 &&
+      defaultMissingVariables.length > 0 &&
+      recipientsWithMissingVariables.length >
+        0
+    ) {
       return Response.json(
         {
           success: false,
-          error: "At least one valid recipient phone number is required.",
+          error:
+            "Required template variables are missing. Enter a default value or provide variables for every recipient.",
+          missingVariables:
+            defaultMissingVariables,
+          recipientsWithMissingVariables:
+            recipientsWithMissingVariables.slice(
+              0,
+              25
+            ),
         },
         { status: 400 }
       );
     }
 
-    const { data: campaign, error: campaignError } = await supabaseAdmin
-      .from("whatsapp_template_campaigns")
+    const campaignType =
+      template.category === "utility"
+        ? "manual_template"
+        : "business_initiated";
+
+    const now =
+      new Date().toISOString();
+
+    const {
+      data: campaign,
+      error: campaignError,
+    } = await supabaseAdmin
+      .from(
+        "whatsapp_template_campaigns"
+      )
       .insert({
         name,
-        template_name: templateName,
-        template_language: templateLanguage || "en",
-        category,
+        template_name:
+          template.template_name,
+        template_language:
+          template.language_code,
+        category: template.category,
         campaign_type: campaignType,
-        send_provider: sendProvider,
-        twilio_content_sid:
-          sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
-        twilio_from: sendProvider === "twilio_whatsapp" ? twilioFrom : null,
+        send_provider: META_PROVIDER,
+
+        // Legacy Twilio columns remain null
+        // so old database schemas remain compatible.
+        twilio_content_sid: null,
+        twilio_from: null,
+
         status: "draft",
-        total_recipients: parsed.recipients.length,
-        batch_size:
-          Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 100,
+        total_recipients:
+          preparedRecipients.length,
+        total_sent: 0,
+        total_failed: 0,
+        total_skipped: 0,
+        batch_size: batchSize,
         created_by: auth.userId,
-        notes: cleanText(body?.notes) || null,
+        notes:
+          cleanText(body?.notes) ||
+          null,
         raw_payload: {
-          invalid_recipients: parsed.invalidRecipients,
-          default_variables: defaultVariables,
-          send_provider: sendProvider,
-          twilio_content_sid:
-            sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
-          twilio_from: sendProvider === "twilio_whatsapp" ? twilioFrom : null,
+          provider: META_PROVIDER,
+          template_id: template.id,
+          template_display_name:
+            template.display_name,
+          variable_count:
+            variableCount,
+          variable_definitions:
+            template.variable_definitions ||
+            [],
+          default_variables:
+            defaultVariables,
+          invalid_recipients:
+            parsed.invalidRecipients,
         },
+        created_at: now,
+        updated_at: now,
       })
       .select("*")
       .maybeSingle();
 
-    if (campaignError || !campaign?.id) {
-      console.error("Failed to create WhatsApp campaign:", campaignError);
+    if (
+      campaignError ||
+      !campaign?.id
+    ) {
+      console.error(
+        "Failed to create WhatsApp campaign:",
+        campaignError
+      );
 
       return Response.json(
-        { success: false, error: "Failed to create campaign." },
+        {
+          success: false,
+          error:
+            "Failed to create campaign.",
+        },
         { status: 500 }
       );
     }
 
     let insertedCount = 0;
-    let skippedCount = 0;
+    let failedInsertCount = 0;
 
-    for (const recipient of parsed.recipients) {
-      const contact = await upsertContact({
-        phoneE164: recipient.phone,
-        customerName: recipient.customerName || null,
-        leadType: recipient.leadType || leadType || "unknown",
-        source: recipient.source || "campaign_import",
-      });
+    for (const {
+      recipient,
+      mergedVariables,
+    } of preparedRecipients) {
+      const contact =
+        await upsertContact({
+          phoneE164: recipient.phone,
+          customerName:
+            recipient.customerName ||
+            null,
+          leadType:
+            recipient.leadType ||
+            leadType ||
+            "unknown",
+          source:
+            recipient.source ||
+            "campaign_import",
+        });
 
-      const mergedVariables = {
-        ...defaultVariables,
-        ...normalizeVariables(recipient.variables),
-      };
-
-      const { error: recipientError } = await supabaseAdmin
-        .from("whatsapp_template_recipients")
+      const {
+        error: recipientError,
+      } = await supabaseAdmin
+        .from(
+          "whatsapp_template_recipients"
+        )
         .insert({
           campaign_id: campaign.id,
-          contact_id: contact?.id || null,
-          phone_e164: recipient.phone,
-          customer_name: recipient.customerName || null,
-          lead_type: recipient.leadType || leadType || "unknown",
-          source: recipient.source || "campaign_import",
+          contact_id:
+            contact?.id || null,
+          phone_e164:
+            recipient.phone,
+          customer_name:
+            recipient.customerName ||
+            null,
+          lead_type:
+            recipient.leadType ||
+            leadType ||
+            "unknown",
+          source:
+            recipient.source ||
+            "campaign_import",
           variables: mergedVariables,
           status: "pending",
         });
 
       if (recipientError) {
-        skippedCount += 1;
-        console.error("Failed to insert campaign recipient:", recipientError);
+        failedInsertCount += 1;
+
+        console.error(
+          "Failed to insert campaign recipient:",
+          recipientError
+        );
       } else {
         insertedCount += 1;
       }
     }
 
     await supabaseAdmin
-      .from("whatsapp_template_campaigns")
+      .from(
+        "whatsapp_template_campaigns"
+      )
       .update({
-        total_recipients: insertedCount,
-        total_skipped: skippedCount,
-        updated_at: new Date().toISOString(),
+        total_recipients:
+          insertedCount,
+        total_skipped:
+          failedInsertCount,
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("id", campaign.id);
 
     return Response.json({
       success: true,
       campaignId: campaign.id,
-      sendProvider,
-      twilioContentSid:
-        sendProvider === "twilio_whatsapp" ? twilioContentSid : null,
-      twilioFrom: sendProvider === "twilio_whatsapp" ? twilioFrom : null,
-      totalRecipients: insertedCount,
-      skippedCount,
-      invalidRecipients: parsed.invalidRecipients,
+      sendProvider: META_PROVIDER,
+      template,
+      totalRecipients:
+        insertedCount,
+      skippedCount:
+        failedInsertCount,
+      invalidRecipients:
+        parsed.invalidRecipients,
     });
   } catch (error) {
-    console.error("Create WhatsApp campaign API error:", error);
+    console.error(
+      "Create WhatsApp campaign API error:",
+      error
+    );
 
     return Response.json(
       {
@@ -824,39 +1319,84 @@ export async function PATCH(req: Request) {
   }
 
   try {
-    const body = await req.json().catch(() => null);
-    const action = cleanText(body?.action);
-    const campaignId = cleanText(body?.campaignId || body?.campaign_id);
-    const requestedBatchSize = Number(body?.batchSize || body?.batch_size || 0);
+    const body = await req
+      .json()
+      .catch(() => null);
+
+    const action = cleanText(
+      body?.action
+    );
+
+    const campaignId = cleanText(
+      body?.campaignId ||
+        body?.campaign_id
+    );
+
+    const requestedBatchSize = Number(
+      body?.batchSize ||
+        body?.batch_size ||
+        0
+    );
 
     if (!campaignId) {
       return Response.json(
-        { success: false, error: "campaignId is required." },
+        {
+          success: false,
+          error:
+            "campaignId is required.",
+        },
         { status: 400 }
       );
     }
 
-    const { data: campaign, error: campaignError } = await supabaseAdmin
-      .from("whatsapp_template_campaigns")
+    const {
+      data: campaign,
+      error: campaignError,
+    } = await supabaseAdmin
+      .from(
+        "whatsapp_template_campaigns"
+      )
       .select("*")
       .eq("id", campaignId)
       .maybeSingle();
 
-    if (campaignError || !campaign?.id) {
+    if (
+      campaignError ||
+      !campaign?.id
+    ) {
       return Response.json(
-        { success: false, error: "Campaign not found." },
+        {
+          success: false,
+          error: "Campaign not found.",
+        },
         { status: 404 }
       );
     }
 
     if (action === "delete_campaign") {
-      await supabaseAdmin
-        .from("whatsapp_template_send_logs")
+      const {
+        error: logsDeleteError,
+      } = await supabaseAdmin
+        .from(
+          "whatsapp_template_send_logs"
+        )
         .delete()
         .eq("campaign_id", campaignId);
 
-      const { error: recipientsDeleteError } = await supabaseAdmin
-        .from("whatsapp_template_recipients")
+      if (logsDeleteError) {
+        console.error(
+          "Failed to delete campaign logs:",
+          logsDeleteError
+        );
+      }
+
+      const {
+        error:
+          recipientsDeleteError,
+      } = await supabaseAdmin
+        .from(
+          "whatsapp_template_recipients"
+        )
         .delete()
         .eq("campaign_id", campaignId);
 
@@ -869,24 +1409,33 @@ export async function PATCH(req: Request) {
         return Response.json(
           {
             success: false,
-            error: "Failed to delete campaign recipients.",
+            error:
+              "Failed to delete campaign recipients.",
           },
           { status: 500 }
         );
       }
 
-      const { error: campaignDeleteError } = await supabaseAdmin
-        .from("whatsapp_template_campaigns")
+      const {
+        error: campaignDeleteError,
+      } = await supabaseAdmin
+        .from(
+          "whatsapp_template_campaigns"
+        )
         .delete()
         .eq("id", campaignId);
 
       if (campaignDeleteError) {
-        console.error("Failed to delete campaign:", campaignDeleteError);
+        console.error(
+          "Failed to delete campaign:",
+          campaignDeleteError
+        );
 
         return Response.json(
           {
             success: false,
-            error: "Failed to delete campaign.",
+            error:
+              "Failed to delete campaign.",
           },
           { status: 500 }
         );
@@ -894,32 +1443,70 @@ export async function PATCH(req: Request) {
 
       return Response.json({
         success: true,
-        deletedCampaignId: campaignId,
+        deletedCampaignId:
+          campaignId,
       });
     }
 
     if (action === "pause") {
-      await supabaseAdmin
-        .from("whatsapp_template_campaigns")
-        .update({
-          status: "paused",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", campaignId);
+      const { error } =
+        await supabaseAdmin
+          .from(
+            "whatsapp_template_campaigns"
+          )
+          .update({
+            status: "paused",
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq("id", campaignId);
 
-      return Response.json({ success: true, status: "paused" });
+      if (error) {
+        return Response.json(
+          {
+            success: false,
+            error:
+              "Failed to pause campaign.",
+          },
+          { status: 500 }
+        );
+      }
+
+      return Response.json({
+        success: true,
+        status: "paused",
+      });
     }
 
     if (action === "resume") {
-      await supabaseAdmin
-        .from("whatsapp_template_campaigns")
-        .update({
-          status: "draft",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", campaignId);
+      const { error } =
+        await supabaseAdmin
+          .from(
+            "whatsapp_template_campaigns"
+          )
+          .update({
+            status: "draft",
+            completed_at: null,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq("id", campaignId);
 
-      return Response.json({ success: true, status: "draft" });
+      if (error) {
+        return Response.json(
+          {
+            success: false,
+            error:
+              "Failed to resume campaign.",
+          },
+          { status: 500 }
+        );
+      }
+
+      return Response.json({
+        success: true,
+        status: "draft",
+      });
     }
 
     const isPendingSend =
@@ -927,43 +1514,131 @@ export async function PATCH(req: Request) {
       action === "start" ||
       action === "continue_pending";
 
-    const isRetryFailed = action === "retry_failed";
+    const isRetryFailed =
+      action === "retry_failed";
 
-    if (!isPendingSend && !isRetryFailed) {
+    if (
+      !isPendingSend &&
+      !isRetryFailed
+    ) {
       return Response.json(
-        { success: false, error: "Invalid action." },
+        {
+          success: false,
+          error: "Invalid action.",
+        },
         { status: 400 }
       );
     }
 
-    const targetStatus: RecipientTargetStatus = isRetryFailed
-      ? "failed"
-      : "pending";
+    const campaignProvider = cleanText(
+      campaign.send_provider
+    ).toLowerCase();
+
+    if (
+      campaignProvider &&
+      campaignProvider !==
+        META_PROVIDER
+    ) {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "This is a legacy Twilio campaign and cannot be sent through the Meta-only campaign system. Create a new Meta campaign.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const template =
+      await loadActiveTemplate(
+        cleanText(
+          campaign.template_name
+        )
+      );
+
+    if (!template) {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "The Meta template used by this campaign is no longer active or available.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const targetStatus: RecipientTargetStatus =
+      isRetryFailed
+        ? "failed"
+        : "pending";
 
     const batchSize =
-      Number.isFinite(requestedBatchSize) && requestedBatchSize > 0
-        ? requestedBatchSize
-        : Number(campaign.batch_size || 100);
+      Number.isFinite(
+        requestedBatchSize
+      ) &&
+      requestedBatchSize > 0
+        ? Math.min(
+            Math.floor(
+              requestedBatchSize
+            ),
+            500
+          )
+        : Math.min(
+            Number(
+              campaign.batch_size ||
+                100
+            ),
+            500
+          );
 
     await supabaseAdmin
-      .from("whatsapp_template_campaigns")
+      .from(
+        "whatsapp_template_campaigns"
+      )
       .update({
         status: "sending",
-        started_at: campaign.started_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        send_provider: META_PROVIDER,
+        started_at:
+          campaign.started_at ||
+          new Date().toISOString(),
+        completed_at: null,
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("id", campaignId);
 
-    const { data: targetRecipients, error: recipientsError } =
-      await supabaseAdmin
-        .from("whatsapp_template_recipients")
-        .select("*")
-        .eq("campaign_id", campaignId)
-        .eq("status", targetStatus)
-        .order("created_at", { ascending: true })
-        .limit(batchSize);
+    const {
+      data: targetRecipients,
+      error: recipientsError,
+    } = await supabaseAdmin
+      .from(
+        "whatsapp_template_recipients"
+      )
+      .select("*")
+      .eq("campaign_id", campaignId)
+      .eq("status", targetStatus)
+      .order("created_at", {
+        ascending: true,
+      })
+      .limit(batchSize);
 
     if (recipientsError) {
+      console.error(
+        "Failed to load campaign recipients:",
+        recipientsError
+      );
+
+      await supabaseAdmin
+        .from(
+          "whatsapp_template_campaigns"
+        )
+        .update({
+          status: "draft",
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", campaignId);
+
       return Response.json(
         {
           success: false,
@@ -976,18 +1651,32 @@ export async function PATCH(req: Request) {
       );
     }
 
-    if (!targetRecipients || targetRecipients.length === 0) {
-      const counts = await recalculateCampaignTotals(campaignId);
+    if (
+      !targetRecipients ||
+      targetRecipients.length === 0
+    ) {
+      const counts =
+        await recalculateCampaignTotals(
+          campaignId
+        );
 
-      const nextStatus = counts.pending > 0 ? "draft" : "completed";
+      const nextStatus =
+        counts.pending > 0
+          ? "draft"
+          : "completed";
 
       await supabaseAdmin
-        .from("whatsapp_template_campaigns")
+        .from(
+          "whatsapp_template_campaigns"
+        )
         .update({
           status: nextStatus,
           completed_at:
-            nextStatus === "completed" ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
+            nextStatus === "completed"
+              ? new Date().toISOString()
+              : null,
+          updated_at:
+            new Date().toISOString(),
         })
         .eq("id", campaignId);
 
@@ -997,6 +1686,7 @@ export async function PATCH(req: Request) {
         status: nextStatus,
         action,
         targetStatus,
+        sendProvider: META_PROVIDER,
         sentThisBatch: 0,
         failedThisBatch: 0,
         skippedThisBatch: 0,
@@ -1016,49 +1706,91 @@ export async function PATCH(req: Request) {
       ok: boolean;
       skipped: boolean;
       status: number;
-      finalStatus: "sent" | "failed" | "skipped";
+      finalStatus:
+        | "sent"
+        | "failed"
+        | "skipped";
       errorType?: string;
       errorSummary?: string;
       error?: unknown;
     }> = [];
 
     for (const recipient of targetRecipients) {
-      const sendResult = await sendRecipientThroughTemplateApi({
-        req,
-        campaign,
-        recipient,
-      });
+      const sendResult =
+        await sendRecipientThroughTemplateApi(
+          {
+            req,
+            campaign: {
+              ...campaign,
+              send_provider:
+                META_PROVIDER,
+              template_name:
+                template.template_name,
+              template_language:
+                template.language_code,
+              category:
+                template.category,
+            },
+            recipient,
+          }
+        );
 
-      const finalStatus = sendResult.skipped
-        ? "skipped"
-        : sendResult.ok
-          ? "sent"
-          : "failed";
+      const finalStatus =
+        sendResult.skipped
+          ? "skipped"
+          : sendResult.ok
+            ? "sent"
+            : "failed";
 
       results.push({
         recipientId: recipient.id,
-        phoneE164: recipient.phone_e164,
+        phoneE164:
+          recipient.phone_e164,
         ok: sendResult.ok,
-        skipped: sendResult.skipped,
+        skipped:
+          sendResult.skipped,
         status: sendResult.status,
         finalStatus,
-        errorType: sendResult.ok ? "" : getErrorType(sendResult.result),
-        errorSummary: sendResult.ok ? "" : getErrorMessage(sendResult.result),
-        error: sendResult.ok ? null : sendResult.result,
+        errorType: sendResult.ok
+          ? ""
+          : getErrorType(
+              sendResult.result
+            ),
+        errorSummary:
+          sendResult.ok
+            ? ""
+            : getErrorMessage(
+                sendResult.result
+              ),
+        error: sendResult.ok
+          ? null
+          : sendResult.result,
       });
     }
 
-    const counts = await recalculateCampaignTotals(campaignId);
+    const counts =
+      await recalculateCampaignTotals(
+        campaignId
+      );
 
-    const nextStatus = counts.pending > 0 ? "draft" : "completed";
+    const nextStatus =
+      counts.pending > 0
+        ? "draft"
+        : "completed";
 
     await supabaseAdmin
-      .from("whatsapp_template_campaigns")
+      .from(
+        "whatsapp_template_campaigns"
+      )
       .update({
         status: nextStatus,
+        send_provider: META_PROVIDER,
         completed_at:
-          nextStatus === "completed" ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
+          nextStatus === "completed"
+            ? new Date().toISOString()
+            : null,
+        updated_at:
+          new Date().toISOString(),
       })
       .eq("id", campaignId);
 
@@ -1068,22 +1800,32 @@ export async function PATCH(req: Request) {
       status: nextStatus,
       action,
       targetStatus,
-      sendProvider: normalizeSendProvider(campaign.send_provider),
+      sendProvider: META_PROVIDER,
       batchSize,
-      processedThisBatch: targetRecipients.length,
-      sentThisBatch: results.filter((item) => item.finalStatus === "sent")
-        .length,
-      failedThisBatch: results.filter((item) => item.finalStatus === "failed")
-        .length,
-      skippedThisBatch: results.filter((item) => item.finalStatus === "skipped")
-        .length,
+      processedThisBatch:
+        targetRecipients.length,
+      sentThisBatch: results.filter(
+        (item) =>
+          item.finalStatus === "sent"
+      ).length,
+      failedThisBatch: results.filter(
+        (item) =>
+          item.finalStatus === "failed"
+      ).length,
+      skippedThisBatch: results.filter(
+        (item) =>
+          item.finalStatus === "skipped"
+      ).length,
       pendingLeft: counts.pending,
       failedLeft: counts.failed,
       recipientCounts: counts,
       results,
     });
   } catch (error) {
-    console.error("Send WhatsApp campaign batch API error:", error);
+    console.error(
+      "Send WhatsApp campaign batch API error:",
+      error
+    );
 
     return Response.json(
       {
@@ -1091,7 +1833,7 @@ export async function PATCH(req: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Failed to send campaign batch.",
+            : "Failed to process campaign.",
       },
       { status: 500 }
     );
