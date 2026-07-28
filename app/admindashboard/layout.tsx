@@ -272,11 +272,15 @@ export default function AdminDashboardLayout({
         title: "Platform",
         items: [
           { href: "/admindashboard/support", label: "Support" },
-          { href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
-          {
-            href: "/admindashboard/whatsapp/campaigns",
-            label: "WhatsApp Campaigns",
-          },
+{ href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
+{
+  href: "/admindashboard/knowledge-base",
+  label: "Mona Knowledge",
+},
+{
+  href: "/admindashboard/whatsapp/campaigns",
+  label: "WhatsApp Campaigns",
+},
           { href: "/admindashboard/settings", label: "Settings" },
           { href: "/admindashboard/logs", label: "Logs" },
           { href: "/admindashboard/ai-insights", label: "AI Insights" },
