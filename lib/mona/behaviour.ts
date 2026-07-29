@@ -8,11 +8,39 @@ export type MonaBehaviourContext = {
 const INDONESIAN_HINTS = [
   "saya",
   "aku",
+  "anda",
+  "kamu",
   "mau",
   "ingin",
   "gimana",
   "bagaimana",
+  "kenapa",
+  "mengapa",
   "berapa",
+  "apa",
+  "siapa",
+  "kapan",
+  "dimana",
+  "mana",
+  "itu",
+  "ini",
+  "yang",
+  "dan",
+  "atau",
+  "dengan",
+  "untuk",
+  "dari",
+  "ke",
+  "di",
+  "tidak",
+  "bukan",
+  "belum",
+  "sudah",
+  "masih",
+  "bisa",
+  "boleh",
+  "tolong",
+  "mohon",
   "harga",
   "iklan",
   "properti",
@@ -23,27 +51,92 @@ const INDONESIAN_HINTS = [
   "pemilik",
   "agent",
   "agen",
-  "bisa",
   "admin",
-  "tolong",
   "cara",
   "paket",
-  "dashboard",
-  "listing",
-  "bayar",
   "pembayaran",
+  "bayar",
   "jadwal",
-  "viewing",
   "pasang",
   "aplikasi",
-  "download",
-  "qris",
-  "siapa",
+  "unduh",
+  "bahasa",
+  "indonesia",
+  "indonesian",
   "bicara",
   "foto",
-  "photo",
-  "video",
-  "upload",
+];
+
+const ENGLISH_HINTS = [
+  "i",
+  "you",
+  "your",
+  "we",
+  "they",
+  "what",
+  "who",
+  "why",
+  "when",
+  "where",
+  "how",
+  "is",
+  "are",
+  "can",
+  "could",
+  "would",
+  "please",
+  "help",
+  "price",
+  "property",
+  "house",
+  "sell",
+  "buy",
+  "rent",
+  "owner",
+  "payment",
+  "schedule",
+  "application",
+  "english",
+  "hello",
+  "thanks",
+  "thank",
+];
+
+const INDONESIAN_LANGUAGE_REQUESTS = [
+  "bahasa indonesia",
+  "bahasa indonesia dong",
+  "pakai bahasa indonesia",
+  "gunakan bahasa indonesia",
+  "jawab dalam bahasa indonesia",
+  "balas dalam bahasa indonesia",
+  "reply in bahasa",
+  "reply in indonesian",
+  "speak bahasa",
+  "speak indonesian",
+  "in bahasa",
+  "in indonesian",
+  "jangan bahasa inggris",
+  "jangan pakai bahasa inggris",
+  "jangan balas bahasa inggris",
+  "bukan bahasa inggris",
+  "kenapa bahasa inggris",
+  "kenapa masih bahasa inggris",
+  "kok bahasa inggris",
+  "kok masih bahasa inggris",
+  "masih bahasa inggris",
+  "balas bahasa indonesia",
+];
+
+const ENGLISH_LANGUAGE_REQUESTS = [
+  "speak english",
+  "reply in english",
+  "answer in english",
+  "use english",
+  "in english please",
+  "english please",
+  "bahasa inggris",
+  "pakai bahasa inggris",
+  "gunakan bahasa inggris",
 ];
 
 const IDENTITY_QUESTIONS = [
@@ -71,14 +164,56 @@ const IDENTITY_QUESTIONS = [
   "what is your name",
 ];
 
-export function detectMonaLanguage(message: string): MonaLanguage {
-  const lower = String(message || "").toLowerCase();
+function normaliseLanguageMessage(message: string): string {
+  return String(message || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const isIndonesian = INDONESIAN_HINTS.some((word) =>
-    lower.includes(word)
+export function detectMonaLanguage(message: string): MonaLanguage {
+  const lower = normaliseLanguageMessage(message);
+
+  if (
+    INDONESIAN_LANGUAGE_REQUESTS.some((phrase) =>
+      lower.includes(phrase)
+    )
+  ) {
+    return "id";
+  }
+
+  if (
+    ENGLISH_LANGUAGE_REQUESTS.some((phrase) =>
+      lower.includes(phrase)
+    )
+  ) {
+    return "en";
+  }
+
+  const words = new Set(lower.split(" ").filter(Boolean));
+
+  const indonesianScore = INDONESIAN_HINTS.reduce(
+    (score, word) => score + (words.has(word) ? 1 : 0),
+    0
   );
 
-  return isIndonesian ? "id" : "en";
+  const englishScore = ENGLISH_HINTS.reduce(
+    (score, word) => score + (words.has(word) ? 1 : 0),
+    0
+  );
+
+  if (indonesianScore > englishScore) {
+    return "id";
+  }
+
+  if (englishScore > indonesianScore) {
+    return "en";
+  }
+
+  // Tetamo primarily serves Indonesia, so ambiguous messages default
+  // to Indonesian unless clear English wording is detected.
+  return "id";
 }
 
 export function isMonaIdentityQuestion(message: string): boolean {
