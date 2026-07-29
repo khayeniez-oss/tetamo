@@ -1715,58 +1715,116 @@ export async function PATCH(req: Request) {
       error?: unknown;
     }> = [];
 
-    for (const recipient of targetRecipients) {
-      const sendResult =
-        await sendRecipientThroughTemplateApi(
-          {
-            req,
-            campaign: {
-              ...campaign,
-              send_provider:
-                META_PROVIDER,
-              template_name:
-                template.template_name,
-              template_language:
-                template.language_code,
-              category:
-                template.category,
-            },
-            recipient,
+    const CONCURRENT_SEND_LIMIT = 10;
+
+for (
+  let index = 0;
+  index < targetRecipients.length;
+  index += CONCURRENT_SEND_LIMIT
+) {
+  const recipientChunk =
+    targetRecipients.slice(
+      index,
+      index + CONCURRENT_SEND_LIMIT
+    );
+
+  const chunkResults =
+    await Promise.all(
+      recipientChunk.map(
+        async (recipient) => {
+          try {
+            const sendResult =
+              await sendRecipientThroughTemplateApi(
+                {
+                  req,
+                  campaign: {
+                    ...campaign,
+                    send_provider:
+                      META_PROVIDER,
+                    template_name:
+                      template.template_name,
+                    template_language:
+                      template.language_code,
+                    category:
+                      template.category,
+                  },
+                  recipient,
+                }
+              );
+
+            const finalStatus:
+              | "sent"
+              | "failed"
+              | "skipped" =
+              sendResult.skipped
+                ? "skipped"
+                : sendResult.ok
+                  ? "sent"
+                  : "failed";
+
+            return {
+              recipientId:
+                recipient.id,
+              phoneE164:
+                recipient.phone_e164,
+              ok: sendResult.ok,
+              skipped:
+                sendResult.skipped,
+              status:
+                sendResult.status,
+              finalStatus,
+              errorType:
+                sendResult.ok
+                  ? ""
+                  : getErrorType(
+                      sendResult.result
+                    ),
+              errorSummary:
+                sendResult.ok
+                  ? ""
+                  : getErrorMessage(
+                      sendResult.result
+                    ),
+              error:
+                sendResult.ok
+                  ? null
+                  : sendResult.result,
+            };
+          } catch (sendError) {
+            return {
+              recipientId:
+                recipient.id,
+              phoneE164:
+                recipient.phone_e164,
+              ok: false,
+              skipped: false,
+              status: 500,
+              finalStatus:
+                "failed" as const,
+              errorType:
+                "send_exception",
+              errorSummary:
+                sendError instanceof Error
+                  ? sendError.message
+                  : "Unexpected sending error.",
+              error:
+                sendError instanceof Error
+                  ? {
+                      message:
+                        sendError.message,
+                    }
+                  : {
+                      message:
+                        "Unexpected sending error.",
+                    },
+            };
           }
-        );
+        }
+      )
+    );
 
-      const finalStatus =
-        sendResult.skipped
-          ? "skipped"
-          : sendResult.ok
-            ? "sent"
-            : "failed";
-
-      results.push({
-        recipientId: recipient.id,
-        phoneE164:
-          recipient.phone_e164,
-        ok: sendResult.ok,
-        skipped:
-          sendResult.skipped,
-        status: sendResult.status,
-        finalStatus,
-        errorType: sendResult.ok
-          ? ""
-          : getErrorType(
-              sendResult.result
-            ),
-        errorSummary:
-          sendResult.ok
-            ? ""
-            : getErrorMessage(
-                sendResult.result
-              ),
-        error: sendResult.ok
-          ? null
-          : sendResult.result,
-      });
-    }
+  results.push(...chunkResults);
+}
 
     const counts =
       await recalculateCampaignTotals(
