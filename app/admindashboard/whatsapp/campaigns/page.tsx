@@ -482,7 +482,7 @@ export default function WhatsAppCampaignsPage() {
   const [
     batchSize,
     setBatchSize,
-  ] = useState(25);
+  ] = useState(100);
 
   const [
     recipientText,
