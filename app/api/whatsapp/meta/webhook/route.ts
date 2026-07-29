@@ -60,6 +60,20 @@ type MetaWebhookValue = {
   statuses?: Array<Record<string, unknown>>;
 };
 
+type CampaignContext = {
+  campaignId: string;
+  recipientId: string | null;
+  templateName: string;
+  templateLanguage: string | null;
+  templateCategory: string | null;
+  sendType: string | null;
+  sentAt: string | null;
+};
+
+type ConversationRoute =
+  | { action: "reply"; campaignContext: CampaignContext | null }
+  | { action: "ignore"; reason: string; campaignContext: CampaignContext | null };
+
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
 }
@@ -154,6 +168,184 @@ function getAdReferralSource(referral?: MetaMessage["referral"] | null) {
 
 function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeForRouting(value?: string | null) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[^a-z0-9\u00c0-\u024f\u1e00-\u1eff\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyAutomaticReply(message: string) {
+  const value = normalizeForRouting(message);
+
+  if (!value) return false;
+
+  const patterns = [
+    /thank you for contacting/,
+    /thanks for contacting/,
+    /we have received your message/,
+    /we received your message/,
+    /your message has been received/,
+    /we will get back to you/,
+    /we ll get back to you/,
+    /our team will respond/,
+    /currently unavailable/,
+    /outside (of )?business hours/,
+    /automatic reply/,
+    /automated reply/,
+    /auto reply/,
+    /terima kasih telah menghubungi/,
+    /terima kasih sudah menghubungi/,
+    /pesan anda telah kami terima/,
+    /pesan kamu telah kami terima/,
+    /kami akan segera membalas/,
+    /kami akan menghubungi kembali/,
+    /diluar jam operasional/,
+    /di luar jam operasional/,
+    /balasan otomatis/,
+  ];
+
+  return patterns.some((pattern) => pattern.test(value));
+}
+
+function isSimpleCampaignAcknowledgement(message: string) {
+  const value = normalizeForRouting(message);
+
+  return [
+    "ok",
+    "okay",
+    "noted",
+    "thanks",
+    "thank you",
+    "thankyou",
+    "terima kasih",
+    "makasih",
+    "trimakasih",
+    "sip",
+    "baik",
+    "oke",
+    "ok thanks",
+    "okay thanks",
+    "baik terima kasih",
+  ].includes(value);
+}
+
+function isAbusiveOrScamAccusation(message: string) {
+  const value = normalizeForRouting(message);
+
+  const patterns = [
+    /\bscam(m?er)?\b/,
+    /\bfraud\b/,
+    /\bpenipu(an)?\b/,
+    /\bbohong\b/,
+    /\bbangsat\b/,
+    /\bbrengsek\b/,
+    /\bfuck(ing)?\b/,
+    /\basshole\b/,
+  ];
+
+  return patterns.some((pattern) => pattern.test(value));
+}
+
+async function getLatestCampaignContext(
+  conversationId: string
+): Promise<CampaignContext | null> {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_template_send_logs")
+    .select(
+      "campaign_id, recipient_id, template_name, template_language, template_category, send_type, sent_at, created_at"
+    )
+    .eq("conversation_id", conversationId)
+    .eq("status", "sent")
+    .not("campaign_id", "is", null)
+    .order("sent_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load WhatsApp campaign context:", error);
+    return null;
+  }
+
+  if (!data?.campaign_id) return null;
+
+  const sentAt = data.sent_at || data.created_at || null;
+
+  if (sentAt) {
+    const age = Date.now() - new Date(sentAt).getTime();
+    const maximumAge = 30 * 24 * 60 * 60 * 1000;
+
+    if (!Number.isFinite(age) || age > maximumAge) {
+      return null;
+    }
+  }
+
+  return {
+    campaignId: String(data.campaign_id),
+    recipientId: data.recipient_id ? String(data.recipient_id) : null,
+    templateName: String(data.template_name || ""),
+    templateLanguage: data.template_language
+      ? String(data.template_language)
+      : null,
+    templateCategory: data.template_category
+      ? String(data.template_category)
+      : null,
+    sendType: data.send_type ? String(data.send_type) : null,
+    sentAt,
+  };
+}
+
+async function routeInboundConversation(params: {
+  conversationId: string;
+  messageText: string;
+  isTextMessage: boolean;
+}): Promise<ConversationRoute> {
+  const campaignContext = await getLatestCampaignContext(
+    params.conversationId
+  );
+
+  if (!params.isTextMessage && campaignContext) {
+    return {
+      action: "ignore",
+      reason: "campaign_media_reply",
+      campaignContext,
+    };
+  }
+
+  if (!params.isTextMessage) {
+    return { action: "reply", campaignContext: null };
+  }
+
+  if (isLikelyAutomaticReply(params.messageText)) {
+    return {
+      action: "ignore",
+      reason: "automatic_reply",
+      campaignContext,
+    };
+  }
+
+  if (campaignContext && isSimpleCampaignAcknowledgement(params.messageText)) {
+    return {
+      action: "ignore",
+      reason: "campaign_acknowledgement",
+      campaignContext,
+    };
+  }
+
+  if (isAbusiveOrScamAccusation(params.messageText)) {
+    return {
+      action: "ignore",
+      reason: "abuse_or_scam_accusation",
+      campaignContext,
+    };
+  }
+
+  return { action: "reply", campaignContext };
 }
 
 async function isWhatsappNumberBlocked(customerPhone: string) {
@@ -291,6 +483,7 @@ async function getConversationContext(
 async function generateMonaReply(params: {
   customerMessage: string;
   conversationId: string;
+  campaignContext?: CampaignContext | null;
 }) {
   const language = detectMonaLanguage(params.customerMessage);
   const fallback = getFallbackReply(params.customerMessage, language);
@@ -312,8 +505,12 @@ async function generateMonaReply(params: {
       ),
     ]);
 
+    const campaignInstruction = params.campaignContext
+      ? `\n\nCAMPAIGN CONTEXT (internal): The customer is replying after Tetamo sent a WhatsApp template campaign. Template: ${params.campaignContext.templateName || "unknown"}. Category: ${params.campaignContext.templateCategory || "unknown"}. Send type: ${params.campaignContext.sendType || "unknown"}. Answer the customer in relation to that campaign when relevant. Do not mention internal campaign IDs, routing, logs, or system metadata.`
+      : "";
+
     const prompt = buildMonaPrompt({
-      customerMessage: params.customerMessage,
+      customerMessage: `${params.customerMessage}${campaignInstruction}`,
       language,
       knowledgeEntries,
       conversationContext,
@@ -815,10 +1012,28 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const routeDecision = await routeInboundConversation({
+        conversationId: conversation.id,
+        messageText,
+        isTextMessage,
+      });
+
+      if (routeDecision.action === "ignore") {
+        console.log("Mona reply suppressed by conversation router.", {
+          conversationId: conversation.id,
+          reason: routeDecision.reason,
+          campaignId: routeDecision.campaignContext?.campaignId || null,
+          templateName: routeDecision.campaignContext?.templateName || null,
+        });
+        processedCount += 1;
+        continue;
+      }
+
       const reply = isTextMessage
         ? await generateMonaReply({
             customerMessage: messageText,
             conversationId: conversation.id,
+            campaignContext: routeDecision.campaignContext,
           })
         : getMediaRedirectReply("id");
 
@@ -854,3 +1069,4 @@ export async function POST(request: Request) {
     return Response.json({ success: true, error_logged: true });
   }
 }
+
