@@ -9,6 +9,7 @@ import {
   limitMonaReply,
   type MonaLanguage,
 } from "@/lib/mona/behaviour";
+import { runMonaConversationEngine } from "@/lib/mona/conversation-engine";
 import { searchApprovedMonaKnowledge } from "@/lib/mona/knowledge";
 import { buildMonaPrompt } from "@/lib/mona/prompt";
 
@@ -69,10 +70,6 @@ type CampaignContext = {
   sendType: string | null;
   sentAt: string | null;
 };
-
-type ConversationRoute =
-  | { action: "reply"; campaignContext: CampaignContext | null }
-  | { action: "ignore"; reason: string; campaignContext: CampaignContext | null };
 
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
@@ -170,87 +167,6 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
-function normalizeForRouting(value?: string | null) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/https?:\/\/\S+/g, " ")
-    .replace(/[^a-z0-9\u00c0-\u024f\u1e00-\u1eff\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isLikelyAutomaticReply(message: string) {
-  const value = normalizeForRouting(message);
-
-  if (!value) return false;
-
-  const patterns = [
-    /thank you for contacting/,
-    /thanks for contacting/,
-    /we have received your message/,
-    /we received your message/,
-    /your message has been received/,
-    /we will get back to you/,
-    /we ll get back to you/,
-    /our team will respond/,
-    /currently unavailable/,
-    /outside (of )?business hours/,
-    /automatic reply/,
-    /automated reply/,
-    /auto reply/,
-    /terima kasih telah menghubungi/,
-    /terima kasih sudah menghubungi/,
-    /pesan anda telah kami terima/,
-    /pesan kamu telah kami terima/,
-    /kami akan segera membalas/,
-    /kami akan menghubungi kembali/,
-    /diluar jam operasional/,
-    /di luar jam operasional/,
-    /balasan otomatis/,
-  ];
-
-  return patterns.some((pattern) => pattern.test(value));
-}
-
-function isSimpleCampaignAcknowledgement(message: string) {
-  const value = normalizeForRouting(message);
-
-  return [
-    "ok",
-    "okay",
-    "noted",
-    "thanks",
-    "thank you",
-    "thankyou",
-    "terima kasih",
-    "makasih",
-    "trimakasih",
-    "sip",
-    "baik",
-    "oke",
-    "ok thanks",
-    "okay thanks",
-    "baik terima kasih",
-  ].includes(value);
-}
-
-function isAbusiveOrScamAccusation(message: string) {
-  const value = normalizeForRouting(message);
-
-  const patterns = [
-    /\bscam(m?er)?\b/,
-    /\bfraud\b/,
-    /\bpenipu(an)?\b/,
-    /\bbohong\b/,
-    /\bbangsat\b/,
-    /\bbrengsek\b/,
-    /\bfuck(ing)?\b/,
-    /\basshole\b/,
-  ];
-
-  return patterns.some((pattern) => pattern.test(value));
-}
-
 async function getLatestCampaignContext(
   conversationId: string
 ): Promise<CampaignContext | null> {
@@ -298,54 +214,6 @@ async function getLatestCampaignContext(
     sendType: data.send_type ? String(data.send_type) : null,
     sentAt,
   };
-}
-
-async function routeInboundConversation(params: {
-  conversationId: string;
-  messageText: string;
-  isTextMessage: boolean;
-}): Promise<ConversationRoute> {
-  const campaignContext = await getLatestCampaignContext(
-    params.conversationId
-  );
-
-  if (!params.isTextMessage && campaignContext) {
-    return {
-      action: "ignore",
-      reason: "campaign_media_reply",
-      campaignContext,
-    };
-  }
-
-  if (!params.isTextMessage) {
-    return { action: "reply", campaignContext: null };
-  }
-
-  if (isLikelyAutomaticReply(params.messageText)) {
-    return {
-      action: "ignore",
-      reason: "automatic_reply",
-      campaignContext,
-    };
-  }
-
-  if (campaignContext && isSimpleCampaignAcknowledgement(params.messageText)) {
-    return {
-      action: "ignore",
-      reason: "campaign_acknowledgement",
-      campaignContext,
-    };
-  }
-
-  if (isAbusiveOrScamAccusation(params.messageText)) {
-    return {
-      action: "ignore",
-      reason: "abuse_or_scam_accusation",
-      campaignContext,
-    };
-  }
-
-  return { action: "reply", campaignContext };
 }
 
 async function isWhatsappNumberBlocked(customerPhone: string) {
@@ -1002,28 +870,32 @@ export async function POST(request: Request) {
         continue;
       }
 
-      if (blockedNumber) {
-        processedCount += 1;
-        continue;
-      }
+      const campaignContext = await getLatestCampaignContext(
+        conversation.id
+      );
 
-      if (conversation.handover_to_admin || conversation.ai_enabled === false) {
-        processedCount += 1;
-        continue;
-      }
-
-      const routeDecision = await routeInboundConversation({
+      const engineDecision = runMonaConversationEngine({
+        customerMessage: messageText,
+        messageType: item.message.type || null,
         conversationId: conversation.id,
-        messageText,
-        isTextMessage,
+        customerPhone,
+        source: referral ? "advertisement" : "organic",
+        campaignContext,
+        isBlocked: blockedNumber,
+        aiEnabled: conversation.ai_enabled !== false,
+        handoverToAdmin: Boolean(conversation.handover_to_admin),
       });
 
-      if (routeDecision.action === "ignore") {
-        console.log("Mona reply suppressed by conversation router.", {
+      if (!engineDecision.shouldGenerateReply) {
+        console.log("Mona reply suppressed by conversation engine.", {
           conversationId: conversation.id,
-          reason: routeDecision.reason,
-          campaignId: routeDecision.campaignContext?.campaignId || null,
-          templateName: routeDecision.campaignContext?.templateName || null,
+          action: engineDecision.action,
+          intent: engineDecision.intent,
+          source: engineDecision.source,
+          confidence: engineDecision.confidence,
+          reason: engineDecision.reason,
+          campaignId: campaignContext?.campaignId || null,
+          templateName: campaignContext?.templateName || null,
         });
         processedCount += 1;
         continue;
@@ -1033,7 +905,7 @@ export async function POST(request: Request) {
         ? await generateMonaReply({
             customerMessage: messageText,
             conversationId: conversation.id,
-            campaignContext: routeDecision.campaignContext,
+            campaignContext,
           })
         : getMediaRedirectReply("id");
 
@@ -1069,4 +941,3 @@ export async function POST(request: Request) {
     return Response.json({ success: true, error_logged: true });
   }
 }
-
