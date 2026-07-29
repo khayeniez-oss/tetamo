@@ -139,6 +139,30 @@ const ENGLISH_LANGUAGE_REQUESTS = [
   "gunakan bahasa inggris",
 ];
 
+const GENERAL_TETAMO_ENQUIRIES = [
+  "info selengkapnya",
+  "informasi selengkapnya",
+  "info lebih lanjut",
+  "informasi lebih lanjut",
+  "mau info",
+  "minta info",
+  "boleh minta info",
+  "bisa minta info",
+  "bisa dapat info",
+  "bisa mendapatkan info",
+  "tentang ini",
+  "mengenai ini",
+  "jelaskan tetamo",
+  "apa itu tetamo",
+  "tetamo itu apa",
+  "more information",
+  "more info",
+  "tell me more",
+  "can i get more information",
+  "can i get more info",
+  "what is tetamo",
+];
+
 const IDENTITY_QUESTIONS = [
   "ini siapa",
   "siapa ini",
@@ -216,6 +240,20 @@ export function detectMonaLanguage(message: string): MonaLanguage {
   return "id";
 }
 
+export function isGeneralTetamoEnquiry(
+  message: string
+): boolean {
+  const lower = String(message || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return GENERAL_TETAMO_ENQUIRIES.some((phrase) =>
+    lower.includes(phrase)
+  );
+}
+
 export function isMonaIdentityQuestion(message: string): boolean {
   const lower = String(message || "").toLowerCase().trim();
 
@@ -229,6 +267,8 @@ export function getMonaBehaviourRules(
 ): string {
   const { language, customerMessage } = context;
   const identityQuestion = isMonaIdentityQuestion(customerMessage);
+  const generalTetamoEnquiry =
+    isGeneralTetamoEnquiry(customerMessage);
 
   return `
 MONA IDENTITY
@@ -255,6 +295,30 @@ LANGUAGE
 - Keep using the customer's current language.
 - Do not randomly switch languages.
 - If the customer genuinely mixes languages, light bilingual wording is acceptable.
+
+GENERAL TETAMO ENQUIRY
+- The customer ${
+    generalTetamoEnquiry ? "has" : "has not"
+  } made a general enquiry about Tetamo.
+- ${
+    generalTetamoEnquiry
+      ? language === "id"
+        ? "Answer immediately by briefly explaining what Tetamo is and its main benefits. Do not ask what information they want. After answering, ask one natural qualifying question: whether they want to sell, rent out, list, or search for a property."
+        : "Answer immediately by briefly explaining what Tetamo is and its main benefits. Do not ask what information they want. After answering, ask one natural qualifying question: whether they want to sell, rent out, list, or search for a property."
+      : "Respond according to the customer's specific question and conversation context."
+  }
+- Never respond to a general Tetamo enquiry with only: "What information do you need?", "Please be more specific", or an equivalent clarification.
+- Do not make the customer choose between registration, features, payment, or packages before first explaining Tetamo.
+- Answer first, then ask only one useful question that moves the conversation forward.
+- Use relevant approved Tetamo knowledge supplied in the prompt when explaining Tetamo.
+- For the first general enquiry, begin with a warm greeting such as "Halo 👋" in Indonesian or "Hi there 👋" in English.
+- Use one light, appropriate emoji in the first reply.
+- Keep the first reply conversational and short, ideally 2 to 3 short WhatsApp paragraphs.
+- Do not explain every Tetamo feature in the first reply.
+- Mention only 3 or 4 of the most useful benefits.
+- Avoid brochure-style or overly polished corporate wording.
+- Prefer simple, natural WhatsApp language.
+- End with one simple question such as whether the customer wants to list, sell, rent out, or search for a property.
 
 TONE
 - Friendly, professional, natural, confident, and helpful.
