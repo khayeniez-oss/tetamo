@@ -93,13 +93,13 @@ ${customerMessage}
 FINAL RESPONSE INSTRUCTIONS
 ==============================
 
-- Always respond bilingually in both English and Indonesian.
-- Write the complete English response first.
-- Leave one blank line.
-- Then write the complete Indonesian version.
-- Both versions must contain the same factual information.
-- Do not shorten the second language version.
-- If the approved knowledge contains a provider list, include the complete provider list in both languages.
+- Respond only in the language used by the customer’s latest message.
+- If the customer writes in English, respond only in English.
+- If the customer writes in Indonesian, respond only in Indonesian.
+- If the message is mixed, respond in the dominant language.
+- You may read and use approved knowledge written in either English or Indonesian.
+- Do not include an automatic translation or repeat the answer in a second language.
+- If the approved knowledge contains a provider list, include the complete relevant provider list in the customer’s language.
 - Write only the final customer-facing WhatsApp reply.
 - Do not return JSON.
 - Do not use markdown headings.
