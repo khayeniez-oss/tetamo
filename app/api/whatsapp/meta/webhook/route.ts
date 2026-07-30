@@ -167,6 +167,10 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function isMonaAiEnabled(value: unknown) {
+  return value !== false;
+}
+
 function normaliseKnowledgeQuestion(value?: string | null) {
   return String(value || "")
     .toLowerCase()
@@ -1243,7 +1247,7 @@ export async function POST(request: Request) {
       // Hard Meta Mona lock: once the conversation needs admin, save the
       // inbound message but remain completely silent until Resume AI is used.
       if (
-        conversation.ai_enabled === false ||
+        !isMonaAiEnabled(conversation.ai_enabled) ||
         conversation.handover_to_admin === true
       ) {
         console.log("Meta Mona remains silent while conversation needs admin.", {
@@ -1285,7 +1289,7 @@ export async function POST(request: Request) {
         source: referral ? "advertisement" : "organic",
         campaignContext,
         isBlocked: blockedNumber,
-        aiEnabled: conversation.ai_enabled !== false,
+        aiEnabled: isMonaAiEnabled(conversation.ai_enabled),
         handoverToAdmin: Boolean(conversation.handover_to_admin),
       });
 
