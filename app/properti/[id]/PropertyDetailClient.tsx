@@ -1822,8 +1822,11 @@ Is this property still available?`;
       }
 
       const leadPayload = {
-        property_id: property.id,
-        sender_user_id: user?.id || null,
+  property_id: property.id,
+  property_code: property.kodeListing ?? null,
+  property_title: property.title,
+
+  sender_user_id: user?.id || null,
         sender_name:
           senderProfile?.full_name ||
           (typeof user?.user_metadata?.full_name === "string"
@@ -1945,7 +1948,10 @@ Is this property still available?`;
         : `Viewing request for ${property.title} on ${selectedDate} at ${selectedTime}`;
 
     const leadPayload = {
-      property_id: property.id,
+  property_id: property.id,
+  property_code: property.kodeListing ?? null,
+  property_title: property.title,
+
       sender_user_id: user.id,
       sender_name:
         senderProfile?.full_name ||

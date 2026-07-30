@@ -65,81 +65,102 @@ export type MonaConversationState = {
   engineInput: MonaConversationEngineInput;
 };
 
-function normalizeString(value?: string | null): string {
-  return String(value || "").trim();
+function cleanString(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
-function normalizeLowercase(value?: string | null): string {
-  return normalizeString(value).toLowerCase();
+function normalizeLowercase(value: unknown): string {
+  return cleanString(value).toLowerCase();
 }
 
 function resolveBoolean(
   value: boolean | null | undefined,
   fallback: boolean
 ): boolean {
-  return typeof value === "boolean" ? value : fallback;
+  return typeof value === "boolean"
+    ? value
+    : fallback;
 }
 
-function resolveSource(
-  conversation?: MonaConversationRecord | null,
-  campaign?: MonaCampaignRecord | null,
-  fallbackSource?: MonaConversationSource
-): MonaConversationSource {
-  if (normalizeString(campaign?.campaign_id)) {
+function resolveSource(params: {
+  conversation: MonaConversationRecord | null;
+  campaign: MonaCampaignRecord | null;
+  fallbackSource?: MonaConversationSource;
+}): MonaConversationSource {
+  const campaignId = cleanString(
+    params.campaign?.campaign_id
+  );
+
+  if (campaignId) {
     return "campaign";
   }
 
-  const source = normalizeLowercase(conversation?.source);
+  const storedSource = normalizeLowercase(
+    params.conversation?.source
+  );
 
-  if (source === "campaign") {
+  if (storedSource === "campaign") {
     return "campaign";
   }
 
-  if (source === "advertisement" || source === "ad") {
+  if (
+    storedSource === "advertisement" ||
+    storedSource === "ad"
+  ) {
     return "advertisement";
   }
 
-  if (source === "support") {
+  if (storedSource === "support") {
     return "support";
   }
 
-  if (source === "organic") {
+  if (storedSource === "organic") {
     return "organic";
   }
 
-  return fallbackSource || "unknown";
+  return params.fallbackSource ?? "unknown";
 }
 
 function resolveCampaignContext(
-  campaign?: MonaCampaignRecord | null
+  campaign: MonaCampaignRecord | null
 ): MonaCampaignContext | null {
   if (!campaign) {
     return null;
   }
 
-  const context: MonaCampaignContext = {
-    campaignId: normalizeString(campaign.campaign_id) || null,
-    recipientId: normalizeString(campaign.recipient_id) || null,
-    templateName: normalizeString(campaign.template_name) || null,
+  const campaignContext: MonaCampaignContext = {
+    campaignId:
+      cleanString(campaign.campaign_id) || null,
+
+    recipientId:
+      cleanString(campaign.recipient_id) || null,
+
+    templateName:
+      cleanString(campaign.template_name) || null,
+
     templateLanguage:
-      normalizeString(campaign.template_language) || null,
+      cleanString(campaign.template_language) || null,
+
     templateCategory:
-      normalizeString(campaign.template_category) || null,
-    sendType: normalizeString(campaign.send_type) || null,
+      cleanString(campaign.template_category) || null,
+
+    sendType:
+      cleanString(campaign.send_type) || null,
   };
 
-  const hasCampaignData = Object.values(context).some(
-    (value) => Boolean(value)
-  );
+  const hasCampaignContext = Object.values(
+    campaignContext
+  ).some((value) => Boolean(value));
 
-  return hasCampaignData ? context : null;
+  return hasCampaignContext
+    ? campaignContext
+    : null;
 }
 
 function resolveConversationStatus(params: {
   isBlocked: boolean;
   aiEnabled: boolean;
   handoverToAdmin: boolean;
-  storedStatus?: string | null;
 }): MonaConversationStatus {
   if (params.isBlocked) {
     return "blocked";
@@ -153,41 +174,32 @@ function resolveConversationStatus(params: {
     return "ai_disabled";
   }
 
-  const storedStatus = normalizeLowercase(params.storedStatus);
-
-  if (
-    storedStatus === "blocked" ||
-    storedStatus === "admin_handover" ||
-    storedStatus === "ai_disabled"
-  ) {
-    return storedStatus;
-  }
-
   return "active";
 }
 
 export function buildMonaConversationState(
   input: MonaConversationStateInput
 ): MonaConversationState {
-  const conversation = input.conversation || null;
-  const campaign = input.campaign || null;
+  const conversation = input.conversation ?? null;
+  const campaign = input.campaign ?? null;
 
   const conversationId =
-    normalizeString(conversation?.id) ||
-    normalizeString(input.fallbackConversationId) ||
+    cleanString(conversation?.id) ||
+    cleanString(input.fallbackConversationId) ||
     null;
 
   const customerPhone =
-    normalizeString(conversation?.customer_phone) ||
-    normalizeString(input.fallbackCustomerPhone) ||
+    cleanString(conversation?.customer_phone) ||
+    cleanString(input.fallbackCustomerPhone) ||
     null;
 
-  const customerMessage = normalizeString(
+  const customerMessage = cleanString(
     input.incomingMessage.text
   );
 
   const messageType =
-    normalizeLowercase(input.incomingMessage.type) || "text";
+    normalizeLowercase(input.incomingMessage.type) ||
+    "text";
 
   const isBlocked = resolveBoolean(
     conversation?.is_blocked,
@@ -204,19 +216,19 @@ export function buildMonaConversationState(
     false
   );
 
-  const source = resolveSource(
+  const source = resolveSource({
     conversation,
     campaign,
-    input.fallbackSource
-  );
+    fallbackSource: input.fallbackSource,
+  });
 
-  const campaignContext = resolveCampaignContext(campaign);
+  const campaignContext =
+    resolveCampaignContext(campaign);
 
   const status = resolveConversationStatus({
     isBlocked,
     aiEnabled,
     handoverToAdmin,
-    storedStatus: conversation?.status,
   });
 
   const engineInput: MonaConversationEngineInput = {
@@ -234,19 +246,14 @@ export function buildMonaConversationState(
   return {
     conversationId,
     customerPhone,
-
     customerMessage,
     messageType,
-
     source,
     status,
-
     isBlocked,
     aiEnabled,
     handoverToAdmin,
-
     campaignContext,
-
     engineInput,
   };
 }

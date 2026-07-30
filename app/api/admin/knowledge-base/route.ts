@@ -29,6 +29,25 @@ const ENTRY_SELECT = `
   updated_at
 `;
 
+const CANDIDATE_SELECT = `
+  id,
+  source_message_id,
+  conversation_id,
+  original_message,
+  extracted_question,
+  normalised_question,
+  suggested_category,
+  suggested_answer,
+  detected_language,
+  candidate_type,
+  status,
+  confidence,
+  grouped_entry_id,
+  processing_batch_id,
+  created_at,
+  reviewed_at
+`;
+
 type AdminAuthResult = {
   authorised: boolean;
   userId?: string;
@@ -219,6 +238,7 @@ export async function GET(req: Request) {
       draftResult,
       inactiveResult,
       candidatesResult,
+      pendingCandidatesResult,
     ] = await Promise.all([
       query,
 
@@ -245,6 +265,13 @@ export async function GET(req: Request) {
         .from("knowledge_base_candidates")
         .select("id", { count: "exact", head: true })
         .eq("status", "pending"),
+
+      supabaseAdmin
+        .from("knowledge_base_candidates")
+        .select(CANDIDATE_SELECT)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(100),
     ]);
 
     if (entriesResult.error) {
@@ -268,6 +295,7 @@ export async function GET(req: Request) {
       draftResult.error,
       inactiveResult.error,
       candidatesResult.error,
+      pendingCandidatesResult.error,
     ].filter(Boolean);
 
     if (countErrors.length > 0) {
@@ -285,6 +313,7 @@ export async function GET(req: Request) {
     return Response.json({
       success: true,
       entries: entriesResult.data || [],
+      pendingCandidates: pendingCandidatesResult.data || [],
       categories,
       stats: {
         total: totalResult.count || 0,

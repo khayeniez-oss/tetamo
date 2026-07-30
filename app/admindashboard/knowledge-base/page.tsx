@@ -25,6 +25,18 @@ type KnowledgeEntry = {
   updated_at: string;
 };
 
+type KnowledgeCandidate = {
+  id: string;
+  original_message: string | null;
+  extracted_question: string | null;
+  suggested_answer: string | null;
+  detected_language: string | null;
+  status: string;
+  confidence: number | string | null;
+  grouped_entry_id: string | null;
+  created_at: string;
+};
+
 type KnowledgeStats = {
   total: number;
   active: number;
@@ -208,6 +220,9 @@ export default function MonaKnowledgePage() {
   const [activeTab, setActiveTab] = useState<TabValue>("knowledge");
 
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
+  const [pendingCandidates, setPendingCandidates] = useState<
+    KnowledgeCandidate[]
+  >([]);
   const [stats, setStats] = useState<KnowledgeStats>(EMPTY_STATS);
   const [categories, setCategories] = useState<string[]>([]);
 
@@ -266,6 +281,7 @@ export default function MonaKnowledgePage() {
 
       if (!token) {
         setEntries([]);
+        setPendingCandidates([]);
         setStats(EMPTY_STATS);
         setError("Please log in as admin first.");
         return;
@@ -299,6 +315,9 @@ export default function MonaKnowledgePage() {
       }
 
       setEntries((result.entries || []) as KnowledgeEntry[]);
+      setPendingCandidates(
+        (result.pendingCandidates || []) as KnowledgeCandidate[]
+      );
       setStats((result.stats || EMPTY_STATS) as KnowledgeStats);
       setCategories((result.categories || []) as string[]);
     } catch (err: any) {
@@ -332,6 +351,55 @@ export default function MonaKnowledgePage() {
     setError("");
     setSuccessMessage("");
     setDrawerOpen(true);
+  }
+
+  function openCandidateDrawer(candidate: KnowledgeCandidate) {
+    const question =
+      candidate.extracted_question?.trim() ||
+      candidate.original_message?.trim() ||
+      "";
+
+    const detectedLanguage = String(
+      candidate.detected_language || "id"
+    ).toLowerCase();
+
+    setForm({
+      ...EMPTY_FORM,
+      canonicalQuestion: question,
+      approvedAnswer: candidate.suggested_answer?.trim() || "",
+      category: "general",
+      language:
+        detectedLanguage === "en"
+          ? "en"
+          : detectedLanguage === "both"
+          ? "both"
+          : "id",
+      status: "draft",
+      priority: 50,
+    });
+
+    setError("");
+    setSuccessMessage("");
+    setDrawerOpen(true);
+  }
+
+  function formatConfidence(value: KnowledgeCandidate["confidence"]) {
+    if (value === null || value === undefined || value === "") {
+      return "Not scored";
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return String(value);
+    }
+
+    const percentage =
+      numericValue <= 1
+        ? Math.round(numericValue * 100)
+        : Math.round(numericValue);
+
+    return `${Math.max(0, Math.min(percentage, 100))}% confidence`;
   }
 
   function closeDrawer() {
@@ -878,20 +946,177 @@ export default function MonaKnowledgePage() {
       ) : null}
 
       {activeTab === "pending" ? (
-        <section className="mt-6 rounded-[28px] border border-gray-200 bg-white px-6 py-14 text-center shadow-sm">
-          <Badge tone="purple">
-            {stats.pendingCandidates} waiting
-          </Badge>
+        <section className="mt-6 space-y-4">
+          <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="purple">
+                    {pendingCandidates.length} waiting
+                  </Badge>
 
-          <h2 className="mt-4 text-xl font-bold">
-            Pending Customer Questions
-          </h2>
+                  <Badge tone="gray">
+                    Admin review required
+                  </Badge>
+                </div>
 
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500">
-            This tab will show questions collected from real WhatsApp
-            conversations. You will be able to review, edit, approve or
-            reject them before Mona learns anything.
-          </p>
+                <h2 className="mt-4 text-xl font-bold">
+                  Pending Customer Questions
+                </h2>
+
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+                  These questions were collected when Mona could not find
+                  approved knowledge. Review each question before adding
+                  anything to Mona’s trusted Knowledge Base.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={loadKnowledge}
+                disabled={loading}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              >
+                {loading ? "Refreshing..." : "Refresh Questions"}
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="rounded-[28px] border border-gray-200 bg-white px-6 py-12 text-center text-sm text-gray-500 shadow-sm">
+              Loading pending questions...
+            </div>
+          ) : null}
+
+          {!loading && pendingCandidates.length === 0 ? (
+            <div className="rounded-[28px] border border-gray-200 bg-white px-6 py-14 text-center shadow-sm">
+              <Badge tone="green">All reviewed</Badge>
+
+              <h3 className="mt-4 text-lg font-bold text-gray-800">
+                No pending questions
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500">
+                New unanswered WhatsApp questions will appear here
+                automatically for admin review.
+              </p>
+            </div>
+          ) : null}
+
+          {!loading
+            ? pendingCandidates.map((candidate) => {
+                const question =
+                  candidate.extracted_question?.trim() ||
+                  candidate.original_message?.trim() ||
+                  "No question text was captured.";
+
+                const originalMessage =
+                  candidate.original_message?.trim() || "";
+
+                const showOriginalMessage =
+                  originalMessage &&
+                  originalMessage.toLowerCase() !==
+                    question.toLowerCase();
+
+                const language =
+                  String(candidate.detected_language || "id").toLowerCase();
+
+                return (
+                  <article
+                    key={candidate.id}
+                    className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
+                  >
+                    <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap gap-2">
+                          <Badge tone="amber">Pending Review</Badge>
+
+                          <Badge tone="blue">
+                            {language === "en"
+                              ? "English"
+                              : language === "both"
+                              ? "Indonesian & English"
+                              : "Indonesian"}
+                          </Badge>
+
+                          <Badge tone="purple">
+                            {formatConfidence(candidate.confidence)}
+                          </Badge>
+
+                          <Badge tone="gray">
+                            WhatsApp
+                          </Badge>
+                        </div>
+
+                        <div className="mt-5">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                            Extracted Customer Question
+                          </p>
+
+                          <p className="mt-3 text-base font-semibold leading-7 text-gray-900">
+                            {question}
+                          </p>
+                        </div>
+
+                        {showOriginalMessage ? (
+                          <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                              Original Customer Message
+                            </p>
+
+                            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-700">
+                              {originalMessage}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {candidate.suggested_answer?.trim() ? (
+                          <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-purple-500">
+                              Suggested Draft Answer
+                            </p>
+
+                            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-purple-900">
+                              {candidate.suggested_answer}
+                            </p>
+
+                            <p className="mt-3 text-xs leading-5 text-purple-700">
+                              This is only a draft. An admin must review and
+                              edit it before Mona can use it.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                            No answer was suggested. Add the correct approved
+                            answer during review.
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-400">
+                          <span>
+                            Collected: {formatDate(candidate.created_at)}
+                          </span>
+
+                          <span>
+                            Candidate ID: {candidate.id.slice(0, 8)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 flex-wrap gap-2 xl:max-w-[240px] xl:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openCandidateDrawer(candidate)}
+                          className="rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90"
+                        >
+                          Review & Add Knowledge
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            : null}
         </section>
       ) : null}
 

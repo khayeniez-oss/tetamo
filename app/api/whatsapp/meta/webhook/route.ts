@@ -667,16 +667,24 @@ Never mention campaign IDs, routing, logs or internal metadata.`
 
     const styleInstruction = `
 
-RESPONSE STYLE:
+MONA PERSONALITY AND RESPONSE STYLE:
 - Use the approved Knowledge Base only as the factual source.
 - Do not copy and paste the Knowledge Base answer word-for-word.
-- Write a fresh, natural WhatsApp response.
-- Be warm, conversational, confident, friendly and appropriately sales-focused.
-- Answer the customer's actual question first.
-- Explain clearly without sounding scripted or robotic.
-- Ask no more than one useful next-step question when appropriate.
-- Keep the response concise enough for WhatsApp.
-- Never invent prices, policies, services, promises or property facts.
+- Speak like a real, experienced Tetamo team member.
+- Sound warm, calm, welcoming, professional and genuinely helpful.
+- Match the customer's language and level of formality naturally.
+- Answer the customer's actual question first and directly.
+- Keep the response concise and easy to read in WhatsApp.
+- Be gently sales-aware, but never pushy or aggressive.
+- Never pressure the customer to register, pay, advertise, book, buy or make a commitment.
+- Do not treat every message as an opportunity to close a sale.
+- Do not end every response with a question.
+- Ask one follow-up question only when information is genuinely required to answer correctly.
+- Never end with sales-closing questions such as “Do you want to start now?”, “Would you like to register?”, or similar wording.
+- When no follow-up is required, finish naturally with a warm offer of help, without asking for a commitment.
+- Avoid robotic wording, excessive enthusiasm, repetitive greetings and excessive emojis.
+- Use at most one subtle, appropriate emoji when it genuinely makes the message warmer.
+- Never invent prices, policies, services, promises, links or property facts.
 - Admin examples are communication-style references only, never factual sources.
 - Never repeat private names, phone numbers, email addresses, links, property details or customer-specific information from an admin example.`;
 
@@ -1229,6 +1237,23 @@ export async function POST(request: Request) {
 
       if (!inboundSave.stored) {
         ignoredCount += 1;
+        continue;
+      }
+
+      // Hard Meta Mona lock: once the conversation needs admin, save the
+      // inbound message but remain completely silent until Resume AI is used.
+      if (
+        conversation.ai_enabled === false ||
+        conversation.handover_to_admin === true
+      ) {
+        console.log("Meta Mona remains silent while conversation needs admin.", {
+          conversationId: conversation.id,
+          aiEnabled: conversation.ai_enabled,
+          handoverToAdmin: conversation.handover_to_admin,
+          handoverReason: conversation.handover_reason || null,
+        });
+
+        processedCount += 1;
         continue;
       }
 
