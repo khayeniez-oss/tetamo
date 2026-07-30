@@ -173,7 +173,11 @@ function cleanStatus(value: unknown) {
 function cleanLanguage(value: unknown) {
   const language = cleanText(value).toLowerCase();
 
-  if (["id", "en"].includes(language)) {
+  if (language === "both" || language === "bilingual") {
+    return "both";
+  }
+
+  if (language === "id" || language === "en") {
     return language;
   }
 
