@@ -85,48 +85,65 @@ function calculateKnowledgeScore(
   const normalisedMessage = normaliseSearchText(customerMessage);
   const messageTokens = tokenise(customerMessage);
 
-  const question = normaliseSearchText(entry.canonicalQuestion);
+  const questions = entry.canonicalQuestion
+    .split("\n")
+    .map((question) => normaliseSearchText(question))
+    .filter(Boolean);
+
   const answer = normaliseSearchText(entry.approvedAnswer);
   const category = normaliseSearchText(entry.category);
 
-  let score = entry.priority;
+  let relevanceScore = 0;
 
-  if (question && normalisedMessage === question) {
-    score += 100;
-  } else if (
-    question &&
-    normalisedMessage.includes(question)
-  ) {
-    score += 60;
-  } else if (
-    question &&
-    question.includes(normalisedMessage)
-  ) {
-    score += 40;
+  for (const question of questions) {
+    if (normalisedMessage === question) {
+      relevanceScore = Math.max(relevanceScore, 100);
+      continue;
+    }
+
+    if (
+      normalisedMessage.length >= 6 &&
+      normalisedMessage.includes(question)
+    ) {
+      relevanceScore = Math.max(relevanceScore, 70);
+    }
+
+    if (
+      normalisedMessage.length >= 6 &&
+      question.includes(normalisedMessage)
+    ) {
+      relevanceScore = Math.max(relevanceScore, 55);
+    }
+
+    for (const token of messageTokens) {
+      if (question.includes(token)) {
+        relevanceScore += 10;
+      }
+    }
   }
 
   if (
     category &&
     normalisedMessage.includes(category)
   ) {
-    score += 12;
+    relevanceScore += 12;
   }
 
   for (const token of messageTokens) {
-    if (question.includes(token)) {
-      score += 10;
-    }
-
     if (category.includes(token)) {
-      score += 5;
+      relevanceScore += 5;
     }
 
     if (answer.includes(token)) {
-      score += 2;
+      relevanceScore += 2;
     }
   }
 
-  return score;
+  if (relevanceScore <= 0) {
+    return 0;
+  }
+
+  return relevanceScore + Math.min(entry.priority, 100) / 100;
 }
 
 export async function searchApprovedMonaKnowledge(params: {
@@ -154,12 +171,6 @@ export async function searchApprovedMonaKnowledge(params: {
     .eq("status", "active")
     .order("priority", { ascending: false })
     .limit(250);
-
-  const language = cleanText(params.language).toLowerCase();
-
-  if (language === "id" || language === "en") {
-    query = query.in("language", [language, "both"]);
-  }
 
   const { data, error } = await query;
 
