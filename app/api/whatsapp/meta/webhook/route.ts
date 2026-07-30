@@ -605,11 +605,7 @@ async function generateMonaReply(params: {
   const language = detectMonaLanguage(params.customerMessage);
 
   try {
-    const [
-      knowledgeEntries,
-      conversationContext,
-      adminStyleExamples,
-    ] = await Promise.all([
+    const [knowledgeEntries, conversationContext] = await Promise.all([
       searchApprovedMonaKnowledge({
         supabase: supabaseAdmin,
         customerMessage: params.customerMessage,
@@ -619,7 +615,6 @@ async function generateMonaReply(params: {
         params.conversationId,
         params.customerMessage
       ),
-      getRecentAdminStyleExamples(language),
     ]);
 
     if (knowledgeEntries.length === 0) {
@@ -696,16 +691,14 @@ MONA PERSONALITY AND RESPONSE STYLE:
       conversationContext
         ? `CURRENT CONVERSATION:\n${conversationContext}`
         : null,
-      adminStyleExamples
-        ? `ADMIN COMMUNICATION EXAMPLES — STYLE ONLY:\n${adminStyleExamples}`
-        : null,
+      params.campaignContext ? campaignInstruction.trim() : null,
       styleInstruction,
     ]
       .filter(Boolean)
       .join("\n\n");
 
     const prompt = buildMonaPrompt({
-      customerMessage: `${params.customerMessage}${campaignInstruction}`,
+      customerMessage: params.customerMessage,
       language,
       knowledgeEntries,
       conversationContext: combinedContext || null,
