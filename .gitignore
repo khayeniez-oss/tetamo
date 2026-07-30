@@ -56,3 +56,6 @@ supabase/.temp/
 
 # Supabase local temp files - never commit
 supabase/.temp/
+
+# Local Mona Knowledge backups
+mona-knowledge-backup-*.json
