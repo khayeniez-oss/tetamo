@@ -167,6 +167,233 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function normaliseKnowledgeQuestion(value?: string | null) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsExternalLink(value?: string | null) {
+  const message = String(value || "").trim();
+
+  if (!message) return false;
+
+  return /(?:https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|id|co\.id|io|app|me|link|site|online|store)\b)/i.test(
+    message
+  );
+}
+
+function isEmojiOnlyMessage(value?: string | null) {
+  const compact = String(value || "").replace(/\s+/g, "");
+
+  if (!compact) return false;
+
+  const withoutEmoji = compact
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u20E3]/gu, "")
+    .replace(/[\u{1F1E6}-\u{1F1FF}]/gu, "");
+
+  return withoutEmoji.length === 0;
+}
+
+function getUnsupportedMessageHandoverReason(params: {
+  messageType?: string | null;
+  messageText?: string | null;
+}) {
+  const messageType = String(params.messageType || "").trim().toLowerCase();
+  const messageText = String(params.messageText || "").trim();
+
+  if (messageType !== "text") {
+    const labels: Record<string, string> = {
+      image: "Customer sent a photo",
+      video: "Customer sent a video",
+      audio: "Customer sent an audio or voice message",
+      document: "Customer sent a document",
+      sticker: "Customer sent a sticker",
+      location: "Customer sent a location",
+      contacts: "Customer sent contact information",
+      contact: "Customer sent contact information",
+      reaction: "Customer sent a reaction",
+    };
+
+    return labels[messageType] || `Customer sent unsupported WhatsApp content: ${
+      messageType || "unknown"
+    }`;
+  }
+
+  if (containsExternalLink(messageText)) {
+    return "Customer sent a link";
+  }
+
+  if (isEmojiOnlyMessage(messageText)) {
+    return "Customer sent an emoji-only message";
+  }
+
+  return null;
+}
+
+function sanitiseAdminStyleExample(value?: string | null) {
+  return String(value || "")
+    .replace(/https?:\/\/\S+/gi, "[link]")
+    .replace(/www\.\S+/gi, "[link]")
+    .replace(
+      /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+      "[email]"
+    )
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 700);
+}
+
+async function pauseMonaForAdmin(params: {
+  conversationId: string;
+  reason: string;
+}) {
+  const { error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .update({
+      ai_enabled: false,
+      handover_to_admin: true,
+      handover_reason: params.reason,
+    })
+    .eq("id", params.conversationId);
+
+  if (error) {
+    console.error("Failed to pause Mona for admin handover:", error);
+    return false;
+  }
+
+  console.log("Mona paused for admin handover.", {
+    conversationId: params.conversationId,
+    reason: params.reason,
+  });
+
+  return true;
+}
+
+async function saveKnowledgeCandidate(params: {
+  sourceMessageId?: string | null;
+  conversationId: string;
+  customerMessage: string;
+  language: MonaLanguage;
+}) {
+  const originalMessage = String(params.customerMessage || "").trim();
+  const normalisedQuestion =
+    normaliseKnowledgeQuestion(originalMessage);
+
+  if (!originalMessage || normalisedQuestion.length < 3) {
+    return;
+  }
+
+  const ignoredMessages = new Set([
+    "halo",
+    "hai",
+    "hi",
+    "hello",
+    "hey",
+    "ok",
+    "oke",
+    "okay",
+    "makasih",
+    "terima kasih",
+    "thanks",
+    "thank you",
+    "selamat pagi",
+    "selamat siang",
+    "selamat sore",
+    "selamat malam",
+  ]);
+
+  if (ignoredMessages.has(normalisedQuestion)) {
+    return;
+  }
+
+  const { data: existingCandidate, error: duplicateError } =
+    await supabaseAdmin
+      .from("knowledge_base_candidates")
+      .select("id")
+      .eq("conversation_id", params.conversationId)
+      .eq("normalised_question", normalisedQuestion)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+
+  if (duplicateError) {
+    console.error(
+      "Failed to check duplicate Mona Knowledge candidate:",
+      duplicateError
+    );
+  }
+
+  if (existingCandidate?.id) {
+    return;
+  }
+
+  const { error } = await supabaseAdmin
+    .from("knowledge_base_candidates")
+    .insert({
+      source_message_id: params.sourceMessageId || null,
+      conversation_id: params.conversationId,
+      original_message: originalMessage,
+      extracted_question: originalMessage,
+      normalised_question: normalisedQuestion,
+      suggested_category: null,
+      suggested_answer: null,
+      detected_language: params.language,
+      candidate_type: "general_question",
+      status: "pending",
+      confidence: 0,
+      grouped_entry_id: null,
+      processing_batch_id: null,
+      reviewed_at: null,
+    });
+
+  if (error) {
+    console.error("Failed to save Mona Knowledge candidate:", error);
+    return;
+  }
+
+  console.log("Saved unmatched question for Knowledge review.", {
+    conversationId: params.conversationId,
+    sourceMessageId: params.sourceMessageId || null,
+    normalisedQuestion,
+    language: params.language,
+  });
+}
+
+async function getRecentAdminStyleExamples(
+  language: MonaLanguage
+) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("message, created_at")
+    .eq("direction", "outbound")
+    .eq("admin_generated", true)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) {
+    console.error("Failed to load Mona admin style examples:", error);
+    return null;
+  }
+
+  const examples = (data || [])
+    .map((item) => sanitiseAdminStyleExample(item.message))
+    .filter(Boolean)
+    .filter((message) => detectMonaLanguage(message) === language)
+    .slice(0, 6);
+
+  if (!examples.length) {
+    return null;
+  }
+
+  return examples
+    .map((message, index) => `Admin example ${index + 1}: ${message}`)
+    .join("\n");
+}
+
 async function getLatestCampaignContext(
   conversationId: string
 ): Promise<CampaignContext | null> {
@@ -313,10 +540,12 @@ async function getConversationContext(
 ) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_messages")
-    .select("direction, message, created_at")
+    .select(
+      "direction, message, created_at, admin_generated, ai_generated"
+    )
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
-    .limit(8);
+    .limit(12);
 
   if (error) {
     console.error("Failed to load Mona conversation context:", error);
@@ -326,6 +555,7 @@ async function getConversationContext(
   const orderedMessages = (data || []).slice().reverse();
 
   const latestMessage = orderedMessages.at(-1);
+
   if (
     latestMessage?.direction === "inbound" &&
     String(latestMessage.message || "").trim() ===
@@ -336,7 +566,12 @@ async function getConversationContext(
 
   const messages = orderedMessages
     .map((item) => {
-      const speaker = item.direction === "outbound" ? "Mona" : "Customer";
+      let speaker = "Customer";
+
+      if (item.direction === "outbound") {
+        speaker = item.admin_generated ? "Admin" : "Mona";
+      }
+
       return `${speaker}: ${String(item.message || "").trim()}`;
     })
     .filter((item) => !item.endsWith(": "));
@@ -345,23 +580,32 @@ async function getConversationContext(
     return null;
   }
 
-  return messages.join("\n").slice(-6000);
+  return messages.join("\n").slice(-8000);
 }
 
 async function generateMonaReply(params: {
   customerMessage: string;
   conversationId: string;
+  sourceMessageId?: string | null;
   campaignContext?: CampaignContext | null;
-}) {
+}): Promise<
+  | {
+      shouldReply: true;
+      reply: string;
+    }
+  | {
+      shouldReply: false;
+      reason: string;
+    }
+> {
   const language = detectMonaLanguage(params.customerMessage);
-  const fallback = getFallbackReply(params.customerMessage, language);
-
-  if (!process.env.OPENAI_API_KEY) {
-    return fallback;
-  }
 
   try {
-    const [knowledgeEntries, conversationContext] = await Promise.all([
+    const [
+      knowledgeEntries,
+      conversationContext,
+      adminStyleExamples,
+    ] = await Promise.all([
       searchApprovedMonaKnowledge({
         supabase: supabaseAdmin,
         customerMessage: params.customerMessage,
@@ -371,37 +615,143 @@ async function generateMonaReply(params: {
         params.conversationId,
         params.customerMessage
       ),
+      getRecentAdminStyleExamples(language),
     ]);
 
+    if (knowledgeEntries.length === 0) {
+      await saveKnowledgeCandidate({
+        sourceMessageId: params.sourceMessageId || null,
+        conversationId: params.conversationId,
+        customerMessage: params.customerMessage,
+        language,
+      });
+
+      const reason = "No relevant approved Knowledge Base answer";
+
+      await pauseMonaForAdmin({
+        conversationId: params.conversationId,
+        reason,
+      });
+
+      return {
+        shouldReply: false,
+        reason,
+      };
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      const reason = "Mona AI generation is unavailable";
+
+      await pauseMonaForAdmin({
+        conversationId: params.conversationId,
+        reason,
+      });
+
+      return {
+        shouldReply: false,
+        reason,
+      };
+    }
+
     const campaignInstruction = params.campaignContext
-      ? `\n\nCAMPAIGN CONTEXT (internal): The customer is replying after Tetamo sent a WhatsApp template campaign. Template: ${params.campaignContext.templateName || "unknown"}. Category: ${params.campaignContext.templateCategory || "unknown"}. Send type: ${params.campaignContext.sendType || "unknown"}. Answer the customer in relation to that campaign when relevant. Do not mention internal campaign IDs, routing, logs, or system metadata.`
+      ? `
+
+CAMPAIGN CONTEXT (internal):
+The customer is replying after Tetamo sent a WhatsApp template campaign.
+Template: ${params.campaignContext.templateName || "unknown"}.
+Category: ${params.campaignContext.templateCategory || "unknown"}.
+Send type: ${params.campaignContext.sendType || "unknown"}.
+Answer in relation to that campaign when relevant.
+Never mention campaign IDs, routing, logs or internal metadata.`
       : "";
+
+    const styleInstruction = `
+
+RESPONSE STYLE:
+- Use the approved Knowledge Base only as the factual source.
+- Do not copy and paste the Knowledge Base answer word-for-word.
+- Write a fresh, natural WhatsApp response.
+- Be warm, conversational, confident, friendly and appropriately sales-focused.
+- Answer the customer's actual question first.
+- Explain clearly without sounding scripted or robotic.
+- Ask no more than one useful next-step question when appropriate.
+- Keep the response concise enough for WhatsApp.
+- Never invent prices, policies, services, promises or property facts.
+- Admin examples are communication-style references only, never factual sources.
+- Never repeat private names, phone numbers, email addresses, links, property details or customer-specific information from an admin example.`;
+
+    const combinedContext = [
+      conversationContext
+        ? `CURRENT CONVERSATION:\n${conversationContext}`
+        : null,
+      adminStyleExamples
+        ? `ADMIN COMMUNICATION EXAMPLES — STYLE ONLY:\n${adminStyleExamples}`
+        : null,
+      styleInstruction,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     const prompt = buildMonaPrompt({
       customerMessage: `${params.customerMessage}${campaignInstruction}`,
       language,
       knowledgeEntries,
-      conversationContext,
+      conversationContext: combinedContext || null,
     });
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
-      temperature: 0.35,
+      temperature: 0.45,
       max_output_tokens: 650,
     });
 
-    const rawReply = response.output_text || fallback;
+    const rawReply = String(response.output_text || "").trim();
+
+    if (!rawReply) {
+      const reason = "Mona produced an empty response";
+
+      await pauseMonaForAdmin({
+        conversationId: params.conversationId,
+        reason,
+      });
+
+      return {
+        shouldReply: false,
+        reason,
+      };
+    }
+
     const withoutIdentity = cleanMonaIdentityIntroduction(
       rawReply,
       params.customerMessage
     );
-    const withoutAdminClosing = cleanMonaAdminClosing(withoutIdentity);
 
-    return limitMonaReply(withoutAdminClosing || fallback);
+    const withoutAdminClosing =
+      cleanMonaAdminClosing(withoutIdentity);
+
+    const finalReply = limitMonaReply(
+      withoutAdminClosing || rawReply
+    );
+
+    return {
+      shouldReply: true,
+      reply: finalReply,
+    };
   } catch (error) {
     console.error("Meta Direct WhatsApp AI generation failed:", error);
-    return fallback;
+
+    const reason = "Mona AI generation failed";
+
+    await pauseMonaForAdmin({
+      conversationId: params.conversationId,
+      reason,
+    });
+
+    return {
+      shouldReply: false,
+      reason,
+    };
   }
 }
 
@@ -580,47 +930,59 @@ async function saveInboundMessage(params: {
   referral?: MetaMessage["referral"] | null;
   messageType?: string | null;
 }) {
-  const { error } = await supabaseAdmin.from("whatsapp_messages").insert({
-    conversation_id: params.conversationId,
-    direction: "inbound",
-    from_number: params.customerPhone,
-    to_number: params.businessPhoneNumberId,
-    phone: `whatsapp:+${params.customerPhone}`,
-    profile_name: params.profileName,
-    message: params.messageText,
-    source: "meta",
-    provider: "meta",
-    provider_message_id: params.metaMessageId,
-    ai_generated: false,
-    admin_generated: false,
-    media_count: params.messageType && params.messageType !== "text" ? 1 : 0,
-    raw_payload: {
-      meta_message_id: params.metaMessageId,
-      meta_message_type: params.messageType || null,
-      meta_referral: params.referral || null,
-      meta_payload: params.rawPayload,
-    },
-    created_at: new Date().toISOString(),
-  });
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .insert({
+      conversation_id: params.conversationId,
+      direction: "inbound",
+      from_number: params.customerPhone,
+      to_number: params.businessPhoneNumberId,
+      phone: `whatsapp:+${params.customerPhone}`,
+      profile_name: params.profileName,
+      message: params.messageText,
+      source: "meta",
+      provider: "meta",
+      provider_message_id: params.metaMessageId,
+      ai_generated: false,
+      admin_generated: false,
+      media_count:
+        params.messageType && params.messageType !== "text" ? 1 : 0,
+      raw_payload: {
+        meta_message_id: params.metaMessageId,
+        meta_message_type: params.messageType || null,
+        meta_referral: params.referral || null,
+        meta_payload: params.rawPayload,
+      },
+      created_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
 
   if (error?.code === "23505") {
     return {
       stored: false,
       duplicate: true,
+      messageId: null,
     };
   }
 
   if (error) {
-    console.error("Failed to save Meta Direct inbound WhatsApp message:", error);
+    console.error(
+      "Failed to save Meta Direct inbound WhatsApp message:",
+      error
+    );
+
     return {
       stored: false,
       duplicate: false,
+      messageId: null,
     };
   }
 
   return {
     stored: true,
     duplicate: false,
+    messageId: data?.id ? String(data.id) : null,
   };
 }
 
@@ -870,6 +1232,22 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const unsupportedHandoverReason =
+        getUnsupportedMessageHandoverReason({
+          messageType: item.message.type || null,
+          messageText: isTextMessage ? messageText : null,
+        });
+
+      if (unsupportedHandoverReason) {
+        await pauseMonaForAdmin({
+          conversationId: conversation.id,
+          reason: unsupportedHandoverReason,
+        });
+
+        processedCount += 1;
+        continue;
+      }
+
       const campaignContext = await getLatestCampaignContext(
         conversation.id
       );
@@ -901,13 +1279,24 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const reply = isTextMessage
-        ? await generateMonaReply({
-            customerMessage: messageText,
-            conversationId: conversation.id,
-            campaignContext,
-          })
-        : getMediaRedirectReply("id");
+      const monaDecision = await generateMonaReply({
+        customerMessage: messageText,
+        conversationId: conversation.id,
+        sourceMessageId: inboundSave.messageId,
+        campaignContext,
+      });
+
+      if (!monaDecision.shouldReply) {
+        console.log("Mona remained silent for admin handover.", {
+          conversationId: conversation.id,
+          reason: monaDecision.reason,
+        });
+
+        processedCount += 1;
+        continue;
+      }
+
+      const reply = monaDecision.reply;
 
       await sleep(getMonaResponseDelay(reply));
 
