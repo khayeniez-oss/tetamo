@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { analyseMonaV2Message } from "@/lib/mona-v2/analyser";
+import { generateMonaV2NaturalReply } from "@/lib/mona-v2/natural-reply";
 import { routeMonaV2Analysis } from "@/lib/mona-v2/router";
 import type {
   MonaV2ConversationContext,
@@ -59,10 +60,20 @@ export async function POST(request: NextRequest) {
 
     const decision = routeMonaV2Analysis(analysis);
 
+    const reply = decision.shouldGenerateNaturalReply
+      ? await generateMonaV2NaturalReply({
+          customerMessage: message,
+          analysis,
+          conversationContext:
+            body.conversationContext ?? null,
+        })
+      : null;
+
     return NextResponse.json({
       message,
       analysis,
       decision,
+      reply,
     });
   } catch (error) {
     console.error(
