@@ -1,3 +1,4 @@
+import { saveKnowledgeCandidate } from "@/lib/mona/knowledge-candidates";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
@@ -171,14 +172,6 @@ function isMonaAiEnabled(value: unknown) {
   return value !== false;
 }
 
-function normaliseKnowledgeQuestion(value?: string | null) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function containsExternalLink(value?: string | null) {
   const message = String(value || "").trim();
 
@@ -275,96 +268,6 @@ async function pauseMonaForAdmin(params: {
   });
 
   return true;
-}
-
-async function saveKnowledgeCandidate(params: {
-  sourceMessageId?: string | null;
-  conversationId: string;
-  customerMessage: string;
-  language: MonaLanguage;
-}) {
-  const originalMessage = String(params.customerMessage || "").trim();
-  const normalisedQuestion =
-    normaliseKnowledgeQuestion(originalMessage);
-
-  if (!originalMessage || normalisedQuestion.length < 3) {
-    return;
-  }
-
-  const ignoredMessages = new Set([
-    "halo",
-    "hai",
-    "hi",
-    "hello",
-    "hey",
-    "ok",
-    "oke",
-    "okay",
-    "makasih",
-    "terima kasih",
-    "thanks",
-    "thank you",
-    "selamat pagi",
-    "selamat siang",
-    "selamat sore",
-    "selamat malam",
-  ]);
-
-  if (ignoredMessages.has(normalisedQuestion)) {
-    return;
-  }
-
-  const { data: existingCandidate, error: duplicateError } =
-    await supabaseAdmin
-      .from("knowledge_base_candidates")
-      .select("id")
-      .eq("conversation_id", params.conversationId)
-      .eq("normalised_question", normalisedQuestion)
-      .eq("status", "pending")
-      .limit(1)
-      .maybeSingle();
-
-  if (duplicateError) {
-    console.error(
-      "Failed to check duplicate Mona Knowledge candidate:",
-      duplicateError
-    );
-  }
-
-  if (existingCandidate?.id) {
-    return;
-  }
-
-  const { error } = await supabaseAdmin
-    .from("knowledge_base_candidates")
-    .insert({
-      source_message_id: params.sourceMessageId || null,
-      conversation_id: params.conversationId,
-      original_message: originalMessage,
-      extracted_question: originalMessage,
-      normalised_question: normalisedQuestion,
-      suggested_category: null,
-      suggested_answer: null,
-      detected_language: params.language,
-      candidate_type: "general_question",
-      status: "pending",
-      confidence: 0,
-      grouped_entry_id: null,
-      processing_batch_id: null,
-      reviewed_at: null,
-    });
-
-  if (error) {
-    console.error("Failed to save Mona Knowledge candidate:", error);
-    return;
-  }
-
-  console.log("Saved unmatched question for Knowledge review.", {
-    conversationId: params.conversationId,
-    sourceMessageId: params.sourceMessageId || null,
-    normalisedQuestion,
-    language: params.language,
-  });
 }
 
 async function getRecentAdminStyleExamples(
@@ -619,6 +522,7 @@ async function generateMonaReply(params: {
 
     if (knowledgeEntries.length === 0) {
       await saveKnowledgeCandidate({
+        supabase: supabaseAdmin,
         sourceMessageId: params.sourceMessageId || null,
         conversationId: params.conversationId,
         customerMessage: params.customerMessage,
