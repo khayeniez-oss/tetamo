@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  saveKnowledgeCandidate,
+  type SaveKnowledgeCandidateResult,
+} from "../mona/knowledge-candidates";
 import { analyseMonaV2Message } from "./analyser";
 import { generateMonaV2NaturalReply } from "./natural-reply";
 import {
@@ -17,10 +21,17 @@ import type {
   MonaV2Decision,
 } from "./types";
 
+export type MonaV2KnowledgeCandidateContext = {
+  enabled?: boolean;
+  conversationId?: string | null;
+  sourceMessageId?: string | null;
+};
+
 export type RunMonaV2Input = {
   customerMessage: string;
   messageType?: string | null;
   conversationContext?: MonaV2ConversationContext | null;
+  knowledgeCandidateContext?: MonaV2KnowledgeCandidateContext | null;
   supabase: SupabaseClient;
 };
 
@@ -30,6 +41,7 @@ export type RunMonaV2Result = {
   decision: MonaV2Decision;
   tetamoKnowledge: MonaV2TetamoKnowledgeResult | null;
   propertyEducation: MonaV2PropertyEducationResult | null;
+  knowledgeCandidate: SaveKnowledgeCandidateResult | null;
   reply: string | null;
 };
 
@@ -93,12 +105,50 @@ export async function runMonaV2(
     propertyEducation?.reply ??
     naturalReply;
 
+  const shouldSaveKnowledgeCandidate =
+    Boolean(
+      tetamoKnowledge?.shouldSaveKnowledgeCandidate
+    ) ||
+    Boolean(
+      propertyEducation?.shouldSaveKnowledgeCandidate
+    );
+
+  const candidateContext =
+    input.knowledgeCandidateContext ?? null;
+
+  let knowledgeCandidate:
+    | SaveKnowledgeCandidateResult
+    | null = null;
+
+  if (
+    shouldSaveKnowledgeCandidate &&
+    candidateContext?.enabled === true &&
+    candidateContext.conversationId
+  ) {
+    knowledgeCandidate =
+      await saveKnowledgeCandidate({
+        supabase: input.supabase,
+        sourceMessageId:
+          candidateContext.sourceMessageId ?? null,
+        conversationId:
+          candidateContext.conversationId,
+        customerMessage: message,
+        language:
+          analysis.preferredReplyLanguage,
+        suggestedCategory: analysis.intent,
+        suggestedAnswer: null,
+        candidateType: "general_question",
+        confidence: 0,
+      });
+  }
+
   return {
     message,
     analysis,
     decision,
     tetamoKnowledge,
     propertyEducation,
+    knowledgeCandidate,
     reply,
   };
 }
