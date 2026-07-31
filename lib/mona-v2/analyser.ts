@@ -218,11 +218,30 @@ Sales opportunity must be:
 - soft when Tetamo may be mentioned naturally;
 - relevant when Tetamo directly solves the customer's stated need.
 
-9. ACCURACY
+9. CURRENT MESSAGE PRIORITY
+Analyse the CURRENT MESSAGE independently before considering conversation history.
+
+The current explicit message is always the primary source of intent.
+Conversation context is secondary and may only:
+- resolve pronouns or references such as "that one", "it", "the package";
+- complete short elliptical follow-ups such as "how much?", "why?", "yes", or "continue";
+- preserve a known language or customer role when the current message does not change it.
+
+Conversation context must not replace or override a complete, self-contained current message.
+
+When the customer clearly starts a new topic, use the new topic even when recent messages discussed pricing, payment, membership, listings or something else.
+
+Examples:
+- "Bisa tak bahasa Indonesia?" = language_switch and natural_conversation, regardless of the previous topic.
+- "Can you reply in English?" = language_switch and natural_conversation.
+- "What is Tetamo?" = tetamo_info and tetamo_official, regardless of earlier pricing discussion.
+- "Apa itu Tetamo?" = tetamo_info and tetamo_official.
+- "How much?" may use recent context because it is incomplete by itself.
+
+10. ACCURACY
 Do not treat every unknown message as an admin handover.
 Harmless uncertainty may be clarified.
 Do not invent facts.
-Base the analysis on the current message and supplied conversation context.
 
 CURRENT MESSAGE:
 ${input.customerMessage}
@@ -248,6 +267,117 @@ ${context?.campaignContext || "none"}
 RECENT CONVERSATION:
 ${context?.recentMessages || "none"}
 `.trim();
+}
+
+function normaliseExplicitMessage(
+  value?: string | null
+): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[^\p{L}\p{N}\s?]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function applyExplicitCurrentMessageOverride(
+  input: MonaV2AnalyseInput,
+  analysis: MonaV2Analysis
+): MonaV2Analysis {
+  const message = normaliseExplicitMessage(
+    input.customerMessage
+  );
+
+  const languageSwitchPatterns = [
+    /\bbisa(?:kah)?\s+(?:tak\s+)?(?:pakai|gunakan|jawab(?:\s+dengan)?|bicara)?\s*bahasa indonesia\b/,
+    /\bpakai bahasa indonesia\b/,
+    /\bgunakan bahasa indonesia\b/,
+    /\bjawab(?:lah)? (?:dengan )?bahasa indonesia\b/,
+    /\bbahasa indonesia (?:ya|dong|please)\b/,
+    /\bcan you (?:reply|answer|speak) in indonesian\b/,
+    /\bplease (?:reply|answer|speak) in indonesian\b/,
+    /\bin indonesian please\b/,
+    /\bcan you (?:reply|answer|speak) in english\b/,
+    /\bplease (?:reply|answer|speak) in english\b/,
+    /\bin english please\b/,
+    /\bpakai bahasa inggris\b/,
+    /\bgunakan bahasa inggris\b/,
+    /\bjawab(?:lah)? (?:dengan )?bahasa inggris\b/,
+  ];
+
+  if (
+    languageSwitchPatterns.some(
+      (pattern) => pattern.test(message)
+    )
+  ) {
+    const wantsEnglish =
+      /\benglish\b|\bbahasa inggris\b/.test(
+        message
+      );
+
+    return {
+      ...analysis,
+      language:
+        wantsEnglish ? "en" : "id",
+      preferredReplyLanguage:
+        wantsEnglish ? "en" : "id",
+      intent: "language_switch",
+      knowledgeRoute:
+        "natural_conversation",
+      action: "reply",
+      salesOpportunity: "none",
+      confidence: Math.max(
+        analysis.confidence,
+        0.99
+      ),
+      needsClarification: false,
+      requiresAccountData: false,
+      requiresHumanReview: false,
+      shouldSaveKnowledgeCandidate: false,
+      reason:
+        "The current message explicitly requests a reply-language change, so it overrides the previous conversation topic.",
+    };
+  }
+
+  const tetamoInfoPatterns = [
+    /^what is tetamo\??$/,
+    /^whats tetamo\??$/,
+    /^what exactly is tetamo\??$/,
+    /^tell me about tetamo\??$/,
+    /^apa itu tetamo\??$/,
+    /^tetamo itu apa\??$/,
+    /^apa sebenarnya tetamo\??$/,
+    /^jelaskan tetamo\??$/,
+    /^tentang tetamo\??$/,
+  ];
+
+  if (
+    tetamoInfoPatterns.some(
+      (pattern) => pattern.test(message)
+    )
+  ) {
+    return {
+      ...analysis,
+      intent: "tetamo_info",
+      customerRole:
+        analysis.customerRole,
+      knowledgeRoute: "tetamo_official",
+      action: "reply",
+      salesOpportunity: "soft",
+      confidence: Math.max(
+        analysis.confidence,
+        0.99
+      ),
+      needsClarification: false,
+      requiresAccountData: false,
+      requiresHumanReview: false,
+      shouldSaveKnowledgeCandidate: false,
+      reason:
+        "The current message explicitly asks what Tetamo is, so it overrides the previous conversation topic.",
+    };
+  }
+
+  return analysis;
 }
 
 function getSafeFallbackAnalysis(
@@ -331,7 +461,10 @@ export async function analyseMonaV2Message(
     }
 
     const parsedAnalysis =
-      JSON.parse(rawAnalysis) as MonaV2Analysis;
+      applyExplicitCurrentMessageOverride(
+        input,
+        JSON.parse(rawAnalysis) as MonaV2Analysis
+      );
 
     /*
      * Knowledge candidates can only be identified after the
