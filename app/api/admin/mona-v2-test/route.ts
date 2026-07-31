@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { analyseMonaV2Message } from "@/lib/mona-v2/analyser";
+import { routeMonaV2Analysis } from "@/lib/mona-v2/router";
 import type {
   MonaV2ConversationContext,
 } from "@/lib/mona-v2/types";
@@ -56,9 +57,12 @@ export async function POST(request: NextRequest) {
         body.conversationContext ?? null,
     });
 
+    const decision = routeMonaV2Analysis(analysis);
+
     return NextResponse.json({
       message,
       analysis,
+      decision,
     });
   } catch (error) {
     console.error(
