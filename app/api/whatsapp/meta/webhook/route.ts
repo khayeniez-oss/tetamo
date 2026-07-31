@@ -1,4 +1,8 @@
 import { saveKnowledgeCandidate } from "@/lib/mona/knowledge-candidates";
+import {
+  runMonaV2,
+  type RunMonaV2Result,
+} from "@/lib/mona-v2/orchestrator";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 
@@ -74,6 +78,23 @@ type CampaignContext = {
 
 function cleanEnv(value?: string | null) {
   return String(value || "").trim();
+}
+
+type MonaV2Mode = "off" | "shadow" | "live";
+
+function getMonaV2Mode(): MonaV2Mode {
+  const configuredMode = cleanEnv(
+    process.env.MONA_V2_MODE
+  ).toLowerCase();
+
+  if (
+    configuredMode === "shadow" ||
+    configuredMode === "live"
+  ) {
+    return configuredMode;
+  }
+
+  return "off";
 }
 
 function getGraphVersion() {
@@ -488,6 +509,142 @@ async function getConversationContext(
   }
 
   return messages.join("\n").slice(-8000);
+}
+
+async function runMonaV2ForMeta(params: {
+  customerMessage: string;
+  messageType?: string | null;
+  conversationId: string;
+  sourceMessageId?: string | null;
+  campaignContext?: CampaignContext | null;
+  persistKnowledgeCandidate: boolean;
+}): Promise<RunMonaV2Result> {
+  const recentMessages =
+    await getConversationContext(
+      params.conversationId,
+      params.customerMessage
+    );
+
+  const campaignContext = params.campaignContext
+    ? [
+        `Template: ${
+          params.campaignContext.templateName ||
+          "unknown"
+        }`,
+        `Category: ${
+          params.campaignContext.templateCategory ||
+          "unknown"
+        }`,
+        `Send type: ${
+          params.campaignContext.sendType ||
+          "unknown"
+        }`,
+        `Sent at: ${
+          params.campaignContext.sentAt ||
+          "unknown"
+        }`,
+      ].join("\n")
+    : null;
+
+  return runMonaV2({
+    customerMessage: params.customerMessage,
+    messageType: params.messageType || "text",
+    conversationContext: {
+      recentMessages,
+      campaignContext,
+    },
+    knowledgeCandidateContext: {
+      enabled:
+        params.persistKnowledgeCandidate,
+      conversationId: params.conversationId,
+      sourceMessageId:
+        params.sourceMessageId || null,
+    },
+    supabase: supabaseAdmin,
+  });
+}
+
+function getMonaV2PauseReason(
+  result: RunMonaV2Result
+): string | null {
+  if (result.decision.shouldPauseForAdmin) {
+    return `Mona V2 requested admin handover for ${result.analysis.intent}`;
+  }
+
+  if (
+    result.tetamoKnowledge?.shouldPauseForAdmin
+  ) {
+    return `Mona V2 Tetamo Knowledge requires admin review for ${result.analysis.intent}`;
+  }
+
+  if (
+    result.propertyEducation?.shouldPauseForAdmin
+  ) {
+    return `Mona V2 property education requires admin review for ${result.analysis.intent}`;
+  }
+
+  if (result.decision.shouldUseTetamoTool) {
+    return `Mona V2 requires an unavailable Tetamo system tool for ${result.analysis.intent}`;
+  }
+
+  if (!result.reply) {
+    return `Mona V2 produced no reply for ${result.analysis.intent}`;
+  }
+
+  return null;
+}
+
+function logMonaV2ShadowComparison(params: {
+  conversationId: string;
+  oldDecision:
+    | {
+        shouldReply: true;
+        reply: string;
+      }
+    | {
+        shouldReply: false;
+        reason: string;
+      };
+  v2Result: RunMonaV2Result;
+}) {
+  console.log("Mona V2 shadow comparison.", {
+    conversationId: params.conversationId,
+    oldMonaShouldReply:
+      params.oldDecision.shouldReply,
+    oldMonaReplyLength:
+      params.oldDecision.shouldReply
+        ? params.oldDecision.reply.length
+        : 0,
+    oldMonaReason:
+      params.oldDecision.shouldReply
+        ? null
+        : params.oldDecision.reason,
+    v2Intent:
+      params.v2Result.analysis.intent,
+    v2Route:
+      params.v2Result.analysis.knowledgeRoute,
+    v2Action:
+      params.v2Result.analysis.action,
+    v2HasReply:
+      Boolean(params.v2Result.reply),
+    v2ReplyLength:
+      params.v2Result.reply?.length || 0,
+    v2ShouldPause:
+      Boolean(
+        getMonaV2PauseReason(
+          params.v2Result
+        )
+      ),
+    v2TetamoMatched:
+      params.v2Result.tetamoKnowledge?.matched ??
+      null,
+    v2PropertyMatched:
+      params.v2Result.propertyEducation?.matched ??
+      null,
+    v2NeedsExternalResearch:
+      params.v2Result.propertyEducation
+        ?.requiresExternalResearch ?? null,
+  });
 }
 
 async function generateMonaReply(params: {
@@ -1205,16 +1362,149 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const monaDecision = await generateMonaReply({
-        customerMessage: messageText,
-        conversationId: conversation.id,
-        sourceMessageId: inboundSave.messageId,
-        campaignContext,
-      });
+      const monaV2Mode = getMonaV2Mode();
+
+      let monaDecision:
+        | {
+            shouldReply: true;
+            reply: string;
+          }
+        | {
+            shouldReply: false;
+            reason: string;
+          };
+
+      if (monaV2Mode === "off") {
+        monaDecision = await generateMonaReply({
+          customerMessage: messageText,
+          conversationId: conversation.id,
+          sourceMessageId:
+            inboundSave.messageId,
+          campaignContext,
+        });
+      } else if (monaV2Mode === "shadow") {
+        const shadowPromise =
+          runMonaV2ForMeta({
+            customerMessage: messageText,
+            messageType:
+              item.message.type || null,
+            conversationId:
+              conversation.id,
+            sourceMessageId:
+              inboundSave.messageId,
+            campaignContext,
+            persistKnowledgeCandidate: false,
+          }).catch(
+            (
+              error
+            ): RunMonaV2Result | null => {
+              console.error(
+                "Mona V2 shadow execution failed:",
+                error
+              );
+
+              return null;
+            }
+          );
+
+        const [
+          oldMonaDecision,
+          shadowResult,
+        ] = await Promise.all([
+          generateMonaReply({
+            customerMessage: messageText,
+            conversationId:
+              conversation.id,
+            sourceMessageId:
+              inboundSave.messageId,
+            campaignContext,
+          }),
+          shadowPromise,
+        ]);
+
+        monaDecision = oldMonaDecision;
+
+        if (shadowResult) {
+          logMonaV2ShadowComparison({
+            conversationId:
+              conversation.id,
+            oldDecision:
+              oldMonaDecision,
+            v2Result: shadowResult,
+          });
+        }
+      } else {
+        try {
+          const v2Result =
+            await runMonaV2ForMeta({
+              customerMessage: messageText,
+              messageType:
+                item.message.type || null,
+              conversationId:
+                conversation.id,
+              sourceMessageId:
+                inboundSave.messageId,
+              campaignContext,
+              persistKnowledgeCandidate: true,
+            });
+
+          if (
+            v2Result.decision.shouldIgnore
+          ) {
+            monaDecision = {
+              shouldReply: false,
+              reason:
+                "Mona V2 intentionally ignored this message.",
+            };
+          } else {
+            const pauseReason =
+              getMonaV2PauseReason(
+                v2Result
+              );
+
+            if (pauseReason) {
+              await pauseMonaForAdmin({
+                conversationId:
+                  conversation.id,
+                reason: pauseReason,
+              });
+
+              monaDecision = {
+                shouldReply: false,
+                reason: pauseReason,
+              };
+            } else {
+              monaDecision = {
+                shouldReply: true,
+                reply: limitMonaReply(
+                  v2Result.reply || ""
+                ),
+              };
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Mona V2 live execution failed. Falling back to current Mona:",
+            error
+          );
+
+          monaDecision =
+            await generateMonaReply({
+              customerMessage:
+                messageText,
+              conversationId:
+                conversation.id,
+              sourceMessageId:
+                inboundSave.messageId,
+              campaignContext,
+            });
+        }
+      }
 
       if (!monaDecision.shouldReply) {
-        console.log("Mona remained silent for admin handover.", {
+        console.log("Mona did not send a reply.", {
           conversationId: conversation.id,
+          mode: monaV2Mode,
           reason: monaDecision.reason,
         });
 
