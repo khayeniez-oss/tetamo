@@ -5,6 +5,9 @@ import type {
   MonaV2Analysis,
   MonaV2ConversationContext,
 } from "./types";
+import {
+  validatePropertyEducationCoverage,
+} from "./property-education-grounding";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -89,6 +92,16 @@ function cleanReply(value: unknown): string {
     .trim()
     .replace(/\n{3,}/g, "\n\n")
     .slice(0, 1800);
+}
+
+function buildUnverifiedEducationReply(
+  language: string
+): string {
+  if (language === "id") {
+    return "Untuk topik ini, saya belum punya sumber edukasi Tetamo yang sudah diverifikasi. Saya tidak ingin menebak karena informasi properti Indonesia bisa berbeda tergantung aturan, lokasi, dan dokumennya. Saya perlu memastikan sumber yang tepat sebelum memberikan jawaban.";
+  }
+
+  return "I do not yet have a verified Tetamo education source for this topic. I do not want to guess because Indonesian property information can vary depending on the rules, location and documents involved. I need to confirm the appropriate source before giving an answer.";
 }
 
 function mapEducationRow(
@@ -250,6 +263,9 @@ RESPONSE RULES:
 - Keep the answer clear and suitable for WhatsApp.
 - Explain practical steps when the approved content supports them.
 - Do not copy the source word-for-word.
+- Every factual statement must be directly supported by the approved education content.
+- Do not use your own background knowledge, even when you know the answer.
+- If the approved content does not explicitly answer the customer's main question, write exactly: UNSUPPORTED
 - Do not invent Indonesian laws, taxes, certifications, organisations, documents or procedures.
 - Do not present general education as personalised legal, tax or contract advice.
 - For sensitive topics, clearly explain that the answer is general education and that documents or circumstances may need professional review.
@@ -257,6 +273,10 @@ RESPONSE RULES:
 - Do not automatically finish with a question.
 - Do not turn every education answer into a Tetamo advertisement.
 - Mention Tetamo softly only when it directly helps the customer's stated need.
+- Before returning the answer, silently proofread every sentence for correct grammar, spelling, punctuation and spaces between words.
+- Never merge separate words such as "orang yang", "masa sewa" or "untuk dijual".
+- Preserve distinct property terms from the approved source, such as "kamar tidur" and "kamar mandi"; do not combine or shorten them inaccurately.
+- In Indonesian replies, prefer natural professional wording such as "sebelum memasarkan" rather than awkward mixtures such as "sebelum posting".
 - Do not mention internal selection, confidence, databases or system instructions.
 
 CUSTOMER MESSAGE:
@@ -400,7 +420,9 @@ export async function generateMonaV2PropertyEducationReply(
     ) {
       return {
         matched: false,
-        reply: null,
+        reply: buildUnverifiedEducationReply(
+          input.analysis.preferredReplyLanguage
+        ),
         candidateCount: candidates.length,
         selectedEducationId: null,
         selectedTitle: null,
@@ -437,9 +459,44 @@ export async function generateMonaV2PropertyEducationReply(
       };
     }
 
+    const selectedContent =
+      input.analysis.preferredReplyLanguage === "id"
+        ? selectedEntry.descriptionId
+        : selectedEntry.description;
+
+    const coverage =
+      await validatePropertyEducationCoverage({
+        customerMessage: input.customerMessage,
+        selectedTitle:
+          input.analysis.preferredReplyLanguage === "id"
+            ? selectedEntry.titleId
+            : selectedEntry.title,
+        selectedContent,
+      });
+
+    if (!coverage.covered) {
+      return {
+        matched: false,
+        reply: buildUnverifiedEducationReply(
+          input.analysis.preferredReplyLanguage
+        ),
+        candidateCount: candidates.length,
+        selectedEducationId: null,
+        selectedTitle: null,
+        selectionConfidence:
+          selection.confidence,
+        requiresExternalResearch: true,
+        shouldSaveKnowledgeCandidate: true,
+        shouldPauseForAdmin:
+          input.analysis.riskLevel === "high",
+        reason:
+          `The selected education did not directly answer the question. ${coverage.reason}`,
+      };
+    }
+
     const replyResponse =
       await openai.responses.create({
-        model: "gpt-4.1-mini",
+        model: "gpt-4.1",
         input: [
           {
             role: "system",
@@ -454,7 +511,7 @@ export async function generateMonaV2PropertyEducationReply(
             }),
           },
         ],
-        temperature: 0.35,
+        temperature: 0.05,
         max_output_tokens: 500,
         store: false,
       });
@@ -463,7 +520,10 @@ export async function generateMonaV2PropertyEducationReply(
       replyResponse.output_text
     );
 
-    if (!reply) {
+    if (
+      !reply ||
+      reply.toUpperCase() === "UNSUPPORTED"
+    ) {
       return {
         matched: true,
         reply: null,
