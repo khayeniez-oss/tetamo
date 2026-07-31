@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 import { analyseMonaV2Message } from "@/lib/mona-v2/analyser";
 import { generateMonaV2NaturalReply } from "@/lib/mona-v2/natural-reply";
+import {
+  generateMonaV2PropertyEducationReply,
+} from "@/lib/mona-v2/property-education-reply";
 import { routeMonaV2Analysis } from "@/lib/mona-v2/router";
 import {
   generateMonaV2TetamoKnowledgeReply,
@@ -90,14 +93,27 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
+    const propertyEducation =
+      decision.shouldSearchPropertyKnowledge
+        ? await generateMonaV2PropertyEducationReply({
+            customerMessage: message,
+            analysis,
+            conversationContext,
+            supabase: supabaseAdmin,
+          })
+        : null;
+
     const reply =
-      tetamoKnowledge?.reply ?? naturalReply;
+      tetamoKnowledge?.reply ??
+      propertyEducation?.reply ??
+      naturalReply;
 
     return NextResponse.json({
       message,
       analysis,
       decision,
       tetamoKnowledge,
+      propertyEducation,
       reply,
     });
   } catch (error) {
