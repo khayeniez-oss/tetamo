@@ -204,6 +204,14 @@ function getMonaV2LivePhoneAllowlist() {
   );
 }
 
+function isMonaV2LiveForAllCustomers() {
+  return cleanEnv(
+    process.env.MONA_V2_LIVE_PHONE_ALLOWLIST
+  )
+    .split(/[,\s]+/)
+    .includes("*");
+}
+
 function getMonaV2ModeForCustomer(
   customerPhone: string
 ): MonaV2Mode {
@@ -211,6 +219,10 @@ function getMonaV2ModeForCustomer(
 
   if (configuredMode !== "live") {
     return configuredMode;
+  }
+
+  if (isMonaV2LiveForAllCustomers()) {
+    return "live";
   }
 
   const normalizedCustomerPhone =
@@ -1412,6 +1424,8 @@ export async function POST(request: Request) {
             conversationId: conversation.id,
             effectiveMode: monaV2Mode,
             allowlisted: monaV2Mode === "live",
+            liveForAllCustomers:
+              isMonaV2LiveForAllCustomers(),
             livePhoneAllowlistCount:
               getMonaV2LivePhoneAllowlist()
                 .length,
