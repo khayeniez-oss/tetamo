@@ -189,6 +189,44 @@ function normalizePhone(value?: string | null) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function getMonaV2LivePhoneAllowlist() {
+  const configuredPhones = cleanEnv(
+    process.env.MONA_V2_LIVE_PHONE_ALLOWLIST
+  );
+
+  return Array.from(
+    new Set(
+      configuredPhones
+        .split(/[,\s]+/)
+        .map((value) => normalizePhone(value))
+        .filter(Boolean)
+    )
+  );
+}
+
+function getMonaV2ModeForCustomer(
+  customerPhone: string
+): MonaV2Mode {
+  const configuredMode = getMonaV2Mode();
+
+  if (configuredMode !== "live") {
+    return configuredMode;
+  }
+
+  const normalizedCustomerPhone =
+    normalizePhone(customerPhone);
+
+  if (!normalizedCustomerPhone) {
+    return "shadow";
+  }
+
+  return getMonaV2LivePhoneAllowlist().includes(
+    normalizedCustomerPhone
+  )
+    ? "live"
+    : "shadow";
+}
+
 function isMonaAiEnabled(value: unknown) {
   return value !== false;
 }
@@ -1362,7 +1400,24 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const monaV2Mode = getMonaV2Mode();
+      const configuredMonaV2Mode =
+        getMonaV2Mode();
+      const monaV2Mode =
+        getMonaV2ModeForCustomer(customerPhone);
+
+      if (configuredMonaV2Mode === "live") {
+        console.log(
+          "Mona V2 live allowlist decision.",
+          {
+            conversationId: conversation.id,
+            effectiveMode: monaV2Mode,
+            allowlisted: monaV2Mode === "live",
+            livePhoneAllowlistCount:
+              getMonaV2LivePhoneAllowlist()
+                .length,
+          }
+        );
+      }
 
       let monaDecision:
         | {
