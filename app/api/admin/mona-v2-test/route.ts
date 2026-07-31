@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 import { analyseMonaV2Message } from "@/lib/mona-v2/analyser";
 import { generateMonaV2NaturalReply } from "@/lib/mona-v2/natural-reply";
 import { routeMonaV2Analysis } from "@/lib/mona-v2/router";
+import {
+  generateMonaV2TetamoKnowledgeReply,
+} from "@/lib/mona-v2/tetamo-knowledge-reply";
 import type {
   MonaV2ConversationContext,
 } from "@/lib/mona-v2/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
 
 type MonaV2TestBody = {
   message?: unknown;
@@ -49,30 +58,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const conversationContext =
+      body.conversationContext ?? null;
+
     const analysis = await analyseMonaV2Message({
       customerMessage: message,
       messageType: String(
         body.messageType ?? "text"
       ),
-      conversationContext:
-        body.conversationContext ?? null,
+      conversationContext,
     });
 
     const decision = routeMonaV2Analysis(analysis);
 
-    const reply = decision.shouldGenerateNaturalReply
-      ? await generateMonaV2NaturalReply({
-          customerMessage: message,
-          analysis,
-          conversationContext:
-            body.conversationContext ?? null,
-        })
-      : null;
+    const naturalReply =
+      decision.shouldGenerateNaturalReply
+        ? await generateMonaV2NaturalReply({
+            customerMessage: message,
+            analysis,
+            conversationContext,
+          })
+        : null;
+
+    const tetamoKnowledge =
+      decision.shouldSearchTetamoKnowledge
+        ? await generateMonaV2TetamoKnowledgeReply({
+            customerMessage: message,
+            analysis,
+            conversationContext,
+            supabase: supabaseAdmin,
+          })
+        : null;
+
+    const reply =
+      tetamoKnowledge?.reply ?? naturalReply;
 
     return NextResponse.json({
       message,
       analysis,
       decision,
+      tetamoKnowledge,
       reply,
     });
   } catch (error) {
