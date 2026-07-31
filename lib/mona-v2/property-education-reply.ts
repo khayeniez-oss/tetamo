@@ -87,11 +87,104 @@ function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function cleanReply(value: unknown): string {
-  return String(value ?? "")
+function escapeRegExp(value: string): string {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+}
+
+function repairMergedSourceWords(
+  value: string,
+  sourceContent: string
+): string {
+  const sourceWords =
+    String(sourceContent || "").match(
+      /[\p{L}\p{N}]+/gu
+    ) || [];
+
+  const repairs = new Map<string, string>();
+
+  for (
+    let index = 0;
+    index < sourceWords.length - 1;
+    index += 1
+  ) {
+    const firstWord = sourceWords[index];
+    const secondWord = sourceWords[index + 1];
+
+    if (
+      firstWord.length < 3 ||
+      secondWord.length < 3
+    ) {
+      continue;
+    }
+
+    const merged =
+      `${firstWord}${secondWord}`.toLowerCase();
+
+    if (merged.length < 8) {
+      continue;
+    }
+
+    repairs.set(
+      merged,
+      `${firstWord} ${secondWord}`
+    );
+  }
+
+  let repaired = value;
+
+  const orderedRepairs = Array.from(
+    repairs.entries()
+  ).sort(
+    ([firstMerged], [secondMerged]) =>
+      secondMerged.length - firstMerged.length
+  );
+
+  for (
+    const [merged, separated]
+    of orderedRepairs
+  ) {
+    const pattern = new RegExp(
+      `\\b${escapeRegExp(merged)}\\b`,
+      "giu"
+    );
+
+    repaired = repaired.replace(
+      pattern,
+      (match) => {
+        const startsWithCapital =
+          match.charAt(0) ===
+          match.charAt(0).toUpperCase();
+
+        if (!startsWithCapital) {
+          return separated;
+        }
+
+        return (
+          separated.charAt(0).toUpperCase() +
+          separated.slice(1)
+        );
+      }
+    );
+  }
+
+  return repaired;
+}
+
+function cleanReply(
+  value: unknown,
+  sourceContent = ""
+): string {
+  const rawReply = String(value ?? "")
     .trim()
-    .replace(/\n{3,}/g, "\n\n")
-    .slice(0, 1800);
+    .replace(/\n{3,}/g, "\n\n");
+
+  return repairMergedSourceWords(
+    rawReply,
+    sourceContent
+  ).slice(0, 1800);
 }
 
 function buildUnverifiedEducationReply(
@@ -517,7 +610,8 @@ export async function generateMonaV2PropertyEducationReply(
       });
 
     const reply = cleanReply(
-      replyResponse.output_text
+      replyResponse.output_text,
+      selectedContent
     );
 
     if (

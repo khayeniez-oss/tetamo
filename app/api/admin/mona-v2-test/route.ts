@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-import { analyseMonaV2Message } from "@/lib/mona-v2/analyser";
-import { generateMonaV2NaturalReply } from "@/lib/mona-v2/natural-reply";
-import {
-  generateMonaV2PropertyEducationReply,
-} from "@/lib/mona-v2/property-education-reply";
-import { routeMonaV2Analysis } from "@/lib/mona-v2/router";
-import {
-  generateMonaV2TetamoKnowledgeReply,
-} from "@/lib/mona-v2/tetamo-knowledge-reply";
+import { runMonaV2 } from "@/lib/mona-v2/orchestrator";
 import type {
   MonaV2ConversationContext,
 } from "@/lib/mona-v2/types";
@@ -48,7 +40,9 @@ export async function POST(request: NextRequest) {
     const body =
       (await request.json()) as MonaV2TestBody;
 
-    const message = String(body.message ?? "").trim();
+    const message = String(
+      body.message ?? ""
+    ).trim();
 
     if (!message) {
       return NextResponse.json(
@@ -61,61 +55,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const conversationContext =
-      body.conversationContext ?? null;
-
-    const analysis = await analyseMonaV2Message({
+    const result = await runMonaV2({
       customerMessage: message,
       messageType: String(
         body.messageType ?? "text"
       ),
-      conversationContext,
+      conversationContext:
+        body.conversationContext ?? null,
+      supabase: supabaseAdmin,
     });
 
-    const decision = routeMonaV2Analysis(analysis);
-
-    const naturalReply =
-      decision.shouldGenerateNaturalReply
-        ? await generateMonaV2NaturalReply({
-            customerMessage: message,
-            analysis,
-            conversationContext,
-          })
-        : null;
-
-    const tetamoKnowledge =
-      decision.shouldSearchTetamoKnowledge
-        ? await generateMonaV2TetamoKnowledgeReply({
-            customerMessage: message,
-            analysis,
-            conversationContext,
-            supabase: supabaseAdmin,
-          })
-        : null;
-
-    const propertyEducation =
-      decision.shouldSearchPropertyKnowledge
-        ? await generateMonaV2PropertyEducationReply({
-            customerMessage: message,
-            analysis,
-            conversationContext,
-            supabase: supabaseAdmin,
-          })
-        : null;
-
-    const reply =
-      tetamoKnowledge?.reply ??
-      propertyEducation?.reply ??
-      naturalReply;
-
-    return NextResponse.json({
-      message,
-      analysis,
-      decision,
-      tetamoKnowledge,
-      propertyEducation,
-      reply,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     console.error(
       "Mona V2 local test endpoint failed:",
