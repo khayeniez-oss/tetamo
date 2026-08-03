@@ -191,16 +191,6 @@ function cleanReply(
   ).slice(0, 1800);
 }
 
-function buildUnverifiedEducationReply(
-  language: string
-): string {
-  if (language === "id") {
-    return "Untuk topik ini, saya belum punya sumber edukasi Tetamo yang sudah diverifikasi. Saya tidak ingin menebak karena informasi properti Indonesia bisa berbeda tergantung aturan, lokasi, dan dokumennya. Saya perlu memastikan sumber yang tepat sebelum memberikan jawaban.";
-  }
-
-  return "I do not yet have a verified Tetamo education source for this topic. I do not want to guess because Indonesian property information can vary depending on the rules, location and documents involved. I need to confirm the appropriate source before giving an answer.";
-}
-
 function mapEducationRow(
   row: PropertyEducationRow
 ): PropertyEducationEntry | null {
@@ -490,8 +480,7 @@ export async function generateMonaV2PropertyEducationReply(
         selectionConfidence: 0,
         requiresExternalResearch: true,
         shouldSaveKnowledgeCandidate: true,
-        shouldPauseForAdmin:
-          input.analysis.riskLevel === "high",
+        shouldPauseForAdmin: true,
         reason:
           "No published public property education is available.",
       };
@@ -559,8 +548,7 @@ export async function generateMonaV2PropertyEducationReply(
         selectionConfidence: 0,
         requiresExternalResearch: true,
         shouldSaveKnowledgeCandidate: true,
-        shouldPauseForAdmin:
-          input.analysis.riskLevel === "high",
+        shouldPauseForAdmin: true,
         reason:
           "The property education selector returned no result.",
       };
@@ -580,9 +568,7 @@ export async function generateMonaV2PropertyEducationReply(
     ) {
       return {
         matched: false,
-        reply: buildUnverifiedEducationReply(
-          input.analysis.preferredReplyLanguage
-        ),
+        reply: null,
         candidateCount: candidates.length,
         selectedEducationId: null,
         selectedTitle: null,
@@ -590,8 +576,7 @@ export async function generateMonaV2PropertyEducationReply(
           selection.confidence,
         requiresExternalResearch: true,
         shouldSaveKnowledgeCandidate: true,
-        shouldPauseForAdmin:
-          input.analysis.riskLevel === "high",
+        shouldPauseForAdmin: true,
         reason: selection.reason,
       };
     }
@@ -637,9 +622,7 @@ export async function generateMonaV2PropertyEducationReply(
     if (!coverage.covered) {
       return {
         matched: false,
-        reply: buildUnverifiedEducationReply(
-          input.analysis.preferredReplyLanguage
-        ),
+        reply: null,
         candidateCount: candidates.length,
         selectedEducationId: null,
         selectedTitle: null,
@@ -647,8 +630,7 @@ export async function generateMonaV2PropertyEducationReply(
           selection.confidence,
         requiresExternalResearch: true,
         shouldSaveKnowledgeCandidate: true,
-        shouldPauseForAdmin:
-          input.analysis.riskLevel === "high",
+        shouldPauseForAdmin: true,
         reason:
           `The selected education did not directly answer the question. ${coverage.reason}`,
       };
