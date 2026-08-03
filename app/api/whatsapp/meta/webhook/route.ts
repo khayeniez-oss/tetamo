@@ -602,6 +602,7 @@ async function runMonaV2ForMeta(params: {
     conversationContext: {
       recentMessages,
       campaignContext,
+      isFirstReply: !recentMessages,
     },
     knowledgeCandidateContext: {
       enabled:

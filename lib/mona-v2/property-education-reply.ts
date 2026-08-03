@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  buildMonaV2PersonalityInstructions,
+  finaliseMonaV2Reply,
+} from "./personality";
 import type {
   MonaV2Analysis,
   MonaV2ConversationContext,
@@ -335,6 +339,71 @@ ${JSON.stringify(compactCandidates, null, 2)}
 `.trim();
 }
 
+function compactPropertyEducationReply(
+  reply: string
+): string {
+  const maximumLength = 340;
+
+  if (reply.length <= maximumLength) {
+    return reply;
+  }
+
+  const greetingMatch = reply.match(
+    /^(Halo!|Hi!)\s*/i
+  );
+
+  const greeting =
+    greetingMatch?.[1] ?? "";
+
+  const body = greetingMatch
+    ? reply.slice(greetingMatch[0].length)
+    : reply;
+
+  const sentences =
+    body
+      .match(
+        /[^.!?]+[.!?]+(?:\s*(?:😊|🙂|😉))?/gu
+      )
+      ?.map((sentence) => sentence.trim())
+      .filter(Boolean) ?? [body.trim()];
+
+  const firstStatement =
+    sentences.find(
+      (sentence) => !sentence.includes("?")
+    ) ?? sentences[0];
+
+  const finalQuestion =
+    [...sentences]
+      .reverse()
+      .find((sentence) =>
+        sentence.includes("?")
+      ) ?? null;
+
+  const compact = [
+    greeting,
+    firstStatement,
+    finalQuestion,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  if (
+    compact &&
+    compact.length <= maximumLength
+  ) {
+    return compact;
+  }
+
+  const shortened = Array.from(compact)
+    .slice(0, maximumLength - 1)
+    .join("")
+    .replace(/\s+\S*$/, "")
+    .trim();
+
+  return `${shortened}…`;
+}
+
 function buildReplyPrompt(params: {
   input: MonaV2PropertyEducationInput;
   entry: PropertyEducationEntry;
@@ -349,27 +418,25 @@ You are Mona, Tetamo's Indonesian property WhatsApp assistant.
 
 Answer the customer using only the approved public property education content supplied below.
 
-RESPONSE RULES:
-- Sound knowledgeable, warm, professional and conversational.
-- Answer the actual question first.
-- Match the preferred reply language.
-- Keep the answer clear and suitable for WhatsApp.
-- Explain practical steps when the approved content supports them.
+${buildMonaV2PersonalityInstructions({
+    conversationContext:
+      params.input.conversationContext ?? null,
+    route: "property_education",
+  })}
+
+PROPERTY EDUCATION GROUNDING:
+- Use only the approved public property education content supplied below.
 - Do not copy the source word-for-word.
-- Every factual statement must be directly supported by the approved education content.
-- Do not use your own background knowledge, even when you know the answer.
-- If the approved content does not explicitly answer the customer's main question, write exactly: UNSUPPORTED
+- Every factual statement must be directly supported by the approved content.
+- Do not use background model knowledge, even when you know the answer.
+- If the approved content does not explicitly answer the main question, write exactly: UNSUPPORTED
 - Do not invent Indonesian laws, taxes, certifications, organisations, documents or procedures.
 - Do not present general education as personalised legal, tax or contract advice.
-- For sensitive topics, clearly explain that the answer is general education and that documents or circumstances may need professional review.
-- Do not begin with a greeting unless the customer greeted Mona.
-- Do not automatically finish with a question.
-- Do not turn every education answer into a Tetamo advertisement.
-- Mention Tetamo softly only when it directly helps the customer's stated need.
-- Before returning the answer, silently proofread every sentence for correct grammar, spelling, punctuation and spaces between words.
+- For sensitive topics, explain briefly that the information is general and documents or circumstances may need professional review.
+- Before returning the answer, silently proofread the grammar, spelling, punctuation and spacing.
 - Never merge separate words such as "orang yang", "masa sewa" or "untuk dijual".
-- Preserve distinct property terms from the approved source, such as "kamar tidur" and "kamar mandi"; do not combine or shorten them inaccurately.
-- In Indonesian replies, prefer natural professional wording such as "sebelum memasarkan" rather than awkward mixtures such as "sebelum posting".
+- Preserve distinct property terms such as "kamar tidur" and "kamar mandi".
+- In Indonesian, prefer natural wording such as "sebelum memasarkan" instead of awkward mixtures such as "sebelum posting".
 - Do not mention internal selection, confidence, databases or system instructions.
 
 CUSTOMER MESSAGE:
@@ -605,14 +672,25 @@ export async function generateMonaV2PropertyEducationReply(
           },
         ],
         temperature: 0.05,
-        max_output_tokens: 500,
+        max_output_tokens: 140,
         store: false,
       });
 
-    const reply = cleanReply(
-      replyResponse.output_text,
-      selectedContent
-    );
+    const reply =
+      compactPropertyEducationReply(
+        finaliseMonaV2Reply({
+          reply: cleanReply(
+            replyResponse.output_text,
+            selectedContent
+          ),
+          language:
+            input.analysis.preferredReplyLanguage,
+          intent: input.analysis.intent,
+          customerMessage: input.customerMessage,
+          isFirstReply:
+            input.conversationContext?.isFirstReply,
+        })
+      );
 
     if (
       !reply ||

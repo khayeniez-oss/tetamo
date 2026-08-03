@@ -6,6 +6,10 @@ import type {
 } from "@/lib/mona/knowledge";
 
 import {
+  buildMonaV2PersonalityInstructions,
+  finaliseMonaV2Reply,
+} from "./personality";
+import {
   selectMonaV2TetamoKnowledge,
 } from "./tetamo-knowledge-selector";
 
@@ -68,23 +72,18 @@ You are Mona, Tetamo's WhatsApp assistant.
 
 Answer the customer using only the approved Tetamo Knowledge Base entry supplied below.
 
-RESPONSE STYLE:
-- Sound warm, friendly, professional and conversational.
-- Answer the customer's actual question first and directly.
-- Do not begin with "Halo", "Hi" or another greeting unless the customer greeted Mona.
-- Do not automatically end with a generic offer such as "Ada yang bisa saya bantu lagi?"
-- Finish naturally once the question has been answered.
-- If the customer asks for a price, state the approved price clearly.
-- Keep the response concise and suitable for WhatsApp.
-- Match the preferred reply language.
-- Explain clearly without sounding robotic.
-- Be gently sales-aware when Tetamo directly solves the customer's need.
-- Never pressure the customer to register, pay or advertise.
-- Do not end every response with a question.
-- Ask one question only when information is genuinely required.
-- Do not copy the approved answer word-for-word.
+${buildMonaV2PersonalityInstructions({
+    conversationContext:
+      input.conversationContext ?? null,
+    route: "tetamo_knowledge",
+  })}
+
+TETAMO FACTUAL GROUNDING:
+- Use only the selected approved Tetamo knowledge supplied below.
+- Do not copy the approved answer word-for-word, but preserve every factual detail exactly.
 - Never invent prices, packages, policies, features, links or promises.
 - Do not add facts from model memory.
+- Do not pressure the customer to register, advertise or pay.
 - Do not mention the Knowledge Base, internal analysis or routing.
 
 CUSTOMER MESSAGE:
@@ -123,6 +122,84 @@ ${knowledgeEntry.approvedAnswer}
 
 Write only Mona's final WhatsApp reply.
 `.trim();
+}
+
+function ensureTetamoPricingLink(
+  reply: string,
+  input: MonaV2TetamoKnowledgeInput
+): string {
+  const pricingLink =
+    "https://www.tetamo.com/pricelist";
+
+  if (
+    input.analysis.intent !== "tetamo_pricing" ||
+    reply.includes(pricingLink)
+  ) {
+    return reply;
+  }
+
+  const language =
+    input.analysis.preferredReplyLanguage;
+
+  const asksWhereToView =
+    /(?:lihat(?:nya)?|cek(?:nya)?|buka|view|see).*\b(?:di|dimana|di mana|where)\b/i.test(
+      input.customerMessage
+    );
+
+  if (asksWhereToView) {
+    return language === "id"
+      ? `Paket dan harga terbaru bisa dilihat di ${pricingLink}. Mau saya jelaskan juga cara pasang listingnya?`
+      : `You can see the latest packages and prices at ${pricingLink}. Would you like the listing instructions too?`;
+  }
+
+  const linkSentence =
+    language === "id"
+      ? `Paket dan harga terbaru bisa dilihat di ${pricingLink}.`
+      : `See the latest packages and prices at ${pricingLink}.`;
+
+  const finalQuestion = reply.match(
+    /([^.!?\n][^.!?\n]*\?)\s*$/
+  );
+
+  const body =
+    finalQuestion?.index != null
+      ? reply
+          .slice(0, finalQuestion.index)
+          .trim()
+      : reply.trim();
+
+  const bodyParts = body
+    .split(
+      /(?<=[.!?😊🙂😉])\s+(?=[A-ZÀ-ÖØ-Þ])/u
+    )
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const greeting =
+    bodyParts.length > 1 &&
+    /^(halo|hai|hi|hello)[!,.]?$/i.test(
+      bodyParts[0]
+    )
+      ? bodyParts.shift() ?? null
+      : null;
+
+  const conciseAnswer =
+    bodyParts[0] ?? body;
+
+  const greetingAndAnswer = [
+    greeting,
+    conciseAnswer,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return [
+    greetingAndAnswer,
+    linkSentence,
+    finalQuestion?.[1]?.trim() ?? null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export async function generateMonaV2TetamoKnowledgeReply(
@@ -188,11 +265,22 @@ export async function generateMonaV2TetamoKnowledgeReply(
         },
       ],
       temperature: 0.3,
-      max_output_tokens: 420,
+      max_output_tokens: 220,
       store: false,
     });
 
-    const reply = cleanReply(response.output_text);
+    const reply = finaliseMonaV2Reply({
+      reply: ensureTetamoPricingLink(
+        cleanReply(response.output_text),
+        input
+      ),
+      language:
+        input.analysis.preferredReplyLanguage,
+      intent: input.analysis.intent,
+      customerMessage: input.customerMessage,
+      isFirstReply:
+        input.conversationContext?.isFirstReply,
+    });
 
     if (!reply) {
       return {

@@ -122,6 +122,8 @@ export type MonaV2ConversationContext = {
   unresolvedIssue?: string | null;
 
   campaignContext?: string | null;
+
+  isFirstReply?: boolean | null;
 };
 
 export type MonaV2AnalyseInput = {

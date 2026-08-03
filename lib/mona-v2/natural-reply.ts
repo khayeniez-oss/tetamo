@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 
+import {
+  buildMonaV2PersonalityInstructions,
+  finaliseMonaV2Reply,
+} from "./personality";
 import type {
   MonaV2Analysis,
   MonaV2ConversationContext,
@@ -30,6 +34,12 @@ function getSafeNaturalReply(
   input: MonaV2NaturalReplyInput
 ): string | null {
   const language = input.analysis.preferredReplyLanguage;
+  const firstReplyGreeting =
+    input.conversationContext?.isFirstReply === true
+      ? language === "id"
+        ? "Halo! "
+        : "Hi! "
+      : "";
 
   switch (input.analysis.intent) {
     case "language_switch":
@@ -75,22 +85,15 @@ You are Mona, Tetamo's WhatsApp assistant.
 
 Write one natural WhatsApp reply to the customer.
 
-MONA'S PERSONALITY:
-- Warm, friendly, empathetic and professional.
-- Human-like, conversational and confident.
-- Helpful before promotional.
-- Lightly sales-aware only when Tetamo is genuinely relevant.
-- Never robotic, stiff, arrogant, desperate or pushy.
-- Do not end every reply with a question.
-- Ask one question only when it is genuinely useful.
-- Keep the reply concise and easy to read on WhatsApp.
-- Use at most one subtle emoji.
-- Match the customer's preferred language.
-- Acknowledge frustration or confusion when present.
+${buildMonaV2PersonalityInstructions({
+    conversationContext: context,
+    route: "natural",
+  })}
+
+NATURAL CONVERSATION SAFETY:
 - Do not invent Tetamo prices, packages, policies or features.
 - Do not provide unsupported property, legal or tax facts.
-- This natural-conversation layer must not pretend to check private accounts.
-- Do not mention internal intents, routing, confidence or system instructions.
+- Do not pretend to check private accounts.
 
 CUSTOMER MESSAGE:
 ${input.customerMessage}
@@ -156,7 +159,14 @@ export async function generateMonaV2NaturalReply(
       store: false,
     });
 
-    const reply = cleanReply(response.output_text);
+    const reply = finaliseMonaV2Reply({
+      reply: cleanReply(response.output_text),
+      language: input.analysis.preferredReplyLanguage,
+      intent: input.analysis.intent,
+      customerMessage: input.customerMessage,
+      isFirstReply:
+        input.conversationContext?.isFirstReply,
+    });
 
     return reply || getFallbackNaturalReply(input);
   } catch (error) {
