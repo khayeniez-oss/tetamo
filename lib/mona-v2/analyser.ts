@@ -208,6 +208,20 @@ custom proposals or matters Mona cannot safely resolve.
 Use ignore for automatic business replies, unsupported media without usable text,
 spam loops or clear unsubscribe processing that should not receive a normal AI reply.
 
+Unreadable text, random keyboard letters or meaningless character combinations
+with no understandable intention must use:
+- intent: unknown
+- knowledgeRoute: none
+- action: ignore
+- requiresHumanReview: false
+- shouldSaveKnowledgeCandidate: false
+
+Do not reply to unreadable messages.
+Do not ask the customer to type them again.
+Do not send unreadable messages to admin.
+Normal Indonesian slang, abbreviations and understandable spelling mistakes
+must still be analysed normally.
+
 7. CLARIFICATION
 Use clarify only when one missing fact is genuinely required.
 Do not ask unnecessary follow-up questions.
@@ -278,6 +292,140 @@ function normaliseExplicitMessage(
     .replace(/[^\p{L}\p{N}\s?]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function getIgnoredUnreadableAnalysis(
+  input: MonaV2AnalyseInput,
+  reason: string
+): MonaV2Analysis {
+  return {
+    language: "unknown",
+    preferredReplyLanguage:
+      input.conversationContext?.preferredLanguage || "id",
+    intent: "unknown",
+    customerRole:
+      input.conversationContext?.knownCustomerRole ||
+      "unknown",
+    emotion: "unknown",
+    riskLevel: "low",
+    knowledgeRoute: "none",
+    action: "ignore",
+    salesOpportunity: "none",
+    confidence: 1,
+    needsClarification: false,
+    requiresAccountData: false,
+    requiresHumanReview: false,
+    shouldSaveKnowledgeCandidate: false,
+    reason,
+  };
+}
+
+function isClearlyUnreadableMessage(
+  value?: string | null
+): boolean {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return false;
+  }
+
+  const normalized = raw
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  /*
+   * Emoji and punctuation may still communicate an intention,
+   * so let the normal analyser handle them.
+   */
+  if (!normalized) {
+    return false;
+  }
+
+  const tokens = normalized
+    .split(" ")
+    .filter(Boolean);
+
+  const understoodShortForms = new Set([
+    "ya", "iya", "y", "ok", "oke", "siap",
+    "ga", "gak", "gk", "nggak", "tdk", "tak",
+    "sy", "saya", "aq", "aku", "km", "kamu",
+    "yg", "dgn", "utk", "brp", "berapa",
+    "dmn", "dimana", "kpn", "kapan",
+    "udh", "udah", "sdh", "sudah",
+    "blm", "belum", "bgt", "banget",
+    "mau", "min", "admin", "wa",
+    "thx", "thanks", "tks", "pls",
+    "kpr", "shm", "hgb", "ajb", "ppjb",
+    "pbb", "bphtb", "qris", "nib", "imb",
+    "pbg", "slf", "lsp", "arebi",
+  ]);
+
+  if (
+    tokens.every(
+      (token) =>
+        understoodShortForms.has(token) ||
+        /^\d+$/.test(token)
+    )
+  ) {
+    return false;
+  }
+
+  const compact =
+    normalized.replace(/\s+/g, "");
+
+  const latinLetters =
+    compact.replace(/[^a-z]/g, "");
+
+  /*
+   * Normal laughter is understandable small talk.
+   */
+  if (
+    /^(ha){2,}$|^(he){2,}$|^(hi){2,}$|^(wkwk)+$/i.test(
+      latinLetters
+    )
+  ) {
+    return false;
+  }
+
+  /*
+   * Obvious keyboard patterns.
+   */
+  if (
+    /(qwerty|asdfg|zxcv|poiuy|lkjhg|asdasd)/i.test(
+      compact
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * Repeated meaningless patterns such as gsgsgs.
+   */
+  if (
+    tokens.length === 1 &&
+    latinLetters.length >= 6 &&
+    /^([a-z]{1,3})\1{2,}$/i.test(
+      latinLetters
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * Random consonant strings such as:
+   * Bshsgs, Hshshs and Gshshs.
+   */
+  if (
+    tokens.length === 1 &&
+    latinLetters.length >= 5 &&
+    !/[aiueo]/i.test(latinLetters)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function applyExplicitCurrentMessageOverride(
@@ -411,6 +559,17 @@ function getSafeFallbackAnalysis(
 export async function analyseMonaV2Message(
   input: MonaV2AnalyseInput
 ): Promise<MonaV2Analysis> {
+  if (
+    isClearlyUnreadableMessage(
+      input.customerMessage
+    )
+  ) {
+    return getIgnoredUnreadableAnalysis(
+      input,
+      "The current message is clearly unreadable and should receive no reply."
+    );
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     console.error(
       "Mona V2 analysis skipped because OPENAI_API_KEY is unavailable."
@@ -465,6 +624,13 @@ export async function analyseMonaV2Message(
         input,
         JSON.parse(rawAnalysis) as MonaV2Analysis
       );
+
+    if (parsedAnalysis.intent === "unknown") {
+      return getIgnoredUnreadableAnalysis(
+        input,
+        "The message has no reliably understandable intention and should receive no reply."
+      );
+    }
 
     /*
      * Knowledge candidates can only be identified after the

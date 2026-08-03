@@ -81,6 +81,42 @@ function removeLoneSurrogates(
     .join("");
 }
 
+function replaceUnsupportedFuturePromises(
+  value: string
+): string {
+  return value
+    .replace(
+      /\bMau saya kirim(?:kan)?\s+((?:langkah|panduan|penjelasan|detail|informasi|cara)\b[^?\n]*)\?/gi,
+      (_match, subject: string) => {
+        const cleanedSubject = String(subject)
+          .trim()
+          .replace(/\s+di sini$/i, "");
+
+        return `Mau saya jelaskan ${cleanedSubject} di sini?`;
+      }
+    )
+    .replace(
+      /\bApakah (?:Anda|Ibu\/Bapak|kamu) ingin saya kirim(?:kan)?\s+((?:langkah|panduan|penjelasan|detail|informasi|cara)\b[^?\n]*)\?/gi,
+      (_match, subject: string) => {
+        const cleanedSubject = String(subject)
+          .trim()
+          .replace(/\s+di sini$/i, "");
+
+        return `Apakah Anda ingin saya jelaskan ${cleanedSubject} di sini?`;
+      }
+    )
+    .replace(
+      /\bWould you like me to send\s+((?:(?:the|a)\s+)?(?:full\s+)?(?:steps|instructions|guide|details|information|process)\b[^?\n]*)\?/gi,
+      (_match, subject: string) => {
+        const cleanedSubject = String(subject)
+          .trim()
+          .replace(/\s+here$/i, "");
+
+        return `Would you like me to explain ${cleanedSubject} here?`;
+      }
+    );
+}
+
 export function finaliseMonaV2Reply(params: {
   reply: string;
   language: string;
@@ -95,6 +131,8 @@ export function finaliseMonaV2Reply(params: {
       .replace(/(😊|🙂|😉)\./gu, "$1")
       .replace(/\n{3,}/g, "\n\n")
   );
+
+  reply = replaceUnsupportedFuturePromises(reply);
 
   if (params.isFirstReply === true && reply) {
     const alreadyStartsWithGreeting =
