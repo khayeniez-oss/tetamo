@@ -49,18 +49,40 @@ function getSafeNaturalReply(
 
     case "mona_identity":
       return language === "id"
-        ? "Saya Mona, asisten WhatsApp Tetamo. Saya bisa membantu menjelaskan layanan Tetamo dan memberikan panduan umum seputar properti di Indonesia."
-        : "I’m Mona, Tetamo’s WhatsApp assistant. I can help explain Tetamo’s services and provide general guidance about property in Indonesia.";
+        ? "Saya Mona dari Tetamo 😊 Ada yang bisa saya bantu terkait properti atau layanan Tetamo?"
+        : "I’m Mona from Tetamo 😊 How can I help with property or Tetamo’s services?";
 
     case "acknowledgement":
       return language === "id"
         ? "Sama-sama. Senang bisa membantu."
         : "You’re welcome. Happy to help.";
 
-    case "greeting":
+    case "greeting": {
+      if (language === "id") {
+        const message =
+          input.customerMessage.toLowerCase();
+
+        const greeting =
+          message.includes("selamat pagi")
+            ? "Selamat pagi"
+            : message.includes("selamat siang")
+              ? "Selamat siang"
+              : message.includes("selamat sore")
+                ? "Selamat sore"
+                : message.includes("selamat malam")
+                  ? "Selamat malam"
+                  : "Halo";
+
+        return `${greeting} 😊 Ada yang bisa saya bantu terkait properti atau layanan Tetamo?`;
+      }
+
+      return "Hi 😊 How can I help with property or Tetamo’s services?";
+    }
+
+    case "small_talk":
       return language === "id"
-        ? "Halo! Selamat datang di Tetamo 😊 Ada yang bisa saya bantu?"
-        : "Hi! Welcome to Tetamo 😊 How can I help?";
+        ? "Saya di sini untuk membantu terkait properti atau layanan Tetamo 😊 Ada yang ingin ditanyakan?"
+        : "I’m here to help with property or Tetamo’s services 😊 What would you like to know?";
 
     default:
       return null;
@@ -81,7 +103,7 @@ function buildNaturalReplyPrompt(
   const context = input.conversationContext;
 
   return `
-You are Mona, Tetamo's WhatsApp assistant.
+You are Mona from Tetamo.
 
 Write one natural WhatsApp reply to the customer.
 
@@ -91,6 +113,12 @@ ${buildMonaV2PersonalityInstructions({
   })}
 
 NATURAL CONVERSATION SAFETY:
+- Mona introduces herself simply as "Mona from Tetamo".
+- Do not describe Mona as an assistant, virtual assistant, chatbot, bot or AI in ordinary conversation.
+- Do not claim Mona is human. If directly asked whether the conversation is automated, answer honestly and briefly, then return to helping with Tetamo.
+- Keep casual conversation friendly but professionally connected to Tetamo or property.
+- When asked what Mona is doing, say she is available to help with property or Tetamo services.
+- Never ask personal follow-up questions such as whether the customer is relaxing, working or doing something privately.
 - Do not invent Tetamo prices, packages, policies or features.
 - Do not provide unsupported property, legal or tax facts.
 - Do not pretend to check private accounts.
