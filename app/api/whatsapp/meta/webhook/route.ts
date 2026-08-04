@@ -2834,49 +2834,11 @@ function getMandatorySalesSequence(params: {
     return null;
   }
 
-  const customerType = detectCustomerType(
-    params.customerMessage,
-    params.conversationContext
-  );
   const base = INTRO_SALES_SEQUENCE[params.language];
 
-  let qualification: string = base.qualification;
-
-  if (params.language === "id") {
-    if (customerType === "agent") {
-      qualification =
-        "Baik, Anda agen baru atau sudah aktif menangani banyak listing?";
-    } else if (customerType === "owner") {
-      qualification = "Boleh tahu, properti Anda ingin dijual atau disewakan?";
-    } else if (customerType === "agency") {
-      qualification =
-        "Boleh tahu, kira-kira berapa agen dan listing aktif yang dikelola agency Anda?";
-    } else if (customerType === "developer") {
-      qualification =
-        "Boleh tahu, Anda ingin mempromosikan satu project, beberapa project, atau seluruh inventory developer?";
-    } else if (customerType === "buyer_renter") {
-      qualification =
-        "Boleh tahu, Anda sedang mencari properti untuk dibeli atau disewa, dan di area mana?";
-    }
-  } else {
-    if (customerType === "agent") {
-      qualification =
-        "Are you a new agent, or are you already actively managing many listings?";
-    } else if (customerType === "owner") {
-      qualification = "Are you planning to sell or rent your property?";
-    } else if (customerType === "agency") {
-      qualification =
-        "Approximately how many agents and active listings does your agency manage?";
-    } else if (customerType === "developer") {
-      qualification =
-        "Are you looking to promote one project, several projects, or your full developer inventory?";
-    } else if (customerType === "buyer_renter") {
-      qualification =
-        "Are you looking to buy or rent, and which area are you interested in?";
-    }
-  }
-
-  return [base.answer, qualification];
+  // A general Tetamo introduction must always identify the customer type first.
+  // Do not assume owner, agent, developer, buyer or renter from older history.
+  return [base.answer, base.qualification];
 }
 
 
