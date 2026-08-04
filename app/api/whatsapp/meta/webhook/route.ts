@@ -155,12 +155,63 @@ type SalesPlaybookEntry = {
   approvedGuidance: string;
 };
 
+type DiscoveryField =
+  | "customer_type"
+  | "agent_experience"
+  | "listing_count"
+  | "enquiry_reason"
+  | "desired_result"
+  | "property_type"
+  | "operating_area"
+  | "advertising_channels"
+  | "current_pain"
+  | "main_priority"
+  | "start_timing"
+  | "decision_role"
+  | "other_decision_maker"
+  | "remaining_concern"
+  | "sale_or_rent"
+  | "owner_visibility"
+  | "project_scope"
+  | "agency_size"
+  | "buyer_intent";
+
+type DiscoveryProfile = {
+  enquiryReasonKnown: boolean;
+  desiredResultKnown: boolean;
+  propertyTypeKnown: boolean;
+  operatingAreaKnown: boolean;
+  advertisingChannelsKnown: boolean;
+  currentPainKnown: boolean;
+  mainPriority:
+    | "price"
+    | "listing_capacity"
+    | "visibility"
+    | "branding"
+    | "enquiries"
+    | "management"
+    | null;
+  startTiming: "now" | "soon" | "later" | "considering" | null;
+  decisionRole: "self" | "shared" | "other" | null;
+  otherDecisionMakerKnown: boolean;
+  remainingConcernKnown: boolean;
+  saleOrRentKnown: boolean;
+  ownerVisibilityKnown: boolean;
+  projectScopeKnown: boolean;
+  buyerIntentKnown: boolean;
+  answeredFields: DiscoveryField[];
+};
+
 type SalesContext = {
   customerType: CustomerType;
   listingCount: number | null;
   agentExperience: "new" | "experienced" | null;
   closingSignal: string | null;
   recommendedProduct: string | null;
+  discoveryStage: string;
+  discoveryProfile: DiscoveryProfile;
+  nextQuestionField: DiscoveryField | null;
+  nextQuestion: string | null;
   nextAction: string;
   matchedPlaybookIds: string[];
 };
@@ -485,6 +536,93 @@ Buyers and renters can view property information, photos and videos, contact the
   },
 } as const;
 
+
+const DISCOVERY_QUESTIONS: Record<
+  MonaLanguage,
+  Record<DiscoveryField, string>
+> = {
+  id: {
+    customer_type:
+      "Boleh tahu, Anda seorang pemilik properti, agen, developer, atau sedang mencari properti?",
+    agent_experience:
+      "Anda agen baru atau sudah aktif menangani banyak listing?",
+    listing_count:
+      "Saat ini kira-kira berapa listing aktif yang Anda kelola?",
+    enquiry_reason:
+      "Boleh tahu, apa yang membuat Anda tertarik dengan Tetamo hari ini?",
+    desired_result:
+      "Hasil utama apa yang sedang Anda ingin capai melalui Tetamo?",
+    property_type:
+      "Listing Anda biasanya berupa rumah, villa, apartemen, tanah, properti komersial, atau campuran?",
+    operating_area:
+      "Listing Anda paling banyak berada di kota atau area mana?",
+    advertising_channels:
+      "Saat ini Anda biasanya mempromosikan listing melalui media sosial, WhatsApp, portal properti, website sendiri, atau kombinasi beberapa channel?",
+    current_pain:
+      "Dari cara promosi yang sekarang, bagian apa yang paling terasa sulit atau belum berjalan sesuai harapan?",
+    main_priority:
+      "Yang paling penting untuk Anda sekarang apa: harga, kapasitas listing, visibility, branding, enquiry, atau pengelolaan yang lebih mudah?",
+    start_timing:
+      "Kapan Anda berencana mulai—sekarang, dalam beberapa hari, atau masih tahap mempertimbangkan?",
+    decision_role:
+      "Untuk pemilihan paket dan pembayarannya, Anda yang memutuskan sendiri atau perlu berdiskusi dengan pihak lain terlebih dahulu?",
+    other_decision_maker:
+      "Siapa lagi yang perlu melihat atau menyetujui informasinya?",
+    remaining_concern:
+      "Sebelum Anda memutuskan, bagian apa yang masih perlu lebih jelas—harga, cara penggunaan, fitur, pembayaran, atau hasil yang dapat dibantu Tetamo?",
+    sale_or_rent:
+      "Properti Anda ingin dijual atau disewakan?",
+    owner_visibility:
+      "Anda membutuhkan listing standar, visibilitas lebih tinggi, atau exposure featured yang paling kuat?",
+    project_scope:
+      "Apakah Anda ingin mempromosikan satu project, beberapa project, atau seluruh inventory?",
+    agency_size:
+      "Kira-kira berapa agen dan berapa listing aktif yang dikelola agency Anda?",
+    buyer_intent:
+      "Anda sedang mencari properti untuk dibeli atau disewa, dan di area mana?",
+  },
+  en: {
+    customer_type:
+      "May I know whether you are a property owner, an agent, a developer, or currently looking for a property?",
+    agent_experience:
+      "Are you a new agent, or are you already actively managing many listings?",
+    listing_count:
+      "Approximately how many active listings do you currently manage?",
+    enquiry_reason:
+      "May I know what made you interested in Tetamo today?",
+    desired_result:
+      "What is the main result you are hoping to achieve through Tetamo?",
+    property_type:
+      "Do you mainly handle houses, villas, apartments, land, commercial properties, or a mixture?",
+    operating_area:
+      "Which city or area contains most of your listings?",
+    advertising_channels:
+      "How do you currently promote your listings—social media, WhatsApp, property portals, your own website, or a combination of channels?",
+    current_pain:
+      "What feels most difficult or is not working as well as you would like with your current promotion method?",
+    main_priority:
+      "What matters most to you now: price, listing capacity, visibility, branding, enquiries, or easier management?",
+    start_timing:
+      "When are you planning to start—now, within the next few days, or are you still considering it?",
+    decision_role:
+      "Will you decide and arrange payment yourself, or do you need to discuss it with someone else first?",
+    other_decision_maker:
+      "Who else needs to review or approve the information?",
+    remaining_concern:
+      "Before you decide, what still needs to be clearer—price, how it works, features, payment, or the result Tetamo can help with?",
+    sale_or_rent:
+      "Would you like to sell or rent out your property?",
+    owner_visibility:
+      "Do you need a standard listing, higher visibility, or the strongest featured exposure?",
+    project_scope:
+      "Would you like to promote one project, several projects, or your full inventory?",
+    agency_size:
+      "Approximately how many agents and active listings does your agency manage?",
+    buyer_intent:
+      "Are you looking to buy or rent, and which area do you prefer?",
+  },
+};
+
 const SALES_CORE_RULES = `
 TETAMO SALES MISSION:
 - Mona is not only an information assistant. She is a helpful Tetamo sales consultant.
@@ -501,6 +639,16 @@ FIRST-INQUIRY JOURNEY:
    - About one second later, the webhook sends the customer-type question as Message 2.
    - Do not combine those two messages into one.
 2. After the customer identifies their type, continue immediately into the correct journey below.
+
+STRUCTURED DISCOVERY JOURNEY:
+- Use the hardcoded discovery engine to decide what is already known and what single question is most useful next.
+- Discovery areas include why the customer enquired, the result they want, listing volume, property type, operating area, current advertising channels, what is not working, main priority, start timing, decision process, other people involved, and the concern preventing the next step.
+- Do not ask every discovery question. Ask only the approved next question supplied in the detected sales context.
+- Treat information volunteered by the customer as already answered. Never ask for it again.
+- When a package recommendation can already be made, give the recommendation and its value before asking the next approved discovery question.
+- When the customer shows a buying signal, stop discovery and give the registration or payment action.
+- When an objection, policy issue, comparison, trust concern, or support issue is detected, answer that first. Resume discovery only when it is genuinely helpful.
+- Never ask more than one question in a reply.
 
 CUSTOMER-TYPE JOURNEYS:
 - Agent:
@@ -2567,6 +2715,779 @@ function detectClosingSignal(message: string) {
   ) || null;
 }
 
+
+function getConversationTurns(conversationContext?: string | null) {
+  return String(conversationContext || "")
+    .split("\n")
+    .map((line) => {
+      const match = line.match(/^(Customer|Mona|Admin):\s*(.*)$/i);
+      if (!match) return null;
+
+      return {
+        speaker: match[1].toLowerCase() as "customer" | "mona" | "admin",
+        message: String(match[2] || "").trim(),
+      };
+    })
+    .filter(
+      (
+        item
+      ): item is {
+        speaker: "customer" | "mona" | "admin";
+        message: string;
+      } => Boolean(item?.message)
+    );
+}
+
+const DISCOVERY_QUESTION_PATTERNS: Record<DiscoveryField, readonly string[]> = {
+  customer_type: [
+    "pemilik properti, agen, developer",
+    "property owner, an agent, a developer",
+  ],
+  agent_experience: [
+    "agen baru atau sudah aktif",
+    "new agent, or are you already active",
+    "new agent or already actively",
+  ],
+  listing_count: [
+    "berapa listing aktif",
+    "berapa properti yang ingin",
+    "how many active listings",
+    "how many properties do you",
+  ],
+  enquiry_reason: [
+    "apa yang membuat anda tertarik",
+    "what made you interested",
+  ],
+  desired_result: [
+    "hasil utama apa",
+    "tujuan utamanya",
+    "main result",
+    "what result",
+  ],
+  property_type: [
+    "jenis propert",
+    "listing anda biasanya berupa",
+    "do you mainly handle",
+    "property type",
+  ],
+  operating_area: [
+    "area mana",
+    "wilayah mana",
+    "kota atau area",
+    "which city or area",
+    "which area",
+  ],
+  advertising_channels: [
+    "mempromosikan listing melalui",
+    "channel apa",
+    "how do you currently promote",
+    "how do you advertise",
+  ],
+  current_pain: [
+    "bagian apa yang paling terasa sulit",
+    "belum berjalan sesuai harapan",
+    "what feels most difficult",
+    "what is not working",
+  ],
+  main_priority: [
+    "yang paling penting untuk anda",
+    "what matters most to you",
+  ],
+  start_timing: [
+    "kapan anda berencana mulai",
+    "when are you planning to start",
+  ],
+  decision_role: [
+    "anda yang memutuskan sendiri",
+    "will you decide",
+    "perlu berdiskusi dengan",
+  ],
+  other_decision_maker: [
+    "siapa lagi yang perlu",
+    "who else needs to",
+  ],
+  remaining_concern: [
+    "bagian apa yang masih perlu lebih jelas",
+    "apa yang masih membuat anda ragu",
+    "what still needs to be clearer",
+    "what is still holding you back",
+  ],
+  sale_or_rent: [
+    "ingin dijual atau disewakan",
+    "sell or rent out",
+  ],
+  owner_visibility: [
+    "listing standar, visibilitas lebih tinggi",
+    "standard listing, higher visibility",
+  ],
+  project_scope: [
+    "satu project, beberapa project",
+    "one project, several projects",
+  ],
+  agency_size: [
+    "berapa agen dan berapa listing",
+    "how many agents and active listings",
+  ],
+  buyer_intent: [
+    "dibeli atau disewa, dan di area mana",
+    "looking to buy or rent, and which area",
+  ],
+};
+
+function wasDiscoveryQuestionAnswered(params: {
+  field: DiscoveryField;
+  conversationContext?: string | null;
+  currentMessage: string;
+}) {
+  const turns = getConversationTurns(params.conversationContext);
+  const patterns = DISCOVERY_QUESTION_PATTERNS[params.field];
+  let latestQuestionIndex = -1;
+
+  turns.forEach((turn, index) => {
+    if (turn.speaker === "mona" && containsPattern(turn.message, patterns)) {
+      latestQuestionIndex = index;
+    }
+  });
+
+  if (latestQuestionIndex < 0) return false;
+
+  const answeredInHistory = turns
+    .slice(latestQuestionIndex + 1)
+    .some((turn) => turn.speaker === "customer" && turn.message.length > 0);
+
+  return answeredInHistory || Boolean(String(params.currentMessage || "").trim());
+}
+
+function detectMainPriority(text: string): DiscoveryProfile["mainPriority"] {
+  const normalized = normalizeIntentText(text);
+
+  if (
+    containsPattern(normalized, [
+      "harga",
+      "price",
+      "murah",
+      "budget",
+      "biaya",
+    ])
+  ) {
+    return "price";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "kapasitas listing",
+      "jumlah listing",
+      "banyak listing",
+      "listing capacity",
+    ])
+  ) {
+    return "listing_capacity";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "visibility",
+      "visibilitas",
+      "exposure",
+      "lebih terlihat",
+      "jangkauan",
+    ])
+  ) {
+    return "visibility";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "branding",
+      "brand",
+      "profil profesional",
+      "professional profile",
+    ])
+  ) {
+    return "branding";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "leads",
+      "lead",
+      "enquiry",
+      "inquiry",
+      "calon pembeli",
+      "calon penyewa",
+    ])
+  ) {
+    return "enquiries";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "mudah dikelola",
+      "pengelolaan",
+      "manage listing",
+      "management",
+      "dashboard",
+      "lebih mudah",
+    ])
+  ) {
+    return "management";
+  }
+
+  return null;
+}
+
+function detectStartTiming(text: string): DiscoveryProfile["startTiming"] {
+  const normalized = normalizeIntentText(text);
+
+  if (
+    containsPattern(normalized, [
+      "mulai sekarang",
+      "sekarang juga",
+      "hari ini",
+      "langsung mulai",
+      "start now",
+      "today",
+      "right now",
+    ])
+  ) {
+    return "now";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "beberapa hari",
+      "minggu ini",
+      "secepatnya",
+      "soon",
+      "this week",
+      "next few days",
+    ])
+  ) {
+    return "soon";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "bulan depan",
+      "nanti",
+      "belum sekarang",
+      "later",
+      "next month",
+      "not now",
+    ])
+  ) {
+    return "later";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "masih pertimbangkan",
+      "masih mempertimbangkan",
+      "lihat dulu",
+      "bandingkan dulu",
+      "considering",
+      "still comparing",
+      "review first",
+    ])
+  ) {
+    return "considering";
+  }
+
+  return null;
+}
+
+function detectDecisionRole(text: string): DiscoveryProfile["decisionRole"] {
+  const normalized = normalizeIntentText(text);
+
+  if (
+    containsPattern(normalized, [
+      "saya sendiri yang memutuskan",
+      "saya yang bayar",
+      "saya yang putuskan",
+      "i decide",
+      "i will pay",
+      "my decision",
+    ])
+  ) {
+    return "self";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "diskusi dengan partner",
+      "diskusi dengan tim",
+      "bersama partner",
+      "keputusan bersama",
+      "discuss with my partner",
+      "discuss with my team",
+      "joint decision",
+    ])
+  ) {
+    return "shared";
+  }
+
+  if (
+    containsPattern(normalized, [
+      "tanya bos",
+      "approval management",
+      "atasan yang memutuskan",
+      "bos yang bayar",
+      "ask my boss",
+      "manager decides",
+      "not my decision",
+    ])
+  ) {
+    return "other";
+  }
+
+  return null;
+}
+
+function buildDiscoveryProfile(params: {
+  customerMessage: string;
+  conversationContext: string | null;
+}): DiscoveryProfile {
+  const customerText = normalizeIntentText(
+    `${getCustomerOnlyConversationText(params.conversationContext)}\n${
+      params.customerMessage
+    }`
+  );
+  const answered = (field: DiscoveryField) =>
+    wasDiscoveryQuestionAnswered({
+      field,
+      conversationContext: params.conversationContext,
+      currentMessage: params.customerMessage,
+    });
+
+  const mainPriority = detectMainPriority(customerText);
+  const startTiming = detectStartTiming(customerText);
+  const decisionRole = detectDecisionRole(customerText);
+
+  const propertyTypeKnown =
+    containsPattern(customerText, [
+      "rumah",
+      "villa",
+      "apartemen",
+      "apartment",
+      "tanah",
+      "land",
+      "ruko",
+      "warehouse",
+      "gudang",
+      "hotel",
+      "guest house",
+      "commercial property",
+      "properti komersial",
+      "perumahan",
+    ]) || answered("property_type");
+
+  const operatingAreaKnown =
+    /(?:area|wilayah|lokasi|kota|beroperasi|listing(?:nya)?|properti(?:nya)?)\s+(?:di\s+)?[a-z][a-z\s.'-]{2,40}/i.test(
+      customerText
+    ) || answered("operating_area");
+
+  const advertisingChannelsKnown =
+    containsPattern(customerText, [
+      "instagram",
+      "facebook",
+      "whatsapp status",
+      "portal properti",
+      "property portal",
+      "website sendiri",
+      "own website",
+      "tiktok",
+      "referral",
+      "referal",
+      "offline",
+    ]) || answered("advertising_channels");
+
+  const currentPainKnown =
+    containsPattern(customerText, [
+      "sulit",
+      "susah",
+      "tidak bekerja",
+      "tidak efektif",
+      "kurang leads",
+      "sedikit enquiry",
+      "postingan tenggelam",
+      "ribet",
+      "manual",
+      "difficult",
+      "not working",
+      "not effective",
+      "few leads",
+      "low enquiries",
+      "too manual",
+    ]) || answered("current_pain");
+
+  const enquiryReasonKnown =
+    containsPattern(customerText, [
+      "lihat iklan tetamo",
+      "melihat iklan tetamo",
+      "tertarik dengan tetamo",
+      "butuh platform",
+      "butuh tempat pasang listing",
+      "mencari platform",
+      "saw tetamo",
+      "saw your ad",
+      "need a platform",
+      "looking for a platform",
+    ]) || answered("enquiry_reason");
+
+  const desiredResultKnown =
+    Boolean(mainPriority) ||
+    containsPattern(customerText, [
+      "ingin jual",
+      "ingin menyewakan",
+      "mau jual",
+      "mau sewa",
+      "menambah exposure",
+      "mendapatkan leads",
+      "bangun branding",
+      "kelola listing",
+      "sell my property",
+      "rent my property",
+      "get leads",
+      "build my brand",
+      "manage listings",
+    ]) ||
+    answered("desired_result");
+
+  const saleOrRentKnown = containsPattern(customerText, [
+    "dijual",
+    "jual properti",
+    "mau jual",
+    "for sale",
+    "sell",
+    "disewakan",
+    "sewa properti",
+    "mau sewa",
+    "for rent",
+    "rent out",
+  ]) || answered("sale_or_rent");
+
+  const ownerVisibilityKnown =
+    Boolean(mainPriority) ||
+    containsPattern(customerText, [
+      "basic",
+      "priority",
+      "featured",
+      "listing standar",
+      "visibilitas lebih tinggi",
+      "exposure paling kuat",
+      "standard listing",
+      "higher visibility",
+      "strongest exposure",
+    ]) ||
+    answered("owner_visibility");
+
+  const projectScopeKnown =
+    containsPattern(customerText, [
+      "satu project",
+      "beberapa project",
+      "seluruh inventory",
+      "full inventory",
+      "one project",
+      "several projects",
+    ]) || answered("project_scope");
+
+  const buyerIntentKnown =
+    containsPattern(customerText, [
+      "mau beli",
+      "ingin beli",
+      "mau sewa",
+      "ingin sewa",
+      "looking to buy",
+      "looking to rent",
+    ]) || answered("buyer_intent");
+
+  const otherDecisionMakerKnown =
+    containsPattern(customerText, [
+      "bos",
+      "atasan",
+      "manager",
+      "management",
+      "partner",
+      "suami",
+      "istri",
+      "tim saya",
+      "my team",
+      "my spouse",
+    ]) || answered("other_decision_maker");
+
+  const remainingConcernKnown =
+    containsPattern(customerText, [
+      "masih ragu karena",
+      "yang saya khawatirkan",
+      "concern saya",
+      "my concern",
+      "holding me back",
+      "not sure about",
+    ]) || answered("remaining_concern");
+
+  const answerMap: Record<DiscoveryField, boolean> = {
+    customer_type: false,
+    agent_experience: false,
+    listing_count: false,
+    enquiry_reason: enquiryReasonKnown,
+    desired_result: desiredResultKnown,
+    property_type: propertyTypeKnown,
+    operating_area: operatingAreaKnown,
+    advertising_channels: advertisingChannelsKnown,
+    current_pain: currentPainKnown,
+    main_priority: Boolean(mainPriority) || answered("main_priority"),
+    start_timing: Boolean(startTiming) || answered("start_timing"),
+    decision_role: Boolean(decisionRole) || answered("decision_role"),
+    other_decision_maker: otherDecisionMakerKnown,
+    remaining_concern: remainingConcernKnown,
+    sale_or_rent: saleOrRentKnown,
+    owner_visibility: ownerVisibilityKnown,
+    project_scope: projectScopeKnown,
+    agency_size: answered("agency_size"),
+    buyer_intent: buyerIntentKnown,
+  };
+
+  return {
+    enquiryReasonKnown,
+    desiredResultKnown,
+    propertyTypeKnown,
+    operatingAreaKnown,
+    advertisingChannelsKnown,
+    currentPainKnown,
+    mainPriority,
+    startTiming,
+    decisionRole,
+    otherDecisionMakerKnown,
+    remainingConcernKnown,
+    saleOrRentKnown,
+    ownerVisibilityKnown,
+    projectScopeKnown,
+    buyerIntentKnown,
+    answeredFields: (Object.keys(answerMap) as DiscoveryField[]).filter(
+      (field) => answerMap[field]
+    ),
+  };
+}
+
+function getDiscoveryQuestion(
+  field: DiscoveryField | null,
+  language: MonaLanguage
+) {
+  if (!field) return null;
+  return DISCOVERY_QUESTIONS[language][field];
+}
+
+function selectNextDiscoveryField(params: {
+  customerType: CustomerType;
+  listingCount: number | null;
+  agentExperience: "new" | "experienced" | null;
+  closingSignal: string | null;
+  profile: DiscoveryProfile;
+  primaryPlaybookEntry: SalesPlaybookEntry | null;
+}): { stage: string; field: DiscoveryField | null } {
+  if (params.closingSignal) {
+    return { stage: "ready_to_close", field: null };
+  }
+
+  if (
+    params.primaryPlaybookEntry &&
+    params.primaryPlaybookEntry.category !== "qualification"
+  ) {
+    return {
+      stage: `handle_${params.primaryPlaybookEntry.category}`,
+      field: null,
+    };
+  }
+
+  if (params.customerType === "unknown") {
+    return { stage: "identify_customer_type", field: "customer_type" };
+  }
+
+  if (params.customerType === "buyer_renter") {
+    if (!params.profile.buyerIntentKnown || !params.profile.operatingAreaKnown) {
+      return { stage: "qualify_property_search", field: "buyer_intent" };
+    }
+
+    return { stage: "guide_property_search", field: null };
+  }
+
+  if (params.customerType === "owner") {
+    if (!params.profile.saleOrRentKnown) {
+      return { stage: "qualify_owner_intent", field: "sale_or_rent" };
+    }
+    if (!params.profile.propertyTypeKnown) {
+      return { stage: "qualify_owner_property", field: "property_type" };
+    }
+    if (!params.profile.operatingAreaKnown) {
+      return { stage: "qualify_owner_area", field: "operating_area" };
+    }
+    if (!params.profile.ownerVisibilityKnown) {
+      return { stage: "qualify_owner_visibility", field: "owner_visibility" };
+    }
+    if (!params.profile.startTiming) {
+      return { stage: "confirm_start_timing", field: "start_timing" };
+    }
+    if (
+      ["later", "considering"].includes(params.profile.startTiming) &&
+      !params.profile.remainingConcernKnown
+    ) {
+      return { stage: "resolve_remaining_concern", field: "remaining_concern" };
+    }
+
+    return { stage: "owner_next_step", field: null };
+  }
+
+  if (params.customerType === "agent") {
+    if (!params.agentExperience) {
+      return { stage: "qualify_agent_experience", field: "agent_experience" };
+    }
+    if (params.listingCount === null) {
+      return { stage: "qualify_listing_count", field: "listing_count" };
+    }
+    if (!params.profile.desiredResultKnown) {
+      return { stage: "discover_desired_result", field: "desired_result" };
+    }
+    if (!params.profile.mainPriority) {
+      return { stage: "discover_main_priority", field: "main_priority" };
+    }
+    if (!params.profile.propertyTypeKnown) {
+      return { stage: "discover_property_type", field: "property_type" };
+    }
+    if (!params.profile.operatingAreaKnown) {
+      return { stage: "discover_operating_area", field: "operating_area" };
+    }
+    if (!params.profile.advertisingChannelsKnown) {
+      return {
+        stage: "discover_current_advertising",
+        field: "advertising_channels",
+      };
+    }
+    if (!params.profile.currentPainKnown) {
+      return { stage: "discover_current_pain", field: "current_pain" };
+    }
+    if (!params.profile.startTiming) {
+      return { stage: "confirm_start_timing", field: "start_timing" };
+    }
+    if (
+      ["now", "soon"].includes(params.profile.startTiming) &&
+      !params.profile.decisionRole
+    ) {
+      return { stage: "confirm_decision_process", field: "decision_role" };
+    }
+    if (
+      ["shared", "other"].includes(params.profile.decisionRole || "") &&
+      !params.profile.otherDecisionMakerKnown
+    ) {
+      return {
+        stage: "identify_other_decision_maker",
+        field: "other_decision_maker",
+      };
+    }
+    if (
+      ["later", "considering"].includes(params.profile.startTiming) &&
+      !params.profile.remainingConcernKnown
+    ) {
+      return { stage: "resolve_remaining_concern", field: "remaining_concern" };
+    }
+
+    return { stage: "agent_next_step", field: null };
+  }
+
+  if (params.customerType === "agency") {
+    if (params.listingCount === null) {
+      return { stage: "qualify_agency_size", field: "agency_size" };
+    }
+    if (!params.profile.desiredResultKnown) {
+      return { stage: "discover_desired_result", field: "desired_result" };
+    }
+    if (!params.profile.operatingAreaKnown) {
+      return { stage: "discover_operating_area", field: "operating_area" };
+    }
+    if (!params.profile.advertisingChannelsKnown) {
+      return {
+        stage: "discover_current_advertising",
+        field: "advertising_channels",
+      };
+    }
+    if (!params.profile.currentPainKnown) {
+      return { stage: "discover_current_pain", field: "current_pain" };
+    }
+    if (!params.profile.startTiming) {
+      return { stage: "confirm_start_timing", field: "start_timing" };
+    }
+    if (!params.profile.decisionRole) {
+      return { stage: "confirm_decision_process", field: "decision_role" };
+    }
+
+    return { stage: "agency_handover_ready", field: null };
+  }
+
+  if (params.customerType === "developer") {
+    if (!params.profile.projectScopeKnown) {
+      return { stage: "qualify_project_scope", field: "project_scope" };
+    }
+    if (params.listingCount === null) {
+      return { stage: "qualify_project_inventory", field: "listing_count" };
+    }
+    if (!params.profile.operatingAreaKnown) {
+      return { stage: "discover_project_area", field: "operating_area" };
+    }
+    if (!params.profile.desiredResultKnown) {
+      return { stage: "discover_desired_result", field: "desired_result" };
+    }
+    if (!params.profile.advertisingChannelsKnown) {
+      return {
+        stage: "discover_current_advertising",
+        field: "advertising_channels",
+      };
+    }
+    if (!params.profile.currentPainKnown) {
+      return { stage: "discover_current_pain", field: "current_pain" };
+    }
+    if (!params.profile.startTiming) {
+      return { stage: "confirm_start_timing", field: "start_timing" };
+    }
+    if (!params.profile.decisionRole) {
+      return { stage: "confirm_decision_process", field: "decision_role" };
+    }
+
+    return { stage: "developer_handover_ready", field: null };
+  }
+
+  return { stage: "continue_conversation", field: null };
+}
+
+function enforceRequiredDiscoveryQuestion(
+  reply: string,
+  requiredQuestion: string | null
+) {
+  const cleanReply = String(reply || "").trim();
+  if (!requiredQuestion) return cleanReply;
+
+  const normalizedReply = normalizeIntentText(cleanReply).replace(/\?/g, "");
+  const normalizedQuestion = normalizeIntentText(requiredQuestion).replace(
+    /\?/g,
+    ""
+  );
+
+  if (normalizedReply.includes(normalizedQuestion)) {
+    return cleanReply;
+  }
+
+  const paragraphs = cleanReply
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  const lastParagraph = paragraphs[paragraphs.length - 1] || "";
+
+  if (/\?\s*$/.test(lastParagraph) && lastParagraph.length <= 320) {
+    paragraphs.pop();
+  }
+
+  return [...paragraphs, requiredQuestion].filter(Boolean).join("\n\n");
+}
+
 function scoreSalesPlaybookEntry(
   message: string,
   conversationContext: string | null,
@@ -2609,6 +3530,7 @@ function buildSalesContext(params: {
   customerMessage: string;
   conversationContext: string | null;
 }): SalesContext {
+  const language = detectLanguage(params.customerMessage);
   const customerType = detectCustomerType(
     params.customerMessage,
     params.conversationContext
@@ -2626,55 +3548,31 @@ function buildSalesContext(params: {
     params.customerMessage,
     params.conversationContext
   );
+  const primaryPlaybookEntry = matchedEntries[0] || null;
+  const discoveryProfile = buildDiscoveryProfile(params);
   const combined = normalizeIntentText(
-    `${getCustomerOnlyConversationText(params.conversationContext)}\n${
+    `${getCustomerOnlyConversationText(params.conversationContext)}
+${
       params.customerMessage
     }`
   );
-  const fullContext = normalizeIntentText(params.conversationContext);
 
   let recommendedProduct: string | null = null;
-  let nextAction =
-    "Answer the current question first, then ask one useful question that moves the customer forward.";
 
-  if (customerType === "agent") {
-    if (listingCount !== null) {
-      if (listingCount <= 30) {
-        recommendedProduct = "Silver";
-      } else if (listingCount <= 100) {
-        recommendedProduct = "Gold";
-      } else if (listingCount <= 500) {
-        recommendedProduct = "Agent Pro";
-      } else {
-        recommendedProduct = "Tetamo team review for inventory above 500";
-      }
-
-      nextAction = closingSignal
-        ? `The customer shows a buying signal. Stop qualifying, confirm ${recommendedProduct}, explain the next registration/payment step, and share only the relevant pricelist link.`
-        : `Recommend ${recommendedProduct}, explain exactly why it fits ${listingCount} active listings, state the official price or quotation rule, and give one clear next step.`;
-    } else if (
-      !agentExperience &&
-      !containsPattern(fullContext, [
-        "agen baru atau",
-        "agent baru atau",
-        "new agent or",
-        "already active",
-      ])
-    ) {
-      nextAction =
-        "The customer is an agent. Ask whether they are a new agent or already actively handling many listings.";
+  if (customerType === "agent" && listingCount !== null) {
+    if (listingCount <= 30) {
+      recommendedProduct = "Silver";
+    } else if (listingCount <= 100) {
+      recommendedProduct = "Gold";
+    } else if (listingCount <= 500) {
+      recommendedProduct = "Agent Pro";
     } else {
-      nextAction =
-        "The customer is an agent. Ask approximately how many active listings they manage so Mona can recommend Silver, Gold, or Agent Pro accurately.";
+      recommendedProduct = "Tetamo team review for inventory above 500";
     }
   } else if (customerType === "agency") {
     recommendedProduct = "Agency discussion / Developer License";
-    nextAction =
-      `Explain that agency needs are handled directly with Tetamo, share ${TETAMO_LINKS.developerLicense}, and ask approximately how many agents and active listings the agency manages.`;
   } else if (customerType === "developer") {
     recommendedProduct = "Developer License";
-    nextAction =
-      `Explain Developer License and share ${TETAMO_LINKS.developerLicense}. Ask whether they want to promote one project, several projects, or their full inventory, unless already known.`;
   } else if (customerType === "owner") {
     if (
       containsPattern(combined, [
@@ -2692,7 +3590,7 @@ function buildSalesContext(params: {
         "lebih terlihat",
         "visibilitas lebih tinggi",
         "higher visibility",
-      ])
+      ]) || discoveryProfile.mainPriority === "visibility"
     ) {
       recommendedProduct = "Priority Listing";
     } else if (
@@ -2701,56 +3599,71 @@ function buildSalesContext(params: {
         "yang paling murah",
         "standard listing",
         "affordable",
-      ])
+      ]) || discoveryProfile.mainPriority === "price"
     ) {
       recommendedProduct = "Basic Listing";
     }
-
-    if (closingSignal && recommendedProduct) {
-      nextAction = `The owner is ready. Confirm ${recommendedProduct}, explain the Owner listing steps and QRIS payment, and share the relevant pricelist link.`;
-    } else if (recommendedProduct) {
-      nextAction = `Recommend ${recommendedProduct}, explain why it matches the owner's desired visibility, and guide the owner to create the listing.`;
-    } else if (
-      !containsPattern(combined, [
-        "jual",
-        "dijual",
-        "sale",
-        "sell",
-        "sewa",
-        "disewakan",
-        "rent",
-      ])
-    ) {
-      nextAction =
-        "The customer is an owner. Ask whether the property is for sale or rent.";
-    } else {
-      nextAction =
-        "Continue the Owner journey with one useful question, then explain Tetamo's value and recommend Basic, Priority, or Featured according to the desired exposure.";
-    }
-  } else if (customerType === "buyer_renter") {
-    nextAction =
-      "Do not sell a package. Ask whether they want to buy or rent and which area they prefer, then guide them to search Tetamo.";
-  } else {
-    nextAction =
-      "After answering the current question, identify whether the customer is an owner, agent, agency, developer, buyer, or renter.";
   }
 
-  const primaryPlaybookEntry = matchedEntries[0] || null;
+  const discovery = selectNextDiscoveryField({
+    customerType,
+    listingCount,
+    agentExperience,
+    closingSignal,
+    profile: discoveryProfile,
+    primaryPlaybookEntry,
+  });
+  const nextQuestion = getDiscoveryQuestion(discovery.field, language);
+
+  let nextAction = nextQuestion
+    ? `Answer the customer's current question first. Then end with exactly this one approved discovery question: “${nextQuestion}” Do not replace it with another question.`
+    : "Answer the current question accurately and give the clearest useful next step without adding an unnecessary discovery question.";
+
+  if (customerType === "agent" && recommendedProduct) {
+    nextAction = closingSignal
+      ? `The customer shows a buying signal. Stop discovery, confirm ${recommendedProduct}, explain the registration and payment step, and share only ${TETAMO_LINKS.pricelist}.`
+      : `Recommend ${recommendedProduct} and explain exactly why it fits ${listingCount} active listings. State the official price. ${
+          nextQuestion
+            ? `Then end with exactly this approved question: “${nextQuestion}”`
+            : `Then give one clear next step using ${TETAMO_LINKS.pricelist}.`
+        }`;
+  } else if (customerType === "agency") {
+    nextAction = `Explain that agency needs are handled directly with Tetamo and that Developer License information is available at ${TETAMO_LINKS.developerLicense}. ${
+      nextQuestion
+        ? `End with exactly this approved question: “${nextQuestion}”`
+        : "State that the Tetamo team should follow up on the commercial requirement."
+    }`;
+  } else if (customerType === "developer") {
+    nextAction = `Explain Developer License without presenting it as a standard package and share ${TETAMO_LINKS.developerLicense} only when relevant. ${
+      nextQuestion
+        ? `End with exactly this approved question: “${nextQuestion}”`
+        : "The essential details are sufficient for qualified Tetamo team follow-up."
+    }`;
+  } else if (customerType === "owner" && recommendedProduct) {
+    nextAction = closingSignal
+      ? `The owner is ready. Confirm ${recommendedProduct}, explain the Owner listing and QRIS payment steps, and share ${TETAMO_LINKS.pricelist}. Do not ask another discovery question.`
+      : `Recommend ${recommendedProduct} and explain why it matches the owner's need. ${
+          nextQuestion
+            ? `End with exactly this approved question: “${nextQuestion}”`
+            : "Guide the owner to create the listing through their own Tetamo account."
+        }`;
+  } else if (customerType === "buyer_renter") {
+    nextAction = nextQuestion
+      ? `Do not sell a package. End with exactly this approved property-search question: “${nextQuestion}”`
+      : `Do not sell a package. Guide the customer to search Tetamo at ${TETAMO_LINKS.website}.`;
+  }
 
   if (primaryPlaybookEntry?.category === "closing") {
-    nextAction =
-      `Use the approved closing handling for “${primaryPlaybookEntry.topic}”. Stop unnecessary qualification, give the correct next action, and continue with at most one essential question only when information is still required.`;
+    nextAction = `Use the approved closing handling for “${primaryPlaybookEntry.topic}”. Stop discovery, give the correct action, and ask only an essential missing question when the approved guidance explicitly requires it.`;
   } else if (primaryPlaybookEntry?.category === "comparison") {
-    nextAction =
-      `Answer the approved factual comparison for “${primaryPlaybookEntry.topic}” first. Then recommend the fitting option when the known customer information is sufficient, or ask only the one missing decision question.`;
+    nextAction = `Answer the approved factual comparison for “${primaryPlaybookEntry.topic}” first. Recommend the fitting option when enough information is known. Do not add an unrelated discovery question.`;
   } else if (
     primaryPlaybookEntry &&
     ["objection", "trust", "policy", "value"].includes(
       primaryPlaybookEntry.category
     )
   ) {
-    nextAction =
-      `Handle “${primaryPlaybookEntry.topic}” using the approved playbook first. Acknowledge the customer naturally, answer the concern, connect the answer to their need, and ask at most one helpful question only when needed.`;
+    nextAction = `Handle “${primaryPlaybookEntry.topic}” using the approved playbook first. Acknowledge naturally, answer factually, connect the answer to the customer's need, and do not add an unrelated discovery question.`;
   }
 
   return {
@@ -2759,6 +3672,13 @@ function buildSalesContext(params: {
     agentExperience,
     closingSignal,
     recommendedProduct,
+    discoveryStage: discovery.stage,
+    discoveryProfile,
+    nextQuestionField: discovery.field,
+    nextQuestion:
+      primaryPlaybookEntry && primaryPlaybookEntry.category !== "qualification"
+        ? null
+        : nextQuestion,
     nextAction,
     matchedPlaybookIds: matchedEntries.map((entry) => entry.id),
   };
@@ -2775,6 +3695,23 @@ function formatSalesContext(context: SalesContext) {
     `Hardcoded recommended product: ${
       context.recommendedProduct || "not determined yet"
     }`,
+    `Discovery stage: ${context.discoveryStage}`,
+    `Known discovery fields: ${
+      context.discoveryProfile.answeredFields.join(", ") || "none"
+    }`,
+    `Detected main priority: ${
+      context.discoveryProfile.mainPriority || "unknown"
+    }`,
+    `Detected start timing: ${
+      context.discoveryProfile.startTiming || "unknown"
+    }`,
+    `Detected decision role: ${
+      context.discoveryProfile.decisionRole || "unknown"
+    }`,
+    `Approved next discovery field: ${
+      context.nextQuestionField || "none"
+    }`,
+    `Approved next discovery question: ${context.nextQuestion || "none"}`,
     `Required next sales action: ${context.nextAction}`,
   ].join("\n");
 }
@@ -3064,6 +4001,8 @@ ${SALES_CORE_RULES}
 DETECTED SALES CONTEXT FOR THIS CONVERSATION:
 ${formatSalesContext(params.salesContext)}
 - Follow the required next sales action unless the customer's immediate question requires a direct factual answer first.
+- When an approved next discovery question is provided, finish with that exact question and do not substitute another question.
+- Do not ask any discovery question when the approved next discovery question is “none”.
 - Never contradict the hardcoded package recommendation.
 
 RELEVANT HARDCODED OBJECTION, COMPARISON, POLICY, VALUE, OR CLOSING ANSWERS:
@@ -3590,9 +4529,19 @@ async function generateMonaReply(params: {
   );
 
   if (!process.env.OPENAI_API_KEY) {
+    const cleanedFallback = cleanFinalReply(
+      fallbackReply,
+      params.customerMessage
+    );
+
     return {
       action: "reply",
-      replies: [cleanFinalReply(fallbackReply, params.customerMessage)],
+      replies: [
+        enforceRequiredDiscoveryQuestion(
+          cleanedFallback,
+          salesContext.nextQuestion
+        ),
+      ].filter(Boolean),
       source: "fallback",
     };
   }
@@ -3630,21 +4579,36 @@ async function generateMonaReply(params: {
       };
     }
 
+    const cleanedReply = cleanFinalReply(
+      rawReply || fallbackReply,
+      params.customerMessage
+    );
+
     return {
       action: "reply",
       replies: [
-        cleanFinalReply(
-          rawReply || fallbackReply,
-          params.customerMessage
+        enforceRequiredDiscoveryQuestion(
+          cleanedReply,
+          salesContext.nextQuestion
         ),
       ].filter(Boolean),
       source: rawReply ? "openai" : "fallback",
     };
   } catch (error) {
     console.error("Meta WhatsApp OpenAI generation failed:", error);
+    const cleanedFallback = cleanFinalReply(
+      fallbackReply,
+      params.customerMessage
+    );
+
     return {
       action: "reply",
-      replies: [cleanFinalReply(fallbackReply, params.customerMessage)],
+      replies: [
+        enforceRequiredDiscoveryQuestion(
+          cleanedFallback,
+          salesContext.nextQuestion
+        ),
+      ].filter(Boolean),
       source: "fallback",
     };
   }
