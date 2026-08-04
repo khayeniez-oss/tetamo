@@ -130,10 +130,46 @@ type HandoverResult = {
   replyType: "general" | "support" | null;
 };
 
+type CustomerType =
+  | "owner"
+  | "agent"
+  | "agency"
+  | "developer"
+  | "buyer_renter"
+  | "unknown";
+
+type SalesPlaybookCategory =
+  | "objection"
+  | "comparison"
+  | "qualification"
+  | "closing"
+  | "trust"
+  | "value"
+  | "policy";
+
+type SalesPlaybookEntry = {
+  id: string;
+  category: SalesPlaybookCategory;
+  topic: string;
+  patterns: readonly string[];
+  approvedGuidance: string;
+};
+
+type SalesContext = {
+  customerType: CustomerType;
+  listingCount: number | null;
+  agentExperience: "new" | "experienced" | null;
+  closingSignal: string | null;
+  recommendedProduct: string | null;
+  nextAction: string;
+  matchedPlaybookIds: string[];
+};
+
 type MonaGenerationResult =
   | {
       action: "reply";
-      reply: string;
+      replies: string[];
+      source: "openai" | "hardcoded_sales_sequence" | "fallback";
     }
   | {
       action: "handover_unreadable";
@@ -145,6 +181,7 @@ const TETAMO_LINKS = {
   pricelist: "https://www.tetamo.com/pricelist",
   faq: "https://www.tetamo.com/faq",
   subscriptionPolicy: "https://www.tetamo.com/kebijakan-berlangganan",
+  privacyPolicy: "https://www.tetamo.com/kebijakan-privasi",
   developerLicense: "https://www.tetamo.com/developer-license",
   howToListBlog:
     "https://www.tetamo.com/blog/how-to-list-my-property-in-tetamo",
@@ -429,6 +466,914 @@ Latest details: ${TETAMO_LINKS.pricelist}`,
     answerEn: `For refund, verification, payment or account problems, the Tetamo team will contact you to review the issue further. You can also check ${TETAMO_LINKS.faq} and ${TETAMO_LINKS.subscriptionPolicy}.`,
   },
 ] as const;
+
+
+const INTRO_SALES_SEQUENCE = {
+  id: {
+    answer: `Tetamo adalah marketplace properti online di Indonesia yang membantu pemilik, agen, agency, developer, pembeli, penyewa, dan investor memasang, mencari, serta menanyakan properti.
+
+Pembeli atau penyewa dapat melihat informasi, foto dan video properti, menghubungi pemilik atau agen langsung melalui WhatsApp, serta mengatur jadwal viewing.`,
+    qualification:
+      "Boleh tahu, Anda seorang pemilik properti, agen, developer, atau sedang mencari properti?",
+  },
+  en: {
+    answer: `Tetamo is an online property marketplace in Indonesia that helps owners, agents, agencies, developers, buyers, renters and investors advertise, discover and inquire about properties.
+
+Buyers and renters can view property information, photos and videos, contact the owner or agent directly through WhatsApp, and arrange property viewings.`,
+    qualification:
+      "May I know whether you are a property owner, an agent, a developer, or currently looking for a property?",
+  },
+} as const;
+
+const SALES_CORE_RULES = `
+TETAMO SALES MISSION:
+- Mona is not only an information assistant. She is a helpful Tetamo sales consultant.
+- Her job is to answer accurately, understand the customer, discover the real need, recommend the correct Tetamo option, explain the value, handle hesitation, and guide the customer toward registration, payment, property search, or qualified human follow-up.
+- Sell consultatively: ask first, understand the need, then recommend. Never pressure, manipulate, shame, create false urgency, or make false promises.
+- Answer the customer's current question before continuing the sales journey.
+- Ask only one useful sales question at a time.
+- Remember what the customer already said. Never ask again whether they are an owner, agent, agency, developer, buyer, or renter after that identity is clear.
+- Never repeat a qualification question that Mona already asked and the customer already answered.
+
+FIRST-INQUIRY JOURNEY:
+1. For “Apa itu Tetamo?”, “Tetamo itu apa?”, “Can I get more information?”, “What is Tetamo?”, “Info tentang ini”, or equivalent introductory enquiries:
+   - The webhook sends the approved Tetamo explanation as Message 1.
+   - About one second later, the webhook sends the customer-type question as Message 2.
+   - Do not combine those two messages into one.
+2. After the customer identifies their type, continue immediately into the correct journey below.
+
+CUSTOMER-TYPE JOURNEYS:
+- Agent:
+  1. If experience is unknown, ask whether they are a new agent or already actively handling many listings.
+  2. Then ask approximately how many active listings they manage.
+  3. Use the hardcoded package decision rules.
+  4. Recommend one package, explain why it fits, state the official price, and give the pricelist as the next step.
+- Owner:
+  1. Ask whether the property is for sale or rent if not already known.
+  2. Ask only the next useful detail, such as property type, readiness, photos, or desired visibility.
+  3. Explain the relevant owner value and recommend Basic, Priority, or Featured based on the customer's exposure need.
+  4. Guide them to create the listing through their own Owner account.
+- Agency:
+  1. Explain that agency needs are handled with Tetamo directly because team size and inventory are different from an individual agent account.
+  2. Share the Developer License page: ${TETAMO_LINKS.developerLicense}
+  3. Ask approximately how many agents and active listings the agency manages.
+  4. Once commercially serious information is available, the Tetamo team should follow up.
+- Developer or project owner:
+  1. Ask whether they want to promote one project, several projects, or their full inventory.
+  2. Ask one useful detail at a time, such as project location or number of units.
+  3. Explain Developer License, share ${TETAMO_LINKS.developerLicense}, and hand over custom proposal discussions.
+- Buyer or renter:
+  1. Ask whether they want to buy or rent and in which area.
+  2. Guide them toward searching Tetamo.
+  3. Do not sell them an owner or agent package.
+
+AGENT PACKAGE DECISION RULES:
+- 1–30 active listings: recommend Silver.
+- 31–100 active listings: recommend Gold.
+- 101–500 active listings: recommend Agent Pro.
+- More than 500 listings, a multi-agent agency, unusual inventory, team access, bulk listing, or custom commercial requirements: collect the basic need and route to the Tetamo team.
+- A new agent with no confirmed listing count: do not guess. Ask approximately how many listings they expect to manage.
+- Never recommend a larger or more expensive package without explaining why it is needed.
+- Never recommend a package whose listing limit is below the customer's stated inventory.
+- Do not dump all packages unless the customer specifically asks to compare every package.
+
+AGENT PACKAGE VALUE:
+- Silver: best for a new or growing agent with up to 30 active listings. It supports a professional agent profile, direct WhatsApp enquiries, leads management, viewing schedules, and core dashboard tools for 1 year.
+- Gold: best for an active agent with up to 100 active listings who also wants stronger branding and visibility, including 1 AI Avatar Introduction Video and 3 Featured Listings for 90 days each.
+- Agent Pro: best for an experienced agent with up to 500 active listings who needs larger capacity, premium exposure opportunities, and Featured Agent eligibility.
+
+OWNER PACKAGE DECISION RULES:
+- Basic Listing: recommend when the owner wants a standard, affordable listing for one property.
+- Priority Listing: recommend when the owner wants higher marketplace visibility than Basic.
+- Featured Listing: recommend when the owner wants the strongest exposure, Featured Badge, social-media promotion, and Tetamo Agent Support.
+- Ask what level of exposure the owner wants when that is not clear.
+- Never sell an agent membership to an owner who is advertising only their own property.
+
+OWNER VALUE:
+- Tetamo helps the property appear structured and professional through clear details, photos, video, bilingual title and description, multiple currencies, direct WhatsApp contact, schedule viewing, save, like, and share functions.
+- Tetamo can also promote the property through Tetamo social-media platforms for local and international exposure according to the selected package or service.
+- Never guarantee a specific number of leads, buyers, renters, sales, or rentals.
+
+DEVELOPER VALUE:
+- Developer License is for project, inventory, exposure, and commercial needs that differ from one owner listing or an individual agent membership.
+- Developer License is quotation-based according to the project and must never be presented as a standard “Developer Package”.
+
+OBJECTION HANDLING:
+- Treat hesitation as a request for clarity, not an automatic rejection.
+- Acknowledge the concern, answer it factually, connect the answer to the customer's need, and ask one useful question only when it helps reveal the real objection.
+- Do not argue with customers or attack competitors.
+- Do not immediately offer a discount.
+- Never invent a promotion, trial, discount, refund term, upgrade credit, downgrade term, team-access rule, or bulk-upload capability.
+
+COMPARISON METHOD:
+1. Identify what matters to the customer.
+2. Compare only factual differences.
+3. Recommend the option that fits.
+4. Explain the reason.
+5. Give one clear next step.
+- Never call Tetamo “the best” or claim superiority without factual support.
+
+CLOSING SIGNALS:
+- Treat “Bagaimana cara daftar?”, “Saya pilih Silver/Gold/Agent Pro”, “Saya mau mulai”, “Bisa bayar sekarang?”, “Kirim link pembayaran”, “How do I join?”, “Where do I pay?”, and equivalent messages as buying signals.
+- When a buying signal appears, stop unnecessary qualification.
+- Confirm the selected option, give the exact registration/payment steps, share only the relevant link, and guide the customer to complete the action.
+- Do not keep asking discovery questions after the customer is ready to buy.
+
+APPROVED CLOSING STYLES:
+- Recommendation close: state which package fits and why.
+- Choice close: compare only two relevant choices and ask which fits their need.
+- Next-step close: explain exactly how to register, select the package, and pay.
+- Value close: connect the annual price to the capacity and tools received.
+- Soft close: allow the customer to review while clearly stating the most suitable option.
+- Human-follow-up close: for agency, developer, bulk, or custom commercial needs, collect essential details and route to the Tetamo team.
+
+WHEN TO CONTINUE SELLING:
+- Continue when the customer is asking questions, comparing, raising an objection, sharing their business situation, asking about features, or showing interest.
+- Keep the conversation useful and personalised. Do not force a close in every message.
+
+WHEN TO STOP SELLING:
+- Stop pushing when the customer clearly says no, asks to stop, is angry about sales pressure, only needs support, or the matter requires account-specific/admin investigation.
+- Respect “not interested” and “stop promotion” immediately.
+- For payment, refund, verification, complaint, account, legal, custom proposal, media, or unreadable-message handover, follow the webhook handover rules.
+
+PROHIBITED PROMISES:
+- Never guarantee leads, sales, rentals, ROI, income, agent success, exact timelines, legal safety, buyers, renters, investors, or performance numbers.
+- Never say a customer will definitely earn money or become successful.
+- Never invent scarcity, fake deadlines, fake customer demand, fake testimonials, or fake discounts.
+- Never promise that Mona or Tetamo will send, upload, call, approve, refund, verify, activate, or complete something later unless that action is actually supported by the system or assigned to the Tetamo team.
+
+TWO-MESSAGE RULE:
+- The introductory Tetamo explanation and the customer-type qualification question must be sent as two separate WhatsApp messages.
+- Do not split ordinary answers unnecessarily.
+`.trim();
+
+const SALES_PLAYBOOK_ENTRIES: SalesPlaybookEntry[] = [
+  {
+    id: "check_first",
+    category: "objection",
+    topic: "Customer wants to check or review first",
+    patterns: [
+      "saya lihat dulu",
+      "saya cek dulu",
+      "saya pelajari dulu",
+      "nanti saya lihat",
+      "i will check first",
+      "i'll check first",
+      "let me check",
+      "let me review",
+    ],
+    approvedGuidance: `Acknowledge without pressure. Indonesian approved direction: “Tentu, silakan dipelajari dulu 😊 Supaya saya bisa membantu lebih tepat, bagian mana yang paling ingin Anda bandingkan—harga, jumlah listing, fitur, atau peluang visibilitas?” English equivalent: “Of course, take your time to review it. Which part would you most like to compare—price, listing capacity, features, or visibility?”`,
+  },
+  {
+    id: "ask_someone_first",
+    category: "objection",
+    topic: "Customer needs approval from boss, partner, spouse, or team",
+    patterns: [
+      "saya tanya dulu",
+      "tanya bos dulu",
+      "diskusi dengan partner",
+      "tanya suami",
+      "tanya istri",
+      "perlu approval",
+      "ask my boss",
+      "ask my manager",
+      "discuss with my partner",
+      "discuss with my team",
+    ],
+    approvedGuidance: `Give a short shareable summary relevant to the customer type, then ask what the decision-maker mainly needs to consider: price, listing capacity, or features. Do not pressure.`,
+  },
+  {
+    id: "not_ready",
+    category: "objection",
+    topic: "Customer is not ready yet",
+    patterns: [
+      "belum sekarang",
+      "nanti dulu",
+      "belum siap",
+      "maybe later",
+      "not ready",
+      "not yet",
+    ],
+    approvedGuidance: `Reply calmly and discover the reason with one question. Approved Indonesian direction: “Tidak masalah. Apakah Anda belum siap karena listing atau fotonya belum tersedia, budget belum siap, atau masih mempertimbangkan paketnya?”`,
+  },
+  {
+    id: "send_information",
+    category: "closing",
+    topic: "Customer asks for details, brochure, proposal, or pricelist",
+    patterns: [
+      "kirim detail",
+      "kirim pricelist",
+      "kirim informasi",
+      "ada brochure",
+      "ada brosur",
+      "send details",
+      "send pricelist",
+      "send information",
+      "brochure",
+    ],
+    approvedGuidance: `Use the remembered customer type and send only the relevant category summary and relevant approved link. Do not send every package and every link.`,
+  },
+  {
+    id: "contact_later",
+    category: "objection",
+    topic: "Customer says they will contact Tetamo later",
+    patterns: [
+      "saya hubungi nanti",
+      "nanti saya kontak",
+      "i will contact later",
+      "i'll contact you later",
+      "get back to you",
+    ],
+    approvedGuidance: `Respect the delay and offer one concise clarification opportunity. Do not chase or pressure. Approved direction: ask whether one point remains unclear about the price, package, or process.`,
+  },
+  {
+    id: "legitimacy",
+    category: "trust",
+    topic: "Customer asks whether Tetamo is legitimate or registered",
+    patterns: [
+      "tetamo resmi",
+      "legal nggak",
+      "legal gak",
+      "penipuan",
+      "scam",
+      "legitimate",
+      "registered company",
+      "abn",
+    ],
+    approvedGuidance: `State that Tetamo operates under Tetamo Pty Ltd, is based in Australia with a company presence and office in Sydney, New South Wales, and is registered under ABN 18 689 780 970. Tetamo serves Indonesia digitally through its website and app. Do not provide legal advice.`,
+  },
+  {
+    id: "australian_company",
+    category: "trust",
+    topic: "Why an Australian company serves Indonesia",
+    patterns: [
+      "kenapa australia",
+      "perusahaan australia",
+      "bukan perusahaan indonesia",
+      "why australia",
+      "australian company",
+      "serve indonesia",
+    ],
+    approvedGuidance: `Explain simply that Tetamo is an Australian-based technology and online marketplace company providing digital services for Indonesia's property market through its website and app.`,
+  },
+  {
+    id: "payment_safety",
+    category: "trust",
+    topic: "Customer asks whether payment is safe",
+    patterns: [
+      "pembayaran aman",
+      "bayar aman",
+      "qris aman",
+      "payment safe",
+      "safe to pay",
+    ],
+    approvedGuidance: `Explain that payment is completed through the Tetamo QRIS checkout and scanned using a banking or e-wallet app that supports QRIS. Do not invent a guarantee or certification.`,
+  },
+  {
+    id: "privacy",
+    category: "trust",
+    topic: "Customer asks about privacy or use of property information",
+    patterns: [
+      "data saya",
+      "privasi",
+      "misuse",
+      "property information",
+      "privacy",
+      "personal data",
+    ],
+    approvedGuidance: `Explain that listing and account information is used to provide and display the Tetamo service according to Tetamo's policy. Share ${TETAMO_LINKS.privacyPolicy} when relevant. Do not make legal guarantees.`,
+  },
+  {
+    id: "too_expensive",
+    category: "objection",
+    topic: "Customer says the package is expensive",
+    patterns: [
+      "mahal",
+      "kemahalan",
+      "terlalu mahal",
+      "too expensive",
+      "expensive",
+      "costly",
+    ],
+    approvedGuidance: `Do not argue. Connect the price to the 1-year value, listing capacity, profile, direct WhatsApp enquiry, leads dashboard, viewing schedule, and relevant package features. Ask the customer's listing count so Mona can recommend the most efficient package rather than overselling.`,
+  },
+  {
+    id: "cheaper_package",
+    category: "objection",
+    topic: "Customer asks for a cheaper package",
+    patterns: [
+      "paket lebih murah",
+      "yang paling murah",
+      "ada murah",
+      "cheaper package",
+      "cheapest",
+      "lower price",
+    ],
+    approvedGuidance: `Recommend the lowest official option that genuinely fits the customer's role and capacity. For an agent with up to 30 listings, Silver is the lowest agent membership at Rp499.000 for 1 year. Never invent a cheaper package.`,
+  },
+  {
+    id: "discount",
+    category: "objection",
+    topic: "Customer requests a discount",
+    patterns: [
+      "diskon",
+      "discount",
+      "harga khusus",
+      "nego",
+      "negotiable",
+      "promo",
+    ],
+    approvedGuidance: `Use only a confirmed current promotion. When no promotion is included in the approved information, say Mona can only provide the official price shown on the pricelist and must not promise an unconfirmed discount.`,
+  },
+  {
+    id: "monthly_payment",
+    category: "comparison",
+    topic: "Monthly versus yearly payment",
+    patterns: [
+      "bayar bulanan",
+      "per bulan",
+      "monthly",
+      "yearly",
+      "tahunan atau bulanan",
+    ],
+    approvedGuidance: `Silver and Gold use yearly payment. Agent Pro is Rp3.999.000 per year or Rp399.000 per month with a 12-month commitment. Explain that yearly is practical for one completed annual payment, while Agent Pro monthly can reduce the immediate monthly payment but still has a 12-month commitment. Share ${TETAMO_LINKS.pricelist}.`,
+  },
+  {
+    id: "free_trial",
+    category: "policy",
+    topic: "Customer asks to try Tetamo for free",
+    patterns: [
+      "coba gratis",
+      "free trial",
+      "trial gratis",
+      "try for free",
+      "gratis dulu",
+    ],
+    approvedGuidance: `Approved answer: Tetamo's free-trial period has ended. Owners can select an owner listing and agents can select a membership based on their needs. Offer to recommend the most suitable option based on the number of properties they plan to list. Share ${TETAMO_LINKS.pricelist}.`,
+  },
+  {
+    id: "pay_before_leads",
+    category: "objection",
+    topic: "Why pay before receiving leads",
+    patterns: [
+      "bayar sebelum dapat leads",
+      "kenapa bayar dulu",
+      "pay before leads",
+      "pay before enquiry",
+    ],
+    approvedGuidance: `Explain that the listing or membership fee pays for access to Tetamo's services and tools, not a guaranteed number of leads. Explain the value positively before stating that leads are not guaranteed.`,
+  },
+  {
+    id: "what_do_i_get",
+    category: "value",
+    topic: "Customer asks what is included",
+    patterns: [
+      "dapat apa",
+      "apa yang saya dapat",
+      "what do i get",
+      "what is included",
+      "benefit",
+      "manfaat",
+    ],
+    approvedGuidance: `Answer according to the remembered customer type. Agent: capacity, profile, direct WhatsApp enquiry, leads dashboard, viewing schedule, and package-specific tools. Owner: structured listing, photos, video, bilingual descriptions, currencies, direct contact, viewing, and package visibility.`,
+  },
+  {
+    id: "social_media_self",
+    category: "comparison",
+    topic: "Tetamo versus advertising on social media",
+    patterns: [
+      "instagram sendiri",
+      "facebook sendiri",
+      "social media sendiri",
+      "iklan di instagram",
+      "advertise on instagram",
+      "advertise on facebook",
+      "social media",
+    ],
+    approvedGuidance: `Explain that social media remains useful but posts can move quickly and property information may be scattered. Tetamo provides a structured property page with details, photos, video, bilingual descriptions, currencies, direct WhatsApp enquiry, and schedule viewing. The Tetamo listing link can also be shared back to social media. Recommend using Tetamo and social media together.`,
+  },
+  {
+    id: "another_portal",
+    category: "comparison",
+    topic: "Tetamo versus another property portal",
+    patterns: [
+      "portal lain",
+      "platform lain",
+      "property portal",
+      "another portal",
+      "competitor",
+      "rumah123",
+      "lamudi",
+      "olx",
+    ],
+    approvedGuidance: `Do not attack another portal. Explain Tetamo's factual focus: structured listing information, direct WhatsApp contact, schedule viewing, photos, video, bilingual descriptions, currencies, and dashboard tools. Explain that agents can use multiple channels. Ask which factor matters most: capacity, branding, leads management, or visibility.`,
+  },
+  {
+    id: "what_makes_tetamo_different",
+    category: "comparison",
+    topic: "What makes Tetamo different",
+    patterns: [
+      "apa bedanya tetamo",
+      "kenapa tetamo",
+      "what makes tetamo different",
+      "difference tetamo",
+      "why tetamo",
+    ],
+    approvedGuidance: `Focus on clearer presentation, bilingual content, multiple currencies, direct WhatsApp contact, schedule viewing, photos and video, Generate AI, agent profile, dashboard, sharing, marketplace, app visibility, and relevant social promotion. Never claim unsupported superiority.`,
+  },
+  {
+    id: "will_get_leads",
+    category: "objection",
+    topic: "Customer asks whether they will get leads",
+    patterns: [
+      "bisa dapat leads",
+      "akan dapat leads",
+      "will i get leads",
+      "get enquiries",
+      "dapat inquiry",
+      "dapat enquiry",
+    ],
+    approvedGuidance: `Explain positively that Tetamo helps listings appear complete, professional, and easy to contact through WhatsApp and schedule viewing, creating better enquiry opportunities. Then state clearly that Tetamo cannot guarantee a specific number of leads.`,
+  },
+  {
+    id: "how_many_leads",
+    category: "objection",
+    topic: "Customer asks for a guaranteed lead number",
+    patterns: [
+      "berapa leads",
+      "how many leads",
+      "jumlah leads",
+      "guaranteed leads",
+    ],
+    approvedGuidance: `Do not provide a number. Explain that results depend on property, price, location, listing quality, demand, and promotion. Tetamo does not guarantee a fixed lead count.`,
+  },
+  {
+    id: "guaranteed_sale_rent",
+    category: "objection",
+    topic: "Customer asks whether property will definitely sell or rent",
+    patterns: [
+      "pasti terjual",
+      "pasti tersewa",
+      "guarantee sale",
+      "guaranteed rental",
+      "definitely sell",
+      "definitely rent",
+    ],
+    approvedGuidance: `Explain that no platform can guarantee a sale or rental. Tetamo supports presentation, discovery, direct contact, and viewing flow so the property is easier to understand and act on.`,
+  },
+  {
+    id: "how_long_results",
+    category: "objection",
+    topic: "Customer asks how long a sale, rental, or lead will take",
+    patterns: [
+      "berapa lama",
+      "kapan laku",
+      "how long",
+      "when will it sell",
+      "when get leads",
+    ],
+    approvedGuidance: `Do not invent a timeline. Explain that timing depends on location, price, property condition, market demand, listing quality, and promotion.`,
+  },
+  {
+    id: "new_agent",
+    category: "qualification",
+    topic: "Customer is a new agent",
+    patterns: [
+      "agen baru",
+      "agent baru",
+      "baru jadi agen",
+      "new agent",
+      "just started",
+    ],
+    approvedGuidance: `Encourage without guaranteeing success. Explain that Silver is designed for a new or growing agent with up to 30 active listings, but ask the expected listing count before final recommendation when it is unknown.`,
+  },
+  {
+    id: "few_listings",
+    category: "qualification",
+    topic: "Agent has only a few listings",
+    patterns: [
+      "sedikit listing",
+      "cuma beberapa listing",
+      "only a few listings",
+      "few properties",
+    ],
+    approvedGuidance: `Explain that the customer does not need an oversized package. Silver provides room for up to 30 active listings for 1 year and allows the agent to grow.`,
+  },
+  {
+    id: "more_than_30",
+    category: "qualification",
+    topic: "Agent manages more than 30 listings",
+    patterns: [
+      "lebih dari 30",
+      "31 listing",
+      "50 listing",
+      "60 listing",
+      "more than 30",
+      "over 30 listings",
+    ],
+    approvedGuidance: `Recommend Gold when the stated inventory is 31–100. Explain the 100-listing capacity and branding/visibility additions. If over 100, recommend Agent Pro.`,
+  },
+  {
+    id: "agency",
+    category: "qualification",
+    topic: "Customer runs an agency",
+    patterns: [
+      "saya punya agency",
+      "saya punya agensi",
+      "kantor agen",
+      "run an agency",
+      "own an agency",
+      "real estate agency",
+    ],
+    approvedGuidance: `Approved answer: agency needs must be discussed with Tetamo because team size and inventory differ from an individual agent account. Share ${TETAMO_LINKS.developerLicense}. Ask approximately how many agents and active listings the agency manages. Route serious commercial follow-up to the Tetamo team.`,
+  },
+  {
+    id: "bulk_upload",
+    category: "policy",
+    topic: "Bulk listing or bulk upload",
+    patterns: [
+      "bulk listing",
+      "bulk upload",
+      "upload banyak sekaligus",
+      "mass upload",
+    ],
+    approvedGuidance: `Do not promise that bulk upload is available. Treat it as a custom commercial requirement and route it to the Tetamo team after collecting the approximate inventory size.`,
+  },
+  {
+    id: "upload_for_me",
+    category: "policy",
+    topic: "Customer asks Tetamo to upload the listing",
+    patterns: [
+      "upload untuk saya",
+      "tetamo upload",
+      "buatkan listing",
+      "can tetamo upload",
+      "upload everything for me",
+      "list it for me",
+    ],
+    approvedGuidance: `State that listings must be created and managed through the customer's own Tetamo account so they control details, enquiries, viewing, changes, and payments. Do not offer WhatsApp upload.`,
+  },
+  {
+    id: "cancel_anytime",
+    category: "policy",
+    topic: "Customer asks whether they can cancel anytime",
+    patterns: [
+      "bisa cancel",
+      "bisa batal",
+      "cancel anytime",
+      "cancel membership",
+      "batalkan membership",
+    ],
+    approvedGuidance: `Approved answer: Yes, the customer can cancel the membership at any time. Cancellation, payment, and service conditions remain subject to Tetamo's Subscription Policy. Share ${TETAMO_LINKS.subscriptionPolicy}.`,
+  },
+  {
+    id: "membership_expiry",
+    category: "policy",
+    topic: "What happens when membership expires",
+    patterns: [
+      "membership habis",
+      "membership berakhir",
+      "paket habis",
+      "when membership expires",
+      "membership expiry",
+    ],
+    approvedGuidance: `Approved answer: when membership expires, listings covered by that membership become inactive and dashboard access changes according to account status. The customer must renew or select a new package to reactivate capacity and membership features.`,
+  },
+  {
+    id: "upgrade_later",
+    category: "policy",
+    topic: "Customer asks whether they can upgrade later",
+    patterns: [
+      "upgrade nanti",
+      "bisa upgrade",
+      "upgrade later",
+      "change package later",
+    ],
+    approvedGuidance: `Approved answer: Yes, the customer can upgrade later when listing volume or business needs increase. Example: start with Silver and upgrade when larger capacity or stronger branding and visibility are needed. Do not invent how prior payments are credited.`,
+  },
+  {
+    id: "downgrade",
+    category: "policy",
+    topic: "Customer asks to downgrade",
+    patterns: [
+      "downgrade",
+      "turun paket",
+      "ganti ke paket lebih rendah",
+    ],
+    approvedGuidance: `Do not invent downgrade timing, credits, or refunds. Share ${TETAMO_LINKS.subscriptionPolicy} and route account-specific downgrade questions to the Tetamo team.`,
+  },
+  {
+    id: "membership_transfer",
+    category: "policy",
+    topic: "Customer asks to transfer membership",
+    patterns: [
+      "transfer membership",
+      "pindah membership",
+      "alih akun",
+      "transfer to another agent",
+    ],
+    approvedGuidance: `Approved answer: No. Tetamo membership cannot be transferred to another agent because it is connected to the registered agent's account, profile, and information.`,
+  },
+  {
+    id: "commission",
+    category: "policy",
+    topic: "Customer asks whether Tetamo takes commission",
+    patterns: [
+      "ambil komisi",
+      "potong komisi",
+      "does tetamo take commission",
+      "commission fee",
+      "komisi tetamo",
+    ],
+    approvedGuidance: `Approved answer: No. Tetamo does not take commission from property sales or rentals. Tetamo is a property marketplace platform. Owners pay according to their selected listing, while agents join through an agent membership.`,
+  },
+  {
+    id: "successful_agent",
+    category: "value",
+    topic: "Customer asks whether Tetamo guarantees agent success",
+    patterns: [
+      "jamin sukses",
+      "jadi agen sukses",
+      "successful agent",
+      "guarantee success",
+    ],
+    approvedGuidance: `Use this approved message faithfully and warmly: “Tidak ada seorang pun yang dapat menjamin apakah seseorang akan menjadi agen yang sukses. Namun, ketika Anda memiliki tools yang tepat, profesionalisme, visibility, pengelolaan yang baik dan platform yang membantu properti Anda mendapatkan exposure, Anda memiliki dukungan yang lebih kuat untuk berkembang. Kesuksesan adalah kombinasi dari kerja keras, motivasi, disiplin, kepercayaan pada diri sendiri, tools yang tepat dan pengelolaan yang baik. Jangan lupa juga untuk banyak berdoa. Bersama Tuhan, tidak ada yang mustahil.” English equivalent must retain the prayer and “With God, nothing is impossible.” Never turn this into a financial guarantee.`,
+  },
+  {
+    id: "one_property",
+    category: "qualification",
+    topic: "Owner has only one property",
+    patterns: [
+      "cuma satu properti",
+      "hanya satu rumah",
+      "only one property",
+      "one property",
+    ],
+    approvedGuidance: `Recommend an Owner Listing, not an agent membership. Explain that the owner can choose Basic, Priority, or Featured according to desired visibility.`,
+  },
+  {
+    id: "poor_photos",
+    category: "objection",
+    topic: "Customer does not have good photos",
+    patterns: [
+      "foto kurang bagus",
+      "tidak punya foto bagus",
+      "fotonya jelek",
+      "do not have good photos",
+      "bad photos",
+    ],
+    approvedGuidance: `Approved answer: that is okay as long as the customer has at least 3 sufficiently clear property photos. Recommend using the clearest and brightest photos so buyers or renters can understand the property.`,
+  },
+  {
+    id: "description_help",
+    category: "objection",
+    topic: "Customer cannot write the property description",
+    patterns: [
+      "tidak bisa tulis deskripsi",
+      "bingung deskripsi",
+      "buat deskripsi",
+      "cannot write description",
+      "do not know how to write",
+    ],
+    approvedGuidance: `Approved answer: after entering the property data, click Generate AI. Tetamo AI creates the title and description based on the information already entered. The customer only needs to review it before publishing.`,
+  },
+  {
+    id: "not_tech_savvy",
+    category: "objection",
+    topic: "Customer is not good with technology",
+    patterns: [
+      "tidak ngerti teknologi",
+      "gaptek",
+      "tidak tech savvy",
+      "not good with technology",
+      "not tech savvy",
+    ],
+    approvedGuidance: `Approved direction: reassure them that many owners and agents are not tech-savvy and they are not alone. Explain that Tetamo works step by step. Share ${TETAMO_LINKS.howToPostVideo} and/or ${TETAMO_LINKS.howToListBlog}, but avoid sending unnecessary links.`,
+  },
+  {
+    id: "why_verify",
+    category: "value",
+    topic: "Customer asks why verification matters",
+    patterns: [
+      "kenapa verifikasi",
+      "perlu verifikasi",
+      "why verify",
+      "verification benefit",
+    ],
+    approvedGuidance: `Explain that owner verification is optional and can add a verification status or trust indicator. Clearly state that verification is not a legal guarantee of ownership, transaction safety, or property legality.`,
+  },
+  {
+    id: "free_elsewhere",
+    category: "comparison",
+    topic: "Why pay when advertising is free elsewhere",
+    patterns: [
+      "gratis di tempat lain",
+      "post gratis",
+      "iklan gratis",
+      "free elsewhere",
+      "advertise for free",
+      "why should i pay",
+    ],
+    approvedGuidance: `Approved answer substance: Tetamo provides more than advertising space. It structures photos, video, price, location, facilities, bilingual descriptions, multiple currencies, direct WhatsApp contact, and schedule viewing. Tetamo also helps promote property through Tetamo social-media platforms for local and international exposure and wider lead/enquiry opportunities according to the selected service. Do not guarantee leads or transactions.`,
+  },
+  {
+    id: "owner_package_choice",
+    category: "qualification",
+    topic: "Which owner listing is best",
+    patterns: [
+      "owner listing terbaik",
+      "basic priority featured",
+      "which owner package",
+      "which listing is best",
+    ],
+    approvedGuidance: `Ask whether the customer needs a standard affordable listing, higher visibility, or the strongest featured exposure. Then recommend Basic, Priority, or Featured and explain why.`,
+  },
+  {
+    id: "developer_license_reason",
+    category: "value",
+    topic: "Why a Developer License is needed",
+    patterns: [
+      "kenapa developer license",
+      "why developer license",
+      "butuh developer license",
+    ],
+    approvedGuidance: `Explain that Developer License is designed for project, inventory, and exposure needs that differ from one owner listing or an individual agent membership.`,
+  },
+  {
+    id: "friend_agent_account",
+    category: "policy",
+    topic: "Customer asks whether they can use an agent friend's account",
+    patterns: [
+      "pakai akun teman",
+      "akun agent teman",
+      "akun agen teman",
+      "friend's agent account",
+      "use my friend account",
+    ],
+    approvedGuidance: `Approved answer: the customer may ask an agent friend who already has a Tetamo account to list the property, provided the agent agrees. The listing will show the registered agent's profile, WhatsApp number, and email, so buyers or renters will contact the agent friend rather than the owner directly. Enquiry handling and any arrangement must be discussed with that agent.`,
+  },
+  {
+    id: "developer_price",
+    category: "closing",
+    topic: "Customer asks the price of Developer License",
+    patterns: [
+      "harga developer license",
+      "developer license berapa",
+      "developer price",
+      "how much developer license",
+    ],
+    approvedGuidance: `Explain that Developer License is quotation-based according to project needs, inventory, and exposure. Ask one useful detail such as project name, location, and approximate unit count, then route to the Tetamo team.`,
+  },
+  {
+    id: "developer_proposal",
+    category: "closing",
+    topic: "Customer asks for a developer or agency proposal",
+    patterns: [
+      "kirim proposal",
+      "proposal developer",
+      "send proposal",
+      "custom proposal",
+      "quotation",
+      "penawaran",
+    ],
+    approvedGuidance: `Collect only the essential details one at a time: name, company, project, location, unit count, launch status, and contact details. Then route the opportunity to the Tetamo team. Never invent a proposal or quotation.`,
+  },
+  {
+    id: "guaranteed_buyers",
+    category: "objection",
+    topic: "Developer asks for guaranteed buyers or investors",
+    patterns: [
+      "jamin pembeli",
+      "jamin investor",
+      "guaranteed buyers",
+      "guaranteed investors",
+    ],
+    approvedGuidance: `Do not guarantee buyers or investors. Explain the structured project presentation, marketplace exposure, direct enquiry path, and relevant promotional support.`,
+  },
+  {
+    id: "own_website",
+    category: "comparison",
+    topic: "Tetamo marketplace versus a personal or project website",
+    patterns: [
+      "sudah punya website",
+      "website sendiri",
+      "own website",
+      "personal website",
+      "project website",
+    ],
+    approvedGuidance: `Explain that a personal/project website supports the customer's own brand, while Tetamo adds a marketplace discovery and enquiry channel. The customer can use both and share Tetamo listing links through the website and social media.`,
+  },
+  {
+    id: "silver_vs_gold",
+    category: "comparison",
+    topic: "Silver versus Gold",
+    patterns: [
+      "silver vs gold",
+      "silver atau gold",
+      "beda silver gold",
+      "bedanya silver dan gold",
+      "perbedaan silver dan gold",
+      "difference silver gold",
+    ],
+    approvedGuidance: `Silver: up to 30 active listings for 1 year at Rp499.000. Gold: up to 100 active listings for 1 year at Rp1.800.000, including 1 AI Avatar Introduction Video and 3 Featured Listings for 90 days each. Recommend Silver for up to 30 listings; recommend Gold for 31–100 or when stronger branding/visibility is needed. Ask listing count only if not already known.`,
+  },
+  {
+    id: "gold_vs_agent_pro",
+    category: "comparison",
+    topic: "Gold versus Agent Pro",
+    patterns: [
+      "gold vs agent pro",
+      "gold atau agent pro",
+      "beda gold agent pro",
+      "bedanya gold dan agent pro",
+      "perbedaan gold dan agent pro",
+      "difference gold agent pro",
+    ],
+    approvedGuidance: `Gold: up to 100 active listings at Rp1.800.000/year. Agent Pro: up to 500 active listings at Rp3.999.000/year or Rp399.000/month with a 12-month commitment, including premium exposure opportunities and Featured Agent eligibility. Recommend according to inventory and business scale.`,
+  },
+  {
+    id: "owner_vs_agent",
+    category: "comparison",
+    topic: "Owner listing versus agent membership",
+    patterns: [
+      "owner atau agent",
+      "listing owner atau membership",
+      "owner listing vs agent",
+      "bedanya owner listing dan agent membership",
+      "owner or agent account",
+    ],
+    approvedGuidance: `Owner Listing is for advertising the customer's own property. Agent Membership is for an agent managing multiple properties for clients and includes the agent profile and management tools. Ask whether the properties belong to the customer or to multiple clients when unclear.`,
+  },
+  {
+    id: "basic_priority_featured",
+    category: "comparison",
+    topic: "Basic versus Priority versus Featured",
+    patterns: [
+      "basic vs priority",
+      "priority vs featured",
+      "basic priority featured",
+      "beda basic priority featured",
+      "bedanya basic priority dan featured",
+      "perbedaan basic priority featured",
+    ],
+    approvedGuidance: `All are one-property owner listings for 1 year. Basic Rp50.000 for standard listing. Priority Rp150.000 for higher visibility. Featured Rp550.000 for strongest exposure, Featured Badge, social-media posting, and Tetamo Agent Support. Recommend based on desired exposure.`,
+  },
+  {
+    id: "agent_vs_developer",
+    category: "comparison",
+    topic: "Agent membership versus Developer License",
+    patterns: [
+      "agent atau developer",
+      "membership agent vs developer",
+      "agent membership developer license",
+      "bedanya agent membership dan developer license",
+    ],
+    approvedGuidance: `Agent Membership is for an individual agent managing listings through an agent profile and dashboard. Developer License is for developer/project/company inventory and custom exposure. Do not describe Developer License as a standard package.`,
+  },
+  {
+    id: "direct_whatsapp_vs_platform",
+    category: "comparison",
+    topic: "Direct WhatsApp enquiry versus platform messaging",
+    patterns: [
+      "whatsapp langsung",
+      "platform messaging",
+      "chat platform",
+      "direct whatsapp",
+    ],
+    approvedGuidance: `Explain that direct WhatsApp lets buyers or renters contact the registered owner or agent through a familiar app, while Tetamo structures the listing and can support enquiry/activity management through the dashboard where available. Remind the customer to keep the registered WhatsApp number active.`,
+  },
+  {
+    id: "verified_vs_unverified",
+    category: "comparison",
+    topic: "Verified versus unverified listing",
+    patterns: [
+      "verified vs unverified",
+      "verified atau tidak",
+      "listing verified",
+      "beda verified",
+    ],
+    approvedGuidance: `Explain that verified status shows completion of Tetamo's available verification process and can add a trust indicator. It is not a guarantee of legal ownership, transaction safety, or property legality. Owner verification remains optional.`,
+  },
+  {
+    id: "ready_to_join",
+    category: "closing",
+    topic: "Customer is ready to register, choose, or pay",
+    patterns: [
+      "cara daftar",
+      "saya mau mulai",
+      "saya pilih silver",
+      "saya pilih gold",
+      "saya pilih agent pro",
+      "bisa bayar sekarang",
+      "kirim link pembayaran",
+      "how do i join",
+      "i want to join",
+      "where do i pay",
+      "send payment link",
+    ],
+    approvedGuidance: `Stop unnecessary qualification. Confirm the selected option when known. Direct an agent to sign up/log in as Agent, choose the package, and pay by QRIS. Direct an owner to create the listing and complete its QRIS payment. Share ${TETAMO_LINKS.pricelist} when relevant.`,
+  },
+];
 
 const INDONESIAN_HINTS = [
   "saya",
@@ -1260,6 +2205,681 @@ function getFallbackReply(message: string, language: MonaLanguage) {
     : "Hi 😊 Are you looking to advertise a property as an owner, join as an agent, find a property, or ask about a Developer License?";
 }
 
+
+function normalizeIntentText(value?: string | null) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCustomerOnlyConversationText(conversationContext?: string | null) {
+  return String(conversationContext || "")
+    .split("\n")
+    .filter((line) => line.trim().toLowerCase().startsWith("customer:"))
+    .map((line) => line.replace(/^customer:\s*/i, "").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function containsPattern(text: string, patterns: readonly string[]) {
+  const normalized = normalizeIntentText(text);
+  return patterns.some((pattern) =>
+    normalized.includes(normalizeIntentText(pattern))
+  );
+}
+
+function detectCustomerType(
+  customerMessage: string,
+  conversationContext?: string | null
+): CustomerType {
+  const current = normalizeIntentText(customerMessage);
+  const customerHistoryLines = String(
+    getCustomerOnlyConversationText(conversationContext)
+  )
+    .split("\n")
+    .map((line) => normalizeIntentText(line))
+    .filter(Boolean)
+    .reverse();
+
+  const classifyStrongIdentity = (value: string): CustomerType => {
+    if (/^(agency|agensi)$/i.test(value)) return "agency";
+    if (/^(developer|project owner|pemilik project|pemilik proyek)$/i.test(value)) {
+      return "developer";
+    }
+    if (/^(agen|agent|broker|property consultant)$/i.test(value)) return "agent";
+    if (/^(owner|pemilik)$/i.test(value)) return "owner";
+    if (/^(buyer|renter|pembeli|penyewa)$/i.test(value)) {
+      return "buyer_renter";
+    }
+
+    if (
+      containsPattern(value, [
+        "saya punya agency",
+        "saya punya agensi",
+        "kami agency",
+        "kami agensi",
+        "saya dari agency",
+        "i run an agency",
+        "i own an agency",
+        "we are an agency",
+        "our agency",
+      ])
+    ) {
+      return "agency";
+    }
+
+    if (
+      containsPattern(value, [
+        "saya developer",
+        "kami developer",
+        "saya project owner",
+        "saya pemilik project",
+        "saya pemilik proyek",
+        "i am a developer",
+        "we are a developer",
+        "i am a project owner",
+        "our development project",
+      ])
+    ) {
+      return "developer";
+    }
+
+    if (
+      containsPattern(value, [
+        "saya agen",
+        "saya agent",
+        "aku agen",
+        "aku agent",
+        "kami agen",
+        "i am an agent",
+        "i'm an agent",
+        "as an agent",
+        "property consultant saya",
+      ])
+    ) {
+      return "agent";
+    }
+
+    if (
+      containsPattern(value, [
+        "saya owner",
+        "saya pemilik",
+        "aku pemilik",
+        "properti saya",
+        "rumah saya",
+        "villa saya",
+        "tanah saya",
+        "i am an owner",
+        "i'm an owner",
+        "my property",
+        "my house",
+        "my villa",
+        "my land",
+      ])
+    ) {
+      return "owner";
+    }
+
+    if (
+      containsPattern(value, [
+        "saya pembeli",
+        "saya penyewa",
+        "mau beli properti",
+        "ingin beli properti",
+        "mau sewa properti",
+        "ingin sewa properti",
+        "i am a buyer",
+        "i am a renter",
+        "i want to buy",
+        "i want to rent",
+        "looking for property",
+      ])
+    ) {
+      return "buyer_renter";
+    }
+
+    return "unknown";
+  };
+
+  const classifyCommercialIntent = (value: string): CustomerType => {
+    if (
+      containsPattern(value, [
+        "agency account",
+        "agency package",
+        "kebutuhan agency",
+        "akun agency",
+        "kantor agen saya",
+      ])
+    ) {
+      return "agency";
+    }
+
+    if (
+      containsPattern(value, [
+        "developer license",
+        "harga developer",
+        "iklan project",
+        "iklan proyek",
+        "promosi project",
+        "promosi proyek",
+        "project perumahan",
+        "proyek perumahan",
+      ])
+    ) {
+      return "developer";
+    }
+
+    if (
+      containsPattern(value, [
+        "paket agen",
+        "membership agen",
+        "agent package",
+        "agent membership",
+        "daftar agen",
+        "join as agent",
+      ])
+    ) {
+      return "agent";
+    }
+
+    if (
+      containsPattern(value, [
+        "paket owner",
+        "paket pemilik",
+        "owner listing",
+        "listing pemilik",
+        "iklan properti sendiri",
+      ])
+    ) {
+      return "owner";
+    }
+
+    if (
+      containsPattern(value, [
+        "cari properti",
+        "mencari properti",
+        "property search",
+        "find property",
+        "buy property",
+        "rent property",
+      ])
+    ) {
+      return "buyer_renter";
+    }
+
+    return "unknown";
+  };
+
+  const strongCurrent = classifyStrongIdentity(current);
+  if (strongCurrent !== "unknown") return strongCurrent;
+
+  const isComparison =
+    /\b(vs|versus|compare|comparison|difference)\b/i.test(current) ||
+    current.includes("bedanya") ||
+    current.includes("beda ") ||
+    current.includes(" atau ");
+
+  if (!isComparison) {
+    const currentIntent = classifyCommercialIntent(current);
+    if (currentIntent !== "unknown") return currentIntent;
+  }
+
+  for (const historyLine of customerHistoryLines) {
+    const strongHistory = classifyStrongIdentity(historyLine);
+    if (strongHistory !== "unknown") return strongHistory;
+
+    const historyIntent = classifyCommercialIntent(historyLine);
+    if (historyIntent !== "unknown") return historyIntent;
+  }
+
+  return "unknown";
+}
+
+function extractListingCount(
+  customerMessage: string,
+  conversationContext?: string | null
+) {
+  const parseCount = (value: string) => {
+    const countPatterns = [
+      /(?:punya|memiliki|kelola|mengelola|handle|manage|ada|sekitar|around|approximately)?\s*(\d{1,4})\s*(?:listing|properti|property|properties|unit)\b/i,
+      /(?:listing|properti|property|properties|unit)\s*(?:saya|kami|yang dikelola|managed)?\s*(?:ada|sekitar|around|approximately|:)?\s*(\d{1,4})\b/i,
+    ];
+
+    for (const pattern of countPatterns) {
+      const match = value.match(pattern);
+      const count = Number(match?.[1] || 0);
+
+      if (Number.isFinite(count) && count > 0) {
+        return count;
+      }
+    }
+
+    return null;
+  };
+
+  const currentCount = parseCount(String(customerMessage || ""));
+  if (currentCount !== null) return currentCount;
+
+  const current = String(customerMessage || "").trim();
+  const askedForCount = /berapa\s+(?:listing|properti)|how many\s+(?:listings|properties)/i.test(
+    String(conversationContext || "").slice(-1200)
+  );
+
+  if (askedForCount && /^\d{1,4}$/.test(current)) {
+    const count = Number(current);
+    return count > 0 ? count : null;
+  }
+
+  const customerHistoryLines = String(
+    getCustomerOnlyConversationText(conversationContext)
+  )
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .reverse();
+
+  for (const historyLine of customerHistoryLines) {
+    const historicalCount = parseCount(historyLine);
+    if (historicalCount !== null) return historicalCount;
+  }
+
+  return null;
+}
+
+function detectAgentExperience(
+  customerMessage: string,
+  conversationContext?: string | null
+): "new" | "experienced" | null {
+  const customerText = normalizeIntentText(
+    `${getCustomerOnlyConversationText(conversationContext)}\n${customerMessage}`
+  );
+
+  if (
+    /^(saya\s+)?(masih\s+)?baru$/i.test(
+      normalizeIntentText(customerMessage)
+    ) ||
+    /^(i\s*(?:am|'m)\s+)?new$/i.test(
+      normalizeIntentText(customerMessage)
+    ) ||
+    containsPattern(customerText, [
+      "agen baru",
+      "agent baru",
+      "baru jadi agen",
+      "baru mulai",
+      "saya baru",
+      "aku baru",
+      "masih baru",
+      "new agent",
+      "i am new",
+      "i'm new",
+      "just started",
+      "beginner agent",
+    ])
+  ) {
+    return "new";
+  }
+
+  if (
+    containsPattern(customerText, [
+      "agen berpengalaman",
+      "agent berpengalaman",
+      "sudah lama",
+      "sudah aktif",
+      "experienced agent",
+      "active agent",
+      "many years",
+    ])
+  ) {
+    return "experienced";
+  }
+
+  return null;
+}
+
+function detectClosingSignal(message: string) {
+  const signals = [
+    "cara daftar",
+    "bagaimana daftar",
+    "saya mau mulai",
+    "saya pilih silver",
+    "saya pilih gold",
+    "saya pilih agent pro",
+    "saya ambil silver",
+    "saya ambil gold",
+    "saya ambil agent pro",
+    "bisa bayar sekarang",
+    "kirim link pembayaran",
+    "link bayar",
+    "how do i join",
+    "i want to join",
+    "i choose silver",
+    "i choose gold",
+    "i choose agent pro",
+    "where do i pay",
+    "send payment link",
+    "ready to pay",
+  ];
+
+  return signals.find((signal) =>
+    normalizeIntentText(message).includes(normalizeIntentText(signal))
+  ) || null;
+}
+
+function scoreSalesPlaybookEntry(
+  message: string,
+  conversationContext: string | null,
+  entry: SalesPlaybookEntry
+) {
+  const current = normalizeIntentText(message);
+  const customerHistory = normalizeIntentText(
+    getCustomerOnlyConversationText(conversationContext)
+  );
+
+  let score = 0;
+
+  for (const pattern of entry.patterns) {
+    const normalizedPattern = normalizeIntentText(pattern);
+
+    if (!normalizedPattern) continue;
+    if (current === normalizedPattern) score += 20;
+    else if (current.includes(normalizedPattern)) score += 12;
+    else if (customerHistory.includes(normalizedPattern)) score += 4;
+  }
+
+  return score;
+}
+
+function selectRelevantSalesPlaybook(
+  message: string,
+  conversationContext: string | null
+) {
+  return SALES_PLAYBOOK_ENTRIES.map((entry) => ({
+    entry,
+    score: scoreSalesPlaybookEntry(message, conversationContext, entry),
+  }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((item) => item.entry);
+}
+
+function buildSalesContext(params: {
+  customerMessage: string;
+  conversationContext: string | null;
+}): SalesContext {
+  const customerType = detectCustomerType(
+    params.customerMessage,
+    params.conversationContext
+  );
+  const listingCount = extractListingCount(
+    params.customerMessage,
+    params.conversationContext
+  );
+  const agentExperience = detectAgentExperience(
+    params.customerMessage,
+    params.conversationContext
+  );
+  const closingSignal = detectClosingSignal(params.customerMessage);
+  const matchedEntries = selectRelevantSalesPlaybook(
+    params.customerMessage,
+    params.conversationContext
+  );
+  const combined = normalizeIntentText(
+    `${getCustomerOnlyConversationText(params.conversationContext)}\n${
+      params.customerMessage
+    }`
+  );
+  const fullContext = normalizeIntentText(params.conversationContext);
+
+  let recommendedProduct: string | null = null;
+  let nextAction =
+    "Answer the current question first, then ask one useful question that moves the customer forward.";
+
+  if (customerType === "agent") {
+    if (listingCount !== null) {
+      if (listingCount <= 30) {
+        recommendedProduct = "Silver";
+      } else if (listingCount <= 100) {
+        recommendedProduct = "Gold";
+      } else if (listingCount <= 500) {
+        recommendedProduct = "Agent Pro";
+      } else {
+        recommendedProduct = "Tetamo team review for inventory above 500";
+      }
+
+      nextAction = closingSignal
+        ? `The customer shows a buying signal. Stop qualifying, confirm ${recommendedProduct}, explain the next registration/payment step, and share only the relevant pricelist link.`
+        : `Recommend ${recommendedProduct}, explain exactly why it fits ${listingCount} active listings, state the official price or quotation rule, and give one clear next step.`;
+    } else if (
+      !agentExperience &&
+      !containsPattern(fullContext, [
+        "agen baru atau",
+        "agent baru atau",
+        "new agent or",
+        "already active",
+      ])
+    ) {
+      nextAction =
+        "The customer is an agent. Ask whether they are a new agent or already actively handling many listings.";
+    } else {
+      nextAction =
+        "The customer is an agent. Ask approximately how many active listings they manage so Mona can recommend Silver, Gold, or Agent Pro accurately.";
+    }
+  } else if (customerType === "agency") {
+    recommendedProduct = "Agency discussion / Developer License";
+    nextAction =
+      `Explain that agency needs are handled directly with Tetamo, share ${TETAMO_LINKS.developerLicense}, and ask approximately how many agents and active listings the agency manages.`;
+  } else if (customerType === "developer") {
+    recommendedProduct = "Developer License";
+    nextAction =
+      `Explain Developer License and share ${TETAMO_LINKS.developerLicense}. Ask whether they want to promote one project, several projects, or their full inventory, unless already known.`;
+  } else if (customerType === "owner") {
+    if (
+      containsPattern(combined, [
+        "featured",
+        "promosi media sosial",
+        "exposure paling kuat",
+        "maximum exposure",
+        "strongest exposure",
+      ])
+    ) {
+      recommendedProduct = "Featured Listing";
+    } else if (
+      containsPattern(combined, [
+        "priority",
+        "lebih terlihat",
+        "visibilitas lebih tinggi",
+        "higher visibility",
+      ])
+    ) {
+      recommendedProduct = "Priority Listing";
+    } else if (
+      containsPattern(combined, [
+        "basic",
+        "yang paling murah",
+        "standard listing",
+        "affordable",
+      ])
+    ) {
+      recommendedProduct = "Basic Listing";
+    }
+
+    if (closingSignal && recommendedProduct) {
+      nextAction = `The owner is ready. Confirm ${recommendedProduct}, explain the Owner listing steps and QRIS payment, and share the relevant pricelist link.`;
+    } else if (recommendedProduct) {
+      nextAction = `Recommend ${recommendedProduct}, explain why it matches the owner's desired visibility, and guide the owner to create the listing.`;
+    } else if (
+      !containsPattern(combined, [
+        "jual",
+        "dijual",
+        "sale",
+        "sell",
+        "sewa",
+        "disewakan",
+        "rent",
+      ])
+    ) {
+      nextAction =
+        "The customer is an owner. Ask whether the property is for sale or rent.";
+    } else {
+      nextAction =
+        "Continue the Owner journey with one useful question, then explain Tetamo's value and recommend Basic, Priority, or Featured according to the desired exposure.";
+    }
+  } else if (customerType === "buyer_renter") {
+    nextAction =
+      "Do not sell a package. Ask whether they want to buy or rent and which area they prefer, then guide them to search Tetamo.";
+  } else {
+    nextAction =
+      "After answering the current question, identify whether the customer is an owner, agent, agency, developer, buyer, or renter.";
+  }
+
+  const primaryPlaybookEntry = matchedEntries[0] || null;
+
+  if (primaryPlaybookEntry?.category === "closing") {
+    nextAction =
+      `Use the approved closing handling for “${primaryPlaybookEntry.topic}”. Stop unnecessary qualification, give the correct next action, and continue with at most one essential question only when information is still required.`;
+  } else if (primaryPlaybookEntry?.category === "comparison") {
+    nextAction =
+      `Answer the approved factual comparison for “${primaryPlaybookEntry.topic}” first. Then recommend the fitting option when the known customer information is sufficient, or ask only the one missing decision question.`;
+  } else if (
+    primaryPlaybookEntry &&
+    ["objection", "trust", "policy", "value"].includes(
+      primaryPlaybookEntry.category
+    )
+  ) {
+    nextAction =
+      `Handle “${primaryPlaybookEntry.topic}” using the approved playbook first. Acknowledge the customer naturally, answer the concern, connect the answer to their need, and ask at most one helpful question only when needed.`;
+  }
+
+  return {
+    customerType,
+    listingCount,
+    agentExperience,
+    closingSignal,
+    recommendedProduct,
+    nextAction,
+    matchedPlaybookIds: matchedEntries.map((entry) => entry.id),
+  };
+}
+
+function formatSalesContext(context: SalesContext) {
+  return [
+    `Detected customer type: ${context.customerType}`,
+    `Detected agent experience: ${context.agentExperience || "unknown"}`,
+    `Detected listing count: ${
+      context.listingCount === null ? "unknown" : context.listingCount
+    }`,
+    `Detected closing signal: ${context.closingSignal || "none"}`,
+    `Hardcoded recommended product: ${
+      context.recommendedProduct || "not determined yet"
+    }`,
+    `Required next sales action: ${context.nextAction}`,
+  ].join("\n");
+}
+
+function formatRelevantSalesPlaybook(entries: SalesPlaybookEntry[]) {
+  if (!entries.length) {
+    return "No specific objection or comparison was detected. Follow the core sales journey and qualification rules.";
+  }
+
+  return entries
+    .map((entry, index) => {
+      return [
+        `Sales playbook ${index + 1}: ${entry.topic}`,
+        `Category: ${entry.category}`,
+        `Approved handling: ${entry.approvedGuidance}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+function isIntroductoryTetamoInquiry(message: string) {
+  const normalized = normalizeIntentText(message);
+
+  return containsPattern(normalized, [
+    "apa itu tetamo",
+    "tetamo itu apa",
+    "tetamo bergerak di bidang apa",
+    "what is tetamo",
+    "what does tetamo do",
+    "can i get more info",
+    "can i get more information",
+    "more information about this",
+    "more info about this",
+    "info tentang ini",
+    "boleh info tentang ini",
+  ]);
+}
+
+function getMandatorySalesSequence(params: {
+  customerMessage: string;
+  language: MonaLanguage;
+  conversationContext: string | null;
+}) {
+  if (!isIntroductoryTetamoInquiry(params.customerMessage)) {
+    return null;
+  }
+
+  const previousExplanation = containsPattern(
+    String(params.conversationContext || ""),
+    [
+      "tetamo adalah marketplace properti online",
+      "tetamo is an online property marketplace",
+    ]
+  );
+
+  if (previousExplanation) {
+    return null;
+  }
+
+  const customerType = detectCustomerType(
+    params.customerMessage,
+    params.conversationContext
+  );
+  const base = INTRO_SALES_SEQUENCE[params.language];
+
+  let qualification: string = base.qualification;
+
+  if (params.language === "id") {
+    if (customerType === "agent") {
+      qualification =
+        "Baik, Anda agen baru atau sudah aktif menangani banyak listing?";
+    } else if (customerType === "owner") {
+      qualification = "Boleh tahu, properti Anda ingin dijual atau disewakan?";
+    } else if (customerType === "agency") {
+      qualification =
+        "Boleh tahu, kira-kira berapa agen dan listing aktif yang dikelola agency Anda?";
+    } else if (customerType === "developer") {
+      qualification =
+        "Boleh tahu, Anda ingin mempromosikan satu project, beberapa project, atau seluruh inventory developer?";
+    } else if (customerType === "buyer_renter") {
+      qualification =
+        "Boleh tahu, Anda sedang mencari properti untuk dibeli atau disewa, dan di area mana?";
+    }
+  } else {
+    if (customerType === "agent") {
+      qualification =
+        "Are you a new agent, or are you already actively managing many listings?";
+    } else if (customerType === "owner") {
+      qualification = "Are you planning to sell or rent your property?";
+    } else if (customerType === "agency") {
+      qualification =
+        "Approximately how many agents and active listings does your agency manage?";
+    } else if (customerType === "developer") {
+      qualification =
+        "Are you looking to promote one project, several projects, or your full developer inventory?";
+    } else if (customerType === "buyer_renter") {
+      qualification =
+        "Are you looking to buy or rent, and which area are you interested in?";
+    }
+  }
+
+  return [base.answer, qualification];
+}
+
+
 function tokeniseForSearch(value: string) {
   return Array.from(
     new Set(
@@ -1379,6 +2999,8 @@ function buildMonaPrompt(params: {
   conversationContext: string | null;
   campaignContext: CampaignContext | null;
   knowledgeEntries: KnowledgeEntry[];
+  salesContext: SalesContext;
+  relevantSalesPlaybook: SalesPlaybookEntry[];
 }) {
   const campaignText = params.campaignContext
     ? [
@@ -1421,7 +3043,11 @@ PERSONALITY:
 - Do not ask the customer to repeat a readable question.
 - If the latest message is genuinely unreadable, meaningless or impossible to understand even after using the conversation context, output exactly [[HANDOVER_UNREADABLE]] and nothing else.
 - Do not use [[HANDOVER_UNREADABLE]] for normal Indonesian slang, abbreviations, spelling mistakes, greetings or vague but understandable messages.
-- Ask at most one useful follow-up question, only when genuinely needed.
+- Ask at most one useful follow-up question. A qualification, objection-discovery, recommendation, or closing question is useful when it follows the hardcoded sales journey.
+- Sound human and commercially confident, but never manipulative, aggressive, desperate, or pushy.
+- Do not merely list features. Connect the relevant feature to the customer's stated need.
+- When the customer gives enough information for a recommendation, recommend one correct option and explain why.
+- When the customer shows a buying signal, stop unnecessary qualification and guide them to the next action.
 
 ADMIN-OFFER PREVENTION:
 - Do not offer admin handover at the end of ordinary answers.
@@ -1463,11 +3089,25 @@ APPROVED LINKS:
 - Pricelist: ${TETAMO_LINKS.pricelist}
 - FAQ: ${TETAMO_LINKS.faq}
 - Subscription Policy: ${TETAMO_LINKS.subscriptionPolicy}
+- Privacy Policy: ${TETAMO_LINKS.privacyPolicy}
 - Developer License: ${TETAMO_LINKS.developerLicense}
 - How to list property blog: ${TETAMO_LINKS.howToListBlog}
 - How to post property video: ${TETAMO_LINKS.howToPostVideo}
 - Owner and agent dashboard guide: ${TETAMO_LINKS.dashboardVideo}
 - Share only the link relevant to the customer's question. Do not send every link at once.
+
+HARDCODED TETAMO SALES CORE:
+${SALES_CORE_RULES}
+
+DETECTED SALES CONTEXT FOR THIS CONVERSATION:
+${formatSalesContext(params.salesContext)}
+- Follow the required next sales action unless the customer's immediate question requires a direct factual answer first.
+- Never contradict the hardcoded package recommendation.
+
+RELEVANT HARDCODED OBJECTION, COMPARISON, POLICY, VALUE, OR CLOSING ANSWERS:
+${formatRelevantSalesPlaybook(params.relevantSalesPlaybook)}
+- Use the approved handling faithfully.
+- You may phrase it naturally, but never change the facts, price, policy, recommendation, link, or boundary.
 
 HARDCODED OFFICIAL QUESTIONS AND ANSWERS:
 ${formatHardcodedFaq()}
@@ -1957,18 +3597,49 @@ async function generateMonaReply(params: {
   const language = detectLanguage(params.customerMessage);
   const fallbackReply = getFallbackReply(params.customerMessage, language);
 
+  const conversationContext = await getConversationContext(
+    params.conversationId,
+    params.excludedMessageIds
+  );
+
+  const mandatorySequence = getMandatorySalesSequence({
+    customerMessage: params.customerMessage,
+    language,
+    conversationContext,
+  });
+
+  if (mandatorySequence) {
+    return {
+      action: "reply",
+      replies: mandatorySequence
+        .map((reply) => cleanFinalReply(reply, params.customerMessage))
+        .filter(Boolean),
+      source: "hardcoded_sales_sequence",
+    };
+  }
+
+  const salesContext = buildSalesContext({
+    customerMessage: params.customerMessage,
+    conversationContext,
+  });
+  const relevantSalesPlaybook = selectRelevantSalesPlaybook(
+    params.customerMessage,
+    conversationContext
+  );
+
   if (!process.env.OPENAI_API_KEY) {
     return {
       action: "reply",
-      reply: cleanFinalReply(fallbackReply, params.customerMessage),
+      replies: [cleanFinalReply(fallbackReply, params.customerMessage)],
+      source: "fallback",
     };
   }
 
   try {
-    const [knowledgeEntries, conversationContext] = await Promise.all([
-      searchApprovedKnowledge(params.customerMessage, language),
-      getConversationContext(params.conversationId, params.excludedMessageIds),
-    ]);
+    const knowledgeEntries = await searchApprovedKnowledge(
+      params.customerMessage,
+      language
+    );
 
     const prompt = buildMonaPrompt({
       customerMessage: params.customerMessage,
@@ -1976,6 +3647,8 @@ async function generateMonaReply(params: {
       conversationContext,
       campaignContext: params.campaignContext,
       knowledgeEntries,
+      salesContext,
+      relevantSalesPlaybook,
     });
 
     const response = await openai.responses.create({
@@ -1997,16 +3670,20 @@ async function generateMonaReply(params: {
 
     return {
       action: "reply",
-      reply: cleanFinalReply(
-        rawReply || fallbackReply,
-        params.customerMessage
-      ),
+      replies: [
+        cleanFinalReply(
+          rawReply || fallbackReply,
+          params.customerMessage
+        ),
+      ].filter(Boolean),
+      source: rawReply ? "openai" : "fallback",
     };
   } catch (error) {
     console.error("Meta WhatsApp OpenAI generation failed:", error);
     return {
       action: "reply",
-      reply: cleanFinalReply(fallbackReply, params.customerMessage),
+      replies: [cleanFinalReply(fallbackReply, params.customerMessage)],
+      source: "fallback",
     };
   }
 }
@@ -2387,9 +4064,11 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const reply = generation.reply;
+      const replies = generation.replies
+        .map((reply) => String(reply || "").trim())
+        .filter(Boolean);
 
-      if (!reply) {
+      if (!replies.length) {
         processedCount += 1;
         ignoredCount += 1;
         continue;
@@ -2406,28 +4085,67 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const sendResult = await sendMetaWhatsappText({
-        phoneNumberId,
-        to: customerPhone,
-        message: reply,
-      });
+      let sentReplyCount = 0;
 
-      await saveOutboundMessage({
-        conversationId: conversation.id,
-        customerPhone,
-        businessPhoneNumberId: phoneNumberId,
-        profileName: item.profileName,
-        reply,
-        metaSendId: sendResult.id,
-        metaSendError: sendResult.success ? null : sendResult.error,
-        aiGenerated: true,
-        source: sendResult.success
-          ? "tetamo_mona_meta"
-          : "tetamo_mona_meta_send_failed",
-      });
+      for (let replyIndex = 0; replyIndex < replies.length; replyIndex += 1) {
+        const reply = replies[replyIndex];
+
+        if (replyIndex > 0) {
+          await sleep(1000);
+
+          const customerHasNotReplied = await isStillLatestInboundMessage(
+            conversation.id,
+            inboundSave.messageId
+          );
+
+          if (!customerHasNotReplied) {
+            console.log(
+              "Skipped the next Mona sales-sequence message because the customer replied.",
+              {
+                conversationId: conversation.id,
+                replyIndex,
+              }
+            );
+            break;
+          }
+        }
+
+        const sendResult = await sendMetaWhatsappText({
+          phoneNumberId,
+          to: customerPhone,
+          message: reply,
+        });
+
+        const sourcePrefix =
+          generation.source === "hardcoded_sales_sequence"
+            ? "tetamo_mona_sales_sequence_meta"
+            : generation.source === "fallback"
+              ? "tetamo_mona_fallback_meta"
+              : "tetamo_mona_meta";
+
+        await saveOutboundMessage({
+          conversationId: conversation.id,
+          customerPhone,
+          businessPhoneNumberId: phoneNumberId,
+          profileName: item.profileName,
+          reply,
+          metaSendId: sendResult.id,
+          metaSendError: sendResult.success ? null : sendResult.error,
+          aiGenerated: true,
+          source: sendResult.success
+            ? sourcePrefix
+            : `${sourcePrefix}_send_failed`,
+        });
+
+        if (!sendResult.success) {
+          break;
+        }
+
+        sentReplyCount += 1;
+      }
 
       processedCount += 1;
-      replyCount += 1;
+      replyCount += sentReplyCount;
     }
 
     return Response.json({
