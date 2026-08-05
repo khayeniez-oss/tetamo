@@ -3605,7 +3605,7 @@ ${
     }
   }
 
-  const discovery = selectNextDiscoveryField({
+  const proposedDiscovery = selectNextDiscoveryField({
     customerType,
     listingCount,
     agentExperience,
@@ -3613,6 +3613,29 @@ ${
     profile: discoveryProfile,
     primaryPlaybookEntry,
   });
+
+  // Discovery is optional. Ask only when the answer is essential to the
+  // customer's immediate request, never merely because a field is empty.
+  const currentIsDirectQuestion = looksLikeDirectQuestion(params.customerMessage);
+  const essentialField: DiscoveryField | null =
+    closingSignal || currentIsDirectQuestion
+      ? null
+      : customerType === "agent" &&
+          listingCount === null &&
+          containsPattern(params.customerMessage, [
+            "paket mana", "paket yang cocok", "recommend package",
+            "rekomendasi paket", "mana yang sesuai"
+          ])
+        ? "listing_count"
+        : customerType === "unknown" &&
+            isIntroductoryTetamoInquiry(params.customerMessage)
+          ? "customer_type"
+          : null;
+
+  const discovery = {
+    stage: essentialField ? proposedDiscovery.stage : "answer_without_forced_discovery",
+    field: essentialField,
+  };
   const nextQuestion = getDiscoveryQuestion(discovery.field, language);
 
   let nextAction = nextQuestion
@@ -3754,8 +3777,15 @@ function getMandatorySalesSequence(params: {
   customerMessage: string;
   language: MonaLanguage;
   conversationContext: string | null;
+  campaignContext: CampaignContext | null;
 }) {
   if (!isIntroductoryTetamoInquiry(params.customerMessage)) {
+    return null;
+  }
+
+  // A reply after any recent template is a continuation of that template,
+  // not a fresh universal introduction.
+  if (isRecentCampaignContext(params.campaignContext, 48)) {
     return null;
   }
 
@@ -3772,10 +3802,12 @@ function getMandatorySalesSequence(params: {
   }
 
   const base = INTRO_SALES_SEQUENCE[params.language];
+  const shortAnswer =
+    params.language === "en"
+      ? "Tetamo is an online property marketplace in Indonesia for owners, agents, developers, buyers and renters. Users can advertise or search for properties, contact owners or agents through WhatsApp, and arrange viewings."
+      : "Tetamo adalah marketplace properti online di Indonesia untuk pemilik, agen, developer, pembeli dan penyewa. Pengguna dapat memasang atau mencari properti, menghubungi pemilik atau agen melalui WhatsApp, dan mengatur jadwal viewing.";
 
-  // A general Tetamo introduction must always identify the customer type first.
-  // Do not assume owner, agent, developer, buyer or renter from older history.
-  return [base.answer, base.qualification];
+  return [shortAnswer, base.qualification];
 }
 
 
@@ -4026,6 +4058,16 @@ ${params.conversationContext || "No earlier conversation context."}
 
 LATEST CUSTOMER MESSAGE:
 ${params.customerMessage}
+
+FINAL RESPONSE BEHAVIOUR:
+- A complete factual answer normally ends without a question.
+- Never ask a question merely because a discovery field is unknown.
+- Never repeat a question already answered in the conversation.
+- Never repeat the customer-type question when intent or earlier context identifies the role.
+- Keep simple replies to 1–3 short sentences.
+- Use at most one question, only when essential to the immediate next decision.
+- When the customer says thank you, closes, declines, or is ready to proceed, stop discovery.
+- Do not repeat package benefits or links already sent unless the customer asks again.
 
 Write only Mona's final WhatsApp reply.
 Do not return JSON.
@@ -4489,6 +4531,285 @@ async function isStillLatestInboundMessage(
   return String(data?.id || "") === String(messageId);
 }
 
+
+type DeterministicReplyDecision =
+  | { action: "silent"; reason: string }
+  | { action: "reply"; reply: string; reason: string }
+  | { action: "continue" };
+
+function isRecentCampaignContext(context: CampaignContext | null, hours = 48) {
+  if (!context?.sentAt) return false;
+  const age = Date.now() - new Date(context.sentAt).getTime();
+  return Number.isFinite(age) && age >= 0 && age <= hours * 60 * 60 * 1000;
+}
+
+function hasGenuineTetamoIntent(message: string) {
+  return containsPattern(message, [
+    "tetamo", "harga", "harganya", "berapa", "brp", "paket", "membership",
+    "listing", "properti", "property", "agen", "agent", "owner", "pemilik",
+    "developer", "jual", "sewa", "beli", "bayar", "qris", "daftar",
+    "register", "join", "minat", "tertarik", "info", "fitur", "cara"
+  ]);
+}
+
+function isLikelyAutomaticBusinessReply(
+  message: string,
+  campaignContext: CampaignContext | null
+) {
+  if (!isRecentCampaignContext(campaignContext, 48)) return false;
+
+  const normalized = normalizeIntentText(message);
+  if (!normalized || hasGenuineTetamoIntent(normalized)) return false;
+
+  const autoPatterns = [
+    "thank you for contacting",
+    "thanks for contacting",
+    "please let us know how we can help",
+    "we have received your message",
+    "your message has been received",
+    "we will get back to you",
+    "we will reply as soon as possible",
+    "we are currently away",
+    "we are currently unavailable",
+    "our business hours",
+    "office hours",
+    "terima kasih telah menghubungi",
+    "terima kasih sudah menghubungi",
+    "pesan anda telah kami terima",
+    "pesan anda sudah kami terima",
+    "kami akan segera membalas",
+    "kami akan membalas secepatnya",
+    "saat ini kami sedang tidak tersedia",
+    "saat ini kami sedang tutup",
+    "jam operasional kami",
+    "di luar jam operasional",
+  ];
+
+  const structureLooksAutomatic =
+    containsPattern(normalized, autoPatterns) ||
+    (
+      normalized.length >= 55 &&
+      containsPattern(normalized, ["terima kasih", "thank you"]) &&
+      containsPattern(normalized, ["menghubungi", "contacting"]) &&
+      !/[?]/.test(message)
+    );
+
+  return structureLooksAutomatic;
+}
+
+function isClearRejection(message: string) {
+  return containsPattern(message, [
+    "tidak jadi", "ga jadi", "gak jadi", "nggak jadi", "ngga jadi",
+    "kalau bayar ogah", "kalo bayar ogah", "tidak tertarik", "ga tertarik",
+    "gak tertarik", "nggak tertarik", "saya batal", "tidak perlu",
+    "gak mau", "ga mau", "nggak mau", "no thanks", "not interested",
+    "dont contact me", "don't contact me", "jangan hubungi lagi",
+    "berhenti promosi", "stop promotion"
+  ]);
+}
+
+function isConversationalClosing(message: string) {
+  const normalized = normalizeIntentText(message);
+  return [
+    "terima kasih", "trimakasih", "makasih", "thanks", "thank you",
+    "ya terima kasih", "baik terima kasih", "oke makasih", "ok makasih",
+    "sudah jelas", "cukup", "sip", "baik", "oke", "ok"
+  ].includes(normalized);
+}
+
+function looksLikeDirectQuestion(message: string) {
+  const normalized = normalizeIntentText(message);
+  return /[?]/.test(message) || containsPattern(normalized, [
+    "berapa", "brp", "harga", "harganya", "biaya", "gimana", "gmn",
+    "bagaimana", "apa", "apakah", "bisa", "boleh", "kapan", "dimana",
+    "di mana", "how", "what", "when", "where", "can i", "is there"
+  ]);
+}
+
+function getDeterministicReplyDecision(params: {
+  customerMessage: string;
+  conversationContext: string | null;
+  campaignContext: CampaignContext | null;
+  language: MonaLanguage;
+}): DeterministicReplyDecision {
+  const message = params.customerMessage;
+  const language = params.language;
+  const customerType = detectCustomerType(message, params.conversationContext);
+
+  if (isLikelyAutomaticBusinessReply(message, params.campaignContext)) {
+    return { action: "silent", reason: "recent_template_automatic_business_reply" };
+  }
+
+  if (isClearRejection(message)) {
+    return {
+      action: "reply",
+      reason: "clear_rejection",
+      reply:
+        language === "en"
+          ? "No problem. Thank you for letting us know 😊"
+          : "Baik, tidak masalah. Terima kasih sudah memberi tahu 😊",
+    };
+  }
+
+  if (isConversationalClosing(message)) {
+    return {
+      action: "reply",
+      reason: "conversation_closing",
+      reply: language === "en" ? "You’re welcome 😊" : "Sama-sama 😊",
+    };
+  }
+
+  const normalized = normalizeIntentText(message);
+
+  if (containsPattern(normalized, ["harga silver", "silver berapa", "biaya silver"])) {
+    return {
+      action: "reply",
+      reason: "direct_silver_price",
+      reply:
+        language === "en"
+          ? `Silver is Rp499,000 per year for up to 30 active listings. Details: ${TETAMO_LINKS.pricelist}`
+          : `Silver Rp499.000 per tahun untuk hingga 30 listing aktif. Detail: ${TETAMO_LINKS.pricelist}`,
+    };
+  }
+
+  if (containsPattern(normalized, ["harga gold", "gold berapa", "biaya gold"])) {
+    return {
+      action: "reply",
+      reason: "direct_gold_price",
+      reply:
+        language === "en"
+          ? `Gold is Rp1,800,000 per year for up to 100 active listings. Details: ${TETAMO_LINKS.pricelist}`
+          : `Gold Rp1.800.000 per tahun untuk hingga 100 listing aktif. Detail: ${TETAMO_LINKS.pricelist}`,
+    };
+  }
+
+  if (containsPattern(normalized, ["harga agent pro", "agent pro berapa", "biaya agent pro"])) {
+    return {
+      action: "reply",
+      reason: "direct_agent_pro_price",
+      reply:
+        language === "en"
+          ? `Agent Pro is Rp3,999,000 per year, or Rp399,000 per month with a 12-month commitment, for up to 500 active listings. Details: ${TETAMO_LINKS.pricelist}`
+          : `Agent Pro Rp3.999.000 per tahun, atau Rp399.000 per bulan dengan komitmen 12 bulan, untuk hingga 500 listing aktif. Detail: ${TETAMO_LINKS.pricelist}`,
+    };
+  }
+
+  if (
+    looksLikeDirectQuestion(message) &&
+    customerType === "agent" &&
+    containsPattern(normalized, ["harga", "harganya", "berapa", "brp", "biaya", "paket", "membership"])
+  ) {
+    return {
+      action: "reply",
+      reason: "direct_agent_pricing",
+      reply:
+        language === "en"
+          ? `Agent membership starts with Silver at Rp499,000 per year for up to 30 active listings. Gold is Rp1,800,000 per year for up to 100 listings, and Agent Pro is Rp3,999,000 per year for up to 500 listings. Details: ${TETAMO_LINKS.pricelist}`
+          : `Membership Agen dimulai dari Silver Rp499.000 per tahun untuk hingga 30 listing aktif. Gold Rp1.800.000 per tahun untuk hingga 100 listing, dan Agent Pro Rp3.999.000 per tahun untuk hingga 500 listing. Detail: ${TETAMO_LINKS.pricelist}`,
+    };
+  }
+
+  if (
+    looksLikeDirectQuestion(message) &&
+    customerType === "owner" &&
+    containsPattern(normalized, ["harga", "harganya", "berapa", "brp", "biaya", "paket", "listing"])
+  ) {
+    return {
+      action: "reply",
+      reason: "direct_owner_pricing",
+      reply:
+        language === "en"
+          ? `Owner listings start from Basic at Rp50,000 for 1 active listing for 1 year. Priority is Rp150,000 and Featured is Rp550,000. Details: ${TETAMO_LINKS.pricelist}`
+          : `Paket Pemilik dimulai dari Basic Rp50.000 untuk 1 listing aktif selama 1 tahun. Priority Rp150.000 dan Featured Rp550.000. Detail: ${TETAMO_LINKS.pricelist}`,
+    };
+  }
+
+  return { action: "continue" };
+}
+
+function removeRepeatedOrUnnecessaryQuestions(params: {
+  reply: string;
+  customerMessage: string;
+  conversationContext: string | null;
+}) {
+  let reply = String(params.reply || "").trim();
+  if (!reply) return "";
+
+  const type = detectCustomerType(params.customerMessage, params.conversationContext);
+  const context = normalizeIntentText(
+    `${getCustomerOnlyConversationText(params.conversationContext)}\n${params.customerMessage}`
+  );
+
+  if (type !== "unknown") {
+    reply = reply
+      .replace(
+        /(?:\n\s*)?(?:boleh tahu,?\s*)?anda (?:seorang )?(?:pemilik properti|pemilik),?\s*agen,?\s*developer,?\s*atau sedang mencari properti\??/gi,
+        ""
+      )
+      .replace(
+        /(?:\n\s*)?may i know whether you are a property owner,?\s*an agent,?\s*a developer,?\s*or currently looking for a property\??/gi,
+        ""
+      );
+  }
+
+  if (/\b\d+\s*(?:listing|properti|property|unit)/i.test(context)) {
+    reply = reply
+      .replace(/(?:\n\s*)?saat ini kira-kira berapa listing aktif yang anda kelola\??/gi, "")
+      .replace(/(?:\n\s*)?approximately how many active listings do you currently manage\??/gi, "");
+  }
+
+  const questionMatches = [...reply.matchAll(/[^.!?\n]*\?/g)];
+  if (questionMatches.length > 1) {
+    const firstQuestion = questionMatches[0][0].trim();
+    const nonQuestions = reply
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.includes("?"));
+    reply = [...nonQuestions, firstQuestion].join("\n\n");
+  }
+
+  return reply.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function keepWhatsappReplyConcise(reply: string, maxLength = 900) {
+  const clean = String(reply || "").trim();
+  if (clean.length <= maxLength) return clean;
+
+  const sentences = clean.match(/[^.!?\n]+[.!?]?/g) || [clean];
+  let result = "";
+
+  for (const sentence of sentences) {
+    const candidate = `${result}${result ? " " : ""}${sentence.trim()}`.trim();
+    if (candidate.length > maxLength) break;
+    result = candidate;
+  }
+
+  return (result || clean.slice(0, maxLength)).trim();
+}
+
+function validateMonaReply(params: {
+  reply: string;
+  customerMessage: string;
+  conversationContext: string | null;
+}) {
+  if (isClearRejection(params.customerMessage)) {
+    return detectLanguage(params.customerMessage) === "en"
+      ? "No problem. Thank you for letting us know 😊"
+      : "Baik, tidak masalah. Terima kasih sudah memberi tahu 😊";
+  }
+
+  if (isConversationalClosing(params.customerMessage)) {
+    return detectLanguage(params.customerMessage) === "en"
+      ? "You’re welcome 😊"
+      : "Sama-sama 😊";
+  }
+
+  return keepWhatsappReplyConcise(
+    removeRepeatedOrUnnecessaryQuestions(params),
+    900
+  );
+}
+
 async function generateMonaReply(params: {
   customerMessage: string;
   conversationId: string;
@@ -4503,10 +4824,34 @@ async function generateMonaReply(params: {
     params.excludedMessageIds
   );
 
+  const deterministic = getDeterministicReplyDecision({
+    customerMessage: params.customerMessage,
+    conversationContext,
+    campaignContext: params.campaignContext,
+    language,
+  });
+
+  if (deterministic.action === "silent") {
+    return {
+      action: "reply",
+      replies: [],
+      source: "fallback",
+    };
+  }
+
+  if (deterministic.action === "reply") {
+    return {
+      action: "reply",
+      replies: [deterministic.reply],
+      source: "fallback",
+    };
+  }
+
   const mandatorySequence = getMandatorySalesSequence({
     customerMessage: params.customerMessage,
     language,
     conversationContext,
+    campaignContext: params.campaignContext,
   });
 
   if (mandatorySequence) {
@@ -4537,10 +4882,11 @@ async function generateMonaReply(params: {
     return {
       action: "reply",
       replies: [
-        enforceRequiredDiscoveryQuestion(
-          cleanedFallback,
-          salesContext.nextQuestion
-        ),
+        validateMonaReply({
+          reply: cleanedFallback,
+          customerMessage: params.customerMessage,
+          conversationContext,
+        }),
       ].filter(Boolean),
       source: "fallback",
     };
@@ -4587,10 +4933,11 @@ async function generateMonaReply(params: {
     return {
       action: "reply",
       replies: [
-        enforceRequiredDiscoveryQuestion(
-          cleanedReply,
-          salesContext.nextQuestion
-        ),
+        validateMonaReply({
+          reply: cleanedReply,
+          customerMessage: params.customerMessage,
+          conversationContext,
+        }),
       ].filter(Boolean),
       source: rawReply ? "openai" : "fallback",
     };
@@ -4604,10 +4951,11 @@ async function generateMonaReply(params: {
     return {
       action: "reply",
       replies: [
-        enforceRequiredDiscoveryQuestion(
-          cleanedFallback,
-          salesContext.nextQuestion
-        ),
+        validateMonaReply({
+          reply: cleanedFallback,
+          customerMessage: params.customerMessage,
+          conversationContext,
+        }),
       ].filter(Boolean),
       source: "fallback",
     };
@@ -4969,6 +5317,16 @@ export async function POST(request: Request) {
       }
 
       const campaignContext = await getLatestCampaignContext(conversation.id);
+
+      if (isLikelyAutomaticBusinessReply(combinedMessage, campaignContext)) {
+        console.log("Suppressed Mona reply to automatic business response.", {
+          conversationId: conversation.id,
+          templateName: campaignContext?.templateName || null,
+        });
+        processedCount += 1;
+        ignoredCount += 1;
+        continue;
+      }
 
       const generation = await generateMonaReply({
         customerMessage: combinedMessage,
