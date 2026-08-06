@@ -26,6 +26,10 @@ const CONVERSATION_SELECT = `
   sales_stage,
   sales_stage_updated_at,
   sales_stage_updated_by,
+  suggested_sales_stage,
+  suggested_sales_stage_reason,
+  suggested_sales_stage_confidence,
+  suggested_sales_stage_at,
   last_inbound_at,
   window_expires_at,
   free_entry_point_expires_at,
@@ -85,6 +89,7 @@ type ConversationStats = {
   activeAi: number;
   pausedAi: number;
   handled: number;
+  needsStageReview: number;
   salesStages: SalesStageStats;
 };
 
@@ -158,6 +163,10 @@ function applyStatusFilter(query: any, filter: string) {
 
   if (filter === "handled") {
     return query.eq("status", "handled");
+  }
+
+  if (filter === "needs_stage_review") {
+    return query.not("suggested_sales_stage", "is", null);
   }
 
   return query;
@@ -303,6 +312,7 @@ async function getConversationStats(): Promise<ConversationStats> {
     activeAi,
     pausedAi,
     handled,
+    needsStageReview,
     newInquiry,
     lead,
     agentPackage,
@@ -327,6 +337,9 @@ async function getConversationStats(): Promise<ConversationStats> {
     countConversations((query) => query.eq("ai_enabled", false)),
     countConversations((query) => query.eq("status", "handled")),
     countConversations((query) =>
+      query.not("suggested_sales_stage", "is", null)
+    ),
+    countConversations((query) =>
       query.or("sales_stage.eq.new_inquiry,sales_stage.is.null")
     ),
     countConversations((query) => query.eq("sales_stage", "lead")),
@@ -349,6 +362,7 @@ async function getConversationStats(): Promise<ConversationStats> {
     activeAi,
     pausedAi,
     handled,
+    needsStageReview,
     salesStages: {
       new_inquiry: newInquiry,
       lead,
@@ -595,6 +609,10 @@ export async function PATCH(req: Request) {
             sales_stage: salesStage,
             sales_stage_updated_at: updatedAt,
             sales_stage_updated_by: auth.userId || null,
+            suggested_sales_stage: null,
+            suggested_sales_stage_reason: null,
+            suggested_sales_stage_confidence: null,
+            suggested_sales_stage_at: null,
           })
           .eq("id", conversationId)
           .select(CONVERSATION_SELECT)
@@ -642,6 +660,163 @@ export async function PATCH(req: Request) {
           action,
           previous_stage: previousStage,
           new_stage: salesStage,
+          admin_user_id: auth.userId,
+        },
+        created_at: updatedAt,
+      });
+
+      return Response.json({
+        success: true,
+        conversation: updatedConversation,
+      });
+    }
+
+    if (action === "approve_stage_suggestion") {
+      const suggestedStage = String(
+        existingConversation.suggested_sales_stage || ""
+      ).trim();
+
+      if (!SALES_STAGES.includes(suggestedStage as SalesStage)) {
+        return Response.json(
+          { success: false, error: "There is no valid stage suggestion to approve." },
+          { status: 400 }
+        );
+      }
+
+      const previousStage = existingConversation.sales_stage || null;
+      const updatedAt = new Date().toISOString();
+
+      const { data: updatedConversation, error: updateError } =
+        await supabaseAdmin
+          .from("whatsapp_conversations")
+          .update({
+            sales_stage: suggestedStage,
+            sales_stage_updated_at: updatedAt,
+            sales_stage_updated_by: auth.userId || null,
+            suggested_sales_stage: null,
+            suggested_sales_stage_reason: null,
+            suggested_sales_stage_confidence: null,
+            suggested_sales_stage_at: null,
+          })
+          .eq("id", conversationId)
+          .select(CONVERSATION_SELECT)
+          .maybeSingle();
+
+      if (updateError) {
+        console.error("Failed to approve WhatsApp stage suggestion:", updateError);
+
+        return Response.json(
+          { success: false, error: "Failed to approve stage suggestion." },
+          { status: 500 }
+        );
+      }
+
+      const { error: historyError } = await supabaseAdmin
+        .from("whatsapp_sales_stage_history")
+        .insert({
+          conversation_id: conversationId,
+          previous_stage: previousStage,
+          new_stage: suggestedStage,
+          changed_by: auth.userId || null,
+          changed_at: updatedAt,
+        });
+
+      if (historyError) {
+        console.error("Failed to save approved stage history:", historyError);
+      }
+
+      const stageLabel =
+        SALES_STAGE_LABELS[suggestedStage as SalesStage] || suggestedStage;
+
+      await supabaseAdmin.from("whatsapp_messages").insert({
+        conversation_id: conversationId,
+        direction: "system",
+        from_number: "tetamo_admin_dashboard",
+        to_number: phoneE164 || null,
+        phone: phoneE164 || null,
+        profile_name: existingConversation.profile_name || null,
+        message: `Admin approved Mona's suggestion and moved this conversation to ${stageLabel}.`,
+        source: "admin_dashboard",
+        ai_generated: false,
+        admin_generated: true,
+        media_count: 0,
+        raw_payload: {
+          action,
+          previous_stage: previousStage,
+          new_stage: suggestedStage,
+          suggested_reason:
+            existingConversation.suggested_sales_stage_reason || null,
+          suggested_confidence:
+            existingConversation.suggested_sales_stage_confidence || null,
+          admin_user_id: auth.userId,
+        },
+        created_at: updatedAt,
+      });
+
+      return Response.json({
+        success: true,
+        conversation: updatedConversation,
+      });
+    }
+
+    if (action === "ignore_stage_suggestion") {
+      const ignoredStage = String(
+        existingConversation.suggested_sales_stage || ""
+      ).trim();
+
+      if (!ignoredStage) {
+        return Response.json(
+          { success: false, error: "There is no stage suggestion to ignore." },
+          { status: 400 }
+        );
+      }
+
+      const updatedAt = new Date().toISOString();
+
+      const { data: updatedConversation, error: updateError } =
+        await supabaseAdmin
+          .from("whatsapp_conversations")
+          .update({
+            suggested_sales_stage: null,
+            suggested_sales_stage_reason: null,
+            suggested_sales_stage_confidence: null,
+            suggested_sales_stage_at: null,
+          })
+          .eq("id", conversationId)
+          .select(CONVERSATION_SELECT)
+          .maybeSingle();
+
+      if (updateError) {
+        console.error("Failed to ignore WhatsApp stage suggestion:", updateError);
+
+        return Response.json(
+          { success: false, error: "Failed to ignore stage suggestion." },
+          { status: 500 }
+        );
+      }
+
+      const ignoredLabel =
+        SALES_STAGE_LABELS[ignoredStage as SalesStage] || ignoredStage;
+
+      await supabaseAdmin.from("whatsapp_messages").insert({
+        conversation_id: conversationId,
+        direction: "system",
+        from_number: "tetamo_admin_dashboard",
+        to_number: phoneE164 || null,
+        phone: phoneE164 || null,
+        profile_name: existingConversation.profile_name || null,
+        message: `Admin ignored Mona's ${ignoredLabel} stage suggestion.`,
+        source: "admin_dashboard",
+        ai_generated: false,
+        admin_generated: true,
+        media_count: 0,
+        raw_payload: {
+          action,
+          ignored_stage: ignoredStage,
+          ignored_reason:
+            existingConversation.suggested_sales_stage_reason || null,
+          ignored_confidence:
+            existingConversation.suggested_sales_stage_confidence || null,
           admin_user_id: auth.userId,
         },
         created_at: updatedAt,
