@@ -15,6 +15,36 @@ const supabaseAdmin = createClient(
 
 type MonaLanguage = "id" | "en";
 
+type SalesStage =
+  | "new_inquiry"
+  | "lead"
+  | "agent_package"
+  | "owner_package"
+  | "developer_agency"
+  | "follow_up"
+  | "payment_started"
+  | "payment_failed"
+  | "closed_won"
+  | "closed_lost";
+
+const SALES_STAGES = new Set<SalesStage>([
+  "new_inquiry",
+  "lead",
+  "agent_package",
+  "owner_package",
+  "developer_agency",
+  "follow_up",
+  "payment_started",
+  "payment_failed",
+  "closed_won",
+  "closed_lost",
+]);
+
+function normalizeSalesStage(value?: string | null): SalesStage | null {
+  const normalized = String(value || "").trim().toLowerCase() as SalesStage;
+  return SALES_STAGES.has(normalized) ? normalized : null;
+}
+
 type MetaMessage = {
   id?: string;
   from?: string;
@@ -98,6 +128,7 @@ type ConversationRow = {
   free_entry_point_expires_at?: string | null;
   free_entry_point_source?: string | null;
   ad_referral_source?: string | null;
+  sales_stage?: SalesStage | null;
 };
 
 type StoredMessageRow = {
@@ -3924,6 +3955,100 @@ function formatKnowledgeEntries(entries: KnowledgeEntry[]) {
     .join("\n\n");
 }
 
+
+function applySalesStageToSalesContext(
+  salesContext: SalesContext,
+  salesStage: SalesStage | null
+): SalesContext {
+  if (!salesStage || salesStage === "new_inquiry" || salesStage === "lead") {
+    return salesContext;
+  }
+
+  const next = { ...salesContext };
+
+  if (salesStage === "agent_package") {
+    next.customerType = "agent";
+    next.discoveryStage = "agent_package";
+    next.nextAction =
+      "Continue the agent membership journey from the existing conversation. Discuss only Silver, Gold, or Agent Pro, answer the latest question first, and move toward the correct recommendation or payment step without repeating customer-type discovery.";
+    if (next.nextQuestionField === "customer_type") {
+      next.nextQuestionField = null;
+      next.nextQuestion = null;
+    }
+  } else if (salesStage === "owner_package") {
+    next.customerType = "owner";
+    next.discoveryStage = "owner_package";
+    next.nextAction =
+      "Continue the owner listing journey from the existing conversation. Discuss only Basic, Priority, or Featured and guide the owner toward creating or completing the listing without repeating customer-type discovery.";
+    if (next.nextQuestionField === "customer_type") {
+      next.nextQuestionField = null;
+      next.nextQuestion = null;
+    }
+  } else if (salesStage === "developer_agency") {
+    if (next.customerType !== "developer" && next.customerType !== "agency") {
+      next.customerType = "agency";
+    }
+    next.discoveryStage = "developer_agency";
+    next.nextAction =
+      "Continue the developer or agency commercial journey. Collect only essential project, team, or inventory details and use Developer License guidance. Do not present a fixed standard package price.";
+    if (next.nextQuestionField === "customer_type") {
+      next.nextQuestionField = null;
+      next.nextQuestion = null;
+    }
+  } else if (salesStage === "follow_up") {
+    next.discoveryStage = "follow_up";
+    next.nextQuestionField = null;
+    next.nextQuestion = null;
+    next.nextAction =
+      "Continue from the last unresolved topic in the conversation. Do not restart discovery, repeat the introduction, or resend package details already provided unless requested.";
+  } else if (salesStage === "payment_started") {
+    next.discoveryStage = "payment_started";
+    next.nextQuestionField = null;
+    next.nextQuestion = null;
+    next.nextAction =
+      "The customer has started or is ready for payment. Stop qualification and focus on completing the selected registration, checkout, or payment step. Do not change the selected package unless the customer asks.";
+  } else if (salesStage === "payment_failed") {
+    next.discoveryStage = "payment_failed";
+    next.nextQuestionField = null;
+    next.nextQuestion = null;
+    next.nextAction =
+      "Focus on the payment problem and the immediate next step. Do not restart sales discovery. Never claim the payment succeeded without system confirmation; account-specific transaction investigation requires admin handover.";
+  } else if (salesStage === "closed_won") {
+    next.discoveryStage = "closed_won";
+    next.nextQuestionField = null;
+    next.nextQuestion = null;
+    next.nextAction =
+      "The customer has converted. Stop selling the same package and provide activation, account, listing, or usage support. Discuss an upgrade only when the customer asks.";
+  } else if (salesStage === "closed_lost") {
+    next.discoveryStage = "closed_lost";
+    next.nextQuestionField = null;
+    next.nextQuestion = null;
+    next.nextAction =
+      "Do not push or restart the sales journey. Answer a direct factual or support question politely. Resume sales only when the customer clearly expresses fresh interest.";
+  }
+
+  return next;
+}
+
+function formatSalesStageContext(salesStage: SalesStage | null) {
+  const descriptions: Record<SalesStage, string> = {
+    new_inquiry: "New Inquiry — answer the immediate question and identify the customer's role or need only when still necessary.",
+    lead: "Lead — genuine interest exists; continue useful qualification from known facts without repeating earlier questions.",
+    agent_package: "Agent Package — continue only the agent membership journey unless the customer explicitly corrects their role.",
+    owner_package: "Owner Package — continue only the owner listing journey unless the customer explicitly corrects their role.",
+    developer_agency: "Developer / Agency — continue the custom commercial journey and Developer License guidance.",
+    follow_up: "Follow-Up — continue from the last unresolved concern; never restart the conversation.",
+    payment_started: "Payment Started — stop discovery and help complete the chosen payment or registration step.",
+    payment_failed: "Payment Failed — focus on resolving or handing over the payment issue; do not restart sales discovery.",
+    closed_won: "Closed Won — the customer converted; stop selling the same offer and provide support.",
+    closed_lost: "Closed Lost — stop sales pressure; only resume when the customer clearly shows new interest.",
+  };
+
+  return salesStage
+    ? `${salesStage}: ${descriptions[salesStage]}`
+    : "No official sales stage is assigned. Use the conversation history and detected sales context.";
+}
+
 function buildMonaPrompt(params: {
   customerMessage: string;
   language: MonaLanguage;
@@ -3932,6 +4057,7 @@ function buildMonaPrompt(params: {
   knowledgeEntries: KnowledgeEntry[];
   salesContext: SalesContext;
   relevantSalesPlaybook: SalesPlaybookEntry[];
+  salesStage: SalesStage | null;
 }) {
   const campaignText = params.campaignContext
     ? [
@@ -4029,6 +4155,14 @@ APPROVED LINKS:
 
 HARDCODED TETAMO SALES CORE:
 ${SALES_CORE_RULES}
+
+OFFICIAL ADMIN SALES STAGE:
+${formatSalesStageContext(params.salesStage)}
+- Treat this stage as the official current pipeline position selected by the Tetamo admin.
+- Read the recent conversation before replying and continue from where it stopped.
+- The latest explicit customer correction overrides a conflicting stage; answer according to the correction without arguing.
+- Never mention internal stage names, pipeline controls, database fields, or admin classification to the customer.
+- Do not automatically change the stage.
 
 DETECTED SALES CONTEXT FOR THIS CONVERSATION:
 ${formatSalesContext(params.salesContext)}
@@ -4228,7 +4362,7 @@ async function upsertConversation(params: {
       onConflict: "conversation_key",
     })
     .select(
-      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source"
+      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source, sales_stage"
     )
     .single();
 
@@ -4815,6 +4949,7 @@ async function generateMonaReply(params: {
   conversationId: string;
   excludedMessageIds: string[];
   campaignContext: CampaignContext | null;
+  salesStage: SalesStage | null;
 }): Promise<MonaGenerationResult> {
   const language = detectLanguage(params.customerMessage);
   const fallbackReply = getFallbackReply(params.customerMessage, language);
@@ -4847,12 +4982,15 @@ async function generateMonaReply(params: {
     };
   }
 
-  const mandatorySequence = getMandatorySalesSequence({
+  const mandatorySequence =
+    (!params.salesStage || params.salesStage === "new_inquiry")
+      ? getMandatorySalesSequence({
     customerMessage: params.customerMessage,
     language,
     conversationContext,
     campaignContext: params.campaignContext,
-  });
+  })
+      : null;
 
   if (mandatorySequence) {
     return {
@@ -4864,10 +5002,14 @@ async function generateMonaReply(params: {
     };
   }
 
-  const salesContext = buildSalesContext({
+  const detectedSalesContext = buildSalesContext({
     customerMessage: params.customerMessage,
     conversationContext,
   });
+  const salesContext = applySalesStageToSalesContext(
+    detectedSalesContext,
+    params.salesStage
+  );
   const relevantSalesPlaybook = selectRelevantSalesPlaybook(
     params.customerMessage,
     conversationContext
@@ -4906,6 +5048,7 @@ async function generateMonaReply(params: {
       knowledgeEntries,
       salesContext,
       relevantSalesPlaybook,
+      salesStage: params.salesStage,
     });
 
     const response = await openai.responses.create({
@@ -5328,6 +5471,13 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const salesStage = normalizeSalesStage(conversation.sales_stage);
+
+      console.log("Generating Mona reply with sales stage context.", {
+        conversationId: conversation.id,
+        salesStage,
+      });
+
       const generation = await generateMonaReply({
         customerMessage: combinedMessage,
         conversationId: conversation.id,
@@ -5335,6 +5485,7 @@ export async function POST(request: Request) {
           ? burst.messageIds
           : [inboundSave.messageId],
         campaignContext,
+        salesStage,
       });
 
       if (generation.action === "handover_unreadable") {
