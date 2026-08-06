@@ -23,6 +23,9 @@ const CONVERSATION_SELECT = `
   ai_enabled,
   handover_to_admin,
   handover_reason,
+  sales_stage,
+  sales_stage_updated_at,
+  sales_stage_updated_by,
   last_inbound_at,
   window_expires_at,
   free_entry_point_expires_at,
@@ -59,6 +62,20 @@ type AdminAuthResult = {
   response?: Response;
 };
 
+type SalesStage =
+  | "new_inquiry"
+  | "lead"
+  | "agent_package"
+  | "owner_package"
+  | "developer_agency"
+  | "follow_up"
+  | "payment_started"
+  | "payment_failed"
+  | "closed_won"
+  | "closed_lost";
+
+type SalesStageStats = Record<SalesStage, number>;
+
 type ConversationStats = {
   total: number;
   metaDirect: number;
@@ -68,6 +85,33 @@ type ConversationStats = {
   activeAi: number;
   pausedAi: number;
   handled: number;
+  salesStages: SalesStageStats;
+};
+
+const SALES_STAGES: SalesStage[] = [
+  "new_inquiry",
+  "lead",
+  "agent_package",
+  "owner_package",
+  "developer_agency",
+  "follow_up",
+  "payment_started",
+  "payment_failed",
+  "closed_won",
+  "closed_lost",
+];
+
+const SALES_STAGE_LABELS: Record<SalesStage, string> = {
+  new_inquiry: "New Inquiry",
+  lead: "Lead",
+  agent_package: "Agent Package",
+  owner_package: "Owner Package",
+  developer_agency: "Developer / Agency",
+  follow_up: "Follow-Up",
+  payment_started: "Payment Started",
+  payment_failed: "Payment Failed",
+  closed_won: "Closed Won",
+  closed_lost: "Closed Lost",
 };
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -130,6 +174,22 @@ function applyChannelFilter(query: any, channelFilter: string) {
 
   if (channelFilter === "unknown_channel") {
     return query.is("channel", null);
+  }
+
+  return query;
+}
+
+function applySalesStageFilter(query: any, salesStageFilter: string) {
+  if (salesStageFilter === "all_stages") {
+    return query;
+  }
+
+  if (salesStageFilter === "new_inquiry") {
+    return query.or("sales_stage.eq.new_inquiry,sales_stage.is.null");
+  }
+
+  if (SALES_STAGES.includes(salesStageFilter as SalesStage)) {
+    return query.eq("sales_stage", salesStageFilter);
   }
 
   return query;
@@ -243,6 +303,16 @@ async function getConversationStats(): Promise<ConversationStats> {
     activeAi,
     pausedAi,
     handled,
+    newInquiry,
+    lead,
+    agentPackage,
+    ownerPackage,
+    developerAgency,
+    followUp,
+    paymentStarted,
+    paymentFailed,
+    closedWon,
+    closedLost,
   ] = await Promise.all([
     countConversations(),
     countConversations((query) => query.ilike("channel", "%meta%")),
@@ -256,6 +326,18 @@ async function getConversationStats(): Promise<ConversationStats> {
     ),
     countConversations((query) => query.eq("ai_enabled", false)),
     countConversations((query) => query.eq("status", "handled")),
+    countConversations((query) =>
+      query.or("sales_stage.eq.new_inquiry,sales_stage.is.null")
+    ),
+    countConversations((query) => query.eq("sales_stage", "lead")),
+    countConversations((query) => query.eq("sales_stage", "agent_package")),
+    countConversations((query) => query.eq("sales_stage", "owner_package")),
+    countConversations((query) => query.eq("sales_stage", "developer_agency")),
+    countConversations((query) => query.eq("sales_stage", "follow_up")),
+    countConversations((query) => query.eq("sales_stage", "payment_started")),
+    countConversations((query) => query.eq("sales_stage", "payment_failed")),
+    countConversations((query) => query.eq("sales_stage", "closed_won")),
+    countConversations((query) => query.eq("sales_stage", "closed_lost")),
   ]);
 
   return {
@@ -267,6 +349,18 @@ async function getConversationStats(): Promise<ConversationStats> {
     activeAi,
     pausedAi,
     handled,
+    salesStages: {
+      new_inquiry: newInquiry,
+      lead,
+      agent_package: agentPackage,
+      owner_package: ownerPackage,
+      developer_agency: developerAgency,
+      follow_up: followUp,
+      payment_started: paymentStarted,
+      payment_failed: paymentFailed,
+      closed_won: closedWon,
+      closed_lost: closedLost,
+    },
   };
 }
 
@@ -328,6 +422,8 @@ export async function GET(req: Request) {
   const conversationId = url.searchParams.get("conversationId") || "";
   const filter = url.searchParams.get("filter") || "all";
   const channelFilter = url.searchParams.get("channelFilter") || "all_channels";
+  const salesStageFilter =
+    url.searchParams.get("salesStageFilter") || "all_stages";
   const page = getPageNumber(url.searchParams.get("page"));
   const pageSize = getPageSize(url.searchParams.get("pageSize"));
 
@@ -380,6 +476,7 @@ export async function GET(req: Request) {
 
     query = applyStatusFilter(query, filter);
     query = applyChannelFilter(query, channelFilter);
+    query = applySalesStageFilter(query, salesStageFilter);
 
     query = query
       .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -439,6 +536,7 @@ export async function PATCH(req: Request) {
     const conversationId = String(body?.conversationId || "").trim();
     const action = String(body?.action || "").trim();
     const reason = String(body?.reason || "").trim();
+    const salesStage = String(body?.salesStage || "").trim();
 
     if (!conversationId) {
       return Response.json(
@@ -478,6 +576,82 @@ export async function PATCH(req: Request) {
         existingConversation.phone ||
         ""
     ).trim();
+
+    if (action === "update_sales_stage") {
+      if (!SALES_STAGES.includes(salesStage as SalesStage)) {
+        return Response.json(
+          { success: false, error: "Invalid sales stage." },
+          { status: 400 }
+        );
+      }
+
+      const previousStage = existingConversation.sales_stage || null;
+      const updatedAt = new Date().toISOString();
+
+      const { data: updatedConversation, error: updateError } =
+        await supabaseAdmin
+          .from("whatsapp_conversations")
+          .update({
+            sales_stage: salesStage,
+            sales_stage_updated_at: updatedAt,
+            sales_stage_updated_by: auth.userId || null,
+          })
+          .eq("id", conversationId)
+          .select(CONVERSATION_SELECT)
+          .maybeSingle();
+
+      if (updateError) {
+        console.error("Failed to update WhatsApp sales stage:", updateError);
+
+        return Response.json(
+          { success: false, error: "Failed to update sales stage." },
+          { status: 500 }
+        );
+      }
+
+      const { error: historyError } = await supabaseAdmin
+        .from("whatsapp_sales_stage_history")
+        .insert({
+          conversation_id: conversationId,
+          previous_stage: previousStage,
+          new_stage: salesStage,
+          changed_by: auth.userId || null,
+          changed_at: updatedAt,
+        });
+
+      if (historyError) {
+        console.error("Failed to save WhatsApp sales stage history:", historyError);
+      }
+
+      const stageLabel =
+        SALES_STAGE_LABELS[salesStage as SalesStage] || salesStage;
+
+      await supabaseAdmin.from("whatsapp_messages").insert({
+        conversation_id: conversationId,
+        direction: "system",
+        from_number: "tetamo_admin_dashboard",
+        to_number: phoneE164 || null,
+        phone: phoneE164 || null,
+        profile_name: existingConversation.profile_name || null,
+        message: `Admin moved this conversation to ${stageLabel}.`,
+        source: "admin_dashboard",
+        ai_generated: false,
+        admin_generated: true,
+        media_count: 0,
+        raw_payload: {
+          action,
+          previous_stage: previousStage,
+          new_stage: salesStage,
+          admin_user_id: auth.userId,
+        },
+        created_at: updatedAt,
+      });
+
+      return Response.json({
+        success: true,
+        conversation: updatedConversation,
+      });
+    }
 
     if (action === "block_number") {
       if (!phoneE164) {
