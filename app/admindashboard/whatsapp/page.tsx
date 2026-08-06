@@ -13,6 +13,9 @@ type Conversation = {
   ai_enabled: boolean | null;
   handover_to_admin: boolean | null;
   handover_reason: string | null;
+  sales_stage: SalesStage | null;
+  sales_stage_updated_at: string | null;
+  sales_stage_updated_by: string | null;
   last_inbound_at: string | null;
   window_expires_at: string | null;
   free_entry_point_expires_at: string | null;
@@ -43,6 +46,20 @@ type Message = {
   created_at: string | null;
 };
 
+type SalesStage =
+  | "new_inquiry"
+  | "lead"
+  | "agent_package"
+  | "owner_package"
+  | "developer_agency"
+  | "follow_up"
+  | "payment_started"
+  | "payment_failed"
+  | "closed_won"
+  | "closed_lost";
+
+type SalesStageFilterValue = "all_stages" | SalesStage;
+
 type FilterValue = "all" | "needs_admin" | "active_ai" | "paused_ai" | "handled";
 
 type ChannelFilterValue =
@@ -64,6 +81,7 @@ type ConversationStats = {
   activeAi: number;
   pausedAi: number;
   handled: number;
+  salesStages: Record<SalesStage, number>;
 };
 
 type PaginationState = {
@@ -85,6 +103,27 @@ const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "handled", label: "Handled" },
 ];
 
+const SALES_STAGE_FILTERS: { value: SalesStageFilterValue; label: string }[] = [
+  { value: "all_stages", label: "All Stages" },
+  { value: "new_inquiry", label: "New Inquiry" },
+  { value: "lead", label: "Lead" },
+  { value: "agent_package", label: "Agent Package" },
+  { value: "owner_package", label: "Owner Package" },
+  { value: "developer_agency", label: "Developer / Agency" },
+  { value: "follow_up", label: "Follow-Up" },
+  { value: "payment_started", label: "Payment Started" },
+  { value: "payment_failed", label: "Payment Failed" },
+  { value: "closed_won", label: "Closed Won" },
+  { value: "closed_lost", label: "Closed Lost" },
+];
+
+const SALES_STAGE_LABELS: Record<SalesStage, string> = Object.fromEntries(
+  SALES_STAGE_FILTERS.filter((item) => item.value !== "all_stages").map((item) => [
+    item.value,
+    item.label,
+  ])
+) as Record<SalesStage, string>;
+
 const CHANNEL_FILTERS: { value: ChannelFilterValue; label: string }[] = [
   { value: "all_channels", label: "All Sources" },
   { value: "meta_whatsapp", label: "Meta Direct" },
@@ -104,6 +143,18 @@ const EMPTY_STATS: ConversationStats = {
   activeAi: 0,
   pausedAi: 0,
   handled: 0,
+  salesStages: {
+    new_inquiry: 0,
+    lead: 0,
+    agent_package: 0,
+    owner_package: 0,
+    developer_agency: 0,
+    follow_up: 0,
+    payment_started: 0,
+    payment_failed: 0,
+    closed_won: 0,
+    closed_lost: 0,
+  },
 };
 
 const EMPTY_PAGINATION: PaginationState = {
@@ -283,6 +334,8 @@ export default function AdminWhatsappInboxPage() {
   const [filter, setFilter] = useState<FilterValue>("all");
   const [channelFilter, setChannelFilter] =
     useState<ChannelFilterValue>("all_channels");
+  const [salesStageFilter, setSalesStageFilter] =
+    useState<SalesStageFilterValue>("all_stages");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [stats, setStats] = useState<ConversationStats>(EMPTY_STATS);
@@ -347,7 +400,8 @@ export default function AdminWhatsappInboxPage() {
     nextFilter = filter,
     nextPage = page,
     nextChannelFilter = channelFilter,
-    nextPageSize = pageSize
+    nextPageSize = pageSize,
+    nextSalesStageFilter = salesStageFilter
   ) {
     try {
       setLoadingConversations(true);
@@ -368,6 +422,7 @@ export default function AdminWhatsappInboxPage() {
         channelFilter: nextChannelFilter,
         page: String(nextPage),
         pageSize: String(nextPageSize),
+        salesStageFilter: nextSalesStageFilter,
       });
 
       const response = await fetch(
@@ -487,11 +542,56 @@ export default function AdminWhatsappInboxPage() {
         throw new Error(result.error || "Failed to update conversation.");
       }
 
-      await loadConversations(filter, page, channelFilter, pageSize);
+      await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
       await loadMessages(selectedConversationId);
     } catch (err: any) {
       console.error("Update WhatsApp conversation error:", err);
       setError(err?.message || "Failed to update conversation.");
+    } finally {
+      setActionLoading("");
+    }
+  }
+
+  async function updateSalesStage(salesStage: SalesStage) {
+    if (!selectedConversationId) return;
+
+    try {
+      setActionLoading(`sales_stage:${salesStage}`);
+      setError("");
+      setSuccessMessage("");
+
+      const token = await getAccessToken();
+
+      if (!token) {
+        setError("Please log in as admin first.");
+        return;
+      }
+
+      const response = await fetch("/api/admin/whatsapp/conversations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversationId,
+          action: "update_sales_stage",
+          salesStage,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to update sales stage.");
+      }
+
+      setSuccessMessage(`Moved to ${SALES_STAGE_LABELS[salesStage]}.`);
+      await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
+      await loadMessages(selectedConversationId);
+    } catch (err: any) {
+      console.error("Update WhatsApp sales stage error:", err);
+      setError(err?.message || "Failed to update sales stage.");
     } finally {
       setActionLoading("");
     }
@@ -559,7 +659,7 @@ export default function AdminWhatsappInboxPage() {
         }. AI remains paused until you resume it.`
       );
 
-      await loadConversations(filter, page, channelFilter, pageSize);
+      await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
       await loadMessages(selectedConversationId);
     } catch (err: any) {
       setError(err?.message || "Failed to send WhatsApp reply.");
@@ -640,9 +740,10 @@ export default function AdminWhatsappInboxPage() {
 
       setFilter("all");
       setChannelFilter("all_channels");
+      setSalesStageFilter("all_stages");
       setPage(1);
 
-      await loadConversations("all", 1, "all_channels", pageSize);
+      await loadConversations("all", 1, "all_channels", pageSize, "all_stages");
 
       if (result.conversationId) {
         await loadMessages(result.conversationId);
@@ -661,6 +762,11 @@ export default function AdminWhatsappInboxPage() {
 
   function changeFilter(nextFilter: FilterValue) {
     setFilter(nextFilter);
+    setPage(1);
+  }
+
+  function changeSalesStageFilter(nextSalesStageFilter: SalesStageFilterValue) {
+    setSalesStageFilter(nextSalesStageFilter);
     setPage(1);
   }
 
@@ -685,9 +791,9 @@ export default function AdminWhatsappInboxPage() {
   }
 
   useEffect(() => {
-    loadConversations(filter, page, channelFilter, pageSize);
+    loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, page, channelFilter, pageSize]);
+  }, [filter, page, channelFilter, pageSize, salesStageFilter]);
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -745,7 +851,7 @@ export default function AdminWhatsappInboxPage() {
             <button
               type="button"
               onClick={() => {
-                loadConversations(filter, page, channelFilter, pageSize);
+                loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
                 if (selectedConversationId) loadMessages(selectedConversationId);
               }}
               className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -875,6 +981,46 @@ export default function AdminWhatsappInboxPage() {
             ))}
           </div>
         </div>
+
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+            Sales Pipeline
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {SALES_STAGE_FILTERS.map((item) => {
+              const count =
+                item.value === "all_stages"
+                  ? stats.total
+                  : stats.salesStages[item.value] || 0;
+
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => changeSalesStageFilter(item.value)}
+                  className={[
+                    "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition",
+                    salesStageFilter === item.value
+                      ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  <span>{item.label}</span>
+                  <span
+                    className={[
+                      "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                      salesStageFilter === item.value
+                        ? "bg-white/15 text-white"
+                        : "bg-gray-100 text-gray-600",
+                    ].join(" ")}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
@@ -961,6 +1107,19 @@ export default function AdminWhatsappInboxPage() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
+                    <span
+                      className={[
+                        "rounded-full border px-2 py-1 text-[10px] font-bold",
+                        active
+                          ? "border-white/20 bg-white/10 text-white"
+                          : "border-purple-200 bg-purple-50 text-purple-700",
+                      ].join(" ")}
+                    >
+                      {conversation.sales_stage
+                        ? SALES_STAGE_LABELS[conversation.sales_stage]
+                        : "New Inquiry"}
+                    </span>
+
                     <span
                       className={[
                         "rounded-full border px-2 py-1 text-[10px] font-bold",
@@ -1103,6 +1262,12 @@ export default function AdminWhatsappInboxPage() {
                         {getChannelMeta(selectedConversation.channel).label}
                       </Badge>
 
+                      <Badge tone="purple">
+                        {selectedConversation.sales_stage
+                          ? SALES_STAGE_LABELS[selectedConversation.sales_stage]
+                          : "New Inquiry"}
+                      </Badge>
+
                       {selectedReplyWindowOpen ? (
                         <Badge tone="green">24h Reply Window Open</Badge>
                       ) : (
@@ -1238,6 +1403,51 @@ export default function AdminWhatsappInboxPage() {
                           : "Block Number"}
                       </button>
                     )}
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-bold">Sales Stage</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Move this customer as the conversation progresses. The full chat and AI controls stay unchanged.
+                      </p>
+                    </div>
+                    <Badge tone="purple">
+                      Current: {selectedConversation.sales_stage
+                        ? SALES_STAGE_LABELS[selectedConversation.sales_stage]
+                        : "New Inquiry"}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {SALES_STAGE_FILTERS.filter(
+                      (item): item is { value: SalesStage; label: string } =>
+                        item.value !== "all_stages"
+                    ).map((item) => {
+                      const currentStage =
+                        selectedConversation.sales_stage || "new_inquiry";
+                      const active = currentStage === item.value;
+                      const loading = actionLoading === `sales_stage:${item.value}`;
+
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => updateSalesStage(item.value)}
+                          disabled={Boolean(actionLoading) || active}
+                          className={[
+                            "rounded-2xl border px-4 py-2.5 text-xs font-semibold transition disabled:cursor-not-allowed",
+                            active
+                              ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-50",
+                          ].join(" ")}
+                        >
+                          {loading ? "Moving..." : item.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
