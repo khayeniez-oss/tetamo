@@ -129,6 +129,10 @@ type ConversationRow = {
   free_entry_point_source?: string | null;
   ad_referral_source?: string | null;
   sales_stage?: SalesStage | null;
+  suggested_sales_stage?: SalesStage | null;
+  suggested_sales_stage_reason?: string | null;
+  suggested_sales_stage_confidence?: number | null;
+  suggested_sales_stage_at?: string | null;
 };
 
 type StoredMessageRow = {
@@ -257,6 +261,12 @@ type MonaGenerationResult =
       action: "handover_unreadable";
       reason: string;
     };
+
+type SalesStageSuggestion = {
+  stage: SalesStage;
+  reason: string;
+  confidence: number;
+};
 
 const TETAMO_LINKS = {
   website: "https://www.tetamo.com",
@@ -4049,6 +4059,229 @@ function formatSalesStageContext(salesStage: SalesStage | null) {
     : "No official sales stage is assigned. Use the conversation history and detected sales context.";
 }
 
+function buildSalesStageSuggestionPrompt(params: {
+  currentStage: SalesStage | null;
+  customerMessage: string;
+  conversationContext: string | null;
+  campaignContext: CampaignContext | null;
+  detectedSalesContext: SalesContext;
+}) {
+  const campaignText = params.campaignContext
+    ? [
+        `Template: ${params.campaignContext.templateName || "unknown"}`,
+        `Category: ${params.campaignContext.templateCategory || "unknown"}`,
+        `Send type: ${params.campaignContext.sendType || "unknown"}`,
+        `Sent at: ${params.campaignContext.sentAt || "unknown"}`,
+      ].join("\n")
+    : "No recent campaign context.";
+
+  return `
+You classify one Tetamo WhatsApp conversation for an admin review queue.
+
+CURRENT OFFICIAL STAGE:
+${params.currentStage || "none"}
+
+ALLOWED SUGGESTED STAGES:
+- new_inquiry
+- lead
+- agent_package
+- owner_package
+- developer_agency
+- follow_up
+- payment_started
+- payment_failed
+- closed_won
+- closed_lost
+
+STAGE MEANINGS:
+- new_inquiry: only a fresh or vague enquiry where the customer's role and serious intent are still unclear.
+- lead: genuine interest exists, but the correct owner, agent, developer or payment path is not yet clear.
+- agent_package: the customer is an agent and is discussing agent membership, package capacity, price, features or joining.
+- owner_package: the customer is a property owner discussing advertising their own property or an owner listing package.
+- developer_agency: the customer represents an agency, developer, project owner, company, team or custom inventory requirement.
+- follow_up: the customer asked to continue later, needs approval, is waiting for budget, photos, inventory or another dependency, or has an unresolved concern that needs later follow-up.
+- payment_started: the customer selected an option, asks how or where to pay, reached checkout, or clearly intends to complete payment.
+- payment_failed: the customer explicitly says payment, QRIS, checkout or transaction failed or could not be completed.
+- closed_won: the customer explicitly confirms payment was completed, membership/listing is active, or the purchase clearly succeeded. Do not infer this merely from intent to pay.
+- closed_lost: the customer clearly declines, is not interested, asks to stop promotion/contact, or definitively rejects the offer.
+
+CLASSIFICATION RULES:
+- Read the full recent conversation before deciding.
+- The latest customer message has the highest weight.
+- Suggest the stage that should help the admin take the next action now.
+- Do not suggest the same stage as the current official stage.
+- Do not use closed_won without explicit success evidence.
+- Do not use closed_lost for hesitation such as "later", "not ready", "ask my boss", or "no budget yet"; use follow_up.
+- A direct role-specific discussion should normally use agent_package, owner_package or developer_agency rather than generic lead.
+- A payment problem overrides the earlier package stage and should be payment_failed.
+- Clear payment intent overrides the earlier package stage and should be payment_started.
+- If evidence is weak or no stage change is needed, return stage as null.
+- Confidence must be an integer from 0 to 100.
+- Keep the reason factual and under 140 characters.
+- Never mention internal reasoning beyond the short factual reason.
+
+DETECTED SALES CONTEXT:
+${formatSalesContext(params.detectedSalesContext)}
+
+RECENT CAMPAIGN CONTEXT:
+${campaignText}
+
+RECENT CONVERSATION:
+${params.conversationContext || "No earlier conversation context."}
+
+LATEST CUSTOMER MESSAGE:
+${params.customerMessage}
+
+Return only valid JSON in this exact shape:
+{"stage":"agent_package","reason":"Customer confirmed they are an agent and asked about membership pricing.","confidence":92}
+
+When there is no useful change:
+{"stage":null,"reason":"No clear stage change is supported yet.","confidence":45}
+`.trim();
+}
+
+function parseSalesStageSuggestion(
+  rawValue: string,
+  currentStage: SalesStage | null
+): SalesStageSuggestion | null {
+  const raw = String(rawValue || "").trim();
+  if (!raw) return null;
+
+  const jsonText = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    const parsed = JSON.parse(jsonText) as {
+      stage?: string | null;
+      reason?: string | null;
+      confidence?: number | string | null;
+    };
+
+    const stage = normalizeSalesStage(parsed.stage);
+    const confidence = Math.max(
+      0,
+      Math.min(100, Math.round(Number(parsed.confidence) || 0))
+    );
+    const reason = String(parsed.reason || "").trim().slice(0, 220);
+
+    if (!stage || stage === currentStage || confidence < 70 || !reason) {
+      return null;
+    }
+
+    return {
+      stage,
+      reason,
+      confidence,
+    };
+  } catch (error) {
+    console.error("Failed to parse Mona sales-stage suggestion:", {
+      raw: raw.slice(0, 500),
+      error,
+    });
+    return null;
+  }
+}
+
+async function saveSalesStageSuggestion(params: {
+  conversationId: string;
+  suggestion: SalesStageSuggestion | null;
+}) {
+  const updatePayload = params.suggestion
+    ? {
+        suggested_sales_stage: params.suggestion.stage,
+        suggested_sales_stage_reason: params.suggestion.reason,
+        suggested_sales_stage_confidence: params.suggestion.confidence,
+        suggested_sales_stage_at: new Date().toISOString(),
+      }
+    : {
+        suggested_sales_stage: null,
+        suggested_sales_stage_reason: null,
+        suggested_sales_stage_confidence: null,
+        suggested_sales_stage_at: null,
+      };
+
+  const { error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .update(updatePayload)
+    .eq("id", params.conversationId);
+
+  if (error) {
+    console.error("Failed to save Mona sales-stage suggestion:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function suggestSalesStage(params: {
+  conversationId: string;
+  customerMessage: string;
+  excludedMessageIds: string[];
+  campaignContext: CampaignContext | null;
+  currentStage: SalesStage | null;
+}) {
+  const conversationContext = await getConversationContext(
+    params.conversationId,
+    params.excludedMessageIds
+  );
+
+  const detectedSalesContext = buildSalesContext({
+    customerMessage: params.customerMessage,
+    conversationContext,
+  });
+
+  if (!process.env.OPENAI_API_KEY) {
+    await saveSalesStageSuggestion({
+      conversationId: params.conversationId,
+      suggestion: null,
+    });
+    return null;
+  }
+
+  try {
+    const prompt = buildSalesStageSuggestionPrompt({
+      currentStage: params.currentStage,
+      customerMessage: params.customerMessage,
+      conversationContext,
+      campaignContext: params.campaignContext,
+      detectedSalesContext,
+    });
+
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: prompt,
+      temperature: 0.1,
+      max_output_tokens: 220,
+    });
+
+    const suggestion = parseSalesStageSuggestion(
+      String(response.output_text || ""),
+      params.currentStage
+    );
+
+    await saveSalesStageSuggestion({
+      conversationId: params.conversationId,
+      suggestion,
+    });
+
+    console.log("Mona sales-stage suggestion evaluated.", {
+      conversationId: params.conversationId,
+      currentStage: params.currentStage,
+      suggestedStage: suggestion?.stage || null,
+      confidence: suggestion?.confidence || null,
+      reason: suggestion?.reason || null,
+    });
+
+    return suggestion;
+  } catch (error) {
+    console.error("Failed to evaluate Mona sales-stage suggestion:", error);
+    return null;
+  }
+}
+
 function buildMonaPrompt(params: {
   customerMessage: string;
   language: MonaLanguage;
@@ -4362,7 +4595,7 @@ async function upsertConversation(params: {
       onConflict: "conversation_key",
     })
     .select(
-      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source, sales_stage"
+      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source, sales_stage, suggested_sales_stage, suggested_sales_stage_reason, suggested_sales_stage_confidence, suggested_sales_stage_at"
     )
     .single();
 
@@ -5476,6 +5709,16 @@ export async function POST(request: Request) {
       console.log("Generating Mona reply with sales stage context.", {
         conversationId: conversation.id,
         salesStage,
+      });
+
+      await suggestSalesStage({
+        conversationId: conversation.id,
+        customerMessage: combinedMessage,
+        excludedMessageIds: burst.messageIds.length
+          ? burst.messageIds
+          : [inboundSave.messageId],
+        campaignContext,
+        currentStage: salesStage,
       });
 
       const generation = await generateMonaReply({
