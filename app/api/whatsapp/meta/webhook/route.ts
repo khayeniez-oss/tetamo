@@ -4107,15 +4107,23 @@ STAGE MEANINGS:
 
 CLASSIFICATION RULES:
 - Read the full recent conversation before deciding.
-- The latest customer message has the highest weight.
+- The latest customer message has the highest weight, but do not guess from short acknowledgements such as "ya", "ok", "baik", "boleh", "thanks", or "terima kasih".
+- Suggest a stage only when the latest customer message contains clear, explicit evidence for that stage.
+- Conversation history may confirm explicit evidence, but it must not turn an ambiguous latest reply into a stage change.
 - Suggest the stage that should help the admin take the next action now.
 - Do not suggest the same stage as the current official stage.
 - Do not use closed_won without explicit success evidence.
 - Do not use closed_lost for hesitation such as "later", "not ready", "ask my boss", or "no budget yet"; use follow_up.
-- A direct role-specific discussion should normally use agent_package, owner_package or developer_agency rather than generic lead.
-- A payment problem overrides the earlier package stage and should be payment_failed.
-- Clear payment intent overrides the earlier package stage and should be payment_started.
-- If evidence is weak or no stage change is needed, return stage as null.
+- Use agent_package only when the customer explicitly identifies as an agent or directly discusses agent membership/package capacity.
+- Use owner_package only when the customer explicitly identifies as an owner or directly discusses advertising their own property.
+- Use developer_agency only when the customer explicitly identifies a developer, agency, company, project owner, team, bulk inventory, or custom commercial need.
+- Use follow_up only when the customer explicitly asks to continue later or names a dependency such as budget, approval, photos, inventory, salary, partner, management, or timing.
+- Use payment_started only when the customer explicitly selected an option, asks for payment instructions/link/account, or clearly says they are proceeding to pay.
+- Use payment_failed only when the customer explicitly reports a failed QRIS, checkout, transfer, card, or transaction.
+- Use closed_won only with explicit payment-success, activation, receipt, or confirmed conversion evidence.
+- Use closed_lost only with an explicit rejection, opt-out, cancellation, or request not to be contacted.
+- Never infer a payment or closed stage from campaign context alone.
+- If evidence is weak, ambiguous, indirect, or no stage change is needed, return stage as null.
 - Confidence must be an integer from 0 to 100.
 - Keep the reason factual and under 140 characters.
 - Never mention internal reasoning beyond the short factual reason.
@@ -4140,9 +4148,119 @@ When there is no useful change:
 `.trim();
 }
 
+function hasExplicitStageEvidence(
+  message: string,
+  stage: SalesStage
+) {
+  const normalized = normalizeIntentText(message);
+
+  if (!normalized) return false;
+
+  const ambiguousOnly = new Set([
+    "ya", "iya", "y", "yes", "ok", "oke", "okay", "baik", "boleh", "sip",
+    "thanks", "thank you", "terima kasih", "trimakasih", "makasih",
+    "nanti", "mungkin", "hello", "hi", "halo"
+  ]);
+
+  if (ambiguousOnly.has(normalized)) return false;
+
+  if (stage === "new_inquiry") {
+    return containsPattern(normalized, [
+      "apa itu tetamo", "tetamo itu apa", "info tetamo",
+      "can i get more info", "more information about tetamo"
+    ]);
+  }
+
+  if (stage === "lead") {
+    return containsPattern(normalized, [
+      "saya tertarik", "saya minat", "ingin tahu lebih lanjut",
+      "mau tahu lebih lanjut", "interested", "tell me more",
+      "more information", "bisa jelaskan", "boleh jelaskan"
+    ]);
+  }
+
+  if (stage === "agent_package") {
+    return containsPattern(normalized, [
+      "saya agen", "saya agent", "agen properti", "agent properti",
+      "agent package", "paket agen", "membership agen", "membership agent",
+      "silver", "gold", "agent pro", "listing saya", "listing aktif saya"
+    ]);
+  }
+
+  if (stage === "owner_package") {
+    return containsPattern(normalized, [
+      "saya pemilik", "saya owner", "properti saya", "rumah saya",
+      "villa saya", "tanah saya", "mau jual properti", "mau sewa properti",
+      "mau sewakan", "pasang iklan properti saya", "paket pemilik",
+      "paket owner", "basic listing", "priority listing", "featured listing"
+    ]);
+  }
+
+  if (stage === "developer_agency") {
+    return containsPattern(normalized, [
+      "saya developer", "kami developer", "saya punya agency",
+      "kami agency", "kantor agen", "perusahaan properti", "project owner",
+      "proyek perumahan", "project perumahan", "banyak unit", "bulk listing",
+      "bulk upload", "team agen", "developer license"
+    ]);
+  }
+
+  if (stage === "follow_up") {
+    return containsPattern(normalized, [
+      "bulan depan", "minggu depan", "nanti saya", "hubungi nanti",
+      "kontak nanti", "setelah gajian", "belum ada budget", "budget belum",
+      "tunggu approval", "menunggu approval", "diskusi dulu", "tanya dulu",
+      "tunggu foto", "menunggu foto", "tunggu inventory", "menunggu inventory",
+      "masih sibuk", "belum siap", "belum sekarang", "maybe later",
+      "contact you later", "get back to you"
+    ]);
+  }
+
+  if (stage === "payment_started") {
+    return containsPattern(normalized, [
+      "cara bayar", "bagaimana bayar", "mau bayar", "akan bayar",
+      "bayar sekarang", "kirim link pembayaran", "link pembayaran",
+      "nomor rekening", "rekening transfer", "saya pilih silver",
+      "saya pilih gold", "saya pilih agent pro", "proceed payment",
+      "ready to pay", "where do i pay", "how do i pay", "payment link"
+    ]);
+  }
+
+  if (stage === "payment_failed") {
+    return containsPattern(normalized, [
+      "pembayaran gagal", "payment failed", "qris gagal", "qris tidak bisa",
+      "tidak bisa bayar", "gagal bayar", "checkout gagal", "checkout error",
+      "transaksi gagal", "transfer gagal", "kartu ditolak", "card declined",
+      "payment error", "unable to pay"
+    ]);
+  }
+
+  if (stage === "closed_won") {
+    return containsPattern(normalized, [
+      "sudah bayar", "telah bayar", "pembayaran berhasil", "payment successful",
+      "payment completed", "sudah transfer", "telah transfer", "sudah aktif",
+      "membership aktif", "listing aktif", "ini bukti pembayaran",
+      "bukti transfer", "receipt pembayaran"
+    ]);
+  }
+
+  if (stage === "closed_lost") {
+    return containsPattern(normalized, [
+      "tidak tertarik", "ga tertarik", "gak tertarik", "nggak tertarik",
+      "tidak jadi", "ga jadi", "gak jadi", "nggak jadi", "saya batal",
+      "tidak perlu", "jangan hubungi lagi", "berhenti promosi",
+      "stop promotion", "not interested", "dont contact me",
+      "don't contact me", "no thanks"
+    ]);
+  }
+
+  return false;
+}
+
 function parseSalesStageSuggestion(
   rawValue: string,
-  currentStage: SalesStage | null
+  currentStage: SalesStage | null,
+  customerMessage: string
 ): SalesStageSuggestion | null {
   const raw = String(rawValue || "").trim();
   if (!raw) return null;
@@ -4167,7 +4285,21 @@ function parseSalesStageSuggestion(
     );
     const reason = String(parsed.reason || "").trim().slice(0, 220);
 
-    if (!stage || stage === currentStage || confidence < 70 || !reason) {
+    const minimumConfidence =
+      stage === "payment_started" ||
+      stage === "payment_failed" ||
+      stage === "closed_won" ||
+      stage === "closed_lost"
+        ? 95
+        : 88;
+
+    if (
+      !stage ||
+      stage === currentStage ||
+      confidence < minimumConfidence ||
+      !reason ||
+      !hasExplicitStageEvidence(customerMessage, stage)
+    ) {
       return null;
     }
 
@@ -4189,19 +4321,16 @@ async function saveSalesStageSuggestion(params: {
   conversationId: string;
   suggestion: SalesStageSuggestion | null;
 }) {
-  const updatePayload = params.suggestion
-    ? {
-        suggested_sales_stage: params.suggestion.stage,
-        suggested_sales_stage_reason: params.suggestion.reason,
-        suggested_sales_stage_confidence: params.suggestion.confidence,
-        suggested_sales_stage_at: new Date().toISOString(),
-      }
-    : {
-        suggested_sales_stage: null,
-        suggested_sales_stage_reason: null,
-        suggested_sales_stage_confidence: null,
-        suggested_sales_stage_at: null,
-      };
+  // Do not erase a pending admin-review suggestion merely because a later
+  // acknowledgement such as "ok" or "thank you" has no reliable stage evidence.
+  if (!params.suggestion) return true;
+
+  const updatePayload = {
+    suggested_sales_stage: params.suggestion.stage,
+    suggested_sales_stage_reason: params.suggestion.reason,
+    suggested_sales_stage_confidence: params.suggestion.confidence,
+    suggested_sales_stage_at: new Date().toISOString(),
+  };
 
   const { error } = await supabaseAdmin
     .from("whatsapp_conversations")
@@ -4259,7 +4388,8 @@ async function suggestSalesStage(params: {
 
     const suggestion = parseSalesStageSuggestion(
       String(response.output_text || ""),
-      params.currentStage
+      params.currentStage,
+      params.customerMessage
     );
 
     await saveSalesStageSuggestion({
@@ -4911,11 +5041,21 @@ function isRecentCampaignContext(context: CampaignContext | null, hours = 48) {
 }
 
 function hasGenuineTetamoIntent(message: string) {
-  return containsPattern(message, [
-    "tetamo", "harga", "harganya", "berapa", "brp", "paket", "membership",
-    "listing", "properti", "property", "agen", "agent", "owner", "pemilik",
-    "developer", "jual", "sewa", "beli", "bayar", "qris", "daftar",
-    "register", "join", "minat", "tertarik", "info", "fitur", "cara"
+  const normalized = normalizeIntentText(message);
+
+  if (/[?]/.test(message)) return true;
+
+  return containsPattern(normalized, [
+    "tetamo", "harga", "harganya", "berapa", "brp", "biaya", "paket",
+    "membership", "listing", "properti", "property", "rumah", "villa",
+    "apartemen", "tanah", "agen", "agent", "owner", "pemilik", "developer",
+    "agency", "jual", "sewa", "beli", "bayar", "payment", "qris", "checkout",
+    "daftar", "register", "join", "gabung", "minat", "tertarik", "info",
+    "informasi", "jelaskan", "penjelasan", "detail", "fitur", "cara",
+    "dibantu", "bantu saya", "mau tahu", "ingin tahu", "lebih lanjut",
+    "how much", "tell me more", "more information", "interested",
+    "want to join", "want to register", "want to list", "want to buy",
+    "want to rent", "can you help", "please explain"
   ]);
 }
 
@@ -4923,14 +5063,50 @@ function isLikelyAutomaticBusinessReply(
   message: string,
   campaignContext: CampaignContext | null
 ) {
+  // Only suppress replies after a recent Tetamo business-initiated template.
   if (!isRecentCampaignContext(campaignContext, 48)) return false;
 
   const normalized = normalizeIntentText(message);
-  if (!normalized || hasGenuineTetamoIntent(normalized)) return false;
+  if (!normalized) return false;
+
+  // A real question or clear Tetamo/property intent must always reach Mona.
+  if (hasGenuineTetamoIntent(message)) return false;
+
+  const exactShortAutoReplies = new Set([
+    "thank you",
+    "thanks",
+    "thankyou",
+    "terima kasih",
+    "trimakasih",
+    "makasih",
+    "hi thank you",
+    "hi thanks",
+    "hello thank you",
+    "hello thanks",
+    "halo thank you",
+    "halo thanks",
+    "hi terima kasih",
+    "hello terima kasih",
+    "halo terima kasih",
+    "hi trimakasih",
+    "hello trimakasih",
+    "halo trimakasih",
+    "hello saya",
+    "hi saya",
+    "halo saya",
+  ]);
+
+  if (exactShortAutoReplies.has(normalized)) return true;
 
   const autoPatterns = [
     "thank you for contacting",
     "thanks for contacting",
+    "thank you for connecting",
+    "thanks for connecting",
+    "thank you for reaching out",
+    "thanks for reaching out",
+    "thank you for your message",
+    "thanks for your message",
     "please let us know how we can help",
     "we have received your message",
     "your message has been received",
@@ -4940,28 +5116,71 @@ function isLikelyAutomaticBusinessReply(
     "we are currently unavailable",
     "our business hours",
     "office hours",
+    "out of office",
+    "automatic reply",
+    "automated reply",
     "terima kasih telah menghubungi",
     "terima kasih sudah menghubungi",
+    "terima kasih menghubungi",
+    "trimakasih telah menghubungi",
+    "trimakasih sudah menghubungi",
+    "makasih sudah menghubungi",
+    "terima kasih telah terhubung",
+    "terima kasih sudah terhubung",
+    "terima kasih atas pesan anda",
+    "terima kasih atas pesannya",
     "pesan anda telah kami terima",
     "pesan anda sudah kami terima",
+    "kami telah menerima pesan anda",
+    "kami sudah menerima pesan anda",
     "kami akan segera membalas",
     "kami akan membalas secepatnya",
+    "kami akan menghubungi kembali",
+    "admin akan segera membalas",
+    "tim kami akan segera membalas",
     "saat ini kami sedang tidak tersedia",
+    "saat ini kami belum tersedia",
     "saat ini kami sedang tutup",
-    "jam operasional kami",
+    "kami sedang offline",
     "di luar jam operasional",
+    "jam operasional kami",
+    "pesan otomatis",
+    "balasan otomatis",
   ];
 
-  const structureLooksAutomatic =
-    containsPattern(normalized, autoPatterns) ||
-    (
-      normalized.length >= 55 &&
-      containsPattern(normalized, ["terima kasih", "thank you"]) &&
-      containsPattern(normalized, ["menghubungi", "contacting"]) &&
-      !/[?]/.test(message)
-    );
+  if (containsPattern(normalized, autoPatterns)) return true;
 
-  return structureLooksAutomatic;
+  const startsWithGreeting = /^(hi|hello|halo|hai|selamat pagi|selamat siang|selamat sore|selamat malam)\b/.test(
+    normalized
+  );
+  const containsThanks = containsPattern(normalized, [
+    "thank you",
+    "thanks",
+    "terima kasih",
+    "trimakasih",
+    "makasih",
+  ]);
+  const containsBusinessAcknowledgement = containsPattern(normalized, [
+    "menghubungi",
+    "contacting",
+    "connecting",
+    "reaching out",
+    "pesan anda",
+    "your message",
+    "akan membalas",
+    "get back to you",
+    "jam operasional",
+    "business hours",
+  ]);
+
+  return (
+    normalized.length <= 180 &&
+    !looksLikeDirectQuestion(message) &&
+    (
+      (startsWithGreeting && containsThanks) ||
+      (containsThanks && containsBusinessAcknowledgement)
+    )
+  );
 }
 
 function isClearRejection(message: string) {
@@ -5002,10 +5221,6 @@ function getDeterministicReplyDecision(params: {
   const message = params.customerMessage;
   const language = params.language;
   const customerType = detectCustomerType(message, params.conversationContext);
-
-  if (isLikelyAutomaticBusinessReply(message, params.campaignContext)) {
-    return { action: "silent", reason: "recent_template_automatic_business_reply" };
-  }
 
   if (isClearRejection(message)) {
     return {
