@@ -153,6 +153,28 @@ type KnowledgeEntry = {
   priority: number | null;
 };
 
+type KnowledgeMatch = {
+  entry: KnowledgeEntry;
+  score: number;
+};
+
+type MonaIntentAnalysis = {
+  understoodQuestion: string;
+  retrievalQuery: string;
+  topic: string;
+  customerType: CustomerType;
+  salesSituation:
+    | "information"
+    | "interest"
+    | "comparison"
+    | "objection"
+    | "rejection"
+    | "closing"
+    | "support"
+    | "unknown";
+  needsFactualKnowledge: boolean;
+};
+
 type MetaSendResult = {
   success: boolean;
   id: string | null;
@@ -3820,13 +3842,26 @@ function getMandatorySalesSequence(params: {
   conversationContext: string | null;
   campaignContext: CampaignContext | null;
 }) {
-  if (!isIntroductoryTetamoInquiry(params.customerMessage)) {
+  // A reply after a recent Tetamo template is a continuation of that template,
+  // not a fresh customer-initiated introduction.
+  if (isRecentCampaignContext(params.campaignContext, 48)) {
     return null;
   }
 
-  // A reply after any recent template is a continuation of that template,
-  // not a fresh universal introduction.
-  if (isRecentCampaignContext(params.campaignContext, 48)) {
+  const hasEarlierConversation = Boolean(
+    String(params.conversationContext || "").trim()
+  );
+
+  // Every genuinely new customer-initiated conversation receives the same
+  // approved Tetamo introduction before Mona starts contextual selling.
+  if (!hasEarlierConversation) {
+    const base = INTRO_SALES_SEQUENCE[params.language];
+    return [base.answer, base.qualification];
+  }
+
+  // Preserve the approved two-message intro when an existing but very short
+  // conversation still has not received the Tetamo explanation.
+  if (!isIntroductoryTetamoInquiry(params.customerMessage)) {
     return null;
   }
 
@@ -3843,12 +3878,7 @@ function getMandatorySalesSequence(params: {
   }
 
   const base = INTRO_SALES_SEQUENCE[params.language];
-  const shortAnswer =
-    params.language === "en"
-      ? "Tetamo is an online property marketplace in Indonesia for owners, agents, developers, buyers and renters. Users can advertise or search for properties, contact owners or agents through WhatsApp, and arrange viewings."
-      : "Tetamo adalah marketplace properti online di Indonesia untuk pemilik, agen, developer, pembeli dan penyewa. Pengguna dapat memasang atau mencari properti, menghubungi pemilik atau agen melalui WhatsApp, dan mengatur jadwal viewing.";
-
-  return [shortAnswer, base.qualification];
+  return [base.answer, base.qualification];
 }
 
 
@@ -3866,9 +3896,9 @@ function tokeniseForSearch(value: string) {
   );
 }
 
-function scoreKnowledgeEntry(message: string, entry: KnowledgeEntry) {
-  const normalizedMessage = String(message || "").toLowerCase().trim();
-  const messageTokens = tokeniseForSearch(message);
+function scoreKnowledgeEntry(searchText: string, entry: KnowledgeEntry) {
+  const normalizedSearch = String(searchText || "").toLowerCase().trim();
+  const searchTokens = tokeniseForSearch(searchText);
   const question = String(entry.canonical_question || "").toLowerCase();
   const answer = String(entry.approved_answer || "").toLowerCase();
   const category = String(entry.category || "").toLowerCase();
@@ -3881,28 +3911,168 @@ function scoreKnowledgeEntry(message: string, entry: KnowledgeEntry) {
     .filter(Boolean);
 
   for (const line of questionLines) {
-    if (line === normalizedMessage) score += 20;
-    else if (line.length >= 8 && normalizedMessage.includes(line)) score += 10;
-    else if (normalizedMessage.length >= 8 && line.includes(normalizedMessage)) {
-      score += 8;
+    if (line === normalizedSearch) score += 30;
+    else if (line.length >= 8 && normalizedSearch.includes(line)) score += 15;
+    else if (normalizedSearch.length >= 8 && line.includes(normalizedSearch)) {
+      score += 12;
     }
   }
 
-  for (const token of messageTokens) {
-    if (question.includes(token)) score += 3;
-    if (category.includes(token)) score += 1.5;
-    if (answer.includes(token)) score += 0.5;
+  for (const token of searchTokens) {
+    if (question.includes(token)) score += 4;
+    if (category.includes(token)) score += 2;
+    if (answer.includes(token)) score += 1;
   }
 
   score += Math.max(0, Number(entry.priority || 0)) / 1000;
-
   return score;
 }
 
+function buildIntentFallback(params: {
+  customerMessage: string;
+  conversationContext: string | null;
+}): MonaIntentAnalysis {
+  const customerType = detectCustomerType(
+    params.customerMessage,
+    params.conversationContext
+  );
+
+  const customerConversation = getCustomerOnlyConversationText(
+    params.conversationContext
+  );
+
+  return {
+    understoodQuestion: params.customerMessage,
+    retrievalQuery: [
+      customerType !== "unknown" ? `customer type ${customerType}` : "",
+      customerConversation,
+      params.customerMessage,
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(-5000),
+    topic: "general Tetamo enquiry",
+    customerType,
+    salesSituation: isClearRejection(params.customerMessage)
+      ? "rejection"
+      : looksLikeDirectQuestion(params.customerMessage)
+        ? "information"
+        : "unknown",
+    needsFactualKnowledge: true,
+  };
+}
+
+async function analyzeMonaConversation(params: {
+  customerMessage: string;
+  conversationContext: string | null;
+  salesStage: SalesStage | null;
+}): Promise<MonaIntentAnalysis> {
+  const fallback = buildIntentFallback(params);
+
+  if (!process.env.OPENAI_API_KEY) return fallback;
+
+  const prompt = `
+You analyse a Tetamo WhatsApp conversation before factual information is retrieved.
+
+Your job is to understand the customer's latest message using the recent conversation.
+Do not answer the customer.
+Do not invent Tetamo facts.
+
+Identify:
+- what the customer is actually asking or communicating now;
+- the known customer type;
+- the sales situation;
+- a concise retrieval query containing all context needed to find the correct Tetamo Knowledge Base answer.
+
+The retrieval query must include relevant remembered facts such as:
+- owner, agent, agency, developer, buyer or renter;
+- package already discussed;
+- listing count;
+- objection, comparison, payment, registration, feature or support topic;
+- any earlier customer statement required to understand a short follow-up.
+
+RECENT CONVERSATION:
+${params.conversationContext || "No earlier conversation."}
+
+OFFICIAL SALES STAGE:
+${params.salesStage || "none"}
+
+LATEST CUSTOMER MESSAGE:
+${params.customerMessage}
+
+Return only valid JSON:
+{
+  "understoodQuestion": "plain-language meaning of the latest message",
+  "retrievalQuery": "context-rich search query for approved Tetamo information",
+  "topic": "short topic",
+  "customerType": "owner|agent|agency|developer|buyer_renter|unknown",
+  "salesSituation": "information|interest|comparison|objection|rejection|closing|support|unknown",
+  "needsFactualKnowledge": true
+}
+`.trim();
+
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: prompt,
+      temperature: 0,
+      max_output_tokens: 350,
+    });
+
+    const raw = String(response.output_text || "")
+      .trim()
+      .replace(/^```json\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
+
+    const parsed = JSON.parse(raw) as Partial<MonaIntentAnalysis>;
+    const allowedTypes = new Set<CustomerType>([
+      "owner",
+      "agent",
+      "agency",
+      "developer",
+      "buyer_renter",
+      "unknown",
+    ]);
+    const allowedSituations = new Set<MonaIntentAnalysis["salesSituation"]>([
+      "information",
+      "interest",
+      "comparison",
+      "objection",
+      "rejection",
+      "closing",
+      "support",
+      "unknown",
+    ]);
+
+    return {
+      understoodQuestion:
+        String(parsed.understoodQuestion || "").trim() ||
+        fallback.understoodQuestion,
+      retrievalQuery:
+        String(parsed.retrievalQuery || "").trim() || fallback.retrievalQuery,
+      topic: String(parsed.topic || "").trim() || fallback.topic,
+      customerType: allowedTypes.has(parsed.customerType as CustomerType)
+        ? (parsed.customerType as CustomerType)
+        : fallback.customerType,
+      salesSituation: allowedSituations.has(
+        parsed.salesSituation as MonaIntentAnalysis["salesSituation"]
+      )
+        ? (parsed.salesSituation as MonaIntentAnalysis["salesSituation"])
+        : fallback.salesSituation,
+      needsFactualKnowledge:
+        parsed.needsFactualKnowledge === false ? false : true,
+    };
+  } catch (error) {
+    console.error("Failed to analyse Mona conversation intent:", error);
+    return fallback;
+  }
+}
+
 async function searchApprovedKnowledge(
-  customerMessage: string,
+  retrievalQuery: string,
   language: MonaLanguage
-) {
+): Promise<KnowledgeMatch[]> {
   const { data, error } = await supabaseAdmin
     .from("knowledge_base_entries")
     .select(
@@ -3910,14 +4080,14 @@ async function searchApprovedKnowledge(
     )
     .eq("status", "active")
     .order("priority", { ascending: false })
-    .limit(150);
+    .limit(250);
 
   if (error) {
     console.error("Failed to search approved Knowledge Base:", error);
-    return [] as KnowledgeEntry[];
+    return [];
   }
 
-  return ((data || []) as KnowledgeEntry[])
+  const matches = ((data || []) as KnowledgeEntry[])
     .filter((entry) => {
       const entryLanguage = String(entry.language || "both").toLowerCase();
       return (
@@ -3929,34 +4099,72 @@ async function searchApprovedKnowledge(
     })
     .map((entry) => ({
       entry,
-      score: scoreKnowledgeEntry(customerMessage, entry),
+      score: scoreKnowledgeEntry(retrievalQuery, entry),
     }))
-    .filter((item) => item.score >= 3)
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map((item) => item.entry);
+    .slice(0, 8);
+
+  return matches;
 }
 
-function formatHardcodedFaq() {
-  return HARDCODED_FAQ.map((item, index) => {
-    return [
-      `FAQ ${index + 1}: ${item.topic}`,
-      `Question variations: ${item.questions.join(" | ")}`,
-      `Approved Indonesian answer: ${item.answerId}`,
-      `Approved English answer: ${item.answerEn}`,
-    ].join("\n");
-  }).join("\n\n");
+function scoreHardcodedFaq(
+  retrievalQuery: string,
+  item: (typeof HARDCODED_FAQ)[number]
+) {
+  const entry: KnowledgeEntry = {
+    id: item.topic,
+    category: item.topic,
+    canonical_question: item.questions.join("\n"),
+    approved_answer: `${item.answerId}\n${item.answerEn}`,
+    language: "both",
+    priority: 100,
+  };
+
+  return scoreKnowledgeEntry(retrievalQuery, entry);
 }
 
-function formatKnowledgeEntries(entries: KnowledgeEntry[]) {
-  if (!entries.length) {
-    return "No additional relevant approved Knowledge Base entries were found.";
+function selectRelevantHardcodedFaq(retrievalQuery: string) {
+  return HARDCODED_FAQ
+    .map((item) => ({
+      item,
+      score: scoreHardcodedFaq(retrievalQuery, item),
+    }))
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+}
+
+function formatRelevantHardcodedFaq(
+  matches: ReturnType<typeof selectRelevantHardcodedFaq>
+) {
+  if (!matches.length) {
+    return "No directly relevant hardcoded FAQ answer was selected.";
   }
 
-  return entries
-    .map((entry, index) => {
+  return matches
+    .map(({ item, score }, index) => {
       return [
-        `Knowledge Base ${index + 1}`,
+        `Hardcoded FAQ ${index + 1} — relevance ${score.toFixed(1)}`,
+        `Topic: ${item.topic}`,
+        `Question variations: ${item.questions.join(" | ")}`,
+        `Approved Indonesian answer: ${item.answerId}`,
+        `Approved English answer: ${item.answerEn}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+function formatKnowledgeMatches(matches: KnowledgeMatch[]) {
+  if (!matches.length) {
+    return "No relevant approved Knowledge Base entry was found.";
+  }
+
+  return matches
+    .map(({ entry, score }, index) => {
+      return [
+        `Knowledge Base ${index + 1} — relevance ${score.toFixed(1)}`,
+        `Entry ID: ${entry.id}`,
         `Category: ${entry.category || "general"}`,
         `Question patterns: ${entry.canonical_question || ""}`,
         `Approved answer: ${entry.approved_answer || ""}`,
@@ -4417,7 +4625,9 @@ function buildMonaPrompt(params: {
   language: MonaLanguage;
   conversationContext: string | null;
   campaignContext: CampaignContext | null;
-  knowledgeEntries: KnowledgeEntry[];
+  intentAnalysis: MonaIntentAnalysis;
+  hardcodedFaqMatches: ReturnType<typeof selectRelevantHardcodedFaq>;
+  knowledgeMatches: KnowledgeMatch[];
   salesContext: SalesContext;
   relevantSalesPlaybook: SalesPlaybookEntry[];
   salesStage: SalesStage | null;
@@ -4432,123 +4642,71 @@ function buildMonaPrompt(params: {
     : "No recent campaign context.";
 
   return `
-You are Mona from Tetamo, replying to customers through WhatsApp.
+You are Mona from Tetamo, replying to a customer through WhatsApp.
 
-MONA IDENTITY:
-- Your name is Mona.
-- You represent Tetamo.
-- Never introduce yourself as an AI assistant, WhatsApp AI, chatbot, bot, automated assistant or virtual assistant.
-- Do not introduce yourself in every reply.
-- Introduce yourself only when the customer asks who you are, your name, whether you are AI, or whether you are admin.
-- When identity is asked, use the approved identity answer in the customer's language and continue answering any real question they also asked.
+YOUR WORKING ORDER:
+1. Understand the latest message from the full recent conversation.
+2. Answer the customer's actual question first.
+3. Use only the approved Tetamo facts supplied below.
+4. Apply the relevant universal sales skill: explain value, handle an objection, compare, recommend, motivate, close, respect rejection, or provide a next step.
+5. Write naturally in the customer's language and WhatsApp style.
 
-LANGUAGE:
-- Reply in Indonesian when the customer uses Indonesian.
-- Reply in English when the customer uses English.
-- Understand normal Indonesian slang, abbreviations and spelling mistakes, including brp, gmn, udh, sdh, blm, sy, yg, gak, ga and nggak.
-- When the customer mixes Indonesian and English, use the main language naturally.
-- Do not randomly switch languages.
-- The detected language for this message is: ${params.language}.
+CRITICAL FACTUAL BOUNDARY:
+- You may reason about sales and communication.
+- You may personalise the explanation.
+- You may use natural Indonesian, normal WhatsApp wording, abbreviations or light slang when appropriate.
+- You must not invent or change Tetamo facts.
+- Never change prices, package names, listing limits, durations, benefits, links, company information, policies, payment instructions or promises.
+- Never guarantee leads, sales, rentals, income, ROI, buyers or results.
+- When a hardcoded FAQ answer and Knowledge Base answer conflict, use the hardcoded FAQ answer.
+- When no approved factual source supports a requested claim, say that the available information does not confirm it. Do not guess.
 
-PERSONALITY:
-- Professional, friendly, helpful, warm, clear, confident, practical and naturally sales-aware.
-- Sound like an experienced Tetamo team member, not a robotic FAQ system.
-- Be less formal when the customer is casual and appropriately professional when the customer is formal.
-- Answer the actual question first.
-- Keep replies focused, concise and WhatsApp-friendly.
-- Use short paragraphs.
-- Do not write a long tutorial unless the customer asks for detailed steps.
-- Use at most one subtle emoji when it feels natural.
-- Do not repeat greetings, introductions, questions or information already given in the conversation.
-- Do not ask the customer to repeat a readable question.
-- If the latest message is genuinely unreadable, meaningless or impossible to understand even after using the conversation context, output exactly [[HANDOVER_UNREADABLE]] and nothing else.
-- Do not use [[HANDOVER_UNREADABLE]] for normal Indonesian slang, abbreviations, spelling mistakes, greetings or vague but understandable messages.
-- Ask at most one useful follow-up question. A qualification, objection-discovery, recommendation, or closing question is useful when it follows the hardcoded sales journey.
-- Sound human and commercially confident, but never manipulative, aggressive, desperate, or pushy.
-- Do not merely list features. Connect the relevant feature to the customer's stated need.
-- When the customer gives enough information for a recommendation, recommend one correct option and explain why.
-- When the customer shows a buying signal, stop unnecessary qualification and guide them to the next action.
+LANGUAGE AND TONE:
+- Detected language: ${params.language}
+- Indonesian customer: reply naturally in Indonesian.
+- English customer: reply naturally in English.
+- Mixed message: use the main language naturally.
+- Understand normal Indonesian slang and spelling such as brp, gmn, udh, sdh, blm, sy, yg, ga, gak, nggak, min, kak, bu and pak.
+- Friendly, human, commercially confident and concise.
+- Do not sound like a robotic FAQ.
+- Do not introduce yourself repeatedly.
+- Use no more than one subtle emoji.
+- Ask at most one question, and only when it is genuinely needed.
+- Never pressure, manipulate, shame or create false urgency.
 
-ADMIN-OFFER PREVENTION:
-- Do not offer admin handover at the end of ordinary answers.
-- Never ask “Mau saya sambungkan ke admin?” or “Would you like me to connect you to the team?” during normal sales, pricing, listing, buyer, renter, owner, agent, dashboard, app or feature questions.
-- The webhook has already handled issues that require admin.
-
-FACTUAL RULES:
-- Use the hardcoded official Tetamo information below as the primary source of truth.
-- Use approved Knowledge Base entries only as supplementary factual information when relevant.
-- Do not invent prices, package names, listing limits, durations, benefits, links, company details, policies, property facts or promises.
-- When a Knowledge Base entry conflicts with the hardcoded official information, follow the hardcoded official information.
-- Use only the approved links included below.
-- Do not guarantee leads, sales, rentals, ROI, legal safety, exact results or fixed performance numbers.
-- Explain Tetamo positively before discussing limitations.
-- Tetamo is a property marketplace and technology platform, not a real-estate agency or brokerage.
-
-LISTING RULES:
-- Customers cannot create a listing by sending property details, photos or videos through WhatsApp.
-- Owners and agents create and manage listings through their own Tetamo account and dashboard.
-- Minimum 3 photos are required; video may be added when available.
-- Generate AI helps create the title and description inside Tetamo.
-- Owner verification is optional when the owner wants verification status.
-- QRIS may be paid using a banking or e-wallet app that supports QRIS.
-- Owner and agent listing flows are different. Do not mix their steps.
-- Agent membership is active for 1 year, and the listing limit depends on the selected package.
-- Once the required process is completed and the listing is published, it automatically appears in the Tetamo marketplace.
-
-PRICING RULES:
-- When a pricing question is vague, ask whether the customer is an owner, an agent, or a developer/project owner.
-- If the customer is an owner, explain only owner packages.
-- If the customer is an agent, explain only agent packages.
-- If the customer is a developer or project owner, explain Developer License only.
-- Always use official package names.
-- Never call Developer License a normal “Developer Package”.
-- Share the official pricelist when relevant: ${TETAMO_LINKS.pricelist}
-
-APPROVED LINKS:
-- Website: ${TETAMO_LINKS.website}
-- Pricelist: ${TETAMO_LINKS.pricelist}
-- FAQ: ${TETAMO_LINKS.faq}
-- Subscription Policy: ${TETAMO_LINKS.subscriptionPolicy}
-- Privacy Policy: ${TETAMO_LINKS.privacyPolicy}
-- Developer License: ${TETAMO_LINKS.developerLicense}
-- How to list property blog: ${TETAMO_LINKS.howToListBlog}
-- How to post property video: ${TETAMO_LINKS.howToPostVideo}
-- Owner and agent dashboard guide: ${TETAMO_LINKS.dashboardVideo}
-- Share only the link relevant to the customer's question. Do not send every link at once.
-
-HARDCODED TETAMO SALES CORE:
-${SALES_CORE_RULES}
+CONVERSATION UNDERSTANDING:
+- Understood latest meaning: ${params.intentAnalysis.understoodQuestion}
+- Retrieval topic: ${params.intentAnalysis.topic}
+- Customer type: ${params.intentAnalysis.customerType}
+- Sales situation: ${params.intentAnalysis.salesSituation}
+- Retrieval query used: ${params.intentAnalysis.retrievalQuery}
 
 OFFICIAL ADMIN SALES STAGE:
 ${formatSalesStageContext(params.salesStage)}
-- Treat this stage as the official current pipeline position selected by the Tetamo admin.
-- Read the recent conversation before replying and continue from where it stopped.
-- The latest explicit customer correction overrides a conflicting stage; answer according to the correction without arguing.
-- Never mention internal stage names, pipeline controls, database fields, or admin classification to the customer.
-- Do not automatically change the stage.
+- Continue from the current conversation.
+- Never mention internal sales stages or database classifications.
 
-DETECTED SALES CONTEXT FOR THIS CONVERSATION:
+DETECTED SALES CONTEXT:
 ${formatSalesContext(params.salesContext)}
-- Follow the required next sales action unless the customer's immediate question requires a direct factual answer first.
-- When an approved next discovery question is provided, finish with that exact question and do not substitute another question.
-- Do not ask any discovery question when the approved next discovery question is “none”.
-- Never contradict the hardcoded package recommendation.
+- Use this for recommendations and the next sales action.
+- The direct customer question always comes first.
+- Do not repeat information or questions already answered.
 
-RELEVANT HARDCODED OBJECTION, COMPARISON, POLICY, VALUE, OR CLOSING ANSWERS:
+RELEVANT SALES GUIDANCE:
 ${formatRelevantSalesPlaybook(params.relevantSalesPlaybook)}
-- Use the approved handling faithfully.
-- You may phrase it naturally, but never change the facts, price, policy, recommendation, link, or boundary.
+- Use this as sales technique and approved handling.
+- It does not authorise changing factual Tetamo information.
 
-HARDCODED OFFICIAL QUESTIONS AND ANSWERS:
-${formatHardcodedFaq()}
+SELECTED HARDCODED TETAMO FACTS:
+${formatRelevantHardcodedFaq(params.hardcodedFaqMatches)}
 
-RELEVANT APPROVED KNOWLEDGE BASE INFORMATION:
-${formatKnowledgeEntries(params.knowledgeEntries)}
+SELECTED APPROVED KNOWLEDGE BASE FACTS:
+${formatKnowledgeMatches(params.knowledgeMatches)}
 
-RECENT CAMPAIGN CONTEXT:
+RECENT BUSINESS-INITIATED TEMPLATE CONTEXT:
 ${campaignText}
-- Use campaign context only when it helps explain what the customer is replying to.
-- Never mention internal campaign IDs, routing, logs or metadata.
+- Use only to understand what the customer is replying to.
+- Never mention internal template metadata.
 
 RECENT CONVERSATION:
 ${params.conversationContext || "No earlier conversation context."}
@@ -4556,19 +4714,15 @@ ${params.conversationContext || "No earlier conversation context."}
 LATEST CUSTOMER MESSAGE:
 ${params.customerMessage}
 
-FINAL RESPONSE BEHAVIOUR:
-- A complete factual answer normally ends without a question.
-- Never ask a question merely because a discovery field is unknown.
-- Never repeat a question already answered in the conversation.
-- Never repeat the customer-type question when intent or earlier context identifies the role.
-- Keep simple replies to 1–3 short sentences.
-- Use at most one question, only when essential to the immediate next decision.
-- When the customer says thank you, closes, declines, or is ready to proceed, stop discovery.
-- Do not repeat package benefits or links already sent unless the customer asks again.
-
-Write only Mona's final WhatsApp reply.
-Do not return JSON.
-Do not add labels such as “Mona:” or “Tetamo:”.
+FINAL RESPONSE REQUIREMENTS:
+- Give only Mona's final WhatsApp reply.
+- Do not return JSON.
+- Do not add “Mona:” or “Tetamo:” labels.
+- Keep a simple answer to 1–3 short sentences.
+- A detailed answer may be longer only when the customer asks for steps or a full comparison.
+- Do not dump unrelated packages, features or links.
+- Do not repeat the introduction.
+- If the message is genuinely impossible to understand even with context, output exactly [[HANDOVER_UNREADABLE]].
 `.trim();
 }
 
@@ -5220,8 +5374,10 @@ function getDeterministicReplyDecision(params: {
 }): DeterministicReplyDecision {
   const message = params.customerMessage;
   const language = params.language;
-  const customerType = detectCustomerType(message, params.conversationContext);
 
+  // Only universal conversational endings bypass contextual retrieval.
+  // Pricing, packages, features, registration and all other Tetamo questions
+  // must go through context understanding and approved fact retrieval.
   if (isClearRejection(message)) {
     return {
       action: "reply",
@@ -5238,71 +5394,6 @@ function getDeterministicReplyDecision(params: {
       action: "reply",
       reason: "conversation_closing",
       reply: language === "en" ? "You’re welcome 😊" : "Sama-sama 😊",
-    };
-  }
-
-  const normalized = normalizeIntentText(message);
-
-  if (containsPattern(normalized, ["harga silver", "silver berapa", "biaya silver"])) {
-    return {
-      action: "reply",
-      reason: "direct_silver_price",
-      reply:
-        language === "en"
-          ? `Silver is Rp499,000 per year for up to 30 active listings. Details: ${TETAMO_LINKS.pricelist}`
-          : `Silver Rp499.000 per tahun untuk hingga 30 listing aktif. Detail: ${TETAMO_LINKS.pricelist}`,
-    };
-  }
-
-  if (containsPattern(normalized, ["harga gold", "gold berapa", "biaya gold"])) {
-    return {
-      action: "reply",
-      reason: "direct_gold_price",
-      reply:
-        language === "en"
-          ? `Gold is Rp1,800,000 per year for up to 100 active listings. Details: ${TETAMO_LINKS.pricelist}`
-          : `Gold Rp1.800.000 per tahun untuk hingga 100 listing aktif. Detail: ${TETAMO_LINKS.pricelist}`,
-    };
-  }
-
-  if (containsPattern(normalized, ["harga agent pro", "agent pro berapa", "biaya agent pro"])) {
-    return {
-      action: "reply",
-      reason: "direct_agent_pro_price",
-      reply:
-        language === "en"
-          ? `Agent Pro is Rp3,999,000 per year, or Rp399,000 per month with a 12-month commitment, for up to 500 active listings. Details: ${TETAMO_LINKS.pricelist}`
-          : `Agent Pro Rp3.999.000 per tahun, atau Rp399.000 per bulan dengan komitmen 12 bulan, untuk hingga 500 listing aktif. Detail: ${TETAMO_LINKS.pricelist}`,
-    };
-  }
-
-  if (
-    looksLikeDirectQuestion(message) &&
-    customerType === "agent" &&
-    containsPattern(normalized, ["harga", "harganya", "berapa", "brp", "biaya", "paket", "membership"])
-  ) {
-    return {
-      action: "reply",
-      reason: "direct_agent_pricing",
-      reply:
-        language === "en"
-          ? `Agent membership starts with Silver at Rp499,000 per year for up to 30 active listings. Gold is Rp1,800,000 per year for up to 100 listings, and Agent Pro is Rp3,999,000 per year for up to 500 listings. Details: ${TETAMO_LINKS.pricelist}`
-          : `Membership Agen dimulai dari Silver Rp499.000 per tahun untuk hingga 30 listing aktif. Gold Rp1.800.000 per tahun untuk hingga 100 listing, dan Agent Pro Rp3.999.000 per tahun untuk hingga 500 listing. Detail: ${TETAMO_LINKS.pricelist}`,
-    };
-  }
-
-  if (
-    looksLikeDirectQuestion(message) &&
-    customerType === "owner" &&
-    containsPattern(normalized, ["harga", "harganya", "berapa", "brp", "biaya", "paket", "listing"])
-  ) {
-    return {
-      action: "reply",
-      reason: "direct_owner_pricing",
-      reply:
-        language === "en"
-          ? `Owner listings start from Basic at Rp50,000 for 1 active listing for 1 year. Priority is Rp150,000 and Featured is Rp550,000. Details: ${TETAMO_LINKS.pricelist}`
-          : `Paket Pemilik dimulai dari Basic Rp50.000 untuk 1 listing aktif selama 1 tahun. Priority Rp150.000 dan Featured Rp550.000. Detail: ${TETAMO_LINKS.pricelist}`,
     };
   }
 
@@ -5431,16 +5522,20 @@ async function generateMonaReply(params: {
   }
 
   const mandatorySequence =
-    (!params.salesStage || params.salesStage === "new_inquiry")
+    !params.salesStage || params.salesStage === "new_inquiry"
       ? getMandatorySalesSequence({
-    customerMessage: params.customerMessage,
-    language,
-    conversationContext,
-    campaignContext: params.campaignContext,
-  })
+          customerMessage: params.customerMessage,
+          language,
+          conversationContext,
+          campaignContext: params.campaignContext,
+        })
       : null;
 
   if (mandatorySequence) {
+    console.log("Mona used the approved first-customer introduction.", {
+      conversationId: params.conversationId,
+    });
+
     return {
       action: "reply",
       replies: mandatorySequence
@@ -5454,18 +5549,39 @@ async function generateMonaReply(params: {
     customerMessage: params.customerMessage,
     conversationContext,
   });
+
   const salesContext = applySalesStageToSalesContext(
     detectedSalesContext,
     params.salesStage
   );
+
   const relevantSalesPlaybook = selectRelevantSalesPlaybook(
     params.customerMessage,
     conversationContext
   );
 
   if (!process.env.OPENAI_API_KEY) {
+    const fallbackIntent = buildIntentFallback({
+      customerMessage: params.customerMessage,
+      conversationContext,
+    });
+    const hardcodedFaqMatches = selectRelevantHardcodedFaq(
+      fallbackIntent.retrievalQuery
+    );
+    const knowledgeMatches = await searchApprovedKnowledge(
+      fallbackIntent.retrievalQuery,
+      language
+    );
+
+    const approvedFallback =
+      language === "en"
+        ? hardcodedFaqMatches[0]?.item.answerEn ||
+          knowledgeMatches[0]?.entry.approved_answer
+        : hardcodedFaqMatches[0]?.item.answerId ||
+          knowledgeMatches[0]?.entry.approved_answer;
+
     const cleanedFallback = cleanFinalReply(
-      fallbackReply,
+      approvedFallback || fallbackReply,
       params.customerMessage
     );
 
@@ -5483,17 +5599,49 @@ async function generateMonaReply(params: {
   }
 
   try {
-    const knowledgeEntries = await searchApprovedKnowledge(
-      params.customerMessage,
-      language
+    const intentAnalysis = await analyzeMonaConversation({
+      customerMessage: params.customerMessage,
+      conversationContext,
+      salesStage: params.salesStage,
+    });
+
+    const hardcodedFaqMatches = selectRelevantHardcodedFaq(
+      intentAnalysis.retrievalQuery
     );
+
+    const knowledgeMatches = intentAnalysis.needsFactualKnowledge
+      ? await searchApprovedKnowledge(
+          intentAnalysis.retrievalQuery,
+          language
+        )
+      : [];
+
+    console.log("Mona contextual retrieval completed.", {
+      conversationId: params.conversationId,
+      understoodQuestion: intentAnalysis.understoodQuestion,
+      topic: intentAnalysis.topic,
+      customerType: intentAnalysis.customerType,
+      salesSituation: intentAnalysis.salesSituation,
+      retrievalQuery: intentAnalysis.retrievalQuery,
+      hardcodedFaqMatches: hardcodedFaqMatches.map(({ item, score }) => ({
+        topic: item.topic,
+        score,
+      })),
+      knowledgeMatches: knowledgeMatches.map(({ entry, score }) => ({
+        id: entry.id,
+        category: entry.category,
+        score,
+      })),
+    });
 
     const prompt = buildMonaPrompt({
       customerMessage: params.customerMessage,
       language,
       conversationContext,
       campaignContext: params.campaignContext,
-      knowledgeEntries,
+      intentAnalysis,
+      hardcodedFaqMatches,
+      knowledgeMatches,
       salesContext,
       relevantSalesPlaybook,
       salesStage: params.salesStage,
@@ -5502,7 +5650,7 @@ async function generateMonaReply(params: {
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
       input: prompt,
-      temperature: 0.45,
+      temperature: 0.35,
       max_output_tokens: 700,
     });
 
@@ -5516,8 +5664,15 @@ async function generateMonaReply(params: {
       };
     }
 
+    const approvedSourceFallback =
+      language === "en"
+        ? hardcodedFaqMatches[0]?.item.answerEn ||
+          knowledgeMatches[0]?.entry.approved_answer
+        : hardcodedFaqMatches[0]?.item.answerId ||
+          knowledgeMatches[0]?.entry.approved_answer;
+
     const cleanedReply = cleanFinalReply(
-      rawReply || fallbackReply,
+      rawReply || approvedSourceFallback || fallbackReply,
       params.customerMessage
     );
 
@@ -5533,7 +5688,7 @@ async function generateMonaReply(params: {
       source: rawReply ? "openai" : "fallback",
     };
   } catch (error) {
-    console.error("Meta WhatsApp OpenAI generation failed:", error);
+    console.error("Meta WhatsApp contextual Mona generation failed:", error);
     const cleanedFallback = cleanFinalReply(
       fallbackReply,
       params.customerMessage
