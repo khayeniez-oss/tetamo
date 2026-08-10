@@ -12,6 +12,7 @@ import {
   Eye,
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/trackEvent";
 
@@ -107,6 +108,7 @@ type FeaturedProperty = {
   furnishing: string;
   garage: string;
   posterName: string;
+agency: string;
   postedByType: "owner" | "agent" | "developer";
   whatsapp: string;
   receiverId: string;
@@ -166,6 +168,26 @@ function formatIdr(value: number | null | undefined) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatHomepagePrice(value: number, currency: string) {
+  if (currency === "USD") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(value / 16500);
+  }
+
+  if (currency === "AUD") {
+    return new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency: "AUD",
+      maximumFractionDigits: 0,
+    }).format(value / 12072);
+  }
+
+  return formatIdr(value);
 }
 
 function formatPostedDate(value?: string | null) {
@@ -1495,7 +1517,11 @@ function ScheduleViewingButton({
    CARDS
 ========================= */
 
-function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
+function FeaturedPropertiesCard({
+  property,
+}: {
+  property: FeaturedProperty;
+}) {
   const [imgIndex, setImgIndex] = useState(0);
   const { lang } = useLanguage();
 
@@ -1509,7 +1535,9 @@ function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
       prev === 0 ? property.images.length - 1 : prev - 1
     );
 
-  const whatsappHref = property.whatsapp ? `https://wa.me/${property.whatsapp}` : "#";
+  const whatsappHref = property.whatsapp
+    ? `https://wa.me/${property.whatsapp}`
+    : "#";
 
   async function handleHomepageWhatsappClick(
     event: MouseEvent<HTMLAnchorElement>
@@ -1525,7 +1553,8 @@ function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
       receiverWhatsapp: property.whatsapp,
       receiverId: property.receiverId,
       receiverName: property.receiverName,
-      receiverRole: property.receiverRole || property.postedByType || "owner",
+      receiverRole:
+        property.receiverRole || property.postedByType || "owner",
       price: property.price,
       location: property.province,
       lang,
@@ -1535,149 +1564,195 @@ function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
 
   function getVerifiedBadgeText() {
     if (property.postedByType === "owner") {
-      return lang === "id" ? "Pemilik Terverifikasi" : "Verified Owner";
+      return lang === "id"
+        ? "Pemilik Terverifikasi"
+        : "Verified Owner";
     }
 
     if (property.postedByType === "developer") {
-      return lang === "id" ? "Developer Terverifikasi" : "Verified Developer";
+      return lang === "id"
+        ? "Developer Terverifikasi"
+        : "Verified Developer";
     }
 
-    return lang === "id" ? "Agen Terverifikasi" : "Verified Agent";
+    return lang === "id"
+      ? "Agen Terverifikasi"
+      : "Verified Agent";
   }
 
   function getPosterLabel() {
     if (property.postedByType === "owner") {
-      return lang === "id" ? "Pemilik" : "Owner";
+      return lang === "id" ? "PEMILIK" : "OWNER";
     }
 
     if (property.postedByType === "developer") {
-      return lang === "id" ? "Developer" : "Developer";
+      return "DEVELOPER";
     }
 
-    return lang === "id" ? "Agen" : "Agent";
+    return lang === "id" ? "AGEN" : "AGENT";
   }
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-      <div className="relative">
-        <div className="absolute left-3 top-3 z-10">
-          {property.verifiedListing ? (
-            <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-              {getVerifiedBadgeText()}
-            </div>
-          ) : (
-            <div className="rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-800 sm:text-xs">
-              {lang === "id" ? "Pending" : "Pending"}
-            </div>
-          )}
+    <article className="group overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white shadow-[0_16px_45px_rgba(0,0,0,0.07)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.14)]">
+
+      {/* PROPERTY IMAGE */}
+      <div className="relative overflow-hidden">
+        <Link href={`/properti/${property.id}`} className="block">
+          <img
+            src={property.images[imgIndex]}
+            alt={property.title}
+            className="h-[315px] w-full object-cover transition duration-700 group-hover:scale-[1.035] sm:h-[330px]"
+          />
+        </Link>
+
+        {/* Stronger premium gradient */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/10" />
+
+        {/* Verified badge */}
+        <div className="absolute left-4 top-4">
+          <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] font-bold text-white shadow-lg backdrop-blur-md">
+            ✓ {getVerifiedBadgeText()}
+          </div>
         </div>
 
-        <img
-          src={property.images[imgIndex]}
-          alt="Property"
-          className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
-        />
-
-        <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
+        {/* Tetamo */}
+        <div className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#1C1C1E] shadow-sm backdrop-blur">
           TETAMO
         </div>
 
-        <button
-          onClick={prev}
-          type="button"
-          className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-          aria-label="Previous image"
-        >
-          ‹
-        </button>
+        {/* Navigation */}
+        {property.images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              aria-label="Previous image"
+              className="absolute left-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
+            >
+              ‹
+            </button>
 
-        <button
-          onClick={next}
-          type="button"
-          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-          aria-label="Next image"
-        >
-          ›
-        </button>
+            <button
+              type="button"
+              onClick={next}
+              aria-label="Next image"
+              className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
+            >
+              ›
+            </button>
+          </>
+        )}
+
+        {/* PRICE ON IMAGE */}
+        <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 sm:px-6">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/65">
+                {lang === "id" ? "Harga Properti" : "Property Price"}
+              </p>
+
+              <p className="mt-1 text-[24px] font-extrabold tracking-[-0.035em] text-white drop-shadow sm:text-[27px]">
+                {property.price}
+              </p>
+            </div>
+
+            {property.images.length > 1 && (
+              <div className="shrink-0 rounded-full border border-white/20 bg-black/40 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
+                {imgIndex + 1} / {property.images.length}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 text-lg font-bold text-[#1C1C1E] sm:text-xl">
-            {property.price}
+      {/* COMPACT CONTENT */}
+      <div className="p-5 sm:p-6">
+
+        {/* Title */}
+        <Link href={`/properti/${property.id}`}>
+          <h3 className="line-clamp-2 text-[16px] font-extrabold leading-[1.45] tracking-[-0.015em] text-[#1C1C1E] transition hover:text-[#B8860B] sm:text-[17px]">
+            {property.title}
           </h3>
+        </Link>
 
-          <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700 sm:text-xs">
-            <Eye className="h-3.5 w-3.5" />
-            <span>{formatCompactNumber(property.viewCount)}</span>
-            <span>{lang === "id" ? "Dilihat" : "Views"}</span>
-          </div>
-        </div>
-
-        <h4 className="mt-2 text-[15px] font-semibold leading-6 text-[#1C1C1E] sm:text-base">
-          {property.title}
-        </h4>
-
-        <p className="mt-1 text-sm text-gray-600">{property.province}</p>
-
-        <p className="mt-2 text-sm leading-6 text-gray-600">
-          {property.size} • {translateBed(property.bed, lang)} •{" "}
-          {translateFurnishing(property.furnishing, lang)} •{" "}
-          {translateGarage(property.garage, lang)}
+        {/* Location */}
+        <p className="mt-2 text-sm font-medium text-gray-500">
+          📍 {property.province}
         </p>
 
-        <div className="mt-3">
-          <p className="text-sm text-gray-600">
-            {getPosterLabel()}:{" "}
-            <span className="font-semibold text-gray-800">
-              {property.posterName}
-            </span>
-          </p>
+        {/* SPECS - NO PILLS */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-gray-600">
+          <span>{property.size}</span>
 
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span className="text-[#C8A44D]">•</span>
+
+          <span>{translateBed(property.bed, lang)}</span>
+
+          <span className="text-[#C8A44D]">•</span>
+
+          <span>
+            {translateFurnishing(property.furnishing, lang)}
+          </span>
+        </div>
+
+        {/* AGENT / AGENCY PANEL */}
+        <div className="mt-5 rounded-[18px] border border-[#EDE6D8] bg-[#FAF8F3] px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4">
+
+            <div className="min-w-0">
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
+                {getPosterLabel()}
+              </p>
+
+              <p className="mt-1 truncate text-sm font-extrabold text-[#1C1C1E]">
+                {property.posterName}
+              </p>
+
+              {property.agency && (
+                <p className="mt-0.5 truncate text-[12px] font-medium text-gray-500">
+                  {property.agency}
+                </p>
+              )}
+            </div>
+
             {property.kode && (
-              <span>
-                {lang === "id" ? "Kode:" : "Code:"}{" "}
-                <span className="font-medium text-gray-700">
-                  {property.kode}
-                </span>
-              </span>
-            )}
-
-            {property.postedDate && (
-              <span>
-                {lang === "id" ? "Tayang:" : "Posted:"}{" "}
-                <span className="font-medium text-gray-700">
-                  {property.postedDate}
-                </span>
-              </span>
+              <div className="shrink-0 rounded-full border border-[#DDD5C8] bg-white px-3 py-1.5 text-[9px] font-bold tracking-wide text-gray-500">
+                {property.kode}
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        {/* CTA HIERARCHY */}
+        <div className="mt-5 grid grid-cols-[1.35fr_0.85fr] gap-3">
+
+          {/* MAIN CTA */}
+          <Link
+            href={`/properti/${property.id}`}
+            className="flex min-h-[50px] items-center justify-center rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(184,134,11,0.20)] transition hover:bg-[#9C7208]"
+          >
+            {lang === "id"
+              ? "Lihat Properti →"
+              : "View Property →"}
+          </Link>
+
+          {/* SECONDARY CTA */}
           <a
             href={whatsappHref}
             onClick={handleHomepageWhatsappClick}
             target="_blank"
             rel="noreferrer"
-            className={`flex min-h-[48px] items-center justify-center rounded-2xl px-3 py-3 text-center text-[13px] font-semibold text-white transition sm:text-sm ${
+            className={`flex min-h-[50px] items-center justify-center rounded-2xl px-3 py-3 text-center text-sm font-bold transition ${
               property.whatsapp
-                ? "bg-[#1C1C1E] hover:opacity-90"
-                : "cursor-not-allowed bg-gray-300"
+                ? "bg-[#1C1C1E] text-white hover:bg-black"
+                : "pointer-events-none bg-gray-200 text-gray-400"
             }`}
           >
             WhatsApp
           </a>
-
-          <Link
-            href={`/properti/${property.id}`}
-            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
-          >
-            {lang === "id" ? "Lihat Detail" : "View Detail"}
-          </Link>
         </div>
 
+        {/* Viewing */}
         <ScheduleViewingButton
           propertyId={property.id}
           propertyTitle={property.title}
@@ -1686,14 +1761,8 @@ function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
           receiverName={property.receiverName}
           receiverRole={property.receiverRole}
         />
-
-        <PropertyEngagementBar
-          propertyId={property.id}
-          propertyTitle={property.title}
-          propertyProvince={property.province}
-        />
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -1742,124 +1811,171 @@ function FeaturedOwnerPropertyCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-      <div className="relative">
-        <div className="absolute left-3 top-3 z-10">
-          {property.ownerApproved ? (
-            <div className="rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-              {lang === "id" ? "Pemilik Terverifikasi" : "Verified Owner"}
-            </div>
-          ) : (
-            <div className="rounded-full bg-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-800 sm:text-xs">
-              {lang === "id" ? "Pending Verifikasi" : "Pending Verification"}
-            </div>
-          )}
+    <article className="group overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white shadow-[0_14px_45px_rgba(0,0,0,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.13)]">
+
+      {/* PROPERTY IMAGE */}
+      <div className="relative overflow-hidden">
+        <Link href={`/properti/${property.id}`} className="block">
+          <img
+            src={property.images[imgIndex]}
+            alt={property.title}
+            className="h-[315px] w-full object-cover transition duration-700 group-hover:scale-[1.035] sm:h-[330px]"
+          />
+        </Link>
+
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/10" />
+
+        {/* OWNER VERIFIED */}
+        <div className="absolute left-4 top-4">
+          <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
+            ✓{" "}
+            {lang === "id"
+              ? "Pemilik Terverifikasi"
+              : "Verified Owner"}
+          </div>
         </div>
 
-        <img
-          src={property.images[imgIndex]}
-          alt="Property"
-          className="h-[260px] w-full object-cover sm:h-[270px] lg:h-[290px]"
-        />
-
-        <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/80 px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-          TETAMO
+        {/* DIRECT OWNER BADGE */}
+        <div className="absolute right-4 top-4 rounded-full bg-[#D8B46A] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#111111]">
+          {lang === "id"
+            ? "Langsung Pemilik"
+            : "Direct Owner"}
         </div>
 
-        <button
-          onClick={prev}
-          type="button"
-          className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-          aria-label="Previous image"
-        >
-          ‹
-        </button>
+        {/* IMAGE CONTROLS */}
+        {property.images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              aria-label="Previous image"
+              className="absolute left-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
+            >
+              ‹
+            </button>
 
-        <button
-          onClick={next}
-          type="button"
-          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E]"
-          aria-label="Next image"
-        >
-          ›
-        </button>
+            <button
+              type="button"
+              onClick={next}
+              aria-label="Next image"
+              className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
+            >
+              ›
+            </button>
+          </>
+        )}
+
+        {/* PRICE */}
+        <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 sm:px-6">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/60">
+                {lang === "id"
+                  ? "Harga Properti"
+                  : "Property Price"}
+              </p>
+
+              <p className="mt-1 text-[24px] font-extrabold tracking-[-0.035em] text-white sm:text-[27px]">
+                {property.price}
+              </p>
+            </div>
+
+            {property.images.length > 1 && (
+              <span className="rounded-full border border-white/20 bg-black/40 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
+                {imgIndex + 1} / {property.images.length}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 text-lg font-bold text-[#1C1C1E] sm:text-xl">
-            {property.price}
+      {/* DETAILS */}
+      <div className="p-5 sm:p-6">
+
+        <Link href={`/properti/${property.id}`}>
+          <h3 className="line-clamp-2 text-[16px] font-extrabold leading-[1.45] tracking-[-0.015em] text-[#1C1C1E] transition hover:text-[#B8860B] sm:text-[17px]">
+            {property.title}
           </h3>
+        </Link>
 
-          <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700 sm:text-xs">
-            <Eye className="h-3.5 w-3.5" />
-            <span>{formatCompactNumber(property.viewCount)}</span>
-            <span>{lang === "id" ? "Dilihat" : "Views"}</span>
-          </div>
-        </div>
-
-        <h4 className="mt-2 text-[15px] font-semibold leading-6 text-[#1C1C1E] sm:text-base">
-          {property.title}
-        </h4>
-
-        <p className="mt-1 text-sm text-gray-600">{property.province}</p>
-
-        <p className="mt-2 text-sm leading-6 text-gray-600">
-          {property.size} • {translateBed(property.bed, lang)} •{" "}
-          {translateFurnishing(property.furnishing, lang)} •{" "}
-          {translateGarage(property.garage, lang)}
+        <p className="mt-2 text-sm font-medium text-gray-500">
+          📍 {property.province}
         </p>
 
-        <div className="mt-3">
-          <p className="text-sm text-gray-600">
-            {lang === "id" ? "Pemilik:" : "Owner:"}{" "}
-            <span className="font-semibold text-[#1C1C1E]">
-              {property.ownerName}
-            </span>
-          </p>
+        {/* SPECS */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-gray-600">
+          <span>{property.size}</span>
 
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-            {property.kode && (
-              <span>
-                {lang === "id" ? "Kode:" : "Code:"}{" "}
-                <span className="font-medium text-gray-700">
-                  {property.kode}
-                </span>
-              </span>
+          <span className="text-[#C8A44D]">•</span>
+
+          <span>
+            {translateBed(property.bed, lang)}
+          </span>
+
+          <span className="text-[#C8A44D]">•</span>
+
+          <span>
+            {translateFurnishing(
+              property.furnishing,
+              lang
             )}
+          </span>
+        </div>
 
-            {property.postedDate && (
-              <span>
-                {lang === "id" ? "Tayang:" : "Posted:"}{" "}
-                <span className="font-medium text-gray-700">
-                  {property.postedDate}
-                </span>
-              </span>
+        {/* OWNER */}
+        <div className="mt-5 rounded-[18px] border border-[#EDE6D8] bg-[#FAF8F3] px-4 py-3.5">
+          <div className="flex items-center justify-between gap-4">
+
+            <div className="min-w-0">
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
+                {lang === "id"
+                  ? "PEMILIK"
+                  : "OWNER"}
+              </p>
+
+              <p className="mt-1 truncate text-sm font-extrabold text-[#1C1C1E]">
+                {property.ownerName}
+              </p>
+
+              <p className="mt-0.5 text-[11px] font-medium text-gray-500">
+                {lang === "id"
+                  ? "Hubungi pemilik secara langsung"
+                  : "Contact the owner directly"}
+              </p>
+            </div>
+
+            {property.kode && (
+              <div className="shrink-0 rounded-full border border-[#DDD5C8] bg-white px-3 py-1.5 text-[9px] font-bold tracking-wide text-gray-500">
+                {property.kode}
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        {/* CTA */}
+        <div className="mt-5 grid grid-cols-[1.35fr_0.85fr] gap-3">
+          <Link
+            href={`/properti/${property.id}`}
+            className="flex min-h-[50px] items-center justify-center rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-extrabold text-white transition hover:bg-[#9C7208]"
+          >
+            {lang === "id"
+              ? "Lihat Properti →"
+              : "View Property →"}
+          </Link>
+
           <a
             href={whatsappHref}
             onClick={handleHomepageOwnerWhatsappClick}
             target="_blank"
             rel="noreferrer"
-            className={`flex min-h-[48px] items-center justify-center rounded-2xl px-3 py-3 text-center text-[13px] font-semibold text-white transition sm:text-sm ${
+            className={`flex min-h-[50px] items-center justify-center rounded-2xl px-3 py-3 text-center text-sm font-bold transition ${
               property.ownerWhatsapp
-                ? "bg-[#1C1C1E] hover:opacity-90"
-                : "cursor-not-allowed bg-gray-300"
+                ? "bg-[#1C1C1E] text-white hover:bg-black"
+                : "pointer-events-none bg-gray-200 text-gray-400"
             }`}
           >
-            {lang === "id" ? "WhatsApp Pemilik" : "WhatsApp Owner"}
+            WhatsApp
           </a>
-
-          <Link
-            href={`/properti/${property.id}`}
-            className="flex min-h-[48px] items-center justify-center rounded-2xl bg-yellow-600 px-3 py-3 text-center text-[13px] font-bold text-white transition hover:bg-yellow-700 sm:text-sm"
-          >
-            {lang === "id" ? "Lihat Detail" : "View Detail"}
-          </Link>
         </div>
 
         <ScheduleViewingButton
@@ -1870,14 +1986,8 @@ function FeaturedOwnerPropertyCard({
           receiverName={property.receiverName}
           receiverRole={property.receiverRole}
         />
-
-        <PropertyEngagementBar
-          propertyId={property.id}
-          propertyTitle={property.title}
-          propertyProvince={property.province}
-        />
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -1887,6 +1997,8 @@ function FeaturedOwnerPropertyCard({
 
 function FeaturedPropertiesSection() {
   const { lang } = useLanguage();
+  const { currency } = useCurrency();
+
   const [properties, setProperties] = useState<FeaturedProperty[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1903,60 +2015,156 @@ function FeaturedPropertiesSection() {
           .filter((row) => isListingPublic(row))
           .filter((row) => isVerifiedListing(row));
 
-        const featuredRows = FEATURED_PROPERTY_CODES.map((kode) =>
-          publicVerifiedRows.find(
-            (row) =>
-              normalizePropertyCode(row.kode) === normalizePropertyCode(kode)
+        /*
+          Keep our manually selected homepage properties first.
+          If one is missing, expired, or unavailable,
+          automatically fill the empty space with another
+          verified property.
+        */
+        const manualRows = FEATURED_PROPERTY_CODES
+          .map((kode) =>
+            publicVerifiedRows.find(
+              (row) =>
+                normalizePropertyCode(row.kode) ===
+                normalizePropertyCode(kode)
+            )
           )
-        ).filter((row): row is HomepagePropertyRow => Boolean(row));
+          .filter(
+            (row): row is HomepagePropertyRow => Boolean(row)
+          );
+
+        const selectedIds = new Set(
+          manualRows.map((row) => row.id)
+        );
+
+        const fallbackRows = [...publicVerifiedRows]
+          .filter((row) => !selectedIds.has(row.id))
+          .sort(sortRowsByFeaturedNewest);
+
+        const featuredRows = [
+          ...manualRows,
+          ...fallbackRows,
+        ].slice(0, 3);
 
         const profileIds = Array.from(
           new Set(
             featuredRows
               .map((row) => row.contact_user_id)
-              .filter((value): value is string => Boolean(value))
+              .filter(
+                (value): value is string => Boolean(value)
+              )
           )
         );
 
-        const profilesMap = await fetchHomepageProfilesByIds(profileIds);
+        const profilesMap =
+          await fetchHomepageProfilesByIds(profileIds);
 
-        const mapped = featuredRows.map((row) => {
-          const profile = row.contact_user_id
-            ? profilesMap.get(row.contact_user_id)
-            : null;
+        const mapped: FeaturedProperty[] =
+          featuredRows.map((row) => {
+            const profile = row.contact_user_id
+              ? profilesMap.get(row.contact_user_id)
+              : null;
 
-          return {
-            id: row.id,
-            title: row.title ?? "-",
-            viewCount: Number(row.view_count ?? 0),
-            images: buildPropertyImages(row.property_images),
-            price: formatIdr(row.price ?? 0),
-            province: row.province ?? row.city ?? row.area ?? "-",
-            size: getMainSize(row),
-            bed: `${row.bedrooms ?? 0} Bed`,
-            furnishing: mapFurnishing(row.furnishing),
-            garage: getGarageLabel(row.garage),
-            posterName: row.contact_name || profile?.full_name || "Tetamo User",
-            postedByType: normalizePostedByType(row.contact_role, row.source),
-            whatsapp: normalizeWhatsapp(
-              row.contact_phone || profile?.phone || ""
-            ),
-            receiverId: row.contact_user_id || "",
-            receiverName:
-              row.contact_name || profile?.full_name || "Tetamo User",
-            receiverRole: normalizePostedByType(row.contact_role, row.source),
-            kode: row.kode ?? undefined,
-            postedDate: formatPostedDate(row.posted_date || row.created_at),
-            verifiedListing: isVerifiedListing(row),
-          };
-        });
+            return {
+              id: row.id,
 
-        if (!ignore) setProperties(mapped);
+              title:
+                row.title ||
+                (lang === "id"
+                  ? "Properti di Tetamo"
+                  : "Property on Tetamo"),
+
+              viewCount: Number(row.view_count ?? 0),
+
+              images: buildPropertyImages(
+                row.property_images
+              ),
+
+              /*
+                Currency follows the global
+                IDR / USD / AUD selector.
+              */
+              price: formatHomepagePrice(
+                Number(row.price ?? 0),
+                currency
+              ),
+
+              province:
+                row.city ||
+                row.area ||
+                row.province ||
+                "Indonesia",
+
+              size: getMainSize(row),
+
+              bed: `${row.bedrooms ?? 0} Bed`,
+
+              furnishing: mapFurnishing(
+                row.furnishing
+              ),
+
+              garage: getGarageLabel(row.garage),
+
+              posterName:
+                row.contact_name ||
+                profile?.full_name ||
+                "Tetamo User",
+
+              agency:
+                row.contact_agency ||
+                profile?.agency ||
+                "",
+
+              postedByType: normalizePostedByType(
+                row.contact_role,
+                row.source
+              ),
+
+              whatsapp: normalizeWhatsapp(
+                row.contact_phone ||
+                  profile?.phone ||
+                  ""
+              ),
+
+              receiverId:
+                row.contact_user_id || "",
+
+              receiverName:
+                row.contact_name ||
+                profile?.full_name ||
+                "Tetamo User",
+
+              receiverRole: normalizePostedByType(
+                row.contact_role,
+                row.source
+              ),
+
+              kode: row.kode ?? undefined,
+
+              postedDate: formatPostedDate(
+                row.posted_date || row.created_at
+              ),
+
+              verifiedListing: true,
+            };
+          });
+
+        if (!ignore) {
+          setProperties(mapped);
+        }
       } catch (error) {
-        console.error("Failed to load featured properties:", error);
-        if (!ignore) setProperties([]);
+        console.error(
+          "Failed to load featured properties:",
+          error
+        );
+
+        if (!ignore) {
+          setProperties([]);
+        }
       } finally {
-        if (!ignore) setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
 
@@ -1965,38 +2173,303 @@ function FeaturedPropertiesSection() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [currency, lang]);
 
   return (
-    <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-      <div className="mx-auto max-w-7xl">
-        <h2 className="mb-10 text-center text-2xl font-bold text-[#1C1C1E] sm:mb-12 sm:text-3xl">
-          {lang === "id" ? "Properti Unggulan" : "Featured Properties"}
-        </h2>
+    <section className="relative overflow-hidden bg-[#F6F3EC] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
 
+      {/* subtle premium background */}
+      <div className="pointer-events-none absolute -right-40 top-0 h-[420px] w-[420px] rounded-full bg-[#D8B46A]/10 blur-[120px]" />
+
+      <div className="relative mx-auto max-w-7xl">
+
+        {/* SECTION HEADER */}
+        <div className="mb-10 flex flex-col gap-6 md:mb-12 md:flex-row md:items-end md:justify-between">
+
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3">
+              <span className="h-px w-10 bg-[#B8860B]" />
+
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#B8860B] sm:text-xs">
+                {lang === "id"
+                  ? "Pilihan Tetamo"
+                  : "Tetamo Selection"}
+              </span>
+            </div>
+
+            <h2 className="mt-4 text-[32px] font-extrabold leading-tight tracking-[-0.04em] text-[#1C1C1E] sm:text-[40px] lg:text-[44px]">
+              {lang === "id"
+                ? "Properti Pilihan"
+                : "Selected Properties"}
+            </h2>
+
+            <p className="mt-4 max-w-xl text-sm leading-7 text-gray-600 sm:text-base">
+              {lang === "id"
+                ? "Jelajahi properti pilihan dari agen, pemilik dan developer terverifikasi di berbagai lokasi di Indonesia."
+                : "Explore selected properties from verified agents, owners and developers across Indonesia."}
+            </p>
+          </div>
+
+          <Link
+            href="/properti"
+            className="group inline-flex w-fit shrink-0 items-center gap-3 rounded-full border border-[#1C1C1E] bg-white px-5 py-3 text-sm font-extrabold text-[#1C1C1E] transition duration-200 hover:bg-[#1C1C1E] hover:text-white"
+          >
+            {lang === "id"
+              ? "Lihat Semua Properti"
+              : "View All Properties"}
+
+            <span className="transition group-hover:translate-x-1">
+              →
+            </span>
+          </Link>
+        </div>
+
+        {/* PROPERTY CONTENT */}
         {loading ? (
-          <SectionEmpty
-            text={
-              lang === "id"
-                ? "Memuat properti unggulan..."
-                : "Loading featured properties..."
-            }
-          />
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white"
+              >
+                <div className="h-[330px] animate-pulse bg-gray-200" />
+
+                <div className="space-y-4 p-6">
+                  <div className="h-5 w-4/5 animate-pulse rounded bg-gray-200" />
+                  <div className="h-4 w-2/5 animate-pulse rounded bg-gray-100" />
+
+                  <div className="h-16 animate-pulse rounded-2xl bg-gray-100" />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-12 animate-pulse rounded-2xl bg-gray-200" />
+                    <div className="h-12 animate-pulse rounded-2xl bg-gray-200" />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+          </div>
         ) : properties.length === 0 ? (
-          <SectionEmpty
-            text={
-              lang === "id"
-                ? "Belum ada properti unggulan."
-                : "No featured properties yet."
-            }
-          />
+          <div className="rounded-[30px] border border-[#E8E2D7] bg-white px-6 py-14 text-center shadow-sm">
+
+            <p className="text-lg font-extrabold text-[#1C1C1E]">
+              {lang === "id"
+                ? "Properti pilihan sedang diperbarui."
+                : "Selected properties are being updated."}
+            </p>
+
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
+              {lang === "id"
+                ? "Anda tetap dapat melihat seluruh properti yang tersedia di marketplace Tetamo."
+                : "You can still explore all available properties on the Tetamo marketplace."}
+            </p>
+
+            <Link
+              href="/properti"
+              className="mt-5 inline-flex rounded-full bg-[#B8860B] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#9C7208]"
+            >
+              {lang === "id"
+                ? "Lihat Properti →"
+                : "View Properties →"}
+            </Link>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-            {properties.map((p) => (
-              <FeaturedPropertiesCard key={p.id} property={p} />
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+            {properties.map((property) => (
+              <FeaturedPropertiesCard
+                key={property.id}
+                property={property}
+              />
             ))}
           </div>
         )}
+
+        {/* BOTTOM MARKETPLACE CTA */}
+        {properties.length > 0 && !loading && (
+          <div className="mt-10 flex justify-center sm:mt-12">
+            <Link
+              href="/properti"
+              className="group inline-flex items-center gap-2 text-sm font-extrabold text-[#1C1C1E] transition hover:text-[#B8860B]"
+            >
+              {lang === "id"
+                ? "Jelajahi semua properti di Tetamo"
+                : "Explore all properties on Tetamo"}
+
+              <span className="text-[#B8860B] transition group-hover:translate-x-1">
+                →
+              </span>
+            </Link>
+          </div>
+        )}
+
+      </div>
+    </section>
+  );
+}
+
+function TetamoTrustSection() {
+  const { lang } = useLanguage();
+
+  return (
+    <section className="relative overflow-hidden bg-[#111111] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+
+      {/* subtle gold glow */}
+      <div className="pointer-events-none absolute -left-32 top-0 h-[380px] w-[380px] rounded-full bg-[#B8860B]/10 blur-[120px]" />
+
+      <div className="relative mx-auto max-w-7xl">
+
+        {/* HEADER */}
+        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
+
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="h-px w-10 bg-[#D8B46A]" />
+
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#D8B46A] sm:text-xs">
+                {lang === "id"
+                  ? "Kenapa Tetamo"
+                  : "Why Tetamo"}
+              </span>
+            </div>
+
+            <h2 className="mt-4 max-w-xl text-[32px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white sm:text-[40px] lg:text-[44px]">
+              {lang === "id" ? (
+                <>
+                  Cari properti dengan{" "}
+                  <span className="text-[#D8B46A]">
+                    lebih mudah.
+                  </span>
+                </>
+              ) : (
+                <>
+                  Find property{" "}
+                  <span className="text-[#D8B46A]">
+                    more easily.
+                  </span>
+                </>
+              )}
+            </h2>
+          </div>
+
+          <div className="max-w-2xl lg:justify-self-end">
+            <p className="text-sm leading-7 text-white/60 sm:text-base sm:leading-8">
+              {lang === "id"
+                ? "Tetamo menghubungkan pencari properti langsung dengan pemilik, agen dan developer melalui marketplace yang lebih sederhana dan transparan."
+                : "Tetamo connects property seekers directly with owners, agents and developers through a simpler and more transparent marketplace."}
+            </p>
+          </div>
+        </div>
+
+        {/* TRUST POINTS */}
+        <div className="mt-12 grid grid-cols-1 overflow-hidden rounded-[28px] border border-white/10 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* 01 */}
+          <div className="border-b border-white/10 p-6 sm:border-r lg:border-b-0 lg:p-7">
+            <span className="text-[11px] font-extrabold tracking-[0.18em] text-[#D8B46A]">
+              01
+            </span>
+
+            <h3 className="mt-5 text-lg font-extrabold text-white">
+              {lang === "id"
+                ? "Listing Terverifikasi"
+                : "Verified Listings"}
+            </h3>
+
+            <p className="mt-3 text-sm leading-6 text-white/50">
+              {lang === "id"
+                ? "Temukan properti dari pemilik, agen dan developer yang telah melalui proses verifikasi Tetamo."
+                : "Discover properties from owners, agents and developers that have gone through Tetamo's verification process."}
+            </p>
+          </div>
+
+          {/* 02 */}
+          <div className="border-b border-white/10 p-6 lg:border-b-0 lg:border-r lg:p-7">
+            <span className="text-[11px] font-extrabold tracking-[0.18em] text-[#D8B46A]">
+              02
+            </span>
+
+            <h3 className="mt-5 text-lg font-extrabold text-white">
+              {lang === "id"
+                ? "WhatsApp Langsung"
+                : "Direct WhatsApp"}
+            </h3>
+
+            <p className="mt-3 text-sm leading-6 text-white/50">
+              {lang === "id"
+                ? "Hubungi pemilik atau agen langsung dari halaman properti tanpa proses yang rumit."
+                : "Contact the owner or agent directly from the property page without a complicated process."}
+            </p>
+          </div>
+
+          {/* 03 */}
+          <div className="border-b border-white/10 p-6 sm:border-b-0 sm:border-r lg:p-7">
+            <span className="text-[11px] font-extrabold tracking-[0.18em] text-[#D8B46A]">
+              03
+            </span>
+
+            <h3 className="mt-5 text-lg font-extrabold text-white">
+              {lang === "id"
+                ? "Jadwalkan Viewing"
+                : "Schedule Viewing"}
+            </h3>
+
+            <p className="mt-3 text-sm leading-6 text-white/50">
+              {lang === "id"
+                ? "Pilih tanggal dan waktu untuk mengajukan viewing properti langsung melalui Tetamo."
+                : "Choose a date and time to request a property viewing directly through Tetamo."}
+            </p>
+          </div>
+
+          {/* 04 */}
+          <div className="p-6 lg:p-7">
+            <span className="text-[11px] font-extrabold tracking-[0.18em] text-[#D8B46A]">
+              04
+            </span>
+
+            <h3 className="mt-5 text-lg font-extrabold text-white">
+              {lang === "id"
+                ? "Satu Marketplace"
+                : "One Marketplace"}
+            </h3>
+
+            <p className="mt-3 text-sm leading-6 text-white/50">
+              {lang === "id"
+                ? "Cari rumah, apartemen, vila, tanah dan berbagai jenis properti di berbagai wilayah Indonesia."
+                : "Search houses, apartments, villas, land and other property types across Indonesia."}
+            </p>
+          </div>
+        </div>
+
+        {/* BOTTOM CTA */}
+        <div className="mt-9 flex flex-col gap-4 border-t border-white/10 pt-7 sm:flex-row sm:items-center sm:justify-between">
+
+          <p className="max-w-xl text-sm font-medium leading-6 text-white/55">
+            {lang === "id"
+              ? "Punya properti untuk dijual atau disewakan? Anda juga bisa memasangnya di Tetamo."
+              : "Have a property to sell or rent? You can list it on Tetamo too."}
+          </p>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/properti"
+              className="rounded-full border border-white/20 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-white hover:text-[#111111]"
+            >
+              {lang === "id"
+                ? "Cari Properti"
+                : "Find Property"}
+            </Link>
+
+            <Link
+              href="/pricelist"
+              className="rounded-full bg-[#D8B46A] px-5 py-2.5 text-sm font-extrabold text-[#111111] transition hover:bg-[#C49C4E]"
+            >
+              {lang === "id"
+                ? "Pasang Properti →"
+                : "List Property →"}
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -2014,43 +2487,70 @@ function FeaturedAgentsSection() {
       try {
         setLoading(true);
 
-        const profiles = await fetchHomepageProfilesByFeaturedNames(
-          FEATURED_AGENT_NAMES
-        );
+        const profiles =
+          await fetchHomepageProfilesByFeaturedNames(
+            FEATURED_AGENT_NAMES
+          );
 
         const mapped = profiles.map((profile) => {
-          const name = profile.full_name || "Tetamo Agent";
-          const fallbackPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-            name
-          )}&background=1C1C1E&color=fff`;
+          const name =
+            profile.full_name || "Tetamo Agent";
+
+          const fallbackPhoto =
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              name
+            )}&background=1C1C1E&color=fff`;
 
           return {
             id: profile.id,
             name,
-            photo: profile.photo_url || fallbackPhoto,
-            location: profile.address || "Indonesia",
-            agency: profile.agency || "Tetamo Agent Network",
+            photo:
+              profile.photo_url || fallbackPhoto,
+            location:
+              profile.address || "Indonesia",
+            agency:
+              profile.agency || "Independent Agent",
+
             experience:
               lang === "id"
                 ? "Agen properti pilihan Tetamo"
-                : "Selected Tetamo real estate agent",
-            whatsapp: normalizeWhatsapp(profile.phone || ""),
+                : "Selected Tetamo property agent",
+
+            whatsapp: normalizeWhatsapp(
+              profile.phone || ""
+            ),
+
             agentVerified: true,
+
             socials: {
-              instagram: profile.instagram_url || "",
-              facebook: profile.facebook_url || "",
-              tiktok: profile.tiktok_url || "",
-              linkedin: profile.linkedin_url || "",
+              instagram:
+                profile.instagram_url || "",
+              facebook:
+                profile.facebook_url || "",
+              tiktok:
+                profile.tiktok_url || "",
+              linkedin:
+                profile.linkedin_url || "",
             },
           };
         });
 
-        if (!ignore) setAgents(mapped);
+        if (!ignore) {
+          setAgents(mapped);
+        }
       } catch (error) {
-        console.error("Failed to load manual featured agents:", error);
-        if (!ignore) setAgents([]);
+        console.error(
+          "Failed to load manual featured agents:",
+          error
+        );
+
+        if (!ignore) {
+          setAgents([]);
+        }
       } finally {
-        if (!ignore) setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
 
@@ -2062,128 +2562,271 @@ function FeaturedAgentsSection() {
   }, [lang]);
 
   return (
-    <section className="bg-white px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+    <section className="relative overflow-hidden bg-white px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
-        <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
-          {lang === "id" ? "Agen Unggulan Tetamo" : "Tetamo Featured Agents"}
-        </h2>
 
-        <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
-          {lang === "id"
-            ? "Temui agen properti pilihan Tetamo yang siap membantu pembeli, penyewa, dan pemilik properti terhubung dengan lebih mudah."
-            : "Meet selected Tetamo real estate agents ready to help buyers, renters, and property owners connect faster."}
-        </p>
+        {/* HEADER */}
+        <div className="mb-10 flex flex-col gap-6 md:mb-12 md:flex-row md:items-end md:justify-between">
 
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3">
+              <span className="h-px w-10 bg-[#B8860B]" />
+
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#B8860B] sm:text-xs">
+                {lang === "id"
+                  ? "Temukan Agen"
+                  : "Find an Agent"}
+              </span>
+            </div>
+
+            <h2 className="mt-4 text-[32px] font-extrabold tracking-[-0.04em] text-[#1C1C1E] sm:text-[40px] lg:text-[44px]">
+              {lang === "id"
+                ? "Agen Pilihan Tetamo"
+                : "Tetamo Selected Agents"}
+            </h2>
+
+            <p className="mt-4 max-w-xl text-sm leading-7 text-gray-600 sm:text-base">
+              {lang === "id"
+                ? "Terhubung langsung dengan agen properti pilihan Tetamo dan temukan properti yang sesuai dengan kebutuhan Anda."
+                : "Connect directly with selected Tetamo property agents and find a property that fits your needs."}
+            </p>
+          </div>
+
+          <div className="hidden text-right md:block">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">
+              {lang === "id"
+                ? "Hubungi Langsung"
+                : "Contact Directly"}
+            </p>
+
+            <p className="mt-1 text-sm font-semibold text-[#1C1C1E]">
+              WhatsApp · Social Media
+            </p>
+          </div>
+        </div>
+
+        {/* AGENTS */}
         {loading ? (
-          <SectionEmpty
-            text={
-              lang === "id"
-                ? "Memuat agen unggulan..."
-                : "Loading featured agents..."
-            }
-          />
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="overflow-hidden rounded-[30px] border border-gray-200 bg-white"
+              >
+                <div className="h-[320px] animate-pulse bg-gray-200" />
+
+                <div className="space-y-3 p-6">
+                  <div className="h-6 w-2/3 animate-pulse rounded bg-gray-200" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100" />
+                  <div className="h-12 animate-pulse rounded-2xl bg-gray-200" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : agents.length === 0 ? (
-          <SectionEmpty
-            text={
-              lang === "id"
-                ? "Belum ada agen unggulan. Periksa nama agen manual di homepage."
-                : "No featured agents yet. Please check the manual agent names on the homepage."
-            }
-          />
+          <div className="rounded-[30px] border border-gray-200 bg-[#F8F7F4] px-6 py-14 text-center">
+            <p className="text-lg font-extrabold text-[#1C1C1E]">
+              {lang === "id"
+                ? "Agen pilihan sedang diperbarui."
+                : "Selected agents are being updated."}
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+
             {agents.map((agent) => {
-              const whatsappHref = agent.whatsapp
-                ? `https://wa.me/${agent.whatsapp}?text=${encodeURIComponent(
-                    lang === "id"
-                      ? `Halo ${agent.name}, saya melihat profil Anda di Tetamo dan ingin bertanya tentang properti.`
-                      : `Hello ${agent.name}, I saw your profile on Tetamo and would like to ask about property.`
-                  )}`
-                : "#";
+              const whatsappHref =
+                agent.whatsapp
+                  ? `https://wa.me/${agent.whatsapp}?text=${encodeURIComponent(
+                      lang === "id"
+                        ? `Halo ${agent.name}, saya melihat profil Anda di Tetamo dan ingin bertanya tentang properti.`
+                        : `Hello ${agent.name}, I saw your profile on Tetamo and would like to ask about property.`
+                    )}`
+                  : "#";
 
               return (
-                <div
+                <article
                   key={agent.id}
-                  className="relative overflow-hidden rounded-3xl border border-gray-200 bg-gray-100 p-5 shadow-sm sm:p-6"
+                  className="group overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white shadow-[0_14px_45px_rgba(0,0,0,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.13)]"
                 >
-                  <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-[#1C1C1E] via-[#2A2419] to-[#B8860B]" />
 
-                  <div className="relative z-10 flex flex-wrap items-center gap-2">
+                  {/* PHOTO */}
+                  <div className="relative h-[320px] overflow-hidden bg-[#1C1C1E] sm:h-[350px]">
+                    <img
+                      src={agent.photo}
+                      alt={agent.name}
+                      className="h-full w-full object-cover object-center transition duration-700 group-hover:scale-[1.035]"
+                    />
+
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-black/10" />
+
+                    {/* VERIFIED */}
                     {agent.agentVerified && (
-                      <div className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] shadow-sm sm:text-xs">
+                      <div className="absolute left-4 top-4 rounded-full border border-white/20 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
+                        ✓{" "}
                         {lang === "id"
                           ? "Agen Terverifikasi"
                           : "Verified Agent"}
                       </div>
                     )}
 
-                    <div className="inline-flex items-center gap-1 rounded-full bg-[#B8860B] px-3 py-1 text-[11px] font-semibold text-white shadow-sm sm:text-xs">
-                      <Crown className="h-3.5 w-3.5" />
-                      {lang === "id" ? "Agen Unggulan" : "Featured Agent"}
+                    {/* FEATURED */}
+                    <div className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[#D8B46A] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#111111]">
+                      <Crown className="h-3 w-3" />
+
+                      {lang === "id"
+                        ? "Pilihan Tetamo"
+                        : "Tetamo Selected"}
                     </div>
-                  </div>
 
-                  <div className="relative z-10 mt-7 flex items-start gap-4">
-                    <img
-                      src={agent.photo}
-                      alt={agent.name}
-                      className="h-24 w-24 shrink-0 rounded-2xl border-4 border-white bg-white object-cover shadow-sm sm:h-28 sm:w-28"
-                    />
+                    {/* NAME ON IMAGE */}
+                    <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D8B46A]">
+                        {lang === "id"
+                          ? "Agen Properti"
+                          : "Property Agent"}
+                      </p>
 
-                    <div className="min-w-0 flex-1 pt-10 sm:pt-12">
-                      <h3 className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                      <h3 className="mt-1 text-[24px] font-extrabold leading-tight tracking-[-0.025em] text-white">
                         {agent.name}
                       </h3>
 
-                      <div className="mt-1 text-sm font-medium text-gray-700">
+                      <p className="mt-2 text-sm font-semibold text-white/70">
                         {agent.agency}
-                      </div>
-
-                      <div className="mt-1 text-sm text-gray-500">
-                        {agent.location}
-                      </div>
-
-                      <p className="mt-2 text-sm leading-6 text-gray-500">
-                        {agent.experience}
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-5 flex flex-wrap justify-center gap-3">
-                    <SocialBtn href={agent.socials?.instagram} label="Instagram">
-                      <IconInstagram />
-                    </SocialBtn>
-                    <SocialBtn href={agent.socials?.facebook} label="Facebook">
-                      <IconFacebook />
-                    </SocialBtn>
-                    <SocialBtn href={agent.socials?.tiktok} label="TikTok">
-                      <IconTikTok />
-                    </SocialBtn>
-                    <SocialBtn href={agent.socials?.linkedin} label="LinkedIn">
-                      <IconLinkedIn />
-                    </SocialBtn>
-                  </div>
+                  {/* DETAILS */}
+                  <div className="p-5 sm:p-6">
 
-                  <a
-                    href={whatsappHref}
-                    onClick={(e) => {
-                      if (!agent.whatsapp) e.preventDefault();
-                    }}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`mt-5 inline-block w-full rounded-2xl px-4 py-3 text-center text-sm font-semibold text-white transition ${
-                      agent.whatsapp
-                        ? "bg-[#1C1C1E] hover:opacity-90"
-                        : "cursor-not-allowed bg-gray-300"
-                    }`}
-                  >
-                    WhatsApp
-                  </a>
-                </div>
+                    {/* LOCATION */}
+                    <div className="flex items-start gap-2">
+                      <span className="mt-[1px] text-sm">
+                        📍
+                      </span>
+
+                      <p className="text-sm font-medium leading-6 text-gray-600">
+                        {agent.location}
+                      </p>
+                    </div>
+
+                    {/* SOCIAL */}
+                    <div className="mt-5 flex items-center justify-between gap-4 border-t border-gray-100 pt-5">
+
+                      <div>
+                        <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-gray-400">
+                          {lang === "id"
+                            ? "Ikuti Agen"
+                            : "Follow Agent"}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <SocialBtn
+                            href={agent.socials?.instagram}
+                            label="Instagram"
+                          >
+                            <IconInstagram />
+                          </SocialBtn>
+
+                          <SocialBtn
+                            href={agent.socials?.facebook}
+                            label="Facebook"
+                          >
+                            <IconFacebook />
+                          </SocialBtn>
+
+                          <SocialBtn
+                            href={agent.socials?.tiktok}
+                            label="TikTok"
+                          >
+                            <IconTikTok />
+                          </SocialBtn>
+
+                          <SocialBtn
+                            href={agent.socials?.linkedin}
+                            label="LinkedIn"
+                          >
+                            <IconLinkedIn />
+                          </SocialBtn>
+                        </div>
+                      </div>
+
+                      <div className="hidden text-right sm:block">
+                        <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-gray-400">
+                          TETAMO
+                        </p>
+
+                        <p className="mt-1 text-xs font-bold text-[#B8860B]">
+                          VERIFIED
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* WHATSAPP */}
+                    <a
+                      href={whatsappHref}
+                      onClick={(e) => {
+                        if (!agent.whatsapp) {
+                          e.preventDefault();
+                        }
+                      }}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`mt-5 flex min-h-[50px] w-full items-center justify-center rounded-2xl px-4 py-3 text-center text-sm font-extrabold transition ${
+                        agent.whatsapp
+                          ? "bg-[#1C1C1E] text-white hover:bg-black"
+                          : "pointer-events-none bg-gray-200 text-gray-400"
+                      }`}
+                    >
+                      {lang === "id"
+                        ? "Hubungi via WhatsApp →"
+                        : "Contact via WhatsApp →"}
+                    </a>
+                  </div>
+                </article>
               );
             })}
           </div>
         )}
+
+        {/* AGENT SALES CTA */}
+        <div className="mt-12 overflow-hidden rounded-[28px] border border-[#E6DDCB] bg-[#F8F5EE] px-6 py-7 sm:px-8 sm:py-8">
+
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+
+            <div className="max-w-2xl">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
+                {lang === "id"
+                  ? "Untuk Agen Properti"
+                  : "For Property Agents"}
+              </p>
+
+              <h3 className="mt-2 text-xl font-extrabold tracking-[-0.02em] text-[#1C1C1E] sm:text-2xl">
+                {lang === "id"
+                  ? "Bangun profil Anda dan promosikan listing di Tetamo."
+                  : "Build your profile and promote your listings on Tetamo."}
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {lang === "id"
+                  ? "Tampilkan listing, profil agen dan media sosial Anda dalam satu marketplace properti."
+                  : "Showcase your listings, agent profile and social media in one property marketplace."}
+              </p>
+            </div>
+
+            <Link
+              href="/pricelist"
+              className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full bg-[#B8860B] px-6 py-3 text-sm font-extrabold text-white transition hover:bg-[#9C7208]"
+            >
+              {lang === "id"
+                ? "Lihat Paket Agen"
+                : "View Agent Packages"}
+
+              <span>→</span>
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -2191,7 +2834,11 @@ function FeaturedAgentsSection() {
 
 function FeaturedOwnersSection() {
   const { lang } = useLanguage();
-  const [owners, setOwners] = useState<FeaturedOwnerProperty[]>([]);
+  const { currency } = useCurrency();
+
+  const [owners, setOwners] =
+    useState<FeaturedOwnerProperty[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -2201,15 +2848,25 @@ function FeaturedOwnersSection() {
       try {
         setLoading(true);
 
-        const rows = await fetchHomepageProperties();
+        const rows =
+          await fetchHomepageProperties();
 
         const ownerRows = rows
-          .filter((row) => isListingPublic(row))
-          .filter((row) => isVerifiedListing(row))
-          .filter((row) => hasFeaturedPlacement(row))
+          .filter((row) =>
+            isListingPublic(row)
+          )
+          .filter((row) =>
+            isVerifiedListing(row)
+          )
+          .filter((row) =>
+            hasFeaturedPlacement(row)
+          )
           .filter(
             (row) =>
-              normalizePostedByType(row.contact_role, row.source) === "owner"
+              normalizePostedByType(
+                row.contact_role,
+                row.source
+              ) === "owner"
           )
           .sort(sortRowsByFeaturedNewest)
           .slice(0, 3);
@@ -2217,49 +2874,123 @@ function FeaturedOwnersSection() {
         const profileIds = Array.from(
           new Set(
             ownerRows
-              .map((row) => row.contact_user_id)
-              .filter((value): value is string => Boolean(value))
+              .map(
+                (row) =>
+                  row.contact_user_id
+              )
+              .filter(
+                (value): value is string =>
+                  Boolean(value)
+              )
           )
         );
 
-        const profilesMap = await fetchHomepageProfilesByIds(profileIds);
+        const profilesMap =
+          await fetchHomepageProfilesByIds(
+            profileIds
+          );
 
-        const mapped = ownerRows.map((row) => {
-          const profile = row.contact_user_id
-            ? profilesMap.get(row.contact_user_id)
-            : null;
+        const mapped: FeaturedOwnerProperty[] =
+          ownerRows.map((row) => {
+            const profile =
+              row.contact_user_id
+                ? profilesMap.get(
+                    row.contact_user_id
+                  )
+                : null;
 
-          return {
-            id: row.id,
-            title: row.title ?? "-",
-            viewCount: Number(row.view_count ?? 0),
-            ownerName: row.contact_name || profile?.full_name || "Tetamo Owner",
-            ownerWhatsapp: normalizeWhatsapp(
-              row.contact_phone || profile?.phone || ""
-            ),
-            receiverId: row.contact_user_id || "",
-            receiverName:
-              row.contact_name || profile?.full_name || "Tetamo Owner",
-            receiverRole: "owner",
-            images: buildPropertyImages(row.property_images),
-            price: formatIdr(row.price ?? 0),
-            province: row.province ?? row.city ?? row.area ?? "-",
-            size: getMainSize(row),
-            bed: `${row.bedrooms ?? 0} Bed`,
-            furnishing: mapFurnishing(row.furnishing),
-            garage: getGarageLabel(row.garage),
-            kode: row.kode ?? undefined,
-            postedDate: formatPostedDate(row.posted_date || row.created_at),
-            ownerApproved: true,
-          };
-        });
+            return {
+              id: row.id,
 
-        if (!ignore) setOwners(mapped);
+              title:
+                row.title ||
+                (lang === "id"
+                  ? "Properti di Tetamo"
+                  : "Property on Tetamo"),
+
+              viewCount: Number(
+                row.view_count ?? 0
+              ),
+
+              ownerName:
+                row.contact_name ||
+                profile?.full_name ||
+                "Tetamo Owner",
+
+              ownerWhatsapp:
+                normalizeWhatsapp(
+                  row.contact_phone ||
+                    profile?.phone ||
+                    ""
+                ),
+
+              receiverId:
+                row.contact_user_id || "",
+
+              receiverName:
+                row.contact_name ||
+                profile?.full_name ||
+                "Tetamo Owner",
+
+              receiverRole: "owner",
+
+              images: buildPropertyImages(
+                row.property_images
+              ),
+
+              // IDR / USD / AUD
+              price: formatHomepagePrice(
+                Number(row.price ?? 0),
+                currency
+              ),
+
+              province:
+                row.city ||
+                row.area ||
+                row.province ||
+                "Indonesia",
+
+              size: getMainSize(row),
+
+              bed: `${row.bedrooms ?? 0} Bed`,
+
+              furnishing:
+                mapFurnishing(
+                  row.furnishing
+                ),
+
+              garage:
+                getGarageLabel(row.garage),
+
+              kode:
+                row.kode ?? undefined,
+
+              postedDate:
+                formatPostedDate(
+                  row.posted_date ||
+                    row.created_at
+                ),
+
+              ownerApproved: true,
+            };
+          });
+
+        if (!ignore) {
+          setOwners(mapped);
+        }
       } catch (error) {
-        console.error("Failed to load featured owner properties:", error);
-        if (!ignore) setOwners([]);
+        console.error(
+          "Failed to load featured owner properties:",
+          error
+        );
+
+        if (!ignore) {
+          setOwners([]);
+        }
       } finally {
-        if (!ignore) setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
 
@@ -2268,167 +2999,760 @@ function FeaturedOwnersSection() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [currency, lang]);
 
   return (
-    <section className="bg-gray-100 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-      <div className="mx-auto max-w-7xl">
-        <h2 className="mb-4 text-center text-2xl font-bold text-[#1C1C1E] sm:text-3xl">
-          {lang === "id"
-            ? "Properti Pemilik Unggulan"
-            : "Featured Owner Properties"}
-        </h2>
+    <section className="relative overflow-hidden bg-[#F6F3EC] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
 
-        <p className="mx-auto mb-10 max-w-2xl px-2 text-center text-sm leading-7 text-gray-600 sm:mb-12 sm:text-base">
-          {lang === "id"
-            ? "Properti langsung dari pemilik. Transparan, jelas, dan terverifikasi."
-            : "Verified properties directly from owners."}
-        </p>
+      <div className="pointer-events-none absolute -right-32 top-0 h-[380px] w-[380px] rounded-full bg-[#D8B46A]/10 blur-[120px]" />
 
+      <div className="relative mx-auto max-w-7xl">
+
+        {/* HEADER */}
+        <div className="mb-10 flex flex-col gap-6 md:mb-12 md:flex-row md:items-end md:justify-between">
+
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3">
+              <span className="h-px w-10 bg-[#B8860B]" />
+
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#B8860B] sm:text-xs">
+                {lang === "id"
+                  ? "Langsung dari Pemilik"
+                  : "Direct from Owners"}
+              </span>
+            </div>
+
+            <h2 className="mt-4 text-[32px] font-extrabold tracking-[-0.04em] text-[#1C1C1E] sm:text-[40px] lg:text-[44px]">
+              {lang === "id"
+                ? "Properti dari Pemilik"
+                : "Properties from Owners"}
+            </h2>
+
+            <p className="mt-4 max-w-xl text-sm leading-7 text-gray-600 sm:text-base">
+              {lang === "id"
+                ? "Jelajahi properti yang dipasarkan langsung oleh pemilik terverifikasi dan hubungi mereka melalui Tetamo."
+                : "Explore properties marketed directly by verified owners and contact them through Tetamo."}
+            </p>
+          </div>
+
+          <Link
+            href="/properti"
+            className="group inline-flex w-fit items-center gap-3 rounded-full border border-[#1C1C1E] bg-white px-5 py-3 text-sm font-extrabold text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white"
+          >
+            {lang === "id"
+              ? "Lihat Semua Properti"
+              : "View All Properties"}
+
+            <span className="transition group-hover:translate-x-1">
+              →
+            </span>
+          </Link>
+        </div>
+
+        {/* OWNER PROPERTIES */}
         {loading ? (
-          <SectionEmpty
-            text={
-              lang === "id"
-                ? "Memuat properti pemilik..."
-                : "Loading owner properties..."
-            }
-          />
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white"
+              >
+                <div className="h-[330px] animate-pulse bg-gray-200" />
+
+                <div className="space-y-4 p-6">
+                  <div className="h-5 w-4/5 animate-pulse rounded bg-gray-200" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100" />
+                  <div className="h-16 animate-pulse rounded-2xl bg-gray-100" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : owners.length === 0 ? (
-          <SectionEmpty
-            text={
-              lang === "id"
-                ? "Belum ada properti pemilik unggulan."
-                : "No featured owner properties yet."
-            }
-          />
+          <div className="rounded-[30px] border border-[#E8E2D7] bg-white px-6 py-14 text-center">
+            <p className="text-lg font-extrabold text-[#1C1C1E]">
+              {lang === "id"
+                ? "Properti pemilik sedang diperbarui."
+                : "Owner properties are being updated."}
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 xl:grid-cols-3 xl:gap-10">
-            {owners.map((p) => (
-              <FeaturedOwnerPropertyCard key={p.id} property={p} />
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+            {owners.map((property) => (
+              <FeaturedOwnerPropertyCard
+                key={property.id}
+                property={property}
+              />
             ))}
           </div>
         )}
+
+        {/* OWNER SALES CTA */}
+        <div className="mt-12 overflow-hidden rounded-[28px] bg-[#111111] px-6 py-7 text-white sm:px-8 sm:py-8">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+
+            <div className="max-w-2xl">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#D8B46A]">
+                {lang === "id"
+                  ? "Punya Properti?"
+                  : "Own a Property?"}
+              </p>
+
+              <h3 className="mt-2 text-xl font-extrabold tracking-[-0.02em] text-white sm:text-2xl">
+                {lang === "id"
+                  ? "Jual atau sewakan properti Anda di Tetamo."
+                  : "Sell or rent your property on Tetamo."}
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-white/55">
+                {lang === "id"
+                  ? "Pasang properti mulai Rp50.000 dan tayang selama 1 tahun."
+                  : "List your property from Rp50,000 and stay live for 1 year."}
+              </p>
+            </div>
+
+            <Link
+              href="/pricelist"
+              className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full bg-[#D8B46A] px-6 py-3 text-sm font-extrabold text-[#111111] transition hover:bg-[#C49C4E]"
+            >
+              {lang === "id"
+                ? "Pasang Properti"
+                : "List Property"}
+
+              <span>→</span>
+            </Link>
+          </div>
+        </div>
+
       </div>
     </section>
   );
 }
 
+function LocationDiscoverySection() {
+  const { lang } = useLanguage();
+
+  const [locations, setLocations] = useState<
+    {
+      name: string;
+      province: string;
+      image: string;
+      propertyCount: number;
+    }[]
+  >([]);
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadLocations() {
+      try {
+        setLoading(true);
+
+        const rows = await fetchHomepageProperties();
+
+        const verifiedRows = rows
+          .filter((row) => isListingPublic(row))
+          .filter((row) => isVerifiedListing(row));
+
+        const locationMap = new Map<
+          string,
+          {
+            name: string;
+            province: string;
+            image: string;
+            propertyCount: number;
+          }
+        >();
+
+        verifiedRows.forEach((row) => {
+          const locationName = String(
+            row.city ||
+              row.area ||
+              row.province ||
+              ""
+          ).trim();
+
+          if (!locationName) return;
+
+          const key = locationName.toLowerCase();
+
+          const images = buildPropertyImages(
+            row.property_images
+          );
+
+          const existing = locationMap.get(key);
+
+          if (existing) {
+            existing.propertyCount += 1;
+            return;
+          }
+
+          locationMap.set(key, {
+            name: locationName,
+
+            province:
+              row.province &&
+              row.province !== locationName
+                ? row.province
+                : "Indonesia",
+
+            image: images[0],
+
+            propertyCount: 1,
+          });
+        });
+
+        const mapped = Array.from(
+          locationMap.values()
+        )
+          .sort(
+            (a, b) =>
+              b.propertyCount -
+              a.propertyCount
+          )
+          .slice(0, 6);
+
+        if (!ignore) {
+          setLocations(mapped);
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load homepage locations:",
+          error
+        );
+
+        if (!ignore) {
+          setLocations([]);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadLocations();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const mainLocations = locations.slice(0, 3);
+  const moreLocations = locations.slice(3, 6);
+
+  return (
+    <section className="relative overflow-hidden bg-[#F8F6F1] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+
+      <div className="mx-auto max-w-7xl">
+
+        {/* HEADER */}
+        <div className="mb-10 flex flex-col gap-6 md:mb-12 md:flex-row md:items-end md:justify-between">
+
+          <div className="max-w-2xl">
+
+            <div className="flex items-center gap-3">
+              <span className="h-px w-10 bg-[#B8860B]" />
+
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#B8860B] sm:text-xs">
+                {lang === "id"
+                  ? "Jelajahi Indonesia"
+                  : "Explore Indonesia"}
+              </span>
+            </div>
+
+            <h2 className="mt-4 text-[32px] font-extrabold leading-[1.08] tracking-[-0.04em] text-[#1C1C1E] sm:text-[40px] lg:text-[44px]">
+              {lang === "id"
+                ? "Temukan Properti di Lokasi Pilihan"
+                : "Discover Property by Location"}
+            </h2>
+
+            <p className="mt-4 max-w-xl text-sm leading-7 text-gray-600 sm:text-base">
+              {lang === "id"
+                ? "Mulai pencarian dari kota dan wilayah yang memiliki properti aktif di Tetamo."
+                : "Start your search from cities and regions with active properties on Tetamo."}
+            </p>
+          </div>
+
+          <Link
+            href="/search"
+            className="group inline-flex w-fit shrink-0 items-center gap-2 text-sm font-extrabold text-[#1C1C1E] transition hover:text-[#B8860B]"
+          >
+            {lang === "id"
+              ? "Cari lokasi lainnya"
+              : "Search other locations"}
+
+            <span className="text-[#B8860B] transition group-hover:translate-x-1">
+              →
+            </span>
+          </Link>
+        </div>
+
+        {/* MAIN LOCATIONS */}
+        {loading ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="h-[430px] animate-pulse rounded-[32px] bg-gray-200"
+              />
+            ))}
+          </div>
+        ) : mainLocations.length === 0 ? (
+          <div className="rounded-[30px] border border-[#E8E2D7] bg-white px-6 py-14 text-center">
+            <p className="text-lg font-extrabold text-[#1C1C1E]">
+              {lang === "id"
+                ? "Lokasi properti sedang diperbarui."
+                : "Property locations are being updated."}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+
+              {mainLocations.map((location) => {
+                const searchValue =
+                  encodeURIComponent(location.name);
+
+                return (
+                  <Link
+                    key={location.name}
+                    href={`/search?q=${searchValue}&query=${searchValue}`}
+                    className="group block"
+                  >
+                    <article className="overflow-hidden rounded-[32px] border border-[#E7E1D6] bg-white shadow-[0_14px_40px_rgba(0,0,0,0.06)] transition duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_25px_60px_rgba(0,0,0,0.12)]">
+
+                      {/* IMAGE */}
+                      <div className="relative h-[350px] overflow-hidden sm:h-[390px] lg:h-[420px]">
+
+                        <img
+                          src={location.image}
+                          alt={
+                            lang === "id"
+                              ? `Properti di ${location.name}`
+                              : `Property in ${location.name}`
+                          }
+                          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+                        />
+
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
+
+                        {/* LOCATION NAME */}
+                        <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-7">
+
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#E3C373]">
+                            {location.province}
+                          </p>
+
+                          <h3 className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.04em] text-white sm:text-[34px]">
+                            {location.name}
+                          </h3>
+
+                        </div>
+                      </div>
+
+                      {/* CLEAN WHITE FOOTER */}
+                      <div className="flex items-center justify-between gap-4 px-6 py-5">
+
+                        <p className="text-sm font-semibold text-gray-600">
+                          {lang === "id"
+                            ? "Lihat properti di area ini"
+                            : "View properties in this area"}
+                        </p>
+
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1C1C1E] text-lg text-white transition duration-300 group-hover:bg-[#B8860B] group-hover:translate-x-1">
+                          →
+                        </div>
+
+                      </div>
+                    </article>
+                  </Link>
+                );
+              })}
+
+            </div>
+
+            {/* MORE LOCATIONS */}
+            {moreLocations.length > 0 && (
+              <div className="mt-8 rounded-[26px] border border-[#E7E1D6] bg-white px-5 py-5 sm:px-7">
+
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-gray-400">
+                    {lang === "id"
+                      ? "Lokasi Lainnya"
+                      : "More Locations"}
+                  </p>
+
+                  <div className="flex flex-wrap gap-x-7 gap-y-3">
+
+                    {moreLocations.map((location) => {
+                      const searchValue =
+                        encodeURIComponent(
+                          location.name
+                        );
+
+                      return (
+                        <Link
+                          key={location.name}
+                          href={`/search?q=${searchValue}&query=${searchValue}`}
+                          className="group inline-flex items-center gap-2 text-sm font-extrabold text-[#1C1C1E] transition hover:text-[#B8860B]"
+                        >
+                          {location.name}
+
+                          <span className="text-[#B8860B] transition group-hover:translate-x-1">
+                            →
+                          </span>
+                        </Link>
+                      );
+                    })}
+
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+      </div>
+    </section>
+  );
+}             
 
 function DownloadTetamoAppSection() {
   const { lang } = useLanguage();
 
+  const appStoreUrl =
+    TETAMO_APP_STORE_URL === "#"
+      ? "https://apps.apple.com/us/app/tetamo/id6753583699"
+      : TETAMO_APP_STORE_URL;
+
+  const playStoreUrl = TETAMO_PLAY_STORE_URL;
+
   return (
-    <section className="bg-[#050505] px-4 py-16 text-white sm:px-6 lg:px-8 lg:py-24">
-      <div className="mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-[32px] border border-[#D8B46A]/30 bg-gradient-to-br from-[#111111] via-[#050505] to-[#2B2115] px-5 py-8 shadow-2xl sm:px-8 sm:py-10 lg:grid-cols-[1fr_470px] lg:items-center lg:px-10 lg:py-12">
-        <div>
-          <div className="inline-flex rounded-full border border-[#D8B46A]/40 bg-[#D8B46A]/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-[#D8B46A]">
-            {lang === "id" ? "Aplikasi Tetamo" : "Tetamo Mobile App"}
-          </div>
+    <section className="relative overflow-hidden bg-[#090909] px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8 lg:py-24">
 
-          <h2 className="mt-5 max-w-3xl text-3xl font-extrabold leading-tight tracking-[-0.03em] text-white sm:text-4xl lg:text-5xl">
-            {lang === "id"
-              ? "Download aplikasi Tetamo di iOS dan Android."
-              : "Download the Tetamo app on iOS and Android."}
-          </h2>
+      {/* BACKGROUND */}
+      <div className="pointer-events-none absolute -left-40 top-0 h-[500px] w-[500px] rounded-full bg-[#B8860B]/10 blur-[140px]" />
 
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-            {lang === "id"
-              ? "Cari properti terverifikasi di Indonesia, hubungi pemilik atau agen melalui WhatsApp, jadwalkan viewing, dan pasang listing langsung dari ponsel Anda."
-              : "Search verified properties in Indonesia, contact owners or agents through WhatsApp, schedule viewings, and list properties directly from your phone."}
-          </p>
+      <div className="pointer-events-none absolute -right-40 bottom-0 h-[500px] w-[500px] rounded-full bg-[#D8B46A]/5 blur-[140px]" />
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-bold text-[#D8B46A]">
-                {lang === "id" ? "Untuk Pembeli & Penyewa" : "For Buyers & Renters"}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-white/65">
+      <div className="relative mx-auto max-w-7xl">
+
+        <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+
+          {/* =====================================
+              LEFT — CONTENT
+          ===================================== */}
+          <div className="max-w-[590px]">
+
+            <div className="flex items-center gap-3">
+              <span className="h-px w-10 bg-[#D8B46A]" />
+
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#D8B46A] sm:text-xs">
                 {lang === "id"
-                  ? "Cari properti, simpan favorit, hubungi WhatsApp, dan jadwalkan viewing."
-                  : "Search properties, save favourites, contact via WhatsApp, and schedule viewings."}
-              </p>
+                  ? "Aplikasi Tetamo"
+                  : "Tetamo Mobile App"}
+              </span>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-bold text-[#D8B46A]">
-                {lang === "id" ? "Untuk Pemilik & Agen" : "For Owners & Agents"}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-white/65">
-                {lang === "id"
-                  ? "Pasang listing, bayar QRIS, dan kelola leads dari dashboard."
-                  : "Post listings, pay with QRIS, and manage leads from your dashboard."}
-              </p>
+            <h2 className="mt-5 text-[36px] font-extrabold leading-[1.05] tracking-[-0.045em] text-white sm:text-[46px] lg:text-[54px]">
+              {lang === "id" ? (
+                <>
+                  Properti Indonesia,{" "}
+                  <span className="text-[#D8B46A]">
+                    dalam genggaman Anda.
+                  </span>
+                </>
+              ) : (
+                <>
+                  Indonesia property,{" "}
+                  <span className="text-[#D8B46A]">
+                    in your hands.
+                  </span>
+                </>
+              )}
+            </h2>
+
+            <p className="mt-6 max-w-xl text-sm leading-7 text-white/60 sm:text-base sm:leading-8">
+              {lang === "id"
+                ? "Cari, beli, jual dan sewa properti langsung dari aplikasi Tetamo. Hubungi pemilik atau agen melalui WhatsApp, jadwalkan viewing, dan kelola aktivitas properti Anda dengan lebih mudah."
+                : "Find, buy, sell and rent property directly from the Tetamo app. Contact owners or agents through WhatsApp, schedule viewings and manage your property activity more easily."}
+            </p>
+
+            {/* FEATURES */}
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+              <div className="border-l border-[#D8B46A]/50 pl-4">
+                <p className="text-sm font-extrabold text-white">
+                  {lang === "id"
+                    ? "Cari Properti"
+                    : "Find Property"}
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-white/40">
+                  {lang === "id"
+                    ? "Jelajahi listing di berbagai wilayah Indonesia."
+                    : "Explore listings across Indonesia."}
+                </p>
+              </div>
+
+              <div className="border-l border-[#D8B46A]/50 pl-4">
+                <p className="text-sm font-extrabold text-white">
+                  WhatsApp
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-white/40">
+                  {lang === "id"
+                    ? "Hubungi pemilik atau agen secara langsung."
+                    : "Contact owners or agents directly."}
+                </p>
+              </div>
+
+              <div className="border-l border-[#D8B46A]/50 pl-4">
+                <p className="text-sm font-extrabold text-white">
+                  {lang === "id"
+                    ? "Jadwal Viewing"
+                    : "Schedule Viewing"}
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-white/40">
+                  {lang === "id"
+                    ? "Ajukan jadwal viewing melalui Tetamo."
+                    : "Request viewing times through Tetamo."}
+                </p>
+              </div>
+
+              <div className="border-l border-[#D8B46A]/50 pl-4">
+                <p className="text-sm font-extrabold text-white">
+                  {lang === "id"
+                    ? "Pasang Properti"
+                    : "List Property"}
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-white/40">
+                  {lang === "id"
+                    ? "Promosikan dan kelola listing Anda."
+                    : "Promote and manage your listings."}
+                </p>
+              </div>
+
             </div>
+
+            {/* STORE LABEL */}
+            <p className="mt-9 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/35">
+              {lang === "id"
+                ? "Download aplikasi Tetamo"
+                : "Download the Tetamo app"}
+            </p>
+
+            {/* STORE BUTTONS */}
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+
+              {/* APP STORE */}
+              <a
+                href={appStoreUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex min-h-[62px] min-w-[185px] items-center justify-between gap-4 rounded-2xl bg-white px-5 py-3 text-[#111111] transition duration-200 hover:bg-[#D8B46A]"
+              >
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] opacity-50">
+                    {lang === "id"
+                      ? "Download di"
+                      : "Download on the"}
+                  </p>
+
+                  <p className="mt-0.5 text-[15px] font-extrabold">
+                    App Store
+                  </p>
+                </div>
+
+                <span className="text-lg transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+
+              {/* GOOGLE PLAY */}
+              <a
+                href={playStoreUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex min-h-[62px] min-w-[185px] items-center justify-between gap-4 rounded-2xl bg-[#D8B46A] px-5 py-3 text-[#111111] transition duration-200 hover:bg-[#C49C4E]"
+              >
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] opacity-50">
+                    {lang === "id"
+                      ? "Dapatkan di"
+                      : "Get it on"}
+                  </p>
+
+                  <p className="mt-0.5 text-[15px] font-extrabold">
+                    Google Play
+                  </p>
+                </div>
+
+                <span className="text-lg transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+
+            </div>
+
+            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-white/35">
+
+              <span>
+                ✓ iOS
+              </span>
+
+              <span>
+                ✓ Android
+              </span>
+
+              <span>
+                ✓ {lang === "id"
+                  ? "Bahasa Indonesia & English"
+                  : "Indonesian & English"}
+              </span>
+
+            </div>
+
           </div>
 
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <a
-              href={TETAMO_APP_STORE_URL}
-              onClick={(e) => {
-                if (TETAMO_APP_STORE_URL === "#") e.preventDefault();
-              }}
-              target="_blank"
-              rel="noreferrer"
-              className={`inline-flex min-h-[56px] items-center justify-center rounded-2xl border border-white/15 px-5 py-3 text-center text-sm font-bold transition ${
-                TETAMO_APP_STORE_URL === "#"
-                  ? "cursor-not-allowed bg-white/10 text-white/50"
-                  : "bg-white text-[#1C1C1E] hover:bg-[#D8B46A]"
-              }`}
-            >
-              {lang === "id" ? "Download di App Store" : "Download on App Store"}
-            </a>
+          {/* =====================================
+              RIGHT — APP SHOWCASE
+          ===================================== */}
+          <div className="relative">
 
-            <a
-              href={TETAMO_PLAY_STORE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-[#D8B46A] px-5 py-3 text-center text-sm font-bold text-[#1C1C1E] transition hover:brightness-110"
-            >
-              {lang === "id" ? "Dapatkan di Google Play" : "Get it on Google Play"}
-            </a>
+            <div className="pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#D8B46A]/10 blur-[100px]" />
+
+            <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-white/[0.035] p-4 shadow-[0_35px_100px_rgba(0,0,0,0.45)] sm:p-6 lg:p-8">
+
+              {/* SHOWCASE HEADER */}
+              <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
+
+                <div>
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#D8B46A]">
+                    TETAMO APP
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-white">
+                    {lang === "id"
+                      ? "Marketplace properti dalam satu aplikasi"
+                      : "Your property marketplace in one app"}
+                  </p>
+                </div>
+
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#D8B46A]/25 bg-[#D8B46A]/[0.06] px-3 py-1.5">
+
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#D8B46A]" />
+
+                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#D8B46A]">
+                    iOS · Android
+                  </span>
+
+                </div>
+
+              </div>
+
+              {/* PHONE GRID — NO ABSOLUTE OVERLAP */}
+              <div className="grid grid-cols-2 items-end gap-3 sm:gap-5">
+
+                {/* HOME SCREEN */}
+                <div>
+                  <p className="mb-3 text-center text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">
+                    {lang === "id"
+                      ? "Jelajahi"
+                      : "Explore"}
+                  </p>
+
+                  <div className="overflow-hidden rounded-[28px] border border-white/15 bg-[#111111] p-1.5 shadow-[0_25px_60px_rgba(0,0,0,0.5)] sm:rounded-[34px] sm:p-2">
+
+                    <div className="overflow-hidden rounded-[23px] bg-black sm:rounded-[28px]">
+                      <img
+                        src="/app-showcase/tetamo-home.png"
+                        alt="Tetamo mobile app homepage"
+                        className="h-[390px] w-full object-cover object-top sm:h-[520px]"
+                      />
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* PROPERTY SCREEN */}
+                <div>
+                  <p className="mb-3 text-center text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">
+                    {lang === "id"
+                      ? "Properti"
+                      : "Property"}
+                  </p>
+
+                  <div className="overflow-hidden rounded-[28px] border border-[#D8B46A]/35 bg-[#111111] p-1.5 shadow-[0_30px_70px_rgba(0,0,0,0.6)] sm:rounded-[34px] sm:p-2">
+
+                    <div className="overflow-hidden rounded-[23px] bg-black sm:rounded-[28px]">
+                      <img
+                        src="/app-showcase/tetamo-property.png"
+                        alt="Tetamo mobile app property page"
+                        className="h-[410px] w-full object-cover object-top sm:h-[545px]"
+                      />
+                    </div>
+
+                  </div>
+                </div>
+
+              </div>
+
+              {/* NORMAL FLOW — NOTHING OVERLAPS PHONES */}
+              <div className="mt-7 border-t border-white/10 pt-5">
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                  <p className="text-xs font-medium text-white/40">
+                    {lang === "id"
+                      ? "Cari properti. Terhubung langsung. Jadwalkan viewing."
+                      : "Find property. Connect directly. Schedule a viewing."}
+                  </p>
+
+                  <p className="shrink-0 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#D8B46A]">
+                    Innovate · Empower · Transform
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
+
         </div>
 
-        <div className="relative mx-auto flex min-h-[520px] w-full max-w-[470px] items-center justify-center">
-          <div className="absolute left-0 top-10 h-64 w-64 rounded-full bg-[#D8B46A]/20 blur-3xl" />
-          <div className="absolute bottom-12 right-0 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+        {/* =====================================
+            FINAL BRAND STRIP
+        ===================================== */}
+        <div className="mt-16 border-t border-white/10 pt-7">
 
-          <div className="relative h-[500px] w-full">
-            <div className="absolute left-0 top-8 w-[58%] rotate-[-5deg] overflow-hidden rounded-[34px] border border-[#D8B46A]/40 bg-black p-2 shadow-2xl">
-              <img
-                src="/app-showcase/tetamo-home.png"
-                alt="Tetamo mobile app homepage"
-                className="h-[470px] w-full rounded-[26px] object-cover object-top"
-              />
-            </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-            <div className="absolute right-0 top-0 w-[58%] rotate-[5deg] overflow-hidden rounded-[34px] border border-[#D8B46A]/40 bg-black p-2 shadow-2xl">
-              <img
-                src="/app-showcase/tetamo-property.png"
-                alt="Tetamo mobile app property page"
-                className="h-[470px] w-full rounded-[26px] object-cover object-top"
-              />
-            </div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/25">
+              TETAMO PROPERTY MARKETPLACE
+            </p>
 
-            <div className="absolute bottom-0 left-1/2 w-[78%] -translate-x-1/2 rounded-3xl border border-[#D8B46A]/30 bg-[#111111]/95 p-5 text-center shadow-2xl backdrop-blur">
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#D8B46A]">
-                TETAMO APP
-              </p>
-              <p className="mt-2 text-xl font-extrabold text-white">
-                {lang === "id"
-                  ? "Properti Indonesia dalam genggaman"
-                  : "Indonesia property in your hand"}
-              </p>
-            </div>
+            <p className="text-xs font-medium text-white/30">
+              {lang === "id"
+                ? "Cari · Beli · Jual · Sewa Properti"
+                : "Find · Buy · Sell · Rent Property"}
+            </p>
+
           </div>
+
         </div>
+
       </div>
     </section>
   );
 }
-
-
-
 /* =========================
    PAGE
 ========================= */
@@ -2436,127 +3760,322 @@ function DownloadTetamoAppSection() {
 export default function HomeClient() {
   const router = useRouter();
   const { lang } = useLanguage();
+  const { currency } = useCurrency();
   const [q, setQ] = useState("");
 
-  const goSearch = () => {
-    const query = q.trim();
-    if (!query) return;
-    router.push(`/search?q=${encodeURIComponent(query)}`);
-  };
+ const [heroProperty, setHeroProperty] = useState<{
+  id: string;
+  image: string;
+  title: string;
+  priceValue: number;
+  location: string;
+} | null>(null);
 
-  return (
-    <main className="min-h-screen overflow-x-hidden bg-white text-gray-900">
-      <section className="bg-[#F7F7F8] px-4 pb-10 pt-8 text-center sm:px-6 sm:pb-12 sm:pt-10 md:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
-        <div className="mx-auto max-w-5xl">
-          <h1 className="text-[30px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C1C1E] sm:text-[35px] md:text-5xl lg:text-[42px]">
-            {lang === "id"
-              ? "Iklankan Lebih Cerdas dengan TeTaMo"
-              : "Advertise Smarter with TeTaMo"}
+useEffect(() => {
+  let ignore = false;
+
+  async function loadHeroProperty() {
+    try {
+      const rows = await fetchHomepageProperties();
+
+      const verifiedProperties = rows
+        .filter((row) => isListingPublic(row))
+        .filter((row) => isVerifiedListing(row));
+
+      const preferredProperty =
+        FEATURED_PROPERTY_CODES
+          .map((kode) =>
+            verifiedProperties.find(
+              (row) =>
+                normalizePropertyCode(row.kode) ===
+                normalizePropertyCode(kode)
+            )
+          )
+          .find(
+            (row): row is HomepagePropertyRow =>
+              Boolean(row?.property_images?.length)
+          ) ||
+        verifiedProperties.find(
+          (row) => Boolean(row.property_images?.length)
+        ) ||
+        verifiedProperties[0];
+
+      if (!preferredProperty || ignore) return;
+
+      const images = buildPropertyImages(
+        preferredProperty.property_images
+      );
+
+      setHeroProperty({
+        id: preferredProperty.id,
+        image: images[0],
+        title: preferredProperty.title || "Properti di Tetamo",
+        priceValue: Number(preferredProperty.price || 0),
+        location:
+          preferredProperty.city ||
+          preferredProperty.area ||
+          preferredProperty.province ||
+          "Indonesia",
+      });
+    } catch (error) {
+      console.error("Failed to load hero property:", error);
+    }
+  }
+
+  loadHeroProperty();
+
+  return () => {
+    ignore = true;
+  };
+}, []);
+
+const goSearch = () => {
+  const query = q.trim();
+
+  if (!query) {
+    router.push("/properti");
+    return;
+  }
+
+  router.push(`/search?q=${encodeURIComponent(query)}`);
+};
+
+return (
+  <main className="min-h-screen overflow-x-hidden bg-white text-gray-900">
+    <section className="relative overflow-hidden bg-[#0D0D0D]">
+      {/* Background glow */}
+      <div className="pointer-events-none absolute -left-40 top-0 h-[500px] w-[500px] rounded-full bg-[#B8860B]/10 blur-[130px]" />
+      <div className="pointer-events-none absolute -right-40 bottom-0 h-[500px] w-[500px] rounded-full bg-[#D8B46A]/5 blur-[130px]" />
+
+      <div className="relative mx-auto grid min-h-[680px] max-w-7xl grid-cols-1 items-center gap-12 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16 lg:px-8 lg:py-20">
+
+        {/* =========================
+            LEFT
+        ========================= */}
+        <div className="max-w-[650px]">
+          {/* Eyebrow */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#D8B46A]/30 bg-[#D8B46A]/[0.06] px-4 py-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#D8B46A]" />
+
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#D8B46A] sm:text-xs">
+              {lang === "id"
+                ? "Marketplace Properti Indonesia"
+                : "Indonesia Property Marketplace"}
+            </span>
+          </div>
+
+          {/* Main headline */}
+          <h1 className="mt-6 max-w-[640px] text-[42px] font-extrabold leading-[1.02] tracking-[-0.045em] text-white sm:text-[52px] md:text-[58px] lg:text-[62px]">
+            {lang === "id" ? (
+              <>
+                Cari, Beli, Jual &{" "}
+                <span className="text-[#D8B46A]">
+                  Sewa Properti
+                </span>{" "}
+                di Indonesia
+              </>
+            ) : (
+              <>
+                Find, Buy, Sell &{" "}
+                <span className="text-[#D8B46A]">
+                  Rent Property
+                </span>{" "}
+                in Indonesia
+              </>
+            )}
           </h1>
 
-          <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-7 text-[#5F6B7A] sm:mt-5 sm:text-base md:text-lg md:leading-8">
+          {/* Supporting copy */}
+          <p className="mt-6 max-w-[590px] text-[15px] leading-7 text-white/65 sm:text-base sm:leading-8 lg:text-[17px]">
             {lang === "id"
-              ? "Properti • Profesional • Transparan • Fokus pada Pembeli & Penyewa."
-              : "Property • Professional • Transparent • Buyer & Renter Focused."}
+              ? "Cari rumah, apartemen, vila, tanah dan properti lainnya untuk dibeli atau disewa. Pemilik dan agen juga dapat memasarkan properti langsung melalui Tetamo."
+              : "Find houses, apartments, villas, land and other properties to buy or rent. Owners and agents can also market their properties directly through Tetamo."}
           </p>
 
-          <div className="mx-auto mt-7 w-full max-w-3xl rounded-[22px] border border-gray-200 bg-white p-2 shadow-sm sm:mt-8">
+          {/* Buy / Rent */}
+          <div className="mt-8 flex w-full max-w-[410px] rounded-2xl border border-white/10 bg-white/[0.05] p-1.5">
+            <Link
+              href="/properti?jenisListing=dijual"
+              className="flex-1 rounded-xl bg-white px-5 py-3.5 text-center text-sm font-extrabold text-[#111111] transition duration-200 hover:bg-[#D8B46A]"
+            >
+              {lang === "id" ? "Beli" : "Buy"}
+            </Link>
+
+            <Link
+              href="/properti?jenisListing=disewa"
+              className="flex-1 rounded-xl px-5 py-3.5 text-center text-sm font-extrabold text-white transition duration-200 hover:bg-white/10"
+            >
+              {lang === "id" ? "Sewa" : "Rent"}
+            </Link>
+          </div>
+
+          {/* Search */}
+          <div className="mt-4 w-full max-w-[610px] rounded-[22px] bg-white p-2 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
             <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <input
-                  type="text"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") goSearch();
-                  }}
-                  placeholder={
-                    lang === "id"
-                      ? "Cari lokasi, harga, agen, properti..."
-                      : "Search location, price, agent, property..."
-                  }
-                  className="h-11 w-full rounded-[16px] border border-transparent px-4 text-[15px] text-[#1C1C1E] placeholder:text-gray-500 focus:border-gray-200 focus:outline-none"
-                />
-              </div>
+              <input
+                type="text"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") goSearch();
+                }}
+                placeholder={
+                  lang === "id"
+                    ? "Cari kota, area, atau properti..."
+                    : "Search city, area, or property..."
+                }
+                className="h-12 min-w-0 flex-1 rounded-2xl bg-transparent px-4 text-sm text-[#1C1C1E] outline-none placeholder:text-gray-400 sm:text-[15px]"
+              />
 
               <button
                 type="button"
                 onClick={goSearch}
-                className="h-11 w-[92px] shrink-0 rounded-[16px] bg-[#1C1C1E] px-3 text-sm font-semibold text-white transition hover:opacity-90"
+                className="h-12 shrink-0 rounded-2xl bg-[#B8860B] px-5 text-sm font-extrabold text-white transition duration-200 hover:bg-[#9C7208] sm:px-7"
               >
                 {lang === "id" ? "Cari" : "Search"}
               </button>
             </div>
           </div>
 
-          <div className="mx-auto mt-7 grid max-w-4xl grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
-            <Link
-              href="/properti"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-white transition hover:opacity-90 sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-            >
-              {lang === "id" ? "Lihat Properti" : "View Properties"}
-            </Link>
-
-            <Link
-              href="/signup?role=owner&next=/pemilik"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl border border-[#1C1C1E] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#1C1C1E] hover:text-white sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-            >
+          {/* Trust strip */}
+          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-white/55 sm:text-sm">
+            <span>
+              ✓{" "}
               {lang === "id"
-                ? "Iklankan Sebagai Pemilik"
-                : "Advertise as Owner"}
-            </Link>
+                ? "Listing Terverifikasi"
+                : "Verified Listings"}
+            </span>
 
-            <Link
-              href="/signup?role=agent&next=/agentdashboard/paket"
-              className="inline-flex min-h-[58px] items-center justify-center rounded-2xl bg-[#E5E7EB] px-2 py-2 text-center text-[12px] font-semibold leading-[1.2] text-[#1C1C1E] transition hover:bg-[#D1D5DB] sm:min-h-[60px] sm:px-4 sm:text-sm md:text-base"
-            >
-              {lang === "id" ? "Daftar Sebagai Agen" : "Register as Agent"}
-            </Link>
+            <span>
+              ✓{" "}
+              {lang === "id"
+                ? "WhatsApp Langsung"
+                : "Direct WhatsApp"}
+            </span>
+
+            <span>
+              ✓{" "}
+              {lang === "id"
+                ? "Jadwal Viewing"
+                : "Schedule Viewing"}
+            </span>
+          </div>
+
+          {/* Seller CTA */}
+          <div className="mt-8 max-w-[610px] border-t border-white/10 pt-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-white sm:text-[15px]">
+                  {lang === "id"
+                    ? "Mau jual atau sewakan properti?"
+                    : "Want to sell or rent out your property?"}
+                </p>
+
+                <p className="mt-1 text-sm text-white/50">
+                  {lang === "id"
+                    ? "Pasang properti mulai Rp50.000 untuk 1 tahun."
+                    : "List your property from Rp50,000 for 1 year."}
+                </p>
+              </div>
+
+              <Link
+                href="/pricelist"
+                className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-[#D8B46A]/60 px-5 py-2.5 text-sm font-bold text-[#D8B46A] transition duration-200 hover:bg-[#D8B46A] hover:text-[#111111]"
+              >
+                {lang === "id"
+                  ? "Pasang Properti"
+                  : "List Property"}
+
+                <span aria-hidden="true">→</span>
+              </Link>
+            </div>
           </div>
         </div>
-      </section>
 
-      <section className="bg-white px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
-          <InfoCard
-            title={
-              lang === "id" ? "Properti Terverifikasi" : "Verified Properties"
-            }
-            description={
-              lang === "id"
-                ? "Properti asli dari agen dan pemilik. Mengurangi duplikasi dan spam."
-                : "Properties directly from verified agents and owners. Fewer duplicates, less spam."
-            }
-          />
+        {/* =========================
+            RIGHT — PROPERTY
+        ========================= */}
+        <div className="relative mx-auto w-full max-w-[570px] lg:max-w-none">
+          {/* subtle gold corner */}
+          <div className="pointer-events-none absolute -left-5 -top-5 hidden h-28 w-28 rounded-[30px] border border-[#D8B46A]/25 lg:block" />
 
-          <InfoCard
-            title={lang === "id" ? "Jadwal Viewing" : "Schedule a Viewing"}
-            description={
-              lang === "id"
-                ? "Pembeli dan penyewa bisa menjadwalkan viewing langsung lewat Tetamo."
-                : "Buyers and renters can directly schedule a viewing through Tetamo."
-            }
-          />
+          <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[#181818] shadow-[0_35px_90px_rgba(0,0,0,0.5)]">
+            {heroProperty ? (
+              <Link
+                href={`/properti/${heroProperty.id}`}
+                className="group block"
+              >
+                <div className="relative h-[430px] sm:h-[520px] lg:h-[590px]">
+                  <img
+                    src={heroProperty.image}
+                    alt={heroProperty.title}
+                    className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
+                  />
 
-          <InfoCard
-            title={
-              lang === "id"
-                ? "Agen Media Sosial dan Branding"
-                : "Agent Social Media and Branding"
-            }
-            description={
-              lang === "id"
-                ? "Profil agen terhubung ke media sosial, lebih banyak eksposur, lebih besar peluang closing."
-                : "Agent profiles connect directly to social media for higher exposure and better closing opportunities."
-            }
-          />
+                  {/* Image overlays */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/10 to-black/15" />
+
+                  <div className="absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-black to-transparent" />
+
+                  {/* Tetamo badge */}
+                  <div className="absolute left-5 top-5 rounded-full border border-white/20 bg-black/40 px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white backdrop-blur-md">
+                    TETAMO
+                  </div>
+
+                  {/* Property details */}
+                  <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
+                    <div className="inline-flex rounded-full bg-[#D8B46A] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#111111] sm:text-[10px]">
+                      {lang === "id"
+                        ? "Properti Pilihan"
+                        : "Selected Property"}
+                    </div>
+
+                    <p className="mt-4 text-[28px] font-extrabold leading-none tracking-[-0.03em] text-white sm:text-[34px]">
+                      {formatHomepagePrice(heroProperty.priceValue, currency)}
+                    </p>
+
+                    <p className="mt-3 line-clamp-2 max-w-[95%] text-sm font-semibold leading-6 text-white/90 sm:text-[15px]">
+                      {heroProperty.title}
+                    </p>
+
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/15 pt-4">
+                      <p className="text-sm font-medium text-white/65">
+                        {heroProperty.location}
+                      </p>
+
+                      <span className="text-sm font-bold text-[#D8B46A] transition duration-200 group-hover:translate-x-1">
+                        {lang === "id"
+                          ? "Lihat Detail →"
+                          : "View Details →"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ) : (
+              <div className="flex h-[430px] items-center justify-center sm:h-[520px] lg:h-[590px]">
+                <div className="text-center">
+                  <div className="mx-auto h-10 w-10 animate-pulse rounded-full bg-[#D8B46A]/20" />
+
+                  <p className="mt-4 text-sm text-white/40">
+                    {lang === "id"
+                      ? "Memuat properti..."
+                      : "Loading property..."}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <FeaturedPropertiesSection />
-      <FeaturedAgentsSection />
-      <FeaturedOwnersSection />
-      <DownloadTetamoAppSection />
+ <FeaturedPropertiesSection />
+<TetamoTrustSection />
+<FeaturedAgentsSection />
+<FeaturedOwnersSection />
+<LocationDiscoverySection />
+<DownloadTetamoAppSection />
 
       <section className="mt-12 px-4 pb-16 sm:px-6 lg:mt-16 lg:px-8 lg:pb-20">
         <div className="mx-auto max-w-7xl">

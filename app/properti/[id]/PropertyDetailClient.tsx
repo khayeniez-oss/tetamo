@@ -2515,386 +2515,631 @@ const reportUserHref = `/report/user?reported_user_id=${encodeURIComponent(
   reporterRoleLabel
 )}&listing_code=${encodeURIComponent(property.kodeListing || "")}`;
 
+const hasPosterPhoto = Boolean(
+  property.photo &&
+  property.photo !== FALLBACK_POSTER_PHOTO
+);
+
+const posterInitials =
+  (property.agentName ||
+    property.receiverName ||
+    "Tetamo")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase() || "T";
+
+const detailPromoTheme = property.spotlight
+  ? {
+      border: "border-cyan-200/80",
+      glow: "bg-cyan-400/20",
+    }
+  : property.featured
+    ? {
+        border: "border-[#D8B46A]/70",
+        glow: "bg-[#D8B46A]/22",
+      }
+    : property.boosted
+      ? {
+          border: "border-orange-200/80",
+          glow: "bg-orange-300/20",
+        }
+      : {
+          border: "border-[#E8E2D8]",
+          glow: "bg-gray-200/20",
+        };
+
+
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <div className="flex items-start justify-between gap-4">
-          <Link
-            href="/properti"
-            className="text-sm underline text-[#1C1C1E] hover:opacity-80"
-          >
-            {lang === "id" ? "Kembali ke Marketplace" : "Back to Marketplace"}
-          </Link>
+        {/* =========================================
+    TOP NAVIGATION
+========================================= */}
+<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-          <div className="flex items-center gap-2">
-            {prevProperty ? (
-              <Link
-                href={getPropertyHref(prevProperty)}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
-              >
-                ← Prev
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
-              >
-                ← Prev
-              </button>
-            )}
+  <Link
+    href="/properti"
+    className="inline-flex w-fit items-center gap-2 rounded-full border border-[#E5DFD4] bg-white px-4 py-2.5 text-sm font-bold text-[#1C1C1E] transition hover:border-[#B8860B] hover:text-[#B8860B]"
+  >
+    <span>←</span>
 
-            {nextProperty ? (
-              <Link
-                href={getPropertyHref(nextProperty)}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold transition hover:bg-gray-50 sm:text-sm"
-              >
-                Next →
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold opacity-40 sm:text-sm"
-              >
-                Next →
-              </button>
-            )}
-          </div>
+    <span>
+      {lang === "id"
+        ? "Kembali ke Marketplace"
+        : "Back to Marketplace"}
+    </span>
+  </Link>
+
+  <div className="flex items-center gap-2">
+
+    {prevProperty ? (
+      <Link
+        href={getPropertyHref(prevProperty)}
+        className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-[#E5DFD4] bg-white px-4 text-xs font-bold text-[#1C1C1E] transition hover:border-[#B8860B] hover:text-[#B8860B] sm:text-sm"
+      >
+        ← {lang === "id" ? "Sebelumnya" : "Prev"}
+      </Link>
+    ) : (
+      <button
+        type="button"
+        disabled
+        className="inline-flex min-h-[42px] cursor-not-allowed items-center justify-center rounded-full border border-[#E5DFD4] bg-white px-4 text-xs font-bold text-gray-300 sm:text-sm"
+      >
+        ← {lang === "id" ? "Sebelumnya" : "Prev"}
+      </button>
+    )}
+
+    {nextProperty ? (
+      <Link
+        href={getPropertyHref(nextProperty)}
+        className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-[#E5DFD4] bg-white px-4 text-xs font-bold text-[#1C1C1E] transition hover:border-[#B8860B] hover:text-[#B8860B] sm:text-sm"
+      >
+        {lang === "id" ? "Berikutnya" : "Next"} →
+      </Link>
+    ) : (
+      <button
+        type="button"
+        disabled
+        className="inline-flex min-h-[42px] cursor-not-allowed items-center justify-center rounded-full border border-[#E5DFD4] bg-white px-4 text-xs font-bold text-gray-300 sm:text-sm"
+      >
+        {lang === "id" ? "Berikutnya" : "Next"} →
+      </button>
+    )}
+
+  </div>
+</div>
+
+
+{/* =========================================
+    HERO — GALLERY + CONVERSION PANEL
+========================================= */}
+<div className="mt-6 grid items-start gap-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:grid-cols-[minmax(0,1.3fr)_minmax(400px,0.7fr)]">
+
+  {/* =====================================
+      LEFT — PROPERTY GALLERY
+  ===================================== */}
+  <section className="min-w-0">
+
+    <div className="rounded-[30px] border border-[#E8E2D8] bg-white p-3 shadow-[0_18px_55px_rgba(0,0,0,0.06)] sm:p-4">
+
+      {/* MAIN IMAGE */}
+      <div className="relative aspect-[4/3] overflow-hidden rounded-[24px] bg-[#F2F0EB]">
+
+        <img
+          src={property.images[idx]}
+          alt={activeTitle}
+          className="h-full w-full object-cover transition duration-700"
+        />
+
+        {/* PHOTO GRADIENT */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
+
+        {/* TOP LEFT — IMAGE COUNT */}
+        <div className="absolute left-4 top-4 z-20 inline-flex items-center rounded-full border border-white/15 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md sm:text-xs">
+          {idx + 1} / {property.images.length}
         </div>
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[1.12fr_0.88fr]">
-          <div className="rounded-3xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-            <div className="relative overflow-hidden rounded-[24px]">
-              <img
-                src={property.images[idx]}
-                alt={activeTitle}
-                className="h-[520px] w-full object-cover sm:h-[580px] lg:h-[640px]"
-              />
-
-              <div className="absolute right-3 top-3 rounded-full bg-[#1C1C1E]/85 px-3 py-1 text-[11px] font-semibold text-white sm:right-4 sm:top-4 sm:text-xs">
-                TETAMO
-              </div>
-
-              <div className="absolute bottom-3 left-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
-                <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  {property.jenisListing === "dijual"
-                    ? lang === "id"
-                      ? "Dijual"
-                      : "For Sale"
-                    : lang === "id"
-                      ? "Disewa"
-                      : "For Rent"}
-                </span>
-
-                {property.jenisListing === "disewa" && property.rentalType ? (
-                  <span
-                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold sm:text-xs ${rentalTypeBadgeClass(
-                      property.rentalType
-                    )}`}
-                  >
-                    {getRentalTypeLabel(property.rentalType, lang)}
-                  </span>
-                ) : null}
-
-                {propertyTypeLabel ? (
-                  <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                    {propertyTypeLabel}
-                  </span>
-                ) : null}
-              </div>
-
-              <button
-                type="button"
-                onClick={prevImg}
-                className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:left-4"
-                aria-label="Previous image"
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={nextImg}
-                className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#1C1C1E]/70 text-lg text-white transition hover:bg-[#1C1C1E] sm:right-4"
-                aria-label="Next image"
-              >
-                ›
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 text-2xl font-extrabold text-[#1C1C1E] sm:text-[30px]">
-                {displayPrice}
-              </div>
-
-              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-700 sm:text-xs">
-                <Eye className="h-3.5 w-3.5" />
-                <span>{formatCompactNumber(property.viewCount)}</span>
-                <span>{lang === "id" ? "Dilihat" : "Views"}</span>
-              </div>
-            </div>
-
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-500 sm:text-[15px]">
-              {secondaryPrices.map((item) => (
-                <span key={item}>≈ {item}</span>
-              ))}
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {property.spotlight && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  <Gem className="h-3.5 w-3.5" />
-                  Spotlight
-                </span>
-              )}
-
-              {property.featured && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  <Crown className="h-3.5 w-3.5" />
-                  Featured
-                </span>
-              )}
-
-              {property.boosted && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] sm:text-xs">
-                  <Zap className="h-3.5 w-3.5" />
-                  Boost
-                </span>
-              )}
-
-              {property.verifiedListing ? (
-  <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1 text-[11px] font-semibold text-white sm:text-xs">
-    {lang === "id" ? "Listing Terverifikasi" : "Verified Listing"}
-  </span>
-) : property.pendingVerification ? (
-  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 sm:text-xs">
-    <Clock className="h-3.5 w-3.5" />
-    {lang === "id" ? "Menunggu Verifikasi" : "Pending Verification"}
-  </span>
-) : null}
-            </div>
-
-            <h1 className="mt-5 text-xl font-bold leading-snug text-[#1C1C1E] sm:text-2xl">
-              {activeTitle}
-            </h1>
-
-            <div className="mt-2 text-sm text-gray-600 sm:text-[15px]">
-              {property.area}, {property.province}
-            </div>
-
-            <div className="mt-5 border-t border-gray-200 pt-5">
-              <div className="flex items-start gap-4">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 sm:h-24 sm:w-24">
-                  <img
-                    src={property.photo}
-                    alt={property.agentName}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      if (e.currentTarget.src !== FALLBACK_POSTER_PHOTO) {
-                        e.currentTarget.src = FALLBACK_POSTER_PHOTO;
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wide text-gray-500">
-                    {property.postedByType === "owner"
-                      ? "Owner"
-                      : property.postedByType === "developer"
-                        ? "Developer"
-                        : "Agent"}
-                  </div>
-
-                  <div className="mt-1 text-base font-semibold text-[#1C1C1E]">
-                    {property.agentName}
-                  </div>
-
-                  <div className="mt-1 text-sm text-gray-600">
-                    {property.agency}
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
-                    <span>
-                      Code:{" "}
-                      <span className="font-medium text-gray-700">
-                        {property.kodeListing}
-                      </span>
-                    </span>
-
-                    <span>
-                      Posted:{" "}
-                      <span className="font-medium text-gray-700">
-                        {property.postedDate}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {socialLinks.length > 0 ? (
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {socialLinks.map((item) => (
-                    <SocialCircle
-                      key={item.key}
-                      href={item.href}
-                      label={item.label}
-                      icon={item.icon}
-                    />
-                  ))}
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={openJadwalWithTracking}
-                className="mt-5 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Schedule Viewing
-              </button>
-
-              <div className="mt-5 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#B8860B]/30 bg-[#B8860B]/10">
-                    <ShieldAlert className="h-5 w-5 text-[#B8860B]" />
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-bold text-[#1C1C1E]">
-                      {lang === "id" ? "Keamanan & Laporan" : "Safety & Reports"}
-                    </h3>
-
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                      {lang === "id"
-                        ? "Laporkan listing atau pengguna yang mencurigakan."
-                        : "Report suspicious listings or users."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-2">
-                  <Link
-                    href={reportListingHref}
-                    className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3 transition hover:border-[#B8860B]/50 hover:bg-white"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#B8860B]/30 bg-white text-[#B8860B]">
-                      <Flag className="h-4 w-4" />
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-bold text-[#1C1C1E]">
-                        {lang === "id" ? "Laporkan listing" : "Report this listing"}
-                      </div>
-
-                      <div className="mt-0.5 text-[11px] leading-4 text-gray-500">
-                        {lang === "id"
-                          ? "Listing palsu atau detail salah"
-                          : "Fake listing or wrong details"}
-                      </div>
-                    </div>
-                  </Link>
-
-                  <Link
-                    href={reportUserHref}
-                    className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3 transition hover:border-[#B8860B]/50 hover:bg-white"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#B8860B]/30 bg-white text-[#B8860B]">
-                      <UserRound className="h-4 w-4" />
-                    </div>
-
-                    <div>
-                      <div className="text-xs font-bold text-[#1C1C1E]">
-                        {lang === "id" ? "Laporkan pengguna" : "Report this user"}
-                      </div>
-
-                      <div className="mt-0.5 text-[11px] leading-4 text-gray-500">
-                        {lang === "id"
-                          ? "Agen/user mencurigakan"
-                          : "Suspicious user or agent"}
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* TOP RIGHT — TETAMO */}
+        <div className="absolute right-4 top-4 z-20 rounded-full border border-white/15 bg-[#1C1C1E]/85 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white backdrop-blur-md sm:text-xs">
+          TETAMO
         </div>
 
-        <div className="mt-6 grid grid-cols-4 gap-3">
-          <button
-            type="button"
-            onClick={toggleSave}
-            className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
-              saved
-                ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
-            }`}
-          >
-            <Bookmark className="h-3.5 w-3.5" />
-            <span>Save ({displaySaveCount})</span>
-          </button>
+        {/* BOTTOM PROPERTY BADGES */}
+        <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center gap-2">
 
-          <button
-            type="button"
-            onClick={toggleLike}
-            className={`flex min-h-[62px] items-center justify-center gap-1 rounded-2xl border px-2 py-2.5 text-center text-[11px] font-semibold shadow-sm transition ${
-              liked
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
-            }`}
-          >
-            <Heart className="h-3.5 w-3.5" />
-            <span>Like ({displayLikeCount})</span>
-          </button>
+          <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-extrabold text-[#1C1C1E] shadow-sm sm:text-xs">
+            {property.jenisListing === "dijual"
+              ? lang === "id"
+                ? "Dijual"
+                : "For Sale"
+              : lang === "id"
+                ? "Disewa"
+                : "For Rent"}
+          </span>
 
-          <div className="min-h-[62px] rounded-2xl border border-gray-200 bg-white px-2 py-2.5 text-center shadow-sm">
-            <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
-              {displayRatingAverage.toFixed(1)}
-            </div>
-            <div className="mt-1 text-[10px] text-gray-500 sm:text-[11px]">
-              Property Rating ({displayRatingCount})
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleShare}
-            className="min-h-[62px] rounded-2xl border border-gray-200 bg-white px-2 py-2.5 text-center shadow-sm transition hover:bg-gray-50"
-          >
-            <div className="text-sm font-extrabold text-[#1C1C1E] sm:text-base">
-              {displayShareCount}
-            </div>
-            <div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-gray-500 sm:text-[11px]">
-              <Share2 className="h-3.5 w-3.5" />
-              <span>{lang === "id" ? "Bagikan" : "Share"}</span>
-            </div>
-          </button>
-        </div>
-
-        <div className="mt-3 flex items-center justify-center gap-1">
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => handleRate(value)}
-              className={`rounded-full border p-[4px] transition ${
-                userRating >= value
-                  ? "border-amber-200 bg-amber-50 text-amber-500"
-                  : "border-gray-200 bg-white text-gray-300 hover:bg-gray-50"
-              }`}
-              aria-label={`Rate ${value}`}
-              title={`Rate ${value}`}
+          {property.jenisListing === "disewa" &&
+          property.rentalType ? (
+            <span
+              className={`rounded-full border px-3 py-1.5 text-[10px] font-bold shadow-sm sm:text-xs ${rentalTypeBadgeClass(
+                property.rentalType
+              )}`}
             >
-              <Star
-                className="h-3.5 w-3.5"
-                fill={userRating >= value ? "currentColor" : "transparent"}
+              {getRentalTypeLabel(
+                property.rentalType,
+                lang
+              )}
+            </span>
+          ) : null}
+
+          {propertyTypeLabel ? (
+            <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md sm:text-xs">
+              {propertyTypeLabel}
+            </span>
+          ) : null}
+
+        </div>
+
+        {/* IMAGE ARROWS */}
+        {property.images.length > 1 ? (
+          <>
+            <button
+              type="button"
+              onClick={prevImg}
+              aria-label="Previous image"
+              className="absolute left-4 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-xl text-white backdrop-blur-md transition hover:scale-110 hover:bg-black/80"
+            >
+              ‹
+            </button>
+
+            <button
+              type="button"
+              onClick={nextImg}
+              aria-label="Next image"
+              className="absolute right-4 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-xl text-white backdrop-blur-md transition hover:scale-110 hover:bg-black/80"
+            >
+              ›
+            </button>
+          </>
+        ) : null}
+
+      </div>
+
+
+      {/* THUMBNAILS */}
+      {property.images.length > 1 ? (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+
+          {property.images
+            .slice(0, 8)
+            .map((image, imageIndex) => (
+              <button
+                key={`${image}-${imageIndex}`}
+                type="button"
+                onClick={() =>
+                  setIdx(imageIndex)
+                }
+                className={[
+                  "relative h-16 w-20 shrink-0 overflow-hidden rounded-[14px] border-2 transition sm:h-18 sm:w-24",
+                  idx === imageIndex
+                    ? "border-[#B8860B]"
+                    : "border-transparent opacity-70 hover:opacity-100",
+                ].join(" ")}
+              >
+                <img
+                  src={image}
+                  alt={`${activeTitle} ${imageIndex + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            ))}
+
+        </div>
+      ) : null}
+
+    </div>
+
+  </section>
+
+
+  {/* =====================================
+      RIGHT — CONVERSION PANEL
+  ===================================== */}
+  <aside className="relative min-w-0 lg:sticky lg:top-24">
+
+    {/* PROMOTION GLOW */}
+    <div
+      className={[
+        "pointer-events-none absolute -inset-2 rounded-[36px] opacity-70 blur-[34px]",
+        detailPromoTheme.glow,
+      ].join(" ")}
+    />
+
+    <div
+      className={[
+        "relative overflow-hidden rounded-[30px] border bg-white p-5 shadow-[0_20px_65px_rgba(0,0,0,0.08)] sm:p-6",
+        detailPromoTheme.border,
+      ].join(" ")}
+    >
+
+      {/* DECORATION */}
+      <div
+        className={[
+          "pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full opacity-70 blur-[70px]",
+          detailPromoTheme.glow,
+        ].join(" ")}
+      />
+
+
+      <div className="relative z-10">
+
+        {/* =================================
+            PRICE + SAVE / SHARE
+        ================================= */}
+        <div className="flex items-start justify-between gap-5">
+
+          <div className="min-w-0">
+
+            <p className="text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#1C1C1E] sm:text-[34px]">
+              {displayPrice}
+            </p>
+
+            {secondaryPrices.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-400 sm:text-sm">
+                {secondaryPrices.map(
+                  (item) => (
+                    <span key={item}>
+                      ≈ {item}
+                    </span>
+                  )
+                )}
+              </div>
+            ) : null}
+
+          </div>
+
+
+          {/* QUICK ACTIONS */}
+          <div className="flex shrink-0 items-center gap-2">
+
+            <button
+              type="button"
+              onClick={toggleSave}
+              aria-label={
+                lang === "id"
+                  ? "Simpan properti"
+                  : "Save property"
+              }
+              title={
+                lang === "id"
+                  ? "Simpan"
+                  : "Save"
+              }
+              className={[
+                "flex h-10 w-10 items-center justify-center rounded-full border transition",
+                saved
+                  ? "border-[#D8B46A] bg-[#F8F2E5] text-[#B8860B]"
+                  : "border-[#E5DFD4] bg-white text-gray-500 hover:border-[#B8860B] hover:text-[#B8860B]",
+              ].join(" ")}
+            >
+              <Bookmark
+                className="h-4 w-4"
+                fill={
+                  saved
+                    ? "currentColor"
+                    : "none"
+                }
               />
             </button>
-          ))}
+
+            <button
+              type="button"
+              onClick={handleShare}
+              aria-label={
+                lang === "id"
+                  ? "Bagikan properti"
+                  : "Share property"
+              }
+              title={
+                lang === "id"
+                  ? "Bagikan"
+                  : "Share"
+              }
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E5DFD4] bg-white text-gray-500 transition hover:border-[#B8860B] hover:text-[#B8860B]"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+
+          </div>
+
         </div>
+
+
+        {/* =================================
+            PROMOTION + VERIFICATION
+        ================================= */}
+        <div className="mt-5 flex flex-wrap gap-2">
+
+          {property.spotlight ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-cyan-700">
+              <Gem className="h-3.5 w-3.5" />
+              Spotlight
+            </span>
+          ) : null}
+
+          {property.featured ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D8B46A]/50 bg-[#F8F2E5] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#8A650B]">
+              <Crown className="h-3.5 w-3.5" />
+              Featured
+            </span>
+          ) : null}
+
+          {property.boosted ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-orange-700">
+              <Zap className="h-3.5 w-3.5" />
+              Boost
+            </span>
+          ) : null}
+
+          {property.verifiedListing ? (
+            <span className="inline-flex items-center rounded-full bg-[#1C1C1E] px-3 py-1.5 text-[10px] font-extrabold text-white">
+              {lang === "id"
+                ? "Listing Terverifikasi"
+                : "Verified Listing"}
+            </span>
+          ) : property.pendingVerification ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-bold text-amber-700">
+              <Clock className="h-3.5 w-3.5" />
+
+              {lang === "id"
+                ? "Menunggu Verifikasi"
+                : "Pending Verification"}
+            </span>
+          ) : null}
+
+        </div>
+
+
+        {/* =================================
+            TITLE + LOCATION
+        ================================= */}
+        <h1 className="mt-5 text-[23px] font-extrabold leading-[1.25] tracking-[-0.025em] text-[#1C1C1E] sm:text-[27px]">
+          {activeTitle}
+        </h1>
+
+        <p className="mt-2 text-sm font-medium leading-6 text-gray-500">
+          {property.area},{" "}
+          {property.province}
+        </p>
+
+
+        {/* =================================
+            POSTER PROFILE
+        ================================= */}
+        <div className="mt-6 rounded-[22px] border border-[#EAE4D9] bg-[#F8F6F1] p-4">
+
+          <div className="flex items-center gap-3">
+
+            {/* PHOTO OR INITIALS */}
+            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#1C1C1E] text-sm font-extrabold tracking-[0.06em] text-[#D8B46A] shadow-sm">
+
+              <span>
+                {posterInitials}
+              </span>
+
+              {hasPosterPhoto ? (
+                <img
+                  src={property.photo}
+                  alt={property.agentName}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onError={(event) => {
+                    event.currentTarget.style.display =
+                      "none";
+                  }}
+                />
+              ) : null}
+
+            </div>
+
+
+            {/* NAME */}
+            <div className="min-w-0 flex-1">
+
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
+                {reporterRoleLabel}
+              </p>
+
+              <p className="mt-1 truncate text-[15px] font-extrabold text-[#1C1C1E]">
+                {property.agentName}
+              </p>
+
+              {property.postedByType !==
+                "owner" &&
+              property.agency ? (
+                <p className="mt-0.5 truncate text-[11px] font-medium text-gray-500">
+                  {property.agency}
+                </p>
+              ) : null}
+
+            </div>
+
+          </div>
+
+
+          {/* CODE + DATE */}
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#E3DCCE] pt-4">
+
+            <div>
+              <p className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-gray-400">
+                {lang === "id"
+                  ? "Kode Properti"
+                  : "Property Code"}
+              </p>
+
+              <p className="mt-1.5 text-xs font-extrabold text-[#1C1C1E]">
+                {property.kodeListing ||
+                  "-"}
+              </p>
+            </div>
+
+            <div className="text-right">
+              <p className="text-[8px] font-extrabold uppercase tracking-[0.14em] text-gray-400">
+                {lang === "id"
+                  ? "Tanggal Dipasang"
+                  : "Posted Date"}
+              </p>
+
+              <p className="mt-1.5 text-xs font-extrabold text-[#1C1C1E]">
+                {property.postedDate ||
+                  "-"}
+              </p>
+            </div>
+
+          </div>
+
+
+          {/* AGENT SOCIAL LINKS */}
+          {socialLinks.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-[#E3DCCE] pt-4">
+
+              {socialLinks.map(
+                (item) => (
+                  <SocialCircle
+                    key={item.key}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                  />
+                )
+              )}
+
+            </div>
+          ) : null}
+
+        </div>
+
+
+        {/* =================================
+            PRIMARY CONVERSION ACTIONS
+        ================================= */}
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+          <button
+            type="button"
+            onClick={handleWhatsAppClick}
+            className="min-h-[50px] rounded-[16px] bg-[#1C1C1E] px-4 text-sm font-extrabold text-white transition hover:-translate-y-0.5 hover:bg-black hover:shadow-lg"
+          >
+            WhatsApp
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              openJadwalWithTracking
+            }
+            className="min-h-[50px] rounded-[16px] bg-[#D8B46A] px-4 text-sm font-extrabold text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#C59F4F] hover:shadow-lg"
+          >
+            {lang === "id"
+              ? "Jadwalkan Viewing"
+              : "Schedule Viewing"}
+          </button>
+
+        </div>
+
+
+        {/* =================================
+            SAFETY — COLLAPSED
+        ================================= */}
+        <details className="group mt-4 rounded-[18px] border border-[#E8E2D8] bg-white">
+
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
+
+            <div className="flex items-center gap-3">
+
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F8F2E5] text-[#B8860B]">
+                <ShieldAlert className="h-4 w-4" />
+              </div>
+
+              <div>
+                <p className="text-xs font-extrabold text-[#1C1C1E]">
+                  {lang === "id"
+                    ? "Keamanan & Laporan"
+                    : "Safety & Reports"}
+                </p>
+
+                <p className="mt-0.5 text-[10px] text-gray-400">
+                  {lang === "id"
+                    ? "Laporkan masalah pada listing ini"
+                    : "Report an issue with this listing"}
+                </p>
+              </div>
+
+            </div>
+
+            <span className="text-xs text-gray-400 transition-transform group-open:rotate-180">
+              ▼
+            </span>
+
+          </summary>
+
+
+          <div className="grid gap-2 border-t border-[#EEE8DE] p-3">
+
+            <Link
+              href={reportListingHref}
+              className="flex items-center gap-3 rounded-[14px] bg-[#F8F6F1] px-3 py-3 transition hover:bg-[#F2EEE6]"
+            >
+              <Flag className="h-4 w-4 shrink-0 text-[#B8860B]" />
+
+              <div>
+                <p className="text-xs font-bold text-[#1C1C1E]">
+                  {lang === "id"
+                    ? "Laporkan listing"
+                    : "Report listing"}
+                </p>
+
+                <p className="mt-0.5 text-[10px] text-gray-500">
+                  {lang === "id"
+                    ? "Listing palsu atau detail salah"
+                    : "Fake listing or incorrect details"}
+                </p>
+              </div>
+            </Link>
+
+            <Link
+              href={reportUserHref}
+              className="flex items-center gap-3 rounded-[14px] bg-[#F8F6F1] px-3 py-3 transition hover:bg-[#F2EEE6]"
+            >
+              <UserRound className="h-4 w-4 shrink-0 text-[#B8860B]" />
+
+              <div>
+                <p className="text-xs font-bold text-[#1C1C1E]">
+                  {lang === "id"
+                    ? "Laporkan pengguna"
+                    : "Report user"}
+                </p>
+
+                <p className="mt-0.5 text-[10px] text-gray-500">
+                  {lang === "id"
+                    ? "Agen atau pengguna mencurigakan"
+                    : "Suspicious agent or user"}
+                </p>
+              </div>
+            </Link>
+
+          </div>
+
+        </details>
+
+      </div>
+    </div>
+
+  </aside>
+
+</div>
 
         <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-lg font-bold text-[#1C1C1E]">
@@ -2935,148 +3180,353 @@ const reportUserHref = `/report/user?reported_user_id=${encodeURIComponent(
           )}
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.22fr)_360px] xl:grid-cols-[minmax(0,1.28fr)_380px]">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Deskripsi" : "Description"}
-            </h2>
+      {/* =========================================
+    DESCRIPTION + VIDEO
+========================================= */}
+<div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.22fr)_360px] xl:grid-cols-[minmax(0,1.28fr)_380px]">
 
-            <div className="mt-4 text-sm leading-7 text-gray-700">
-              {structuredDescription.intro.length > 0 ? (
-                <div className="space-y-4">
-                  {structuredDescription.intro.map((paragraph, index) => (
-                    <p key={index} className="whitespace-pre-line">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
+  {/* =====================================
+      DESCRIPTION
+  ===================================== */}
+  <section className="rounded-[30px] border border-[#E8E2D8] bg-white p-5 shadow-[0_12px_40px_rgba(0,0,0,0.05)] sm:p-7">
 
-              {structuredDescription.detailHeading ? (
-                <div
-                  className={
-                    structuredDescription.intro.length > 0 ? "mt-6" : ""
-                  }
-                >
-                  <p className="font-bold">
-                    {structuredDescription.detailHeading}
-                  </p>
+    <div className="flex items-center gap-3">
+      <span className="h-px w-8 bg-[#B8860B]" />
 
-                  {structuredDescription.detailItems.length > 0 ? (
-                    <ul className="mt-3 list-disc space-y-1 pl-5">
-                      {structuredDescription.detailItems.map((item, index) => (
-                        <li key={index} className="whitespace-pre-line">
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : structuredDescription.intro.length === 0 ? (
-                <p className="whitespace-pre-line">{activeDescription}</p>
-              ) : null}
-            </div>
-          </div>
+      <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
+        {lang === "id"
+          ? "Tentang Properti"
+          : "About This Property"}
+      </p>
+    </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Video" : "Video"}
-            </h2>
+    <h2 className="mt-3 text-xl font-extrabold tracking-[-0.02em] text-[#1C1C1E]">
+      {lang === "id"
+        ? "Deskripsi"
+        : "Description"}
+    </h2>
 
-            <div className="mx-auto mt-4 w-full max-w-[320px] sm:max-w-[360px] lg:max-w-[360px] xl:max-w-[380px]">
-              {property.videoUrl ? (
-                <div className="rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-                  <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-black">
-                    <video
-                      src={property.videoUrl}
-                      controls
-                      playsInline
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-[28px] border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
-                  <div className="flex aspect-[9/16] items-center justify-center rounded-[22px] bg-gray-100 px-4 text-center text-sm text-gray-500">
-                    {lang === "id"
-                      ? "Belum ada video untuk properti ini."
-                      : "No video available for this property yet."}
-                  </div>
-                </div>
+    <div className="mt-5 text-sm leading-7 text-gray-600 sm:text-[15px] sm:leading-8">
+
+      {structuredDescription.intro.length > 0 ? (
+        <div className="space-y-5">
+          {structuredDescription.intro.map(
+            (paragraph, index) => (
+              <p
+                key={index}
+                className="whitespace-pre-line"
+              >
+                {paragraph}
+              </p>
+            )
+          )}
+        </div>
+      ) : null}
+
+      {structuredDescription.detailHeading ? (
+        <div
+          className={
+            structuredDescription.intro.length >
+            0
+              ? "mt-7 border-t border-[#EEE8DE] pt-6"
+              : ""
+          }
+        >
+          <p className="font-extrabold text-[#1C1C1E]">
+            {structuredDescription.detailHeading}
+          </p>
+
+          {structuredDescription.detailItems
+            .length > 0 ? (
+            <ul className="mt-4 space-y-2.5">
+              {structuredDescription.detailItems.map(
+                (item, index) => (
+                  <li
+                    key={index}
+                    className="flex gap-3"
+                  >
+                    <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#D8B46A]" />
+
+                    <span className="whitespace-pre-line">
+                      {item}
+                    </span>
+                  </li>
+                )
               )}
-            </div>
-          </div>
+            </ul>
+          ) : null}
+        </div>
+      ) : structuredDescription.intro.length ===
+        0 ? (
+        <p className="whitespace-pre-line">
+          {activeDescription}
+        </p>
+      ) : null}
+
+    </div>
+
+  </section>
+
+
+  {/* =====================================
+      VIDEO
+  ===================================== */}
+  <section className="rounded-[30px] border border-[#E8E2D8] bg-white p-5 shadow-[0_12px_40px_rgba(0,0,0,0.05)] sm:p-6">
+
+    <div className="flex items-center justify-between gap-3">
+
+      <div>
+        <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
+          TETAMO
+        </p>
+
+        <h2 className="mt-2 text-xl font-extrabold tracking-[-0.02em] text-[#1C1C1E]">
+          Video
+        </h2>
+      </div>
+
+      {property.videoUrl ? (
+        <span className="rounded-full bg-[#F8F2E5] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#8A650B]">
+          Property Video
+        </span>
+      ) : null}
+
+    </div>
+
+
+   {property.videoUrl ? (
+
+  /* VIDEO EXISTS — 9:16 */
+  <div className="mx-auto mt-5 w-full max-w-[340px]">
+
+    <div className="rounded-[26px] border border-[#E8E2D8] bg-[#F8F6F1] p-3">
+
+      <div className="relative aspect-[9/16] overflow-hidden rounded-[20px] bg-black">
+
+        <video
+          src={property.videoUrl}
+          controls
+          playsInline
+          className="h-full w-full object-cover"
+        />
+
+      </div>
+
+    </div>
+
+  </div>
+
+) : (
+
+  /* NO VIDEO — SAME 9:16 SIZE */
+  <div className="mx-auto mt-5 w-full max-w-[340px]">
+
+    <div className="rounded-[26px] border border-[#E8E2D8] bg-[#F8F6F1] p-3">
+
+      <div className="flex aspect-[9/16] flex-col items-center justify-center rounded-[20px] border border-dashed border-[#DDD5C7] bg-[#F8F6F1] px-6 text-center">
+
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
+          <span className="text-xl text-[#B8860B]">
+            ▶
+          </span>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Fasilitas" : "Facilities"}
+        <p className="mt-4 text-sm font-extrabold text-[#1C1C1E]">
+          {lang === "id"
+            ? "Video belum tersedia"
+            : "Video not available"}
+        </p>
+
+        <p className="mt-2 max-w-[230px] text-xs leading-5 text-gray-500">
+          {lang === "id"
+            ? "Pemilik atau agen belum menambahkan video untuk properti ini."
+            : "The owner or agent has not added a video for this property yet."}
+        </p>
+
+      </div>
+
+    </div>
+
+  </div>
+
+)}
+
+  </section>
+
+</div>
+
+
+{/* =========================================
+    FACILITIES + NEARBY
+    ONLY SHOW SECTIONS WITH DATA
+========================================= */}
+{activeFacilities.length > 0 ||
+activeNearby.length > 0 ? (
+
+  <div
+    className={[
+      "mt-6 grid gap-6",
+      activeFacilities.length > 0 &&
+      activeNearby.length > 0
+        ? "lg:grid-cols-2"
+        : "grid-cols-1",
+    ].join(" ")}
+  >
+
+    {/* FACILITIES */}
+    {activeFacilities.length > 0 ? (
+      <section className="rounded-[28px] border border-[#E8E2D8] bg-white p-5 shadow-[0_10px_35px_rgba(0,0,0,0.045)] sm:p-6">
+
+        <div className="flex items-center justify-between gap-4">
+
+          <div>
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
+              {lang === "id"
+                ? "Yang Tersedia"
+                : "Available"}
+            </p>
+
+            <h2 className="mt-2 text-lg font-extrabold text-[#1C1C1E]">
+              {lang === "id"
+                ? "Fasilitas"
+                : "Facilities"}
             </h2>
-
-            {activeFacilities.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {activeFacilities.map((item) => (
-                  <span
-                    key={item}
-                    className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-[#1C1C1E]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-500">
-                {lang === "id"
-                  ? "Belum ada data fasilitas."
-                  : "No facilities data yet."}
-              </p>
-            )}
           </div>
 
-          <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="text-lg font-bold text-[#1C1C1E]">
-              {lang === "id" ? "Terdekat" : "Nearby"}
+          <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-[#F8F2E5] px-3 text-xs font-extrabold text-[#B8860B]">
+            {activeFacilities.length}
+          </span>
+
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2.5">
+
+          {activeFacilities.map(
+            (item) => (
+              <span
+                key={item}
+                className="inline-flex items-center gap-2 rounded-full border border-[#E5DFD4] bg-[#F8F6F1] px-3.5 py-2 text-xs font-semibold text-[#1C1C1E]"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D8B46A]" />
+
+                {item}
+              </span>
+            )
+          )}
+
+        </div>
+
+      </section>
+    ) : null}
+
+
+    {/* NEARBY */}
+    {activeNearby.length > 0 ? (
+      <section className="rounded-[28px] border border-[#E8E2D8] bg-white p-5 shadow-[0_10px_35px_rgba(0,0,0,0.045)] sm:p-6">
+
+        <div className="flex items-center justify-between gap-4">
+
+          <div>
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
+              {lang === "id"
+                ? "Di Sekitar Properti"
+                : "Around The Property"}
+            </p>
+
+            <h2 className="mt-2 text-lg font-extrabold text-[#1C1C1E]">
+              {lang === "id"
+                ? "Terdekat"
+                : "Nearby"}
             </h2>
-
-            {activeNearby.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {activeNearby.map((item) => (
-                  <span
-                    key={item}
-                    className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-[#1C1C1E]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-gray-500">
-                {lang === "id"
-                  ? "Belum ada data lokasi terdekat."
-                  : "No nearby data yet."}
-              </p>
-            )}
           </div>
+
+          <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-[#F8F2E5] px-3 text-xs font-extrabold text-[#B8860B]">
+            {activeNearby.length}
+          </span>
+
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={handleWhatsAppClick}
-            className="w-full rounded-2xl bg-[#1C1C1E] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            WhatsApp
-          </button>
+        <div className="mt-5 flex flex-wrap gap-2.5">
 
-          <button
-            type="button"
-            onClick={openJadwalWithTracking}
-            className="w-full rounded-2xl bg-yellow-600 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-yellow-700"
-          >
-            Schedule Viewing
-          </button>
+          {activeNearby.map(
+            (item) => (
+              <span
+                key={item}
+                className="inline-flex items-center gap-2 rounded-full border border-[#E5DFD4] bg-[#F8F6F1] px-3.5 py-2 text-xs font-semibold text-[#1C1C1E]"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D8B46A]" />
+
+                {item}
+              </span>
+            )
+          )}
+
         </div>
+
+      </section>
+    ) : null}
+
+  </div>
+
+) : null}
+
+
+{/* =========================================
+    SECOND CONVERSION CTA
+========================================= */}
+<div className="relative mt-6 overflow-hidden rounded-[30px] bg-[#1C1C1E] p-5 sm:p-6">
+
+  {/* GOLD GLOW */}
+  <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#D8B46A]/20 blur-[85px]" />
+
+  <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+
+    <div className="max-w-xl">
+
+      <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#D8B46A]">
+        TETAMO
+      </p>
+
+      <h3 className="mt-2 text-xl font-extrabold tracking-[-0.025em] text-white sm:text-2xl">
+        {lang === "id"
+          ? "Tertarik dengan properti ini?"
+          : "Interested in this property?"}
+      </h3>
+
+      <p className="mt-2 text-sm leading-6 text-white/60">
+        {lang === "id"
+          ? "Hubungi pemilik atau agen langsung melalui WhatsApp, atau kirim permintaan jadwal viewing."
+          : "Contact the owner or agent directly through WhatsApp, or request a property viewing."}
+      </p>
+
+    </div>
+
+
+    <div className="grid w-full shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto lg:min-w-[430px]">
+
+      <button
+        type="button"
+        onClick={handleWhatsAppClick}
+        className="min-h-[50px] rounded-[16px] border border-white/15 bg-white px-6 text-sm font-extrabold text-[#1C1C1E] transition hover:-translate-y-0.5 hover:shadow-xl"
+      >
+        WhatsApp
+      </button>
+
+      <button
+        type="button"
+        onClick={openJadwalWithTracking}
+        className="min-h-[50px] rounded-[16px] bg-[#D8B46A] px-6 text-sm font-extrabold text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#C59F4F] hover:shadow-xl"
+      >
+        {lang === "id"
+          ? "Jadwalkan Viewing"
+          : "Schedule Viewing"}
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
 
         <div className="mt-6">
           <MortgageCalculator
@@ -3086,84 +3536,234 @@ const reportUserHref = `/report/user?reported_user_id=${encodeURIComponent(
         </div>
 
         {jadwalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <button
-              type="button"
-              onClick={closeJadwal}
-              className="absolute inset-0 bg-black/50"
-              aria-label="Close Jadwal popup"
+  <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+
+    {/* BACKDROP */}
+    <button
+      type="button"
+      onClick={closeJadwal}
+      className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+      aria-label="Close Schedule Viewing popup"
+    />
+
+
+    {/* MODAL */}
+    <div className="relative z-10 w-full max-w-[540px] overflow-hidden rounded-[30px] border border-white/10 bg-[#F8F6F1] shadow-[0_30px_100px_rgba(0,0,0,0.35)]">
+
+      {/* GOLD GLOW */}
+      <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#D8B46A]/20 blur-[80px]" />
+
+
+      <div className="relative z-10 p-5 sm:p-7">
+
+        {/* =================================
+            HEADER
+        ================================= */}
+        <div className="flex items-start justify-between gap-4">
+
+          <div>
+
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
+              TETAMO
+            </p>
+
+            <h3 className="mt-2 text-2xl font-extrabold tracking-[-0.03em] text-[#1C1C1E]">
+              {lang === "id"
+                ? "Jadwalkan Viewing"
+                : "Schedule Viewing"}
+            </h3>
+
+            <p className="mt-2 max-w-sm text-xs leading-5 text-gray-500 sm:text-sm">
+              {lang === "id"
+                ? "Pilih tanggal dan waktu yang Anda inginkan. Pemilik atau agen akan menghubungi Anda untuk konfirmasi."
+                : "Choose your preferred date and time. The owner or agent will contact you to confirm the viewing."}
+            </p>
+
+          </div>
+
+
+          <button
+            type="button"
+            onClick={closeJadwal}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#E3DCCE] bg-white text-sm font-bold text-[#1C1C1E] transition hover:border-[#B8860B] hover:text-[#B8860B]"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+
+        </div>
+
+
+        {/* =================================
+            PROPERTY MINI SUMMARY
+        ================================= */}
+        <div className="mt-6 flex items-center gap-3 rounded-[20px] border border-[#E5DFD4] bg-white p-3">
+
+          <div className="h-16 w-20 shrink-0 overflow-hidden rounded-[14px] bg-gray-100">
+
+            <img
+              src={property.images?.[0]}
+              alt={property.title}
+              className="h-full w-full object-cover"
             />
 
-            <div className="relative z-10 w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-bold text-[#1C1C1E]">
-                  {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
-                </h3>
-
-                <button
-                  type="button"
-                  onClick={closeJadwal}
-                  className="rounded-full px-3 py-1 text-sm font-semibold text-[#1C1C1E] hover:bg-gray-100"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Pilih Tanggal" : "Select Date"}
-                  </label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Pilih Jam" : "Select Time"}
-                  </label>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {["10:00", "11:00", "13:00", "15:00", "17:00"].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setSelectedTime(t)}
-                        className={[
-                          "rounded-full border px-4 py-2 text-sm",
-                          selectedTime === t
-                            ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                            : "border-gray-200 bg-white text-[#1C1C1E]",
-                        ].join(" ")}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleViewingRequest}
-                  disabled={!selectedDate || !selectedTime}
-                  className={[
-                    "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                    selectedDate && selectedTime
-                      ? "bg-[#B8860B] text-white hover:opacity-90"
-                      : "cursor-not-allowed bg-gray-200 text-gray-500",
-                  ].join(" ")}
-                >
-                  {lang === "id"
-                    ? "Kirim Permintaan Viewing"
-                    : "Send Viewing Request"}
-                </button>
-              </div>
-            </div>
           </div>
-        )}
+
+
+          <div className="min-w-0 flex-1">
+
+            <p className="truncate text-sm font-extrabold text-[#1C1C1E]">
+              {property.title}
+            </p>
+
+            <p className="mt-1 truncate text-xs text-gray-500">
+              {property.area}, {property.province}
+            </p>
+
+            <p className="mt-1 text-xs font-bold text-[#B8860B]">
+              {displayPrice}
+            </p>
+
+          </div>
+
+        </div>
+
+
+        {/* =================================
+            DATE
+        ================================= */}
+        <div className="mt-6">
+
+          <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-gray-500">
+            {lang === "id"
+              ? "Pilih Tanggal"
+              : "Select Date"}
+          </label>
+
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) =>
+              setSelectedDate(e.target.value)
+            }
+            className="mt-3 w-full rounded-[17px] border border-[#E3DCCE] bg-white px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] outline-none transition focus:border-[#B8860B] focus:ring-2 focus:ring-[#D8B46A]/15"
+          />
+
+        </div>
+
+
+        {/* =================================
+            TIME
+        ================================= */}
+        <div className="mt-5">
+
+          <label className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-gray-500">
+            {lang === "id"
+              ? "Pilih Jam"
+              : "Select Time"}
+          </label>
+
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+
+            {[
+              "10:00",
+              "11:00",
+              "13:00",
+              "15:00",
+              "17:00",
+            ].map((time) => (
+
+              <button
+                key={time}
+                type="button"
+                onClick={() =>
+                  setSelectedTime(time)
+                }
+                className={[
+                  "min-h-[44px] rounded-[14px] border text-xs font-extrabold transition",
+                  selectedTime === time
+                    ? "border-[#1C1C1E] bg-[#1C1C1E] text-white shadow-sm"
+                    : "border-[#E3DCCE] bg-white text-[#1C1C1E] hover:border-[#B8860B] hover:text-[#B8860B]",
+                ].join(" ")}
+              >
+                {time}
+              </button>
+
+            ))}
+
+          </div>
+
+        </div>
+
+
+        {/* =================================
+            SELECTED SUMMARY
+        ================================= */}
+        {selectedDate || selectedTime ? (
+          <div className="mt-5 rounded-[18px] border border-[#E3DCCE] bg-[#F2EEE6] px-4 py-3">
+
+            <p className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-gray-400">
+              {lang === "id"
+                ? "Pilihan Anda"
+                : "Your Selection"}
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs font-bold text-[#1C1C1E]">
+
+              {selectedDate ? (
+                <span>
+                  {selectedDate}
+                </span>
+              ) : null}
+
+              {selectedTime ? (
+                <span>
+                  {selectedTime}
+                </span>
+              ) : null}
+
+            </div>
+
+          </div>
+        ) : null}
+
+
+        {/* =================================
+            SUBMIT
+        ================================= */}
+        <button
+          type="button"
+          onClick={handleViewingRequest}
+          disabled={
+            !selectedDate ||
+            !selectedTime
+          }
+          className={[
+            "mt-6 min-h-[52px] w-full rounded-[17px] px-5 text-sm font-extrabold transition",
+            selectedDate && selectedTime
+              ? "bg-[#D8B46A] text-[#111111] hover:-translate-y-0.5 hover:bg-[#C59F4F] hover:shadow-lg"
+              : "cursor-not-allowed bg-gray-200 text-gray-400",
+          ].join(" ")}
+        >
+          {lang === "id"
+            ? "Kirim Permintaan Viewing"
+            : "Send Viewing Request"}
+        </button>
+
+
+        {/* FOOTNOTE */}
+        <p className="mt-3 text-center text-[10px] leading-5 text-gray-400">
+          {lang === "id"
+            ? "Jadwal belum dikonfirmasi sampai pemilik atau agen menyetujuinya."
+            : "The viewing is not confirmed until the owner or agent approves the request."}
+        </p>
+
+      </div>
+
+    </div>
+
+  </div>
+)}
       </div>
     </main>
   );

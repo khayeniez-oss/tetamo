@@ -29,6 +29,7 @@ import {
   Home,
   CheckCheck,
   ExternalLink,
+  Plus,
 } from "lucide-react";
 
 type ProfileData = {
@@ -318,25 +319,36 @@ function DesktopDropdown({
 }) {
   return (
     <div className="relative">
+
       <button
         type="button"
         onClick={onToggle}
-        className="inline-flex items-center gap-1 text-[15px] font-medium text-[#2C2C2E] transition hover:text-black"
+        className={[
+          "inline-flex h-11 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold transition",
+          isOpen
+            ? "bg-[#F3EEE4] text-[#8A650B]"
+            : "text-[#2C2C2E] hover:bg-[#F8F6F1] hover:text-black",
+        ].join(" ")}
       >
         <span>{label}</span>
+
         <ChevronDown
-          className={`h-4 w-4 transition ${isOpen ? "rotate-180" : ""}`}
+          className={[
+            "h-3.5 w-3.5 transition-transform duration-200",
+            isOpen ? "rotate-180" : "",
+          ].join(" ")}
         />
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 top-[calc(100%+12px)] min-w-[260px] overflow-hidden rounded-[26px] border border-[#E9E9EE] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.14)]">
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute -left-8 top-0 h-24 w-24 rounded-full bg-amber-200/20 blur-2xl" />
-            <div className="absolute right-0 top-10 h-24 w-24 rounded-full bg-emerald-200/20 blur-2xl" />
-          </div>
+
+      {isOpen ? (
+        <div className="absolute left-0 top-[calc(100%+12px)] z-[70] min-w-[270px] overflow-hidden rounded-[24px] border border-[#E6DED1] bg-[#FBFAF7] shadow-[0_24px_65px_rgba(0,0,0,0.14)]">
+
+          {/* GOLD GLOW */}
+          <div className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-[#D8B46A]/18 blur-[45px]" />
 
           <div className="relative p-2">
+
             {items.map((item) => {
               const Icon = item.icon;
 
@@ -345,18 +357,23 @@ function DesktopDropdown({
                   key={`${label}-${item.href}`}
                   href={item.href}
                   onClick={onNavigate}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[#1C1C1E] transition hover:bg-[#FAFAFA]"
+                  className="group flex items-center gap-3 rounded-[18px] px-3 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-white"
                 >
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-[#1C1C1E] shadow-sm">
+
+                  <span className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#E6DED1] bg-white text-[#B8860B] transition group-hover:border-[#D8B46A]">
                     <Icon className="h-4 w-4" />
                   </span>
+
                   <span>{item.label}</span>
+
                 </Link>
               );
             })}
+
           </div>
         </div>
-      )}
+      ) : null}
+
     </div>
   );
 }
@@ -816,428 +833,152 @@ export default function Navbar() {
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/40 bg-[rgba(255,255,255,0.88)] backdrop-blur-xl">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-full bg-[linear-gradient(90deg,rgba(245,158,11,0.06)_0%,rgba(255,255,255,0.3)_35%,rgba(16,185,129,0.06)_100%)]" />
+  <header className="sticky top-0 z-50 border-b border-[#EEE8DE] bg-[#FBFAF7]/95 backdrop-blur-xl">
 
-      <div className="relative mx-auto max-w-7xl px-4 py-3 sm:px-6 md:py-4">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href="/"
-            onClick={closeAllMenus}
-            className="flex min-w-0 max-w-[calc(100%-132px)] items-center gap-3 sm:max-w-none sm:gap-4"
-          >
-            <div className="relative h-12 w-12 shrink-0 rounded-2xl border border-white/50 bg-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.06)] backdrop-blur sm:h-14 sm:w-14 md:h-16 md:w-16">
-              <Image
-                src="/tetamo-logo-transparent1.png"
-                alt="TeTamo logo"
-                fill
-                priority
-                sizes="64px"
-                className="object-contain p-1"
-              />
-            </div>
+    {/* SUBTLE GOLD HEADER GLOW */}
+    <div className="pointer-events-none absolute -left-24 -top-20 h-48 w-72 rounded-full bg-[#D8B46A]/10 blur-[80px]" />
 
-            <div className="min-w-0 leading-tight">
-              <span className="block truncate text-[18px] font-semibold tracking-[-0.01em] text-[#1C1C1E] sm:text-[20px]">
-                TeTaMo
-              </span>
 
-              <span className="hidden text-[11px] font-medium uppercase tracking-[0.08em] text-[#6B7280] md:block">
-                {t.brandTagline}
-              </span>
-            </div>
-          </Link>
+    <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
 
-          <div className="hidden items-center gap-5 md:flex lg:gap-8">
-            <nav
-              ref={desktopNavRef}
-              className="flex items-center gap-4 text-[15px] font-medium text-[#2C2C2E] lg:gap-6"
-            >
-              <DesktopDropdown
-                label={t.properties}
-                items={propertyItems}
-                isOpen={desktopDropdownOpen === "properties"}
-                onToggle={() =>
-                  setDesktopDropdownOpen((prev) =>
-                    prev === "properties" ? null : "properties"
-                  )
-                }
-                onNavigate={closeAllMenus}
-              />
+      <div className="flex min-h-[74px] items-center justify-between gap-4">
 
-              <Link href="/pembeli" className="transition hover:text-black">
-                {t.buyers}
-              </Link>
 
-              <Link href="/career" className="transition hover:text-black">
-                {t.career}
-              </Link>
-            </nav>
+        {/* =====================================
+            BRAND
+        ===================================== */}
+        <Link
+          href="/"
+          onClick={closeAllMenus}
+          className="flex min-w-0 shrink-0 items-center gap-3"
+        >
 
-            <div className="flex shrink-0 items-center gap-3">
-              <div ref={desktopLangRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLangOpen((prev) => !prev);
-                    setCurrencyOpen(false);
-                    setAccountOpen(false);
-                    setDesktopDropdownOpen(null);
-                    setNotificationOpen(false);
-                  }}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white/90 px-3.5 text-[13px] font-medium text-[#1C1C1E] shadow-sm transition hover:bg-white"
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  <span>{lang.toUpperCase()}</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-
-                {langOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLang("id");
-                        setLangOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                        lang === "id"
-                          ? "bg-[#1C1C1E] text-white"
-                          : "text-[#1C1C1E] hover:bg-gray-50"
-                      }`}
-                    >
-                      ID
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLang("en");
-                        setLangOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                        lang === "en"
-                          ? "bg-[#1C1C1E] text-white"
-                          : "text-[#1C1C1E] hover:bg-gray-50"
-                      }`}
-                    >
-                      EN
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div ref={desktopCurrencyRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrencyOpen((prev) => !prev);
-                    setLangOpen(false);
-                    setAccountOpen(false);
-                    setDesktopDropdownOpen(null);
-                    setNotificationOpen(false);
-                  }}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white/90 px-3.5 text-[13px] font-medium text-[#1C1C1E] shadow-sm transition hover:bg-white"
-                >
-                  <BadgeDollarSign className="h-3.5 w-3.5" />
-                  <span>{currency}</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-
-                {currencyOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrency("IDR");
-                        setCurrencyOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                        currency === "IDR"
-                          ? "bg-[#1C1C1E] text-white"
-                          : "text-[#1C1C1E] hover:bg-gray-50"
-                      }`}
-                    >
-                      IDR
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrency("USD");
-                        setCurrencyOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                        currency === "USD"
-                          ? "bg-[#1C1C1E] text-white"
-                          : "text-[#1C1C1E] hover:bg-gray-50"
-                      }`}
-                    >
-                      USD
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrency("AUD");
-                        setCurrencyOpen(false);
-                      }}
-                      className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                        currency === "AUD"
-                          ? "bg-[#1C1C1E] text-white"
-                          : "text-[#1C1C1E] hover:bg-gray-50"
-                      }`}
-                    >
-                      AUD
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div ref={notificationRef} className="relative">
-                <button
-                  type="button"
-                  onClick={handleNotificationClick}
-                  aria-label={t.notifications}
-                  title={t.notifications}
-                  className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#111827] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_12px_30px_rgba(17,24,39,0.2)] transition hover:opacity-95"
-                >
-                  <Bell className="h-4 w-4" />
-                  <NotificationBadge count={notificationCount} />
-                </button>
-
-                {notificationOpen && isLoggedIn ? (
-                  <div className="absolute right-0 top-[calc(100%+10px)] w-[360px] overflow-hidden rounded-[26px] border border-gray-200 bg-white shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
-                    {notificationDropdown}
-                  </div>
-                ) : null}
-              </div>
-
-              <div ref={accountRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccountOpen((prev) => !prev);
-                    setLangOpen(false);
-                    setCurrencyOpen(false);
-                    setDesktopDropdownOpen(null);
-                    setNotificationOpen(false);
-                  }}
-                  className="inline-flex h-12 items-center gap-3 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 text-[15px] font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.22)] transition hover:opacity-95 lg:h-14 lg:px-5"
-                >
-                  {isLoggedIn ? (
-                    <>
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xs font-bold text-white">
-                        {initials}
-                      </div>
-                      <span className="hidden max-w-[140px] truncate lg:inline">
-                        {displayName}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <User className="h-4 w-4" />
-                      <span className="hidden sm:inline">{t.account}</span>
-                    </>
-                  )}
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-
-                {accountOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-[26px] border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                    {sessionLoading ? (
-                      <div className="px-4 py-3 text-sm text-gray-500">
-                        {t.loading}
-                      </div>
-                    ) : isLoggedIn ? (
-                      <>
-                        <div className="border-b border-gray-100 px-4 py-3">
-                          <p className="truncate text-sm font-semibold text-[#1C1C1E]">
-                            {displayName}
-                          </p>
-                          <p className="truncate text-xs text-gray-500">
-                            {authUserEmail}
-                          </p>
-                        </div>
-
-                        {!profileLoading ? (
-                          <Link
-                            href={dashboardHref}
-                            onClick={() => setAccountOpen(false)}
-                            className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                          >
-                            <LayoutDashboard className="h-4 w-4" />
-                            {t.dashboard}
-                          </Link>
-                        ) : (
-                          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400">
-                            <LayoutDashboard className="h-4 w-4" />
-                            {t.loadingDashboard}
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={handleLogout}
-                          className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-red-600 transition hover:bg-red-50"
-                        >
-                          <LogOut className="h-4 w-4" />
-                          {t.logout}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <Link
-                          href="/login"
-                          onClick={() => setAccountOpen(false)}
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                        >
-                          <User className="h-4 w-4" />
-                          {t.login}
-                        </Link>
-
-                        <Link
-                          href="/signup?role=agent&next=/agentdashboard/paket"
-                          onClick={() => setAccountOpen(false)}
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                        >
-                          <BriefcaseBusiness className="h-4 w-4" />
-                          {t.agentPro}
-                        </Link>
-
-                        <Link
-                          href="/signup?role=developer"
-                          onClick={() => setAccountOpen(false)}
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                        >
-                          <Building2 className="h-4 w-4" />
-                          {t.developer}
-                        </Link>
-
-                        <Link
-                          href="/login?role=admin"
-                          onClick={() => setAccountOpen(false)}
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-[#1C1C1E] transition hover:bg-gray-50"
-                        >
-                          <Shield className="h-4 w-4" />
-                          Admin
-                        </Link>
-
-                        <div className="border-t border-gray-100" />
-
-                        <Link
-                          href="/signup"
-                          onClick={() => setAccountOpen(false)}
-                          className="block px-4 py-3 text-sm font-semibold text-[#1C1C1E] transition hover:bg-gray-50"
-                        >
-                          {t.signUp}
-                        </Link>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[15px] border border-[#E7E0D5] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+            <Image
+              src="/tetamo-logo-transparent1.png"
+              alt="TETAMO"
+              fill
+              priority
+              sizes="48px"
+              className="object-contain p-1"
+            />
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 md:hidden">
-            <div ref={mobileCurrencyRef} className="relative">
+
+          <div className="hidden min-w-0 leading-none sm:block">
+
+            <span className="block text-[19px] font-extrabold tracking-[0.01em] text-[#1C1C1E]">
+              TETAMO
+            </span>
+
+            <span className="mt-1.5 block text-[9px] font-bold uppercase tracking-[0.16em] text-gray-400">
+              {t.brandTagline}
+            </span>
+
+          </div>
+
+        </Link>
+
+
+        {/* =====================================
+            DESKTOP NAVIGATION
+        ===================================== */}
+        <div className="hidden min-w-0 flex-1 items-center justify-end gap-5 xl:flex">
+
+          <nav
+            ref={desktopNavRef}
+            className="flex items-center gap-1"
+          >
+
+            <DesktopDropdown
+              label={t.properties}
+              items={propertyItems}
+              isOpen={
+                desktopDropdownOpen ===
+                "properties"
+              }
+              onToggle={() =>
+                setDesktopDropdownOpen(
+                  (prev) =>
+                    prev === "properties"
+                      ? null
+                      : "properties"
+                )
+              }
+              onNavigate={closeAllMenus}
+            />
+
+
+            <Link
+              href="/pembeli"
+              onClick={closeAllMenus}
+              className="inline-flex h-11 items-center rounded-full px-3.5 text-[14px] font-semibold text-[#2C2C2E] transition hover:bg-[#F8F6F1] hover:text-black"
+            >
+              {t.buyers}
+            </Link>
+
+
+            <Link
+              href="/career"
+              onClick={closeAllMenus}
+              className="inline-flex h-11 items-center rounded-full px-3.5 text-[14px] font-semibold text-[#2C2C2E] transition hover:bg-[#F8F6F1] hover:text-black"
+            >
+              {t.career}
+            </Link>
+
+          </nav>
+
+
+          {/* =================================
+              RIGHT DESKTOP CONTROLS
+          ================================= */}
+          <div className="flex shrink-0 items-center gap-2">
+
+
+            {/* LANGUAGE */}
+            <div
+              ref={desktopLangRef}
+              className="relative"
+            >
+
               <button
                 type="button"
                 onClick={() => {
-                  setCurrencyOpen((prev) => !prev);
-                  setLangOpen(false);
-                  setMobileMenuOpen(false);
-                  setAccountOpen(false);
-                  setDesktopDropdownOpen(null);
-                  setNotificationOpen(false);
-                }}
-                className="inline-flex h-11 items-center gap-1.5 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
-              >
-                <BadgeDollarSign className="h-4 w-4" />
-                <span>{currency}</span>
-              </button>
-
-              {currencyOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] w-28 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrency("IDR");
-                      setCurrencyOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                      currency === "IDR"
-                        ? "bg-[#1C1C1E] text-white"
-                        : "text-[#1C1C1E] hover:bg-gray-50"
-                    }`}
-                  >
-                    IDR
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrency("USD");
-                      setCurrencyOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                      currency === "USD"
-                        ? "bg-[#1C1C1E] text-white"
-                        : "text-[#1C1C1E] hover:bg-gray-50"
-                    }`}
-                  >
-                    USD
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCurrency("AUD");
-                      setCurrencyOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
-                      currency === "AUD"
-                        ? "bg-[#1C1C1E] text-white"
-                        : "text-[#1C1C1E] hover:bg-gray-50"
-                    }`}
-                  >
-                    AUD
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div ref={mobileLangRef} className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setLangOpen((prev) => !prev);
+                  setLangOpen(
+                    (prev) => !prev
+                  );
                   setCurrencyOpen(false);
-                  setMobileMenuOpen(false);
                   setAccountOpen(false);
                   setDesktopDropdownOpen(null);
                   setNotificationOpen(false);
                 }}
-                className="inline-flex h-11 items-center gap-2 rounded-2xl border border-gray-300 bg-white px-3 text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
+                className="inline-flex h-11 items-center gap-1.5 rounded-full border border-[#E4DDD2] bg-white px-3.5 text-xs font-bold text-[#1C1C1E] transition hover:border-[#D8B46A]"
               >
-                <Globe className="h-4 w-4" />
-                <span>{lang.toUpperCase()}</span>
+                <Globe className="h-3.5 w-3.5 text-[#B8860B]" />
+
+                <span>
+                  {lang.toUpperCase()}
+                </span>
+
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
               </button>
 
-              {langOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] w-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
+
+              {langOpen ? (
+                <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-24 overflow-hidden rounded-[18px] border border-[#E6DED1] bg-white p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.13)]">
+
                   <button
                     type="button"
                     onClick={() => {
                       setLang("id");
                       setLangOpen(false);
                     }}
-                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                    className={[
+                      "w-full rounded-[12px] px-3 py-2.5 text-xs font-bold transition",
                       lang === "id"
                         ? "bg-[#1C1C1E] text-white"
-                        : "text-[#1C1C1E] hover:bg-gray-50"
-                    }`}
+                        : "text-[#1C1C1E] hover:bg-[#F8F6F1]",
+                    ].join(" ")}
                   >
                     ID
                   </button>
@@ -1248,222 +989,849 @@ export default function Navbar() {
                       setLang("en");
                       setLangOpen(false);
                     }}
-                    className={`flex w-full items-center justify-center px-4 py-3 text-sm font-medium transition ${
+                    className={[
+                      "mt-1 w-full rounded-[12px] px-3 py-2.5 text-xs font-bold transition",
                       lang === "en"
                         ? "bg-[#1C1C1E] text-white"
-                        : "text-[#1C1C1E] hover:bg-gray-50"
-                    }`}
+                        : "text-[#1C1C1E] hover:bg-[#F8F6F1]",
+                    ].join(" ")}
                   >
                     EN
                   </button>
+
                 </div>
-              )}
+              ) : null}
+
             </div>
 
-            <div ref={mobileMenuRef} className="relative">
+
+            {/* CURRENCY */}
+            <div
+              ref={desktopCurrencyRef}
+              className="relative"
+            >
+
               <button
                 type="button"
                 onClick={() => {
-                  setMobileMenuOpen((prev) => !prev);
+                  setCurrencyOpen(
+                    (prev) => !prev
+                  );
                   setLangOpen(false);
-                  setCurrencyOpen(false);
                   setAccountOpen(false);
                   setDesktopDropdownOpen(null);
                   setNotificationOpen(false);
                 }}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_14px_34px_rgba(17,24,39,0.22)] transition hover:opacity-95"
-                aria-label={t.menu}
+                className="inline-flex h-11 items-center gap-1.5 rounded-full border border-[#E4DDD2] bg-white px-3.5 text-xs font-bold text-[#1C1C1E] transition hover:border-[#D8B46A]"
               >
-                {mobileMenuOpen ? (
-                  <X className="h-5 w-5" />
-                ) : (
-                  <Menu className="h-5 w-5" />
-                )}
+                <BadgeDollarSign className="h-3.5 w-3.5 text-[#B8860B]" />
+
+                <span>{currency}</span>
+
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
               </button>
 
-              {mobileMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+10px)] w-[min(92vw,390px)] overflow-hidden rounded-[32px] border border-[#E7E7EA] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFBFC_100%)] shadow-[0_28px_70px_rgba(0,0,0,0.16)]">
-                  <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                    <div className="absolute -left-10 top-4 h-28 w-28 rounded-full bg-amber-200/20 blur-3xl" />
-                    <div className="absolute -right-10 top-16 h-28 w-28 rounded-full bg-emerald-200/20 blur-3xl" />
-                  </div>
 
-                  <div className="relative p-3">
-                    <div className="space-y-3">
-                      <div className="rounded-[26px] border border-gray-200 bg-[linear-gradient(180deg,#FAFAFB_0%,#FFFFFF_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                        <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          {t.properties}
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {propertyItems.map((item) => {
-                            const Icon = item.icon;
+              {currencyOpen ? (
+                <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-28 overflow-hidden rounded-[18px] border border-[#E6DED1] bg-white p-1.5 shadow-[0_20px_50px_rgba(0,0,0,0.13)]">
 
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={closeAllMenus}
-                                className="rounded-[22px] border border-gray-200 bg-white px-3 py-4 text-center text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
-                              >
-                                <div className="flex flex-col items-center gap-2">
-                                  <Icon className="h-4 w-4" />
-                                  <span>{item.label}</span>
-                                </div>
-                              </Link>
-                            );
-                          })}
+                  {[
+                    "IDR",
+                    "USD",
+                    "AUD",
+                  ].map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => {
+                        setCurrency(
+                          item as
+                            | "IDR"
+                            | "USD"
+                            | "AUD"
+                        );
+                        setCurrencyOpen(false);
+                      }}
+                      className={[
+                        "w-full rounded-[12px] px-3 py-2.5 text-xs font-bold transition",
+                        currency === item
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E] hover:bg-[#F8F6F1]",
+                      ].join(" ")}
+                    >
+                      {item}
+                    </button>
+                  ))}
+
+                </div>
+              ) : null}
+
+            </div>
+
+
+            {/* NOTIFICATION */}
+            <div
+              ref={notificationRef}
+              className="relative"
+            >
+
+              <button
+                type="button"
+                onClick={
+                  handleNotificationClick
+                }
+                aria-label={t.notifications}
+                title={t.notifications}
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#1C1C1E] text-white transition hover:-translate-y-0.5 hover:bg-black"
+              >
+                <Bell className="h-4 w-4" />
+
+                <NotificationBadge
+                  count={notificationCount}
+                />
+              </button>
+
+
+              {notificationOpen &&
+              isLoggedIn ? (
+                <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-[360px] overflow-hidden rounded-[26px] border border-[#E6DED1] bg-white shadow-[0_24px_65px_rgba(0,0,0,0.16)]">
+                  {notificationDropdown}
+                </div>
+              ) : null}
+
+            </div>
+
+
+            {/* ACCOUNT */}
+            <div
+              ref={accountRef}
+              className="relative"
+            >
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountOpen(
+                    (prev) => !prev
+                  );
+                  setLangOpen(false);
+                  setCurrencyOpen(false);
+                  setDesktopDropdownOpen(null);
+                  setNotificationOpen(false);
+                }}
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-[#E4DDD2] bg-white px-3 text-sm font-bold text-[#1C1C1E] transition hover:border-[#D8B46A]"
+              >
+
+                {isLoggedIn ? (
+                  <>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1C1C1E] text-[9px] font-extrabold text-[#D8B46A]">
+                      {initials}
+                    </span>
+
+                    <span className="hidden max-w-[120px] truncate 2xl:inline">
+                      {displayName}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <User className="h-4 w-4" />
+
+                    <span>
+                      {t.account}
+                    </span>
+                  </>
+                )}
+
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+
+              </button>
+
+
+              {accountOpen ? (
+                <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-[270px] overflow-hidden rounded-[24px] border border-[#E6DED1] bg-white shadow-[0_24px_65px_rgba(0,0,0,0.15)]">
+
+                  {sessionLoading ? (
+                    <div className="px-4 py-4 text-sm text-gray-500">
+                      {t.loading}
+                    </div>
+                  ) : isLoggedIn ? (
+                    <>
+
+                      {/* USER */}
+                      <div className="border-b border-[#EEE8DE] bg-[#FBFAF7] px-4 py-4">
+
+                        <div className="flex items-center gap-3">
+
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1C1C1E] text-xs font-extrabold text-[#D8B46A]">
+                            {initials}
+                          </div>
+
+                          <div className="min-w-0">
+
+                            <p className="truncate text-sm font-extrabold text-[#1C1C1E]">
+                              {displayName}
+                            </p>
+
+                            <p className="mt-0.5 truncate text-[11px] text-gray-400">
+                              {authUserEmail}
+                            </p>
+
+                          </div>
+
                         </div>
+
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <Link
-                          href="/pembeli"
-                          onClick={closeAllMenus}
-                          className="rounded-[20px] border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
-                        >
-                          {t.buyers}
-                        </Link>
 
+                      {!profileLoading ? (
                         <Link
-                          href="/career"
-                          onClick={closeAllMenus}
-                          className="rounded-[20px] border border-gray-200 bg-white px-3 py-3 text-center text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
+                          href={dashboardHref}
+                          onClick={() =>
+                            setAccountOpen(false)
+                          }
+                          className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
                         >
-                          {t.career}
+                          <LayoutDashboard className="h-4 w-4 text-[#B8860B]" />
+
+                          {t.dashboard}
                         </Link>
+                      ) : (
+                        <div className="flex items-center gap-3 px-4 py-3.5 text-sm text-gray-400">
+                          <LayoutDashboard className="h-4 w-4" />
+
+                          {t.loadingDashboard}
+                        </div>
+                      )}
+
+
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-3 border-t border-[#EEE8DE] px-4 py-3.5 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+
+                        {t.logout}
+                      </button>
+
+                    </>
+                  ) : (
+                    <>
+
+                      <Link
+                        href="/login"
+                        onClick={() =>
+                          setAccountOpen(false)
+                        }
+                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
+                      >
+                        <User className="h-4 w-4 text-[#B8860B]" />
+
+                        {t.login}
+                      </Link>
+
+
+                      <Link
+                        href="/signup?role=agent&next=/agentdashboard/paket"
+                        onClick={() =>
+                          setAccountOpen(false)
+                        }
+                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
+                      >
+                        <BriefcaseBusiness className="h-4 w-4 text-[#B8860B]" />
+
+                        {t.agentPro}
+                      </Link>
+
+
+                      <Link
+                        href="/signup?role=developer"
+                        onClick={() =>
+                          setAccountOpen(false)
+                        }
+                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
+                      >
+                        <Building2 className="h-4 w-4 text-[#B8860B]" />
+
+                        {t.developer}
+                      </Link>
+
+
+                      <Link
+                        href="/login?role=admin"
+                        onClick={() =>
+                          setAccountOpen(false)
+                        }
+                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
+                      >
+                        <Shield className="h-4 w-4 text-[#B8860B]" />
+
+                        Admin
+                      </Link>
+
+
+                      <Link
+                        href="/signup"
+                        onClick={() =>
+                          setAccountOpen(false)
+                        }
+                        className="flex items-center justify-center border-t border-[#EEE8DE] bg-[#FBFAF7] px-4 py-3.5 text-sm font-extrabold text-[#1C1C1E] transition hover:bg-[#F3EEE4]"
+                      >
+                        {t.signUp}
+                      </Link>
+
+                    </>
+                  )}
+
+                </div>
+              ) : null}
+
+            </div>
+
+
+            {/* =================================
+                PRIMARY CTA
+            ================================= */}
+            <Link
+              href="/pricelist"
+              onClick={closeAllMenus}
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[#D8B46A] px-5 text-[13px] font-extrabold text-[#111111] shadow-[0_10px_28px_rgba(184,134,11,0.16)] transition hover:-translate-y-0.5 hover:bg-[#C59F4F] hover:shadow-[0_14px_34px_rgba(184,134,11,0.24)]"
+            >
+              <span className="inline-flex items-center gap-1.5">
+  <Plus className="h-4 w-4" />
+
+  {isID
+    ? "Pasang Properti"
+    : "List Property"}
+</span>
+            </Link>
+
+          </div>
+        </div>
+
+
+        {/* =====================================
+            TABLET / MOBILE CONTROLS
+        ===================================== */}
+        <div className="flex shrink-0 items-center gap-2 xl:hidden">
+
+
+          {/* MOBILE CURRENCY */}
+          <div
+            ref={mobileCurrencyRef}
+            className="relative hidden sm:block"
+          >
+
+            <button
+              type="button"
+              onClick={() => {
+                setCurrencyOpen(
+                  (prev) => !prev
+                );
+                setLangOpen(false);
+                setMobileMenuOpen(false);
+                setAccountOpen(false);
+                setNotificationOpen(false);
+              }}
+              className="inline-flex h-10 items-center gap-1 rounded-full border border-[#E4DDD2] bg-white px-3 text-[11px] font-bold text-[#1C1C1E]"
+            >
+              <BadgeDollarSign className="h-3.5 w-3.5 text-[#B8860B]" />
+
+              {currency}
+            </button>
+
+
+            {currencyOpen ? (
+              <div className="absolute right-0 top-[calc(100%+9px)] z-[80] w-24 overflow-hidden rounded-[16px] border border-[#E6DED1] bg-white p-1.5 shadow-xl">
+
+                {[
+                  "IDR",
+                  "USD",
+                  "AUD",
+                ].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      setCurrency(
+                        item as
+                          | "IDR"
+                          | "USD"
+                          | "AUD"
+                      );
+                      setCurrencyOpen(false);
+                    }}
+                    className={[
+                      "w-full rounded-[10px] px-3 py-2 text-xs font-bold",
+                      currency === item
+                        ? "bg-[#1C1C1E] text-white"
+                        : "text-[#1C1C1E]",
+                    ].join(" ")}
+                  >
+                    {item}
+                  </button>
+                ))}
+
+              </div>
+            ) : null}
+
+          </div>
+
+
+          {/* MOBILE LANGUAGE */}
+          <div
+            ref={mobileLangRef}
+            className="relative hidden sm:block"
+          >
+
+            <button
+              type="button"
+              onClick={() => {
+                setLangOpen(
+                  (prev) => !prev
+                );
+                setCurrencyOpen(false);
+                setMobileMenuOpen(false);
+                setAccountOpen(false);
+                setNotificationOpen(false);
+              }}
+              className="inline-flex h-10 items-center gap-1 rounded-full border border-[#E4DDD2] bg-white px-3 text-[11px] font-bold text-[#1C1C1E]"
+            >
+              <Globe className="h-3.5 w-3.5 text-[#B8860B]" />
+
+              {lang.toUpperCase()}
+            </button>
+
+
+            {langOpen ? (
+              <div className="absolute right-0 top-[calc(100%+9px)] z-[80] w-20 overflow-hidden rounded-[16px] border border-[#E6DED1] bg-white p-1.5 shadow-xl">
+
+                {["id", "en"].map(
+                  (item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => {
+                        setLang(
+                          item as
+                            | "id"
+                            | "en"
+                        );
+                        setLangOpen(false);
+                      }}
+                      className={[
+                        "w-full rounded-[10px] px-3 py-2 text-xs font-bold uppercase",
+                        lang === item
+                          ? "bg-[#1C1C1E] text-white"
+                          : "text-[#1C1C1E]",
+                      ].join(" ")}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+
+              </div>
+            ) : null}
+
+          </div>
+
+
+          {/* MOBILE MENU */}
+          <div
+            ref={mobileMenuRef}
+            className="relative"
+          >
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(
+                  (prev) => !prev
+                );
+                setLangOpen(false);
+                setCurrencyOpen(false);
+                setAccountOpen(false);
+                setNotificationOpen(false);
+              }}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#1C1C1E] text-white transition hover:bg-black"
+              aria-label={t.menu}
+            >
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+
+
+            {mobileMenuOpen ? (
+              <div className="absolute right-0 top-[calc(100%+10px)] z-[80] w-[min(92vw,400px)] overflow-hidden rounded-[28px] border border-[#E6DED1] bg-[#FBFAF7] shadow-[0_28px_80px_rgba(0,0,0,0.18)]">
+
+                <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#D8B46A]/16 blur-[60px]" />
+
+
+                <div className="relative p-3">
+
+
+                  {/* MOBILE PRIMARY CTA */}
+                  <Link
+                    href="/pricelist"
+                    onClick={closeAllMenus}
+                    className="flex min-h-[52px] w-full items-center justify-center rounded-[18px] bg-[#D8B46A] px-4 text-sm font-extrabold text-[#111111]"
+                  >
+                    {isID
+                      ? "+ Pasang Properti"
+                      : "+ List Property"}
+                  </Link>
+
+
+                  {/* PROPERTY NAVIGATION */}
+                  <div className="mt-3 rounded-[22px] border border-[#E6DED1] bg-white p-3">
+
+                    <p className="px-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
+                      {t.properties}
+                    </p>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+
+                      {propertyItems.map(
+                        (item) => {
+                          const Icon =
+                            item.icon;
+
+                          return (
+                            <Link
+                              key={
+                                item.href
+                              }
+                              href={
+                                item.href
+                              }
+                              onClick={
+                                closeAllMenus
+                              }
+                              className="flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-[16px] bg-[#F8F6F1] px-2 text-center text-[11px] font-bold text-[#1C1C1E] transition hover:bg-[#F2EEE6]"
+                            >
+                              <Icon className="h-4 w-4 text-[#B8860B]" />
+
+                              <span>
+                                {item.label}
+                              </span>
+                            </Link>
+                          );
+                        }
+                      )}
+
+                    </div>
+
+                  </div>
+
+
+                  {/* BUYER + CAREER */}
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+
+                    <Link
+                      href="/pembeli"
+                      onClick={closeAllMenus}
+                      className="flex min-h-[46px] items-center justify-center rounded-[16px] border border-[#E6DED1] bg-white px-3 text-xs font-bold text-[#1C1C1E]"
+                    >
+                      {t.buyers}
+                    </Link>
+
+                    <Link
+                      href="/career"
+                      onClick={closeAllMenus}
+                      className="flex min-h-[46px] items-center justify-center rounded-[16px] border border-[#E6DED1] bg-white px-3 text-xs font-bold text-[#1C1C1E]"
+                    >
+                      {t.career}
+                    </Link>
+
+                  </div>
+
+
+                  {/* SMALL PHONE LANGUAGE / CURRENCY */}
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:hidden">
+
+                    <div className="rounded-[18px] border border-[#E6DED1] bg-white p-2">
+
+                      <p className="mb-2 text-center text-[8px] font-extrabold uppercase tracking-[0.12em] text-gray-400">
+                        Language
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-1">
+
+                        {[
+                          "id",
+                          "en",
+                        ].map(
+                          (item) => (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() =>
+                                setLang(
+                                  item as
+                                    | "id"
+                                    | "en"
+                                )
+                              }
+                              className={[
+                                "rounded-[10px] py-2 text-[10px] font-bold uppercase",
+                                lang ===
+                                item
+                                  ? "bg-[#1C1C1E] text-white"
+                                  : "bg-[#F8F6F1] text-[#1C1C1E]",
+                              ].join(
+                                " "
+                              )}
+                            >
+                              {item}
+                            </button>
+                          )
+                        )}
+
                       </div>
                     </div>
 
-                    <div className="mt-3 rounded-[26px] border border-gray-200 bg-[linear-gradient(180deg,#FAFAFB_0%,#FFFFFF_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                      {sessionLoading ? (
-                        <div className="text-sm text-gray-500">{t.loading}</div>
-                      ) : isLoggedIn ? (
-                        <>
-                          <div className="mb-3 flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-xs font-bold text-white shadow-sm">
-                              {initials}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-[#1C1C1E]">
-                                {displayName}
-                              </p>
-                              <p className="truncate text-xs text-gray-500">
-                                {authUserEmail}
-                              </p>
-                            </div>
-                          </div>
 
-                          <div ref={notificationRef} className="mb-2">
+                    <div className="rounded-[18px] border border-[#E6DED1] bg-white p-2">
+
+                      <p className="mb-2 text-center text-[8px] font-extrabold uppercase tracking-[0.12em] text-gray-400">
+                        Currency
+                      </p>
+
+                      <div className="grid grid-cols-3 gap-1">
+
+                        {[
+                          "IDR",
+                          "USD",
+                          "AUD",
+                        ].map(
+                          (item) => (
                             <button
+                              key={item}
                               type="button"
-                              onClick={handleNotificationClick}
-                              className="relative inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-3 py-3 text-center text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.2)] transition hover:opacity-95"
+                              onClick={() =>
+                                setCurrency(
+                                  item as
+                                    | "IDR"
+                                    | "USD"
+                                    | "AUD"
+                                )
+                              }
+                              className={[
+                                "rounded-[10px] py-2 text-[9px] font-bold",
+                                currency ===
+                                item
+                                  ? "bg-[#1C1C1E] text-white"
+                                  : "bg-[#F8F6F1] text-[#1C1C1E]",
+                              ].join(
+                                " "
+                              )}
                             >
-                              <Bell className="h-4 w-4" />
-                              <span>{t.notifications}</span>
-
-                              {notificationCount > 0 ? (
-                                <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-[#B8860B] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
-                                  {notificationCount > 99
-                                    ? "99+"
-                                    : notificationCount}
-                                </span>
-                              ) : null}
+                              {item}
                             </button>
+                          )
+                        )}
 
-                            {notificationOpen ? (
-                              <div className="mt-2 overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-lg">
-                                {notificationDropdown}
-                              </div>
-                            ) : null}
+                      </div>
+                    </div>
+
+                  </div>
+
+
+                  {/* ACCOUNT AREA */}
+                  <div className="mt-3 rounded-[22px] border border-[#E6DED1] bg-white p-3">
+
+                    {sessionLoading ? (
+                      <div className="py-2 text-sm text-gray-500">
+                        {t.loading}
+                      </div>
+                    ) : isLoggedIn ? (
+                      <>
+
+                        <div className="flex items-center gap-3 border-b border-[#EEE8DE] pb-3">
+
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1C1C1E] text-xs font-extrabold text-[#D8B46A]">
+                            {initials}
                           </div>
 
-                          {!profileLoading ? (
-                            <Link
-                              href={dashboardHref}
-                              onClick={closeAllMenus}
-                              className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.2)] transition hover:opacity-95"
-                            >
-                              <LayoutDashboard className="h-4 w-4" />
-                              {t.dashboard}
-                            </Link>
-                          ) : (
-                            <div className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-gray-200 px-4 py-3 text-sm font-medium text-gray-500">
-                              <LayoutDashboard className="h-4 w-4" />
-                              {t.loadingDashboard}
-                            </div>
-                          )}
+                          <div className="min-w-0">
+
+                            <p className="truncate text-sm font-extrabold text-[#1C1C1E]">
+                              {displayName}
+                            </p>
+
+                            <p className="mt-0.5 truncate text-[10px] text-gray-400">
+                              {authUserEmail}
+                            </p>
+
+                          </div>
+
+                        </div>
+
+
+                        {/* NOTIFICATIONS */}
+                        <div
+                          ref={
+                            notificationRef
+                          }
+                          className="mt-3"
+                        >
 
                           <button
                             type="button"
-                            onClick={handleLogout}
-                            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[20px] border border-red-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                            onClick={
+                              handleNotificationClick
+                            }
+                            className="relative flex min-h-[46px] w-full items-center justify-center gap-2 rounded-[16px] bg-[#1C1C1E] px-3 text-xs font-bold text-white"
                           >
-                            <LogOut className="h-4 w-4" />
-                            {t.logout}
+                            <Bell className="h-4 w-4" />
+
+                            {t.notifications}
+
+                            {notificationCount >
+                            0 ? (
+                              <span className="rounded-full bg-[#D8B46A] px-1.5 py-0.5 text-[9px] font-extrabold text-[#111111]">
+                                {notificationCount >
+                                99
+                                  ? "99+"
+                                  : notificationCount}
+                              </span>
+                            ) : null}
+
                           </button>
-                        </>
-                      ) : (
-                        <>
-                          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                            {t.quickAccess}
-                          </div>
 
-                          <div className="grid grid-cols-2 gap-2">
-                            <Link
-                              href="/login"
-                              onClick={closeAllMenus}
-                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-3 py-3 text-center text-sm font-semibold text-white shadow-[0_14px_34px_rgba(17,24,39,0.2)] transition hover:opacity-95"
-                            >
-                              <User className="h-4 w-4" />
-                              {t.login}
-                            </Link>
 
-                            <Link
-                              href="/signup?role=agent&next=/agentdashboard/paket"
-                              onClick={closeAllMenus}
-                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
-                            >
-                              <BriefcaseBusiness className="h-4 w-4" />
-                              {t.agentPro}
-                            </Link>
+                          {notificationOpen ? (
+                            <div className="mt-2 overflow-hidden rounded-[20px] border border-[#E6DED1] bg-white shadow-lg">
+                              {notificationDropdown}
+                            </div>
+                          ) : null}
 
-                            <Link
-                              href="/signup?role=developer"
-                              onClick={closeAllMenus}
-                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
-                            >
-                              <Building2 className="h-4 w-4" />
-                              {t.developer}
-                            </Link>
+                        </div>
 
-                            <Link
-                              href="/login?role=admin"
-                              onClick={closeAllMenus}
-                              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[20px] border border-gray-300 bg-white px-3 py-3 text-center text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:bg-gray-50"
-                            >
-                              <Shield className="h-4 w-4" />
-                              Admin
-                            </Link>
-                          </div>
+
+                        {!profileLoading ? (
+                          <Link
+                            href={
+                              dashboardHref
+                            }
+                            onClick={
+                              closeAllMenus
+                            }
+                            className="mt-2 flex min-h-[46px] w-full items-center justify-center gap-2 rounded-[16px] bg-[#F8F6F1] px-3 text-xs font-bold text-[#1C1C1E]"
+                          >
+                            <LayoutDashboard className="h-4 w-4 text-[#B8860B]" />
+
+                            {t.dashboard}
+                          </Link>
+                        ) : null}
+
+
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="mt-2 flex min-h-[46px] w-full items-center justify-center gap-2 rounded-[16px] border border-red-100 bg-red-50 px-3 text-xs font-bold text-red-600"
+                        >
+                          <LogOut className="h-4 w-4" />
+
+                          {t.logout}
+                        </button>
+
+                      </>
+                    ) : (
+                      <>
+
+                        <p className="mb-3 px-1 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
+                          {t.quickAccess}
+                        </p>
+
+
+                        <div className="grid grid-cols-2 gap-2">
 
                           <Link
-                            href="/signup"
-                            onClick={closeAllMenus}
-                            className="mt-2.5 inline-flex w-full items-center justify-center rounded-[20px] border border-yellow-300 bg-gradient-to-r from-yellow-400 via-yellow-300 to-amber-300 px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-[0_14px_34px_-18px_rgba(234,179,8,0.9)] transition hover:brightness-[1.02]"
+                            href="/login"
+                            onClick={
+                              closeAllMenus
+                            }
+                            className="flex min-h-[46px] items-center justify-center gap-2 rounded-[15px] bg-[#1C1C1E] px-3 text-xs font-bold text-white"
                           >
-                            {t.signUp}
+                            <User className="h-4 w-4" />
+
+                            {t.login}
                           </Link>
-                        </>
-                      )}
-                    </div>
+
+
+                          <Link
+                            href="/signup?role=agent&next=/agentdashboard/paket"
+                            onClick={
+                              closeAllMenus
+                            }
+                            className="flex min-h-[46px] items-center justify-center gap-2 rounded-[15px] bg-[#F8F6F1] px-3 text-center text-xs font-bold text-[#1C1C1E]"
+                          >
+                            <BriefcaseBusiness className="h-4 w-4 text-[#B8860B]" />
+
+                            {t.agentPro}
+                          </Link>
+
+
+                          <Link
+                            href="/signup?role=developer"
+                            onClick={
+                              closeAllMenus
+                            }
+                            className="flex min-h-[46px] items-center justify-center gap-2 rounded-[15px] bg-[#F8F6F1] px-3 text-center text-xs font-bold text-[#1C1C1E]"
+                          >
+                            <Building2 className="h-4 w-4 text-[#B8860B]" />
+
+                            {t.developer}
+                          </Link>
+
+
+                          <Link
+                            href="/login?role=admin"
+                            onClick={
+                              closeAllMenus
+                            }
+                            className="flex min-h-[46px] items-center justify-center gap-2 rounded-[15px] bg-[#F8F6F1] px-3 text-xs font-bold text-[#1C1C1E]"
+                          >
+                            <Shield className="h-4 w-4 text-[#B8860B]" />
+
+                            Admin
+                          </Link>
+
+                        </div>
+
+
+                        <Link
+                          href="/signup"
+                          onClick={
+                            closeAllMenus
+                          }
+                          className="mt-2 flex min-h-[46px] w-full items-center justify-center rounded-[15px] border border-[#D8B46A] bg-[#F8F2E5] px-3 text-xs font-extrabold text-[#8A650B]"
+                        >
+                          {t.signUp}
+                        </Link>
+
+                      </>
+                    )}
+
                   </div>
+
                 </div>
-              )}
-            </div>
+
+              </div>
+            ) : null}
+
           </div>
+
         </div>
+
       </div>
-    </header>
-  );
+    </div>
+
+  </header>
+);
 }

@@ -6,7 +6,7 @@ import { getSEOBySlug, getSiteUrl } from "@/lib/seo-server";
 
 export const dynamic = "force-dynamic";
 
-type RentalType = "monthly" | "yearly" | "";
+type RentalType = "daily" | "monthly" | "yearly" | "";
 
 type Property = {
   verifiedListing: boolean;
@@ -47,6 +47,7 @@ type Property = {
   furnished: string;
 
   agentName: string;
+  agentPhoto: string;
   agency: string;
   whatsapp: string;
   images: string[];
@@ -200,6 +201,7 @@ function normalizePostedByType(
 function normalizeRentalType(value?: string | null): RentalType {
   const v = String(value || "").trim().toLowerCase();
 
+  if (v === "daily" || v === "harian") return "daily";
   if (v === "monthly" || v === "bulanan") return "monthly";
   if (v === "yearly" || v === "tahunan") return "yearly";
 
@@ -340,6 +342,12 @@ async function getInitialProperties(): Promise<Property[]> {
     const resolvedName = row.contact_name || "Tetamo User";
     const resolvedAgency = row.contact_agency || "";
     const resolvedWhatsapp = normalizeWhatsapp(row.contact_phone);
+
+    const resolvedPhoto =
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        resolvedName
+      )}&background=1C1C1E&color=ffffff&bold=true`;
+
     const liveDate = row.posted_date || row.created_at || null;
 
     return {
@@ -381,6 +389,7 @@ async function getInitialProperties(): Promise<Property[]> {
       furnished: mapFurnishing(row.furnishing),
 
       agentName: resolvedName,
+      agentPhoto: resolvedPhoto,
       agency: resolvedAgency,
       whatsapp: resolvedWhatsapp,
       images,
