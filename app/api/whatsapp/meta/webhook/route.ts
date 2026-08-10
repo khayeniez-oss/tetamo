@@ -175,14 +175,6 @@ type MonaIntentAnalysis = {
   needsFactualKnowledge: boolean;
 };
 
-type AuthoritativeTetamoSource = {
-  sourceType: "hardcoded" | "knowledge_base" | "none";
-  sourceId: string | null;
-  topic: string;
-  approvedAnswer: string;
-  confidence: number;
-};
-
 type MetaSendResult = {
   success: boolean;
   id: string | null;
@@ -4088,7 +4080,7 @@ async function searchApprovedKnowledge(
     )
     .eq("status", "active")
     .order("priority", { ascending: false })
-    .limit(500);
+    .limit(250);
 
   if (error) {
     console.error("Failed to search approved Knowledge Base:", error);
@@ -4111,7 +4103,7 @@ async function searchApprovedKnowledge(
     }))
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 16);
+    .slice(0, 8);
 
   return matches;
 }
@@ -4140,7 +4132,7 @@ function selectRelevantHardcodedFaq(retrievalQuery: string) {
     }))
     .filter((match) => match.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+    .slice(0, 4);
 }
 
 function formatRelevantHardcodedFaq(
@@ -4181,244 +4173,6 @@ function formatKnowledgeMatches(matches: KnowledgeMatch[]) {
     .join("\n\n");
 }
 
-
-
-function getApprovedHardcodedAnswer(
-  item: (typeof HARDCODED_FAQ)[number],
-  language: MonaLanguage
-) {
-  return language === "en" ? item.answerEn : item.answerId;
-}
-
-async function selectAuthoritativeTetamoSource(params: {
-  customerMessage: string;
-  conversationContext: string | null;
-  language: MonaLanguage;
-  intentAnalysis: MonaIntentAnalysis;
-  hardcodedFaqMatches: ReturnType<typeof selectRelevantHardcodedFaq>;
-  knowledgeMatches: KnowledgeMatch[];
-}): Promise<AuthoritativeTetamoSource> {
-  const hardcodedCandidates = params.hardcodedFaqMatches.map(
-    ({ item, score }, index) => ({
-      key: `H${index + 1}`,
-      sourceType: "hardcoded" as const,
-      sourceId: item.topic,
-      topic: item.topic,
-      approvedAnswer: getApprovedHardcodedAnswer(item, params.language),
-      score,
-    })
-  );
-
-  const knowledgeCandidates = params.knowledgeMatches.map(
-    ({ entry, score }, index) => ({
-      key: `K${index + 1}`,
-      sourceType: "knowledge_base" as const,
-      sourceId: entry.id,
-      topic: entry.category || entry.canonical_question || "Knowledge Base",
-      approvedAnswer: String(entry.approved_answer || "").trim(),
-      score,
-    })
-  );
-
-  const candidates = [...hardcodedCandidates, ...knowledgeCandidates].filter(
-    (candidate) => candidate.approvedAnswer
-  );
-
-  if (!candidates.length) {
-    return {
-      sourceType: "none",
-      sourceId: null,
-      topic: params.intentAnalysis.topic,
-      approvedAnswer: "",
-      confidence: 0,
-    };
-  }
-
-  // Strong direct hardcoded matches are authoritative immediately. This protects
-  // critical company, pricing, package and policy facts from generative drift.
-  const directHardcoded = hardcodedCandidates.find((candidate) => candidate.score >= 12);
-  if (directHardcoded) {
-    return {
-      sourceType: directHardcoded.sourceType,
-      sourceId: directHardcoded.sourceId,
-      topic: directHardcoded.topic,
-      approvedAnswer: directHardcoded.approvedAnswer,
-      confidence: 100,
-    };
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    const best = candidates.sort((a, b) => b.score - a.score)[0];
-    return {
-      sourceType: best.sourceType,
-      sourceId: best.sourceId,
-      topic: best.topic,
-      approvedAnswer: best.approvedAnswer,
-      confidence: Math.min(99, Math.max(1, Math.round(best.score * 5))),
-    };
-  }
-
-  const candidateText = candidates
-    .map(
-      (candidate) =>
-        `${candidate.key}\nSource: ${candidate.sourceType}\nTopic: ${candidate.topic}\nApproved answer: ${candidate.approvedAnswer}`
-    )
-    .join("\n\n");
-
-  const prompt = `
-You select the single authoritative Tetamo answer for a WhatsApp customer.
-Do not answer the customer. Do not rewrite facts.
-
-Use the full conversation meaning, not keyword similarity alone.
-Choose the ONE candidate that directly answers the customer's current question.
-Hardcoded and Knowledge Base answers are both approved Tetamo sources.
-If a hardcoded answer and Knowledge Base answer conflict, choose hardcoded.
-If none of the candidates actually answers the current question, return NONE.
-
-UNDERSTOOD QUESTION:
-${params.intentAnalysis.understoodQuestion}
-
-CUSTOMER TYPE:
-${params.intentAnalysis.customerType}
-
-TOPIC:
-${params.intentAnalysis.topic}
-
-RECENT CONVERSATION:
-${params.conversationContext || "No earlier conversation."}
-
-LATEST CUSTOMER MESSAGE:
-${params.customerMessage}
-
-APPROVED CANDIDATES:
-${candidateText}
-
-Return only valid JSON:
-{"key":"H1","confidence":98}
-or
-{"key":"NONE","confidence":0}
-`.trim();
-
-  try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-      temperature: 0,
-      max_output_tokens: 120,
-    });
-
-    const raw = String(response.output_text || "")
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-    const parsed = JSON.parse(raw) as { key?: string; confidence?: number };
-    const key = String(parsed.key || "NONE").trim();
-    const selected = candidates.find((candidate) => candidate.key === key);
-
-    if (!selected) {
-      return {
-        sourceType: "none",
-        sourceId: null,
-        topic: params.intentAnalysis.topic,
-        approvedAnswer: "",
-        confidence: 0,
-      };
-    }
-
-    return {
-      sourceType: selected.sourceType,
-      sourceId: selected.sourceId,
-      topic: selected.topic,
-      approvedAnswer: selected.approvedAnswer,
-      confidence: Math.max(0, Math.min(100, Number(parsed.confidence || 0))),
-    };
-  } catch (error) {
-    console.error("Failed to select authoritative Tetamo source:", error);
-    const best = candidates.sort((a, b) => b.score - a.score)[0];
-    return {
-      sourceType: best.sourceType,
-      sourceId: best.sourceId,
-      topic: best.topic,
-      approvedAnswer: best.approvedAnswer,
-      confidence: 50,
-    };
-  }
-}
-
-function hasCriticalFactualContradiction(
-  approvedAnswer: string,
-  proposedReply: string
-) {
-  const source = normalizeIntentText(approvedAnswer);
-  const reply = normalizeIntentText(proposedReply);
-
-  // Company-office protection: an approved Sydney/Australia office answer can
-  // never be rewritten as "no physical office" or "online only".
-  if (
-    (source.includes("office in sydney") ||
-      source.includes("kantor di sydney") ||
-      source.includes("office") && source.includes("sydney")) &&
-    containsPattern(reply, [
-      "tidak memiliki kantor",
-      "tidak punya kantor",
-      "tidak ada kantor",
-      "no physical office",
-      "does not have an office",
-      "doesn't have an office",
-      "online only",
-      "sepenuhnya online",
-    ])
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-async function verifyGroundedMonaReply(params: {
-  customerMessage: string;
-  approvedAnswer: string;
-  proposedReply: string;
-}) {
-  if (!params.approvedAnswer) return true;
-  if (hasCriticalFactualContradiction(params.approvedAnswer, params.proposedReply)) {
-    return false;
-  }
-  if (!process.env.OPENAI_API_KEY) return true;
-
-  const prompt = `
-You are a strict factual verifier.
-Compare Mona's proposed WhatsApp reply with the approved Tetamo answer.
-
-APPROVED TETAMO ANSWER:
-${params.approvedAnswer}
-
-CUSTOMER MESSAGE:
-${params.customerMessage}
-
-PROPOSED REPLY:
-${params.proposedReply}
-
-PASS only when every Tetamo factual claim in the proposed reply is supported by and consistent with the approved answer.
-FAIL if it changes, negates, contradicts, invents, omits a crucial requested fact, changes a number, price, duration, package, company detail, location, link, policy or promise.
-Tone changes and concise paraphrasing are allowed.
-Return exactly PASS or FAIL.
-`.trim();
-
-  try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-      temperature: 0,
-      max_output_tokens: 10,
-    });
-    return String(response.output_text || "").trim().toUpperCase() === "PASS";
-  } catch (error) {
-    console.error("Failed to verify grounded Mona reply:", error);
-    return false;
-  }
-}
 
 function applySalesStageToSalesContext(
   salesContext: SalesContext,
@@ -4872,7 +4626,8 @@ function buildMonaPrompt(params: {
   conversationContext: string | null;
   campaignContext: CampaignContext | null;
   intentAnalysis: MonaIntentAnalysis;
-  authoritativeSource: AuthoritativeTetamoSource;
+  hardcodedFaqMatches: ReturnType<typeof selectRelevantHardcodedFaq>;
+  knowledgeMatches: KnowledgeMatch[];
   salesContext: SalesContext;
   relevantSalesPlaybook: SalesPlaybookEntry[];
   salesStage: SalesStage | null;
@@ -4889,52 +4644,69 @@ function buildMonaPrompt(params: {
   return `
 You are Mona from Tetamo, replying to a customer through WhatsApp.
 
-NON-NEGOTIABLE FACT RULE:
-The AUTHORITATIVE TETAMO ANSWER below is the factual source for the customer's current question.
-You are NOT allowed to change its factual meaning.
-You may only make it sound natural, concise, friendly and appropriate for WhatsApp.
-Do not negate, replace, reinterpret or contradict any fact in it.
-Do not add new Tetamo facts that are not supported by the authoritative answer.
-Prices, package names, limits, durations, addresses/locations, company registration, ABN, links, policies and payment instructions must remain exact.
-If the authoritative answer says Tetamo has an office in Sydney, you MUST preserve that fact and must never say Tetamo has no physical office.
+YOUR WORKING ORDER:
+1. Understand the latest message from the full recent conversation.
+2. Answer the customer's actual question first.
+3. Use only the approved Tetamo facts supplied below.
+4. Apply the relevant universal sales skill: explain value, handle an objection, compare, recommend, motivate, close, respect rejection, or provide a next step.
+5. Write naturally in the customer's language and WhatsApp style.
 
-AUTHORITATIVE TETAMO ANSWER:
-Source type: ${params.authoritativeSource.sourceType}
-Source ID: ${params.authoritativeSource.sourceId || "none"}
-Topic: ${params.authoritativeSource.topic}
-Approved answer:
-${params.authoritativeSource.approvedAnswer || "No approved factual answer was selected."}
-
-SALES ROLE:
-- Answer the customer's current question first.
-- You may apply universal sales skill around the approved facts: explain value, handle objections, compare, recommend, motivate, close, respect rejection, or give the next step.
-- Sales technique never authorises changing Tetamo facts.
-- Never guarantee leads, sales, rentals, ROI, income, buyers or results.
-- Never pressure, manipulate, shame or create false urgency.
+CRITICAL FACTUAL BOUNDARY:
+- You may reason about sales and communication.
+- You may personalise the explanation.
+- You may use natural Indonesian, normal WhatsApp wording, abbreviations or light slang when appropriate.
+- You must not invent or change Tetamo facts.
+- Never change prices, package names, listing limits, durations, benefits, links, company information, policies, payment instructions or promises.
+- Never guarantee leads, sales, rentals, income, ROI, buyers or results.
+- When a hardcoded FAQ answer and Knowledge Base answer conflict, use the hardcoded FAQ answer.
+- When no approved factual source supports a requested claim, say that the available information does not confirm it. Do not guess.
 
 LANGUAGE AND TONE:
 - Detected language: ${params.language}
-- Use natural Indonesian for Indonesian customers and natural English for English customers.
-- Understand and naturally use normal Indonesian WhatsApp style/slang when appropriate: brp, gmn, udh, sdh, blm, sy, yg, ga, gak, nggak, min, kak, bu, pak.
+- Indonesian customer: reply naturally in Indonesian.
+- English customer: reply naturally in English.
+- Mixed message: use the main language naturally.
+- Understand normal Indonesian slang and spelling such as brp, gmn, udh, sdh, blm, sy, yg, ga, gak, nggak, min, kak, bu and pak.
 - Friendly, human, commercially confident and concise.
 - Do not sound like a robotic FAQ.
+- Do not introduce yourself repeatedly.
 - Use no more than one subtle emoji.
-- Ask at most one question, only when genuinely useful.
+- Ask at most one question, and only when it is genuinely needed.
+- Never pressure, manipulate, shame or create false urgency.
 
-UNDERSTOOD CUSTOMER INTENT:
-Meaning: ${params.intentAnalysis.understoodQuestion}
-Customer type: ${params.intentAnalysis.customerType}
-Sales situation: ${params.intentAnalysis.salesSituation}
+CONVERSATION UNDERSTANDING:
+- Understood latest meaning: ${params.intentAnalysis.understoodQuestion}
+- Retrieval topic: ${params.intentAnalysis.topic}
+- Customer type: ${params.intentAnalysis.customerType}
+- Sales situation: ${params.intentAnalysis.salesSituation}
+- Retrieval query used: ${params.intentAnalysis.retrievalQuery}
 
-OFFICIAL SALES CONTEXT:
+OFFICIAL ADMIN SALES STAGE:
 ${formatSalesStageContext(params.salesStage)}
+- Continue from the current conversation.
+- Never mention internal sales stages or database classifications.
+
+DETECTED SALES CONTEXT:
 ${formatSalesContext(params.salesContext)}
+- Use this for recommendations and the next sales action.
+- The direct customer question always comes first.
+- Do not repeat information or questions already answered.
 
 RELEVANT SALES GUIDANCE:
 ${formatRelevantSalesPlaybook(params.relevantSalesPlaybook)}
+- Use this as sales technique and approved handling.
+- It does not authorise changing factual Tetamo information.
 
-RECENT TEMPLATE CONTEXT:
+SELECTED HARDCODED TETAMO FACTS:
+${formatRelevantHardcodedFaq(params.hardcodedFaqMatches)}
+
+SELECTED APPROVED KNOWLEDGE BASE FACTS:
+${formatKnowledgeMatches(params.knowledgeMatches)}
+
+RECENT BUSINESS-INITIATED TEMPLATE CONTEXT:
 ${campaignText}
+- Use only to understand what the customer is replying to.
+- Never mention internal template metadata.
 
 RECENT CONVERSATION:
 ${params.conversationContext || "No earlier conversation context."}
@@ -4942,12 +4714,15 @@ ${params.conversationContext || "No earlier conversation context."}
 LATEST CUSTOMER MESSAGE:
 ${params.customerMessage}
 
-FINAL RESPONSE:
-- Write only Mona's final WhatsApp reply.
-- Do not return JSON or labels.
-- Keep simple factual replies to 1–3 short sentences.
+FINAL RESPONSE REQUIREMENTS:
+- Give only Mona's final WhatsApp reply.
+- Do not return JSON.
+- Do not add “Mona:” or “Tetamo:” labels.
+- Keep a simple answer to 1–3 short sentences.
+- A detailed answer may be longer only when the customer asks for steps or a full comparison.
+- Do not dump unrelated packages, features or links.
 - Do not repeat the introduction.
-- If no authoritative factual answer was selected and the customer is asking for a Tetamo fact, do not guess; say the information is not confirmed and needs checking.
+- If the message is genuinely impossible to understand even with context, output exactly [[HANDOVER_UNREADABLE]].
 `.trim();
 }
 
@@ -5622,6 +5397,36 @@ function getDeterministicReplyDecision(params: {
     };
   }
 
+  const normalized = normalizeIntentText(message);
+
+  // Critical company fact: answer directly from approved hardcoded Tetamo data.
+  // This is intentionally narrow so Mona keeps her normal contextual/human flow
+  // for agent, owner, package, objection, sales and follow-up conversations.
+  if (
+    containsPattern(normalized, [
+      "kantor dimana",
+      "kantor di mana",
+      "kantor tetamo dimana",
+      "kantor tetamo di mana",
+      "lokasi kantor",
+      "office dimana",
+      "where is the office",
+      "where is tetamo office",
+      "where is tetamo based",
+      "tetamo based where",
+      "alamat kantor",
+    ])
+  ) {
+    return {
+      action: "reply",
+      reason: "critical_company_office_fact",
+      reply:
+        language === "en"
+          ? "Tetamo operates under Tetamo Pty Ltd and has an office in Sydney, New South Wales, Australia. Tetamo Pty Ltd is registered under ABN 18 689 780 970. Tetamo serves Indonesia’s property market digitally through the Tetamo website and app."
+          : "Tetamo beroperasi di bawah Tetamo Pty Ltd dan memiliki kantor di Sydney, New South Wales, Australia. Tetamo Pty Ltd terdaftar dengan ABN 18 689 780 970. Tetamo melayani pasar properti Indonesia secara digital melalui website dan aplikasi Tetamo.",
+    };
+  }
+
   return { action: "continue" };
 }
 
@@ -5841,15 +5646,6 @@ async function generateMonaReply(params: {
         )
       : [];
 
-    const authoritativeSource = await selectAuthoritativeTetamoSource({
-      customerMessage: params.customerMessage,
-      conversationContext,
-      language,
-      intentAnalysis,
-      hardcodedFaqMatches,
-      knowledgeMatches,
-    });
-
     console.log("Mona contextual retrieval completed.", {
       conversationId: params.conversationId,
       understoodQuestion: intentAnalysis.understoodQuestion,
@@ -5866,12 +5662,6 @@ async function generateMonaReply(params: {
         category: entry.category,
         score,
       })),
-      authoritativeSource: {
-        sourceType: authoritativeSource.sourceType,
-        sourceId: authoritativeSource.sourceId,
-        topic: authoritativeSource.topic,
-        confidence: authoritativeSource.confidence,
-      },
     });
 
     const prompt = buildMonaPrompt({
@@ -5880,7 +5670,8 @@ async function generateMonaReply(params: {
       conversationContext,
       campaignContext: params.campaignContext,
       intentAnalysis,
-      authoritativeSource,
+      hardcodedFaqMatches,
+      knowledgeMatches,
       salesContext,
       relevantSalesPlaybook,
       salesStage: params.salesStage,
@@ -5903,44 +5694,28 @@ async function generateMonaReply(params: {
       };
     }
 
-    const approvedSourceFallback = authoritativeSource.approvedAnswer || fallbackReply;
+    const approvedSourceFallback =
+      language === "en"
+        ? hardcodedFaqMatches[0]?.item.answerEn ||
+          knowledgeMatches[0]?.entry.approved_answer
+        : hardcodedFaqMatches[0]?.item.answerId ||
+          knowledgeMatches[0]?.entry.approved_answer;
 
-    const cleanedCandidate = cleanFinalReply(
-      rawReply || approvedSourceFallback,
+    const cleanedReply = cleanFinalReply(
+      rawReply || approvedSourceFallback || fallbackReply,
       params.customerMessage
     );
-
-    const grounded = authoritativeSource.approvedAnswer
-      ? await verifyGroundedMonaReply({
-          customerMessage: params.customerMessage,
-          approvedAnswer: authoritativeSource.approvedAnswer,
-          proposedReply: cleanedCandidate,
-        })
-      : true;
-
-    const factualReply = grounded
-      ? cleanedCandidate
-      : cleanFinalReply(approvedSourceFallback, params.customerMessage);
-
-    if (!grounded) {
-      console.error("Blocked Mona reply because it changed approved Tetamo facts.", {
-        conversationId: params.conversationId,
-        sourceType: authoritativeSource.sourceType,
-        sourceId: authoritativeSource.sourceId,
-        proposedReply: cleanedCandidate,
-      });
-    }
 
     return {
       action: "reply",
       replies: [
         validateMonaReply({
-          reply: factualReply,
+          reply: cleanedReply,
           customerMessage: params.customerMessage,
           conversationContext,
         }),
       ].filter(Boolean),
-      source: grounded && rawReply ? "openai" : "fallback",
+      source: rawReply ? "openai" : "fallback",
     };
   } catch (error) {
     console.error("Meta WhatsApp contextual Mona generation failed:", error);
