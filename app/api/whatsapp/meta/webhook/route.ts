@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import {
+  generateAgentSalesGuidance,
+  type AgentSalesGuidance,
+} from "../../../../lib/mona/sales-agent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1975,6 +1979,24 @@ function isMediaOrUnsupportedMessage(message: MetaMessage) {
   ].includes(type);
 }
 
+function isEmojiOnlyText(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+
+  const remaining = raw
+    // Remove keycap emoji sequences first so their digit/#/* base is removed too.
+    .replace(/[0-9#*]\uFE0F?\u20E3/gu, "")
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/\p{Regional_Indicator}/gu, "")
+    .replace(/\p{Emoji_Modifier}/gu, "")
+    .replace(/[\u200D\uFE0E\uFE0F]/gu, "")
+    // Allow punctuation around an emoji, e.g. "😂!!"
+    .replace(/[\s\p{P}]/gu, "")
+    .trim();
+
+  return remaining.length === 0;
+}
+
 function isClearlyUnreadableMessage(value?: string | null) {
   const raw = String(value || "").trim();
 
@@ -3818,6 +3840,45 @@ function formatRelevantSalesPlaybook(entries: SalesPlaybookEntry[]) {
     .join("\n\n");
 }
 
+function formatAgentSalesGuidance(
+  guidance: AgentSalesGuidance | null
+) {
+  if (!guidance) {
+    return "No Agent Sales AI guidance was requested for this conversation.";
+  }
+
+  const known = guidance.knownInformation;
+
+  return [
+    `Customer type: ${guidance.customerType}`,
+    `Known experience: ${known.experience || "unknown"}`,
+    `Known listing count: ${
+      known.listingCount === null ? "unknown" : known.listingCount
+    }`,
+    `Known agent type: ${known.agentType || "unknown"}`,
+    `Known advertising channels: ${known.currentAdvertising || "unknown"}`,
+    `Known problem: ${known.problem || "unknown"}`,
+    `Package discussed: ${known.packageDiscussed || "none"}`,
+    `Package selected: ${known.packageSelected || "none"}`,
+    `Payment status: ${known.paymentStatus || "unknown"}`,
+    `Customer intent: ${guidance.customerIntent}`,
+    `Sales state: ${guidance.salesState}`,
+    `Buying signal: ${guidance.buyingSignal}`,
+    `Objection: ${guidance.objection || "none"}`,
+    `Recommended objective: ${guidance.recommendedObjective}`,
+    `Recommended direction: ${guidance.recommendedDirection}`,
+    `Reason: ${guidance.reason}`,
+    `Should ask a question: ${guidance.shouldAskQuestion ? "yes" : "no"}`,
+    `Do not ask again: ${guidance.doNotAsk.join(", ") || "none"}`,
+    `Pressure level: ${guidance.pressureLevel}`,
+    `Needs Tetamo facts: ${guidance.needsTetamoFacts ? "yes" : "no"}`,
+    `Facts needed: ${guidance.factsNeeded.join(", ") || "none"}`,
+    `Handover recommended: ${
+      guidance.handoverRecommended ? "yes" : "no"
+    }`,
+  ].join("\n");
+}
+
 function isIntroductoryTetamoInquiry(message: string) {
   const normalized = normalizeIntentText(message);
 
@@ -3852,9 +3913,15 @@ function getMandatorySalesSequence(params: {
     String(params.conversationContext || "").trim()
   );
 
-  // Every genuinely new customer-initiated conversation receives the same
-  // approved Tetamo introduction before Mona starts contextual selling.
+  // Use the approved two-message introduction only for a genuinely
+  // introductory Tetamo enquiry. A new customer asking a specific question
+  // must receive an answer to that question instead of being forced through
+  // the generic introduction.
   if (!hasEarlierConversation) {
+    if (!isIntroductoryTetamoInquiry(params.customerMessage)) {
+      return null;
+    }
+
     const base = INTRO_SALES_SEQUENCE[params.language];
     return [base.answer, base.qualification];
   }
@@ -4629,6 +4696,7 @@ function buildMonaPrompt(params: {
   hardcodedFaqMatches: ReturnType<typeof selectRelevantHardcodedFaq>;
   knowledgeMatches: KnowledgeMatch[];
   salesContext: SalesContext;
+  agentSalesGuidance: AgentSalesGuidance | null;
   relevantSalesPlaybook: SalesPlaybookEntry[];
   salesStage: SalesStage | null;
 }) {
@@ -4686,7 +4754,16 @@ ${formatSalesStageContext(params.salesStage)}
 - Continue from the current conversation.
 - Never mention internal sales stages or database classifications.
 
-DETECTED SALES CONTEXT:
+INTERNAL AGENT SALES AI GUIDANCE:
+${formatAgentSalesGuidance(params.agentSalesGuidance)}
+- This is private strategic guidance. Never mention or expose it to the customer.
+- When present, use it to decide the best sales objective for this agent conversation.
+- It is guidance, not customer-facing wording. Write the actual response naturally yourself.
+- Never repeat anything listed under "Do not ask again".
+- If this Agent Sales AI guidance conflicts with a legacy discovery question or required next sales action below, follow the Agent Sales AI for SALES STRATEGY.
+- Approved Tetamo facts, prices, policies and links still come only from the approved factual sources below.
+
+DETECTED LEGACY SALES CONTEXT:
 ${formatSalesContext(params.salesContext)}
 - Use this for recommendations and the next sales action.
 - The direct customer question always comes first.
@@ -5338,13 +5415,50 @@ function isLikelyAutomaticBusinessReply(
 }
 
 function isClearRejection(message: string) {
-  return containsPattern(message, [
-    "tidak jadi", "ga jadi", "gak jadi", "nggak jadi", "ngga jadi",
-    "kalau bayar ogah", "kalo bayar ogah", "tidak tertarik", "ga tertarik",
-    "gak tertarik", "nggak tertarik", "saya batal", "tidak perlu",
-    "gak mau", "ga mau", "nggak mau", "no thanks", "not interested",
-    "dont contact me", "don't contact me", "jangan hubungi lagi",
-    "berhenti promosi", "stop promotion"
+  const normalized = normalizeIntentText(message);
+
+  // Short generic refusals count as rejection only when they are the whole
+  // message. This prevents messages such as "nggak mau Gold, saya mau Silver"
+  // from being mistaken for a complete rejection.
+  const exactShortRejections = new Set([
+    "tidak jadi",
+    "ga jadi",
+    "gak jadi",
+    "nggak jadi",
+    "ngga jadi",
+    "tidak mau",
+    "ga mau",
+    "gak mau",
+    "nggak mau",
+    "ngga mau",
+    "saya batal",
+    "tidak perlu",
+    "no thanks",
+  ]);
+
+  if (exactShortRejections.has(normalized)) {
+    return true;
+  }
+
+  return containsPattern(normalized, [
+    "kalau bayar ogah",
+    "kalo bayar ogah",
+    "tidak tertarik",
+    "ga tertarik",
+    "gak tertarik",
+    "nggak tertarik",
+    "ngga tertarik",
+    "tidak mau lanjut",
+    "ga mau lanjut",
+    "gak mau lanjut",
+    "nggak mau lanjut",
+    "ngga mau lanjut",
+    "not interested",
+    "dont contact me",
+    "don't contact me",
+    "jangan hubungi lagi",
+    "berhenti promosi",
+    "stop promotion",
   ]);
 }
 
@@ -5635,13 +5749,50 @@ async function generateMonaReply(params: {
       salesStage: params.salesStage,
     });
 
+    const resolvedCustomerType =
+      intentAnalysis.customerType !== "unknown"
+        ? intentAnalysis.customerType
+        : detectedSalesContext.customerType;
+
+    const agentSalesGuidance =
+      resolvedCustomerType === "agent"
+        ? await generateAgentSalesGuidance({
+            customerMessage: params.customerMessage,
+            conversationContext,
+            salesStage: params.salesStage,
+          })
+        : null;
+
+    if (agentSalesGuidance) {
+      console.log("Agent Sales AI guidance completed.", {
+        conversationId: params.conversationId,
+        objective: agentSalesGuidance.recommendedObjective,
+        buyingSignal: agentSalesGuidance.buyingSignal,
+        shouldAskQuestion: agentSalesGuidance.shouldAskQuestion,
+        doNotAsk: agentSalesGuidance.doNotAsk,
+        needsTetamoFacts: agentSalesGuidance.needsTetamoFacts,
+        factsNeeded: agentSalesGuidance.factsNeeded,
+      });
+    }
+
+    const needsApprovedFacts =
+      intentAnalysis.needsFactualKnowledge ||
+      agentSalesGuidance?.needsTetamoFacts === true;
+
+    const factualRetrievalQuery = [
+      intentAnalysis.retrievalQuery,
+      ...(agentSalesGuidance?.factsNeeded || []),
+    ]
+      .filter(Boolean)
+      .join(". ");
+
     const hardcodedFaqMatches = selectRelevantHardcodedFaq(
-      intentAnalysis.retrievalQuery
+      factualRetrievalQuery
     );
 
-    const knowledgeMatches = intentAnalysis.needsFactualKnowledge
+    const knowledgeMatches = needsApprovedFacts
       ? await searchApprovedKnowledge(
-          intentAnalysis.retrievalQuery,
+          factualRetrievalQuery,
           language
         )
       : [];
@@ -5652,7 +5803,7 @@ async function generateMonaReply(params: {
       topic: intentAnalysis.topic,
       customerType: intentAnalysis.customerType,
       salesSituation: intentAnalysis.salesSituation,
-      retrievalQuery: intentAnalysis.retrievalQuery,
+      retrievalQuery: factualRetrievalQuery,
       hardcodedFaqMatches: hardcodedFaqMatches.map(({ item, score }) => ({
         topic: item.topic,
         score,
@@ -5673,6 +5824,7 @@ async function generateMonaReply(params: {
       hardcodedFaqMatches,
       knowledgeMatches,
       salesContext,
+      agentSalesGuidance,
       relevantSalesPlaybook,
       salesStage: params.salesStage,
     });
@@ -5994,6 +6146,19 @@ export async function POST(request: Request) {
       }
 
       if (isReactionMessage(item.message)) {
+        processedCount += 1;
+        ignoredCount += 1;
+        continue;
+      }
+
+      if (
+        String(item.message.type || "").toLowerCase() === "text" &&
+        isEmojiOnlyText(readableText)
+      ) {
+        console.log("Ignored emoji-only customer message.", {
+          conversationId: conversation.id,
+        });
+
         processedCount += 1;
         ignoredCount += 1;
         continue;
