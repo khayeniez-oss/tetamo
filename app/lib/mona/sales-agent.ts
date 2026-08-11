@@ -434,9 +434,29 @@ function applyDeterministicAgentSalesGuards(
       recommendedObjective === "handle_objection")
   ) {
     needsTetamoFacts = true;
-    factsNeeded.add(
-      "approved Tetamo features and value relevant to the agent's stated problem"
-    );
+
+    if (discussesPerformanceProblem) {
+      factsNeeded.clear();
+
+      factsNeeded.add(
+        "approved Tetamo listing presentation features"
+      );
+      factsNeeded.add(
+        "approved Tetamo direct WhatsApp enquiry features"
+      );
+      factsNeeded.add(
+        "approved Tetamo leads dashboard and enquiry-management features"
+      );
+      factsNeeded.add(
+        "approved Tetamo viewing scheduling features"
+      );
+
+      recommendedDirection =
+        "Explain only the approved Tetamo features that may be relevant to the agent's workflow, such as listing presentation, direct WhatsApp enquiries, leads management or viewing scheduling when supported by approved facts. Do not say or imply that Tetamo filters serious buyers, reduces curious enquiries, improves lead quality, improves conversion, creates more serious prospects, increases enquiries, or improves sales, rentals or closing results.";
+
+      reason =
+        "The customer has a lead-quality or performance concern. Mona may explain relevant Tetamo tools, but must not turn those tools into an unsupported performance claim.";
+    }
   }
 
   const asksAboutPayment =
