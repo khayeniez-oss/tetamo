@@ -50,6 +50,7 @@ export async function routeMonaSalesStrategy(
       customerMessage: params.customerMessage,
       conversationContext: params.conversationContext,
       salesStage: params.salesStage,
+      brainRecommendedNextStep: params.brain.recommendedNextStep,
     });
 
     return {

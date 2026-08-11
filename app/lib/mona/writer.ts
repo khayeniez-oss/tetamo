@@ -474,6 +474,12 @@ ${salesText}
 APPROVED TETAMO INFORMATION:
 ${approvedFacts}
 
+FACT BOUNDARY FOR THIS REPLY:
+- Do not mention or imply any promotion, promo, discount, special offer, campaign offer, bonus, or deal unless it is explicitly present in APPROVED TETAMO INFORMATION above.
+- A campaign-related remembered fact only provides conversation context. It does not prove what the campaign offered.
+- Do not invent campaign content from a template name, customer type, sales guidance, or the customer's short affirmative reply.
+- If no Tetamo factual information is required, keep the reply conversational and ask only the useful clarification allowed by the strategist.
+
 FULL AVAILABLE CONVERSATION FROM THE BEGINNING:
 ${memoryText}
 
@@ -525,6 +531,21 @@ Write Mona's final WhatsApp reply now.
 
     if (!raw) {
       return fallbackReply(params);
+    }
+
+    const unsupportedPerformanceClaim =
+      /(?:bantu|membantu|meningkatkan|improve|improves|increase|increases|boost|boosts|lebih\s+baik|better)\s+(?:closing|conversion|konversi|lead\s+quality|kualitas\s+lead|sales|penjualan|rentals?|penyewaan)|(?:jamin|menjamin|guarantee|guaranteed)\s+(?:lead|leads|closing|sales|penjualan|rentals?|penyewaan)|(?:filter|menyaring|qualify|memfilter)\s+(?:buyer|buyers|pembeli|lead|leads|inquiry|enquiry)|(?:serious|serius)\s+(?:buyer|buyers|pembeli|lead|leads)/i.test(
+        raw
+      );
+
+    if (unsupportedPerformanceClaim) {
+      return {
+        action: "handover",
+        reply: "",
+        source: "fallback",
+        reason:
+          "Mona generated an unsupported performance claim and the reply was blocked before sending.",
+      };
     }
 
     return {

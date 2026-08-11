@@ -379,9 +379,6 @@ function isLikelyAutomaticBusinessReply(
 
   if (!text) return false;
 
-  // Never suppress something that looks like a genuine customer question/intention.
-  if (looksLikeRealCustomerIntent(text)) return false;
-
   const exactReplies = new Set([
     "thank you",
     "thanks",
@@ -405,7 +402,7 @@ function isLikelyAutomaticBusinessReply(
 
   if (exactReplies.has(text)) return true;
 
-  return includesAny(text, [
+  const strongAutomaticReplyPatterns = [
     "thank you for contacting",
     "thanks for contacting",
     "thank you for reaching out",
@@ -443,7 +440,20 @@ function isLikelyAutomaticBusinessReply(
     "jam operasional kami",
     "pesan otomatis",
     "balasan otomatis",
-  ]);
+  ];
+
+  // Strong automatic greeting/away signatures take priority even when the
+  // business name itself contains words such as "Property" or "Agent".
+  if (includesAny(text, strongAutomaticReplyPatterns)) {
+    return true;
+  }
+
+  // Otherwise, preserve genuine customer questions and intentions.
+  if (looksLikeRealCustomerIntent(text)) {
+    return false;
+  }
+
+  return false;
 }
 
 export function evaluateMonaSafety(

@@ -194,21 +194,45 @@ function buildStructuredPackageFacts(
     query.includes("agen") ||
     query.includes("agency")
   ) {
-    const agentFacts = AGENT_PACKAGES.map((item) => {
-      const monthly =
-        item.monthlyPriceIdr && item.monthlyCommitmentMonths
-          ? ` | Monthly option: ${formatIdr(item.monthlyPriceIdr)} with ${item.monthlyCommitmentMonths}-month commitment`
-          : "";
+    const specificallyNamedAgentPackage =
+      query.includes("agent pro")
+        ? "agent pro"
+        : query.includes("silver")
+          ? "silver"
+          : query.includes("gold")
+            ? "gold"
+            : null;
 
-      return [
-        `${item.name}`,
-        `Yearly price: ${formatIdr(item.priceIdr)}${monthly}`,
-        `Duration: ${item.durationDays} days`,
-        `Max listings: ${item.maxListings}`,
-        `Features: ${item.features.join(" | ")}`,
-        `Billing: ${item.billingNote}`,
-      ].join("\n");
-    }).join("\n\n");
+    const asksBillingDetails =
+      /\b(?:billing|tagihan|bulanan|monthly|tahunan|yearly|renew|renewal|auto renew|perpanjang|komitmen|commitment|cicilan)\b/i.test(
+        query
+      );
+
+    const selectedAgentPackages = specificallyNamedAgentPackage
+      ? AGENT_PACKAGES.filter(
+          (item) => normalize(item.name) === specificallyNamedAgentPackage
+        )
+      : AGENT_PACKAGES;
+
+    const agentFacts = selectedAgentPackages
+      .map((item) => {
+        const monthly =
+          asksBillingDetails &&
+          item.monthlyPriceIdr &&
+          item.monthlyCommitmentMonths
+            ? ` | Monthly option: ${formatIdr(item.monthlyPriceIdr)} with ${item.monthlyCommitmentMonths}-month commitment`
+            : "";
+
+        return [
+          `${item.name}`,
+          `Yearly price: ${formatIdr(item.priceIdr)}${monthly}`,
+          `Duration: ${item.durationDays} days`,
+          `Max listings: ${item.maxListings}`,
+          `Features: ${item.features.join(" | ")}`,
+          ...(asksBillingDetails ? [`Billing: ${item.billingNote}`] : []),
+        ].join("\n");
+      })
+      .join("\n\n");
 
     sections.push(`AUTHORITATIVE AGENT PACKAGE DATA\n${agentFacts}`);
   }
@@ -293,7 +317,7 @@ export async function retrieveMonaKnowledge(
     })
   );
 
-  const matches = entries
+  const rankedMatches = entries
     .filter((entry) =>
       languageMatches(entry.language, params.language)
     )
@@ -305,8 +329,14 @@ export async function retrieveMonaKnowledge(
       ),
     }))
     .filter((match) => match.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
+    .sort((a, b) => b.score - a.score);
+
+  const bestScore = rankedMatches[0]?.score || 0;
+  const minimumRelevantScore = Math.max(12, bestScore * 0.72);
+
+  const matches = rankedMatches
+    .filter((match) => match.score >= minimumRelevantScore)
+    .slice(0, 3);
 
   const structuredPackageFacts = buildStructuredPackageFacts(
     params.brain,

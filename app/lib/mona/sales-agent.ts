@@ -31,6 +31,7 @@ type GenerateAgentSalesGuidanceParams = {
   customerMessage: string;
   conversationContext: string | null;
   salesStage?: string | null;
+  brainRecommendedNextStep?: string | null;
 };
 
 const AGENT_SALES_PLAYBOOK = `
@@ -407,6 +408,22 @@ function applyDeterministicAgentSalesGuards(
   let needsTetamoFacts = guidance.needsTetamoFacts;
   const factsNeeded = new Set(guidance.factsNeeded);
 
+  const brainRequiresAgentPackageContinuation =
+    /agent membership or package conversation/i.test(
+      params.brainRecommendedNextStep || ""
+    );
+
+  if (brainRequiresAgentPackageContinuation) {
+    recommendedObjective = "continue_discovery";
+    recommendedDirection =
+      "Stay specifically in the Tetamo agent membership/package journey. If one clarification is useful, ask only about the agent membership or package they want to know about. Do not branch into owner listing, sell-versus-rent, generic listing needs, promotions, leads, closing, or unrelated discovery.";
+    reason =
+      "Mona Brain already identified this as a short affirmative continuation of an agent-focused Tetamo campaign, so the sales journey must not restart from zero.";
+    shouldAskQuestion = true;
+    needsTetamoFacts = false;
+    factsNeeded.clear();
+  }
+
   // If the problem is already known, do not ask Mona to discover it again.
   if (known.problem && recommendedObjective === "understand_problem") {
     recommendedObjective = "explain_relevant_value";
@@ -504,6 +521,9 @@ ${AGENT_SALES_PLAYBOOK}
 
 OFFICIAL SALES STAGE:
 ${params.salesStage || "none"}
+
+MONA BRAIN DIRECTION:
+${params.brainRecommendedNextStep || "No additional Brain direction."}
 
 RECENT CONVERSATION:
 ${params.conversationContext || "No earlier conversation."}

@@ -698,6 +698,45 @@ Do not include markdown.
       fallback
     );
 
+    const campaignTemplateName = String(
+      params.campaignContext?.templateName || ""
+    ).toLowerCase();
+
+    const shortAffirmativeCampaignReply =
+      /^(?:ya|iya|y|yes|mau|boleh|ok|oke|okay|interested|minat|info|lanjut)$/i.test(
+        params.latestCustomerMessage.trim()
+      );
+
+    const campaignClearlyAgentFocused =
+      /(?:agent|agen)/i.test(campaignTemplateName);
+
+    if (
+      shortAffirmativeCampaignReply &&
+      campaignClearlyAgentFocused
+    ) {
+      decision = {
+        ...decision,
+        customerType: "agent",
+        conversationSituation: "interest",
+        salesStrategyNeeded: true,
+        salesStrategist: "agent",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        directQuestion: null,
+        knownContext: {
+          ...decision.knownContext,
+          importantFacts: Array.from(
+            new Set([
+              ...decision.knownContext.importantFacts,
+              "customer replied affirmatively to a recent agent-focused Tetamo campaign",
+            ])
+          ),
+        },
+        recommendedNextStep:
+          "Continue the agent membership or package conversation in the context of the recent Tetamo campaign. Do not ask whether the customer is an owner, wants to list privately, is selling or renting, or is interested in a promotion unless the customer explicitly brings that up. If one clarification is needed, keep it about the agent membership or package journey.",
+      };
+    }
+
     const performanceConcern =
       /\b(?:inquir(?:y|ies)|enquir(?:y|ies)|lead|leads|kepo|serius|serious|quality|kualitas|conversion|closing|prospek)\b/i.test(
         [
