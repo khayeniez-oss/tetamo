@@ -823,7 +823,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
         <div className="mt-8 rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-10">
           <div className="p-4 sm:p-6 md:p-8">
             <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2">
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-[#1C1C1E]">
                   {lang === "id" ? "Tipe Properti" : "Property Type"}
                 </label>
@@ -837,7 +837,24 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
                 </div>
               </div>
 
-              {isDisewa ? (
+              {!propertyType ? (
+                <div className="md:col-span-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
+                  <p className="text-sm font-semibold text-[#1C1C1E]">
+                    {lang === "id"
+                      ? "Pilih tipe properti terlebih dahulu"
+                      : "Choose the property type first"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+                    {lang === "id"
+                      ? "Form detail akan menyesuaikan otomatis dengan tipe properti yang dipilih."
+                      : "The detail form will automatically adjust to the selected property type."}
+                  </p>
+                </div>
+              ) : null}
+
+              {propertyType ? (
+                <>
+                  {isDisewa ? (
                 <div>
                   <label className="block text-sm font-semibold text-[#1C1C1E]">
                     {lang === "id" ? "Jenis Sewa" : "Rental Type"}
@@ -1552,9 +1569,12 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
                   </div>
                 </>
               )}
+
+                </>
+              ) : null}
             </div>
 
-            {showLegalFields && (
+            {propertyType && showLegalFields && (
               <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
                 <h2 className="text-sm font-bold text-[#1C1C1E] sm:text-base">
                   {lang === "id"
@@ -1767,7 +1787,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
               </div>
             )}
 
-            {(showFacilities || showNearby) && (
+            {propertyType && (showFacilities || showNearby) && (
               <div className="md:col-span-2">
                 <div
                   className={`grid grid-cols-1 items-start gap-6 ${
@@ -1869,21 +1889,23 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
               </div>
             )}
 
-            <div className="mt-8">
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={!isValid}
-                className={[
-                  "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition",
-                  isValid
-                    ? "bg-[#1C1C1E] text-white hover:opacity-90"
-                    : "cursor-not-allowed bg-gray-200 text-gray-500",
-                ].join(" ")}
-              >
-                {lang === "id" ? "Simpan & Lanjutkan" : "Save & Continue"}
-              </button>
-            </div>
+            {propertyType ? (
+              <div className="mt-8">
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={!isValid}
+                  className={[
+                    "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition",
+                    isValid
+                      ? "bg-[#1C1C1E] text-white hover:opacity-90"
+                      : "cursor-not-allowed bg-gray-200 text-gray-500",
+                  ].join(" ")}
+                >
+                  {lang === "id" ? "Simpan & Lanjutkan" : "Save & Continue"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

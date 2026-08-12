@@ -46,6 +46,17 @@ export default function Page() {
     return Number.isNaN(parsed) ? null : parsed;
   }
 
+function cleanDecimal(value: unknown) {
+  if (value === null || value === undefined) return null;
+
+  const raw = String(value).trim().replace(",", ".");
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+
   async function onNext() {
     if (!kode || saving) return;
 
@@ -126,7 +137,7 @@ export default function Page() {
         bathrooms: cleanNumber(draft?.bath),
         maid_room: cleanNumber(draft?.maid),
         garage: cleanNumber(draft?.garage),
-        floor: cleanNumber(draft?.floor),
+        floor: cleanDecimal(draft?.floor),
 
         furnishing: cleanText(draft?.furnishing),
         electricity: cleanNumber(draft?.listrik),
