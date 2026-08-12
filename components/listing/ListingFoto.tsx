@@ -26,6 +26,7 @@ type DraftMedia = {
   mode?: "create" | "edit";
   source?: SourceType;
   aiGeneratedOnce?: boolean;
+  aiGenerationCount?: number;
   ai_seo_title?: string;
   ai_seo_meta_description?: string;
   ai_social_caption?: string;
@@ -54,6 +55,7 @@ const MAX_PHOTOS = 30;
 const MIN_PHOTOS = 3;
 const MAX_TITLE = 150;
 const MAX_DESC = 2000;
+const MAX_AI_GENERATIONS = 5;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
 
@@ -527,15 +529,15 @@ export default function ListingFoto({
             "Untuk agent/admin, AI juga akan membuat caption media sosial siap pakai.",
           aiButton: "✨ Generate dengan AI",
           aiGenerating: "Membuat...",
-          aiUsedShort: "AI Sudah Digunakan",
+          aiUsedShort: "Batas AI Tercapai",
           aiNote:
-            "AI hanya dapat digunakan satu kali per listing untuk penggunaan yang adil.",
+            "AI dapat digunakan maksimal 5 kali per listing.",
           aiNeedDetails:
             "Lengkapi detail properti terlebih dahulu sebelum menggunakan AI.",
           aiFailed: "AI gagal membuat deskripsi. Silakan coba lagi.",
           aiOverwriteConfirm:
             "Konten judul/deskripsi yang sudah ada akan diganti oleh hasil AI. Lanjutkan?",
-          aiAlreadyGenerated: "AI sudah digunakan 1x untuk listing ini.",
+          aiAlreadyGenerated: "AI sudah digunakan maksimal 5 kali untuk listing ini.",
           socialCaptionTitle: "AI Social Media Caption",
           socialCaptionSubtitle:
             "Gunakan caption ini untuk promosi listing di Instagram, Facebook, TikTok, atau WhatsApp broadcast.",
@@ -600,15 +602,15 @@ export default function ListingFoto({
             "For agent/admin, AI will also create a ready-to-use social media caption.",
           aiButton: "✨ Generate with AI",
           aiGenerating: "Generating...",
-          aiUsedShort: "AI Used",
+          aiUsedShort: "AI Limit Reached",
           aiNote:
-            "AI can only be used once per listing to control fair usage.",
+            "AI can be used up to 5 times per listing.",
           aiNeedDetails:
             "Please complete the property details first before using AI.",
           aiFailed: "AI failed to generate the description. Please try again.",
           aiOverwriteConfirm:
             "Existing title/description content will be replaced by the AI result. Continue?",
-          aiAlreadyGenerated: "AI has already been used 1x for this listing.",
+          aiAlreadyGenerated: "AI has already been used 5 times for this listing.",
           socialCaptionTitle: "AI Social Media Caption",
           socialCaptionSubtitle:
             "Use this caption to promote the listing on Instagram, Facebook, TikTok, or WhatsApp broadcast.",
@@ -644,9 +646,15 @@ export default function ListingFoto({
   const [generatingAi, setGeneratingAi] = useState(false);
   const [aiError, setAiError] = useState("");
   const [captionCopied, setCaptionCopied] = useState(false);
-  const [aiGeneratedOnce, setAiGeneratedOnce] = useState<boolean>(
-    Boolean(initial.aiGeneratedOnce)
-  );
+  const [aiGenerationCount, setAiGenerationCount] = useState<number>(() => {
+    const storedCount = Number(initial.aiGenerationCount);
+
+    if (Number.isFinite(storedCount) && storedCount > 0) {
+      return Math.min(Math.floor(storedCount), MAX_AI_GENERATIONS);
+    }
+
+    return initial.aiGeneratedOnce ? 1 : 0;
+  });
 
   const hydratedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -672,7 +680,15 @@ export default function ListingFoto({
     setAiWhatsappInquiryMessage(
       (draft as any)?.ai_whatsapp_inquiry_message ?? ""
     );
-    setAiGeneratedOnce(Boolean((draft as any)?.aiGeneratedOnce));
+    const storedAiCount = Number((draft as any)?.aiGenerationCount);
+
+    if (Number.isFinite(storedAiCount) && storedAiCount > 0) {
+      setAiGenerationCount(
+        Math.min(Math.floor(storedAiCount), MAX_AI_GENERATIONS)
+      );
+    } else {
+      setAiGenerationCount((draft as any)?.aiGeneratedOnce ? 1 : 0);
+    }
 
     hydratedRef.current = true;
   }, [draft]);
@@ -690,7 +706,8 @@ export default function ListingFoto({
       title_id: titleId,
       description,
       description_id: descriptionId,
-      aiGeneratedOnce,
+      aiGeneratedOnce: aiGenerationCount > 0,
+      aiGenerationCount,
       ai_seo_title: aiSeoTitle,
       ai_seo_meta_description: aiSeoMetaDescription,
       ai_social_caption: socialCaption,
@@ -705,7 +722,7 @@ export default function ListingFoto({
     titleId,
     description,
     descriptionId,
-    aiGeneratedOnce,
+    aiGenerationCount,
     aiSeoTitle,
     aiSeoMetaDescription,
     socialCaption,
@@ -895,7 +912,7 @@ export default function ListingFoto({
   async function generateWithAi() {
     if (generatingAi) return;
 
-    if (aiGeneratedOnce) {
+    if (aiGenerationCount >= MAX_AI_GENERATIONS) {
       alert(t.aiAlreadyGenerated);
       return;
     }
@@ -998,7 +1015,13 @@ export default function ListingFoto({
       setAiSeoMetaDescription(nextSeoMetaDescription);
       setSocialCaption(nextSocialCaption);
       setAiWhatsappInquiryMessage(nextWhatsappInquiryMessage);
-      setAiGeneratedOnce(true);
+
+      const nextAiGenerationCount = Math.min(
+        aiGenerationCount + 1,
+        MAX_AI_GENERATIONS
+      );
+
+      setAiGenerationCount(nextAiGenerationCount);
 
       setDraft((p: any) => ({
         ...(p || {}),
@@ -1008,6 +1031,7 @@ export default function ListingFoto({
         description: nextDescription,
         description_id: nextDescriptionId,
         aiGeneratedOnce: true,
+        aiGenerationCount: nextAiGenerationCount,
         ai_seo_title: nextSeoTitle,
         ai_seo_meta_description: nextSeoMetaDescription,
         ai_social_caption: nextSocialCaption,
@@ -1473,16 +1497,20 @@ export default function ListingFoto({
 
                   <button
                     onClick={generateWithAi}
-                    disabled={generatingAi || aiGeneratedOnce}
+                    disabled={
+                      generatingAi ||
+                      aiGenerationCount >= MAX_AI_GENERATIONS
+                    }
                     className={[
                       "inline-flex shrink-0 items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                      generatingAi || aiGeneratedOnce
+                      generatingAi ||
+                      aiGenerationCount >= MAX_AI_GENERATIONS
                         ? "cursor-not-allowed bg-gray-200 text-gray-500"
                         : "bg-[#1C1C1E] text-white hover:opacity-90",
                     ].join(" ")}
                     type="button"
                   >
-                    {aiGeneratedOnce
+                    {aiGenerationCount >= MAX_AI_GENERATIONS
                       ? t.aiUsedShort
                       : generatingAi
                       ? t.aiGenerating

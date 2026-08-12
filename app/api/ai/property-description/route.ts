@@ -194,7 +194,12 @@ Social caption rules for agent/admin:
 - End with a clear call to action.
 - Include 6–10 relevant hashtags at the end.
 - The caption should feel valuable enough for an agent to copy and post directly.
-- The caption may be in English, Indonesian, or light bilingual style depending on the property facts and tone.
+- Write the socialCaption in natural Bahasa Indonesia.
+- The target audience is primarily Indonesian property buyers, renters, and investors.
+- Use natural Indonesian real estate marketing language suitable for Instagram, Facebook, TikTok, or WhatsApp.
+- Do not translate mechanically from the English description.
+- Common property terms such as villa, apartment, freehold, leasehold, fully furnished, ROI, and similar industry terms may remain in English when they are naturally used by Indonesian property agents.
+- Keep the tone professional, attractive, conversational, and sales-ready.
 - Do not invent facilities, distance, exact travel time, legal claims, ROI, urgency, or availability.
 - Do not use fake hype such as "limited offer", "guaranteed ROI", "best investment", or "exclusive" unless supported by the facts.
 `;

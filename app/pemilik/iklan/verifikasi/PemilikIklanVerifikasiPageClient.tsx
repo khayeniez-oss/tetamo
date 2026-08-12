@@ -23,6 +23,17 @@ function cleanNumber(value: unknown) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+function cleanDecimal(value: unknown) {
+  if (value === null || value === undefined) return null;
+
+  const raw = String(value).trim().replace(",", ".");
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+
 function buildListingCode(existingKode?: string | null) {
   const current = String(existingKode || "").trim();
   if (current) return current;
@@ -277,7 +288,7 @@ export default function PemilikIklanVerifikasiPageClient() {
         bathrooms: cleanNumber(draft?.bath),
         maid_room: cleanNumber(draft?.maid),
         garage: cleanNumber(draft?.garage),
-        floor: cleanNumber(draft?.floor),
+        floor: cleanDecimal(draft?.floor),
         building_size: cleanNumber(draft?.lb),
         land_size: cleanNumber(draft?.lt),
 
