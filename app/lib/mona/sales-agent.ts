@@ -31,6 +31,7 @@ type GenerateAgentSalesGuidanceParams = {
   customerMessage: string;
   conversationContext: string | null;
   salesStage?: string | null;
+  brainRecommendedNextStep?: string | null;
 };
 
 const AGENT_SALES_PLAYBOOK = `
@@ -407,6 +408,22 @@ function applyDeterministicAgentSalesGuards(
   let needsTetamoFacts = guidance.needsTetamoFacts;
   const factsNeeded = new Set(guidance.factsNeeded);
 
+  const brainRequiresAgentPackageContinuation =
+    /agent membership or package conversation/i.test(
+      params.brainRecommendedNextStep || ""
+    );
+
+  if (brainRequiresAgentPackageContinuation) {
+    recommendedObjective = "continue_discovery";
+    recommendedDirection =
+      "Stay specifically in the Tetamo agent membership/package journey. If one clarification is useful, ask only about the agent membership or package they want to know about. Do not branch into owner listing, sell-versus-rent, generic listing needs, promotions, leads, closing, or unrelated discovery.";
+    reason =
+      "Mona Brain already identified this as a short affirmative continuation of an agent-focused Tetamo campaign, so the sales journey must not restart from zero.";
+    shouldAskQuestion = true;
+    needsTetamoFacts = false;
+    factsNeeded.clear();
+  }
+
   // If the problem is already known, do not ask Mona to discover it again.
   if (known.problem && recommendedObjective === "understand_problem") {
     recommendedObjective = "explain_relevant_value";
@@ -434,9 +451,29 @@ function applyDeterministicAgentSalesGuards(
       recommendedObjective === "handle_objection")
   ) {
     needsTetamoFacts = true;
-    factsNeeded.add(
-      "approved Tetamo features and value relevant to the agent's stated problem"
-    );
+
+    if (discussesPerformanceProblem) {
+      factsNeeded.clear();
+
+      factsNeeded.add(
+        "approved Tetamo listing presentation features"
+      );
+      factsNeeded.add(
+        "approved Tetamo direct WhatsApp enquiry features"
+      );
+      factsNeeded.add(
+        "approved Tetamo leads dashboard and enquiry-management features"
+      );
+      factsNeeded.add(
+        "approved Tetamo viewing scheduling features"
+      );
+
+      recommendedDirection =
+        "Explain only the approved Tetamo features that may be relevant to the agent's workflow, such as listing presentation, direct WhatsApp enquiries, leads management or viewing scheduling when supported by approved facts. Do not say or imply that Tetamo filters serious buyers, reduces curious enquiries, improves lead quality, improves conversion, creates more serious prospects, increases enquiries, or improves sales, rentals or closing results.";
+
+      reason =
+        "The customer has a lead-quality or performance concern. Mona may explain relevant Tetamo tools, but must not turn those tools into an unsupported performance claim.";
+    }
   }
 
   const asksAboutPayment =
@@ -484,6 +521,9 @@ ${AGENT_SALES_PLAYBOOK}
 
 OFFICIAL SALES STAGE:
 ${params.salesStage || "none"}
+
+MONA BRAIN DIRECTION:
+${params.brainRecommendedNextStep || "No additional Brain direction."}
 
 RECENT CONVERSATION:
 ${params.conversationContext || "No earlier conversation."}
