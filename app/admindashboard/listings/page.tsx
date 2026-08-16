@@ -51,6 +51,8 @@ type Listing = {
   kode: string;
   title: string;
   price: string;
+  salePrice: string;
+  rentPrice: string;
   city: string;
   owner: string;
   agent: string;
@@ -64,7 +66,7 @@ type Listing = {
   boostActive: boolean;
   photos?: string[];
 
-  listingType: "dijual" | "disewa";
+  listingType: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   saleType: SaleType;
   propertyType: string;
@@ -94,6 +96,8 @@ type PropertyRow = {
   kode: string | null;
   title: string | null;
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   city: string | null;
   area: string | null;
   posted_date: string | null;
@@ -458,6 +462,8 @@ export default function AdminListingsPage() {
             kode,
             title,
             price,
+            sale_price,
+            rent_price,
             city,
             area,
             posted_date,
@@ -527,6 +533,17 @@ export default function AdminListingsPage() {
             kode: item.kode || "-",
             title: item.title || "-",
             price: formatIdr(item.price),
+            salePrice: formatIdr(
+              item.sale_price ??
+                (item.listing_type === "dijual" ||
+                item.listing_type === "dijual_disewa"
+                  ? item.price
+                  : null)
+            ),
+            rentPrice: formatIdr(
+              item.rent_price ??
+                (item.listing_type === "disewa" ? item.price : null)
+            ),
             city: item.city || item.area || "-",
             owner: source === "owner" ? profile?.full_name || "Unknown Owner" : "-",
             agent: source === "agent" ? profile?.full_name || "Unknown Agent" : "-",
@@ -546,7 +563,12 @@ export default function AdminListingsPage() {
               (!item.boost_expires_at || isFutureDate(item.boost_expires_at)),
             photos,
 
-            listingType: item.listing_type === "disewa" ? "disewa" : "dijual",
+            listingType:
+              item.listing_type === "disewa" ||
+              item.listing_type === "dijual_disewa" ||
+              item.listing_type === "lelang"
+                ? item.listing_type
+                : "dijual",
             rentalType: normalizeRentalType(item.rental_type),
             saleType: normalizeSaleType(item.sale_type),
             propertyType: item.property_type || "",
@@ -1164,8 +1186,24 @@ export default function AdminListingsPage() {
                     "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
 
                   const listingTypeLabel =
-                    item.listingType === "disewa" ? "Disewa" : "Dijual";
+                    item.listingType === "dijual_disewa"
+                      ? "Dijual + Disewa"
+                      : item.listingType === "lelang"
+                        ? "Lelang"
+                        : item.listingType === "disewa"
+                          ? "Disewa"
+                          : "Dijual";
+
                   const rentalLabel = getRentalTypeLabel(item.rentalType);
+
+                  const rentalPeriod =
+                    item.rentalType === "daily"
+                      ? "Hari"
+                      : item.rentalType === "monthly"
+                        ? "Bulan"
+                        : item.rentalType === "yearly"
+                          ? "Tahun"
+                          : "";
                   const saleLabel = getSaleTypeLabel(item.saleType);
                   const propertyTypeLabel = formatPropertyType(item.propertyType);
 
@@ -1207,15 +1245,17 @@ export default function AdminListingsPage() {
 
                               <span
                                 className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${
-                                  item.listingType === "dijual"
-                                    ? "border-blue-200 bg-blue-50 text-blue-700"
-                                    : "border-yellow-200 bg-yellow-50 text-yellow-700"
+                                  item.listingType === "disewa"
+                                    ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+                                    : "border-blue-200 bg-blue-50 text-blue-700"
                                 }`}
                               >
                                 {listingTypeLabel}
                               </span>
 
-                              {item.listingType === "disewa" && rentalLabel ? (
+                              {(item.listingType === "disewa" ||
+                                item.listingType === "dijual_disewa") &&
+                              rentalLabel ? (
                                 <span
                                   className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${getRentalTypeBadgeClass(
                                     item.rentalType
@@ -1225,7 +1265,10 @@ export default function AdminListingsPage() {
                                 </span>
                               ) : null}
 
-                              {item.listingType === "dijual" && saleLabel ? (
+                              {(item.listingType === "dijual" ||
+                                item.listingType === "dijual_disewa" ||
+                                item.listingType === "lelang") &&
+                              saleLabel ? (
                                 <span
                                   className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:text-[11px] ${getSaleTypeBadgeClass(
                                     item.saleType
@@ -1260,9 +1303,19 @@ export default function AdminListingsPage() {
                               {item.title}
                             </p>
 
-                            <p className="mt-1 text-[12px] font-medium text-gray-600 sm:text-[13px]">
-                              {item.price}
-                            </p>
+                            {item.listingType === "dijual_disewa" ? (
+                              <div className="mt-1 space-y-1 text-[12px] font-medium text-gray-600 sm:text-[13px]">
+                                <p>{item.salePrice} — Dijual</p>
+                                <p>
+                                  {item.rentPrice}
+                                  {rentalPeriod ? ` / ${rentalPeriod}` : ""} — Disewa
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-[12px] font-medium text-gray-600 sm:text-[13px]">
+                                {item.price}
+                              </p>
+                            )}
 
                             <p className="mt-1 text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
                               Owner: {item.owner}{" "}
