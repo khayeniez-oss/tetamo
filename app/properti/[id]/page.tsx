@@ -23,6 +23,8 @@ type PropertySEOData = {
   title: string | null;
   description: string | null;
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -69,6 +71,8 @@ type PropertyRow = {
   title_id: string | null;
 
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -125,6 +129,8 @@ const PROPERTY_SELECT = `
   title,
   description,
   price,
+  sale_price,
+  rent_price,
   province,
   city,
   area,
@@ -218,6 +224,18 @@ function formatListingIntent(
 
   if (listing === "dijual") return "for sale";
 
+  if (listing === "dijual_disewa") {
+    if (rental === "bulanan" || rental === "monthly") {
+      return "for sale and monthly rent";
+    }
+    if (rental === "tahunan" || rental === "yearly") {
+      return "for sale and yearly rent";
+    }
+    return "for sale and rent";
+  }
+
+  if (listing === "lelang") return "for auction";
+
   return "";
 }
 
@@ -229,6 +247,36 @@ function formatPriceIDR(value?: number | null) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatPropertyPriceSummary(property: PropertySEOData) {
+  const listing = cleanText(property.listing_type).toLowerCase();
+  const rental = cleanText(property.rental_type).toLowerCase();
+
+  if (listing === "dijual_disewa") {
+    const salePrice = formatPriceIDR(
+      property.sale_price ?? property.price
+    );
+    const rentPrice = formatPriceIDR(property.rent_price);
+
+    const rentSuffix =
+      rental === "bulanan" || rental === "monthly"
+        ? " / month"
+        : rental === "tahunan" || rental === "yearly"
+          ? " / year"
+          : rental === "harian" || rental === "daily"
+            ? " / day"
+            : "";
+
+    const parts = [
+      salePrice ? `${salePrice} for sale` : "",
+      rentPrice ? `${rentPrice}${rentSuffix} for rent` : "",
+    ].filter(Boolean);
+
+    return parts.join(" and ");
+  }
+
+  return formatPriceIDR(property.price);
 }
 
 function formatPostedDate(value?: string | null) {
@@ -400,7 +448,7 @@ function buildFallbackDescription(property: PropertySEOData, location: string) {
     property.listing_type,
     property.rental_type
   );
-  const price = formatPriceIDR(property.price);
+  const price = formatPropertyPriceSummary(property);
   const content = cleanText(property.description);
 
   const sentenceParts = [
@@ -652,7 +700,12 @@ async function getInitialDetailData(routeValue: string): Promise<{
   const initialProperty: any = {
     id: row.id,
     slug: row.slug ?? undefined,
-    jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+    jenisListing:
+      row.listing_type === "disewa" ||
+      row.listing_type === "dijual_disewa" ||
+      row.listing_type === "lelang"
+        ? row.listing_type
+        : "dijual",
     rentalType: normalizeRentalType(row.rental_type),
     propertyType: row.property_type || "",
 
@@ -661,6 +714,19 @@ async function getInitialDetailData(routeValue: string): Promise<{
 
     price: formatPriceIDR(row.price ?? 0),
     priceValue: Number(row.price ?? 0),
+    salePriceValue: Number(
+      row.sale_price ??
+        (row.listing_type === "dijual" ||
+        row.listing_type === "dijual_disewa"
+          ? row.price
+          : 0) ??
+        0
+    ),
+    rentPriceValue: Number(
+      row.rent_price ??
+        (row.listing_type === "disewa" ? row.price : 0) ??
+        0
+    ),
     province: row.province ?? "-",
     area: row.city || row.area || "-",
     furnished: mapFurnishing(row.furnishing ?? row.furnished),
@@ -837,7 +903,7 @@ export async function generateMetadata({
       property.listing_type,
       property.rental_type
     ),
-    price: formatPriceIDR(property.price),
+    price: formatPropertyPriceSummary(property),
     description: cleanText(property.description),
   };
 

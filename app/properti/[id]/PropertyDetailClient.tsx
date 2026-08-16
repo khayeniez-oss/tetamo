@@ -73,6 +73,8 @@ type PropertyRow = {
   title_id: string | null;
 
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -126,7 +128,7 @@ type PropertyRow = {
 type PropertyItem = {
   id: string;
   slug?: string;
-  jenisListing: "dijual" | "disewa";
+  jenisListing: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   saleType: string;
   leaseYearsValue: number | null;
@@ -139,6 +141,8 @@ type PropertyItem = {
 
   price: string;
   priceValue: number;
+  salePriceValue: number;
+  rentPriceValue: number;
   province: string;
   area: string;
   furnished: string;
@@ -1087,7 +1091,12 @@ const [loading, setLoading] = useState(!initialProperty);
       const mapped: PropertyItem = {
         id: row.id,
         slug: row.slug ?? undefined,
-        jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+        jenisListing:
+          row.listing_type === "disewa" ||
+          row.listing_type === "dijual_disewa" ||
+          row.listing_type === "lelang"
+            ? row.listing_type
+            : "dijual",
         rentalType: normalizeRentalType(row.rental_type),
         saleType: toStringOrEmpty(row.sale_type),
         leaseYearsValue: toNumberOrNull(row.lease_years),
@@ -1100,6 +1109,19 @@ const [loading, setLoading] = useState(!initialProperty);
 
         price: formatIdr(row.price ?? 0),
         priceValue: Number(row.price ?? 0),
+        salePriceValue: Number(
+          row.sale_price ??
+            (row.listing_type === "dijual" ||
+            row.listing_type === "dijual_disewa"
+              ? row.price
+              : 0) ??
+            0
+        ),
+        rentPriceValue: Number(
+          row.rent_price ??
+            (row.listing_type === "disewa" ? row.price : 0) ??
+            0
+        ),
         province: row.province ?? "-",
         area: row.city || row.area || "-",
         furnished: mapFurnishing(row.furnishing ?? row.furnished, lang),
@@ -1741,6 +1763,76 @@ useEffect(() => {
     ? formatSecondaryPrices(property.priceValue, currentCurrency)
     : [];
 
+  const hasSale =
+    property?.jenisListing === "dijual" ||
+    property?.jenisListing === "dijual_disewa";
+
+  const hasRent =
+    property?.jenisListing === "disewa" ||
+    property?.jenisListing === "dijual_disewa";
+
+  const isAuction =
+    property?.jenisListing === "lelang";
+
+  const isSaleLike = hasSale || isAuction;
+
+  const saleDisplayPrice = property
+    ? formatPriceByCurrency(property.salePriceValue, currentCurrency)
+    : "";
+
+  const saleSecondaryPrices = property
+    ? formatSecondaryPrices(property.salePriceValue, currentCurrency)
+    : [];
+
+  const rentDisplayPrice = property
+    ? formatPriceByCurrency(property.rentPriceValue, currentCurrency)
+    : "";
+
+  const rentSecondaryPrices = property
+    ? formatSecondaryPrices(property.rentPriceValue, currentCurrency)
+    : [];
+
+  const rentalPeriod =
+    property?.rentalType === "monthly"
+      ? lang === "id"
+        ? "Bulan"
+        : "Month"
+      : property?.rentalType === "yearly"
+        ? lang === "id"
+          ? "Tahun"
+          : "Year"
+        : property?.rentalType === "daily"
+          ? lang === "id"
+            ? "Hari"
+            : "Day"
+          : "";
+
+  const combinedPriceSummary =
+    property?.jenisListing === "dijual_disewa"
+      ? `${saleDisplayPrice} — ${
+          lang === "id" ? "Dijual" : "For Sale"
+        } | ${rentDisplayPrice}${
+          rentalPeriod ? ` / ${rentalPeriod}` : ""
+        } — ${lang === "id" ? "Disewa" : "For Rent"}`
+      : displayPrice;
+
+  const listingLabel =
+    property?.jenisListing === "dijual_disewa"
+      ? lang === "id"
+        ? "Dijual + Disewa"
+        : "For Sale + For Rent"
+      : property?.jenisListing === "lelang"
+        ? lang === "id"
+          ? "Lelang"
+          : "Auction"
+        : property?.jenisListing === "dijual"
+          ? lang === "id"
+            ? "Dijual"
+            : "For Sale"
+          : lang === "id"
+            ? "Disewa"
+            : "For Rent";
+
   async function handleWhatsAppClick() {
     if (!property) return;
 
@@ -1760,7 +1852,7 @@ useEffect(() => {
 Properti: ${property.title}
 Kode: ${property.kodeListing ?? "-"}
 Lokasi: ${property.area}, ${property.province}
-Harga: ${displayPrice}
+Harga: ${combinedPriceSummary}
 
 Apakah properti ini masih tersedia?`
         : `Hello ${property.receiverName}, I'm interested in this property on TETAMO.
@@ -1768,7 +1860,7 @@ Apakah properti ini masih tersedia?`
 Property: ${property.title}
 Code: ${property.kodeListing ?? "-"}
 Location: ${property.area}, ${property.province}
-Price: ${displayPrice}
+Price: ${combinedPriceSummary}
 
 Is this property still available?`;
 
@@ -2228,7 +2320,7 @@ Is this property still available?`;
         }
       : null,
 
-    property.jenisListing === "disewa" && property.rentalType
+    hasRent && property.rentalType
       ? {
           key: "rentalType",
           label: lang === "id" ? "Jenis Sewa" : "Rental Type",
@@ -2237,7 +2329,7 @@ Is this property still available?`;
         }
       : null,
 
-    property.jenisListing === "dijual" && property.saleType
+    isSaleLike && property.saleType
       ? {
           key: "saleType",
           label: lang === "id" ? "Tipe Jual" : "Sale Type",
@@ -2246,7 +2338,7 @@ Is this property still available?`;
         }
       : null,
 
-    property.jenisListing === "dijual" && property.leaseYearsValue
+    isSaleLike && property.leaseYearsValue
       ? {
           key: "leaseYears",
           label: lang === "id" ? "Masa Lease" : "Lease Term",
@@ -2257,7 +2349,7 @@ Is this property still available?`;
         }
       : null,
 
-    property.jenisListing === "dijual" && property.leaseUntilYearValue
+    isSaleLike && property.leaseUntilYearValue
       ? {
           key: "leaseUntilYear",
           label: lang === "id" ? "Lease Sampai" : "Lease Until",
@@ -2266,7 +2358,7 @@ Is this property still available?`;
         }
       : null,
 
-    property.jenisListing === "dijual" && property.leaseExtendable
+    isSaleLike && property.leaseExtendable
       ? {
           key: "leaseExtendable",
           label: lang === "id" ? "Perpanjangan" : "Extension",
@@ -2652,17 +2744,10 @@ const detailPromoTheme = property.spotlight
         <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center gap-2">
 
           <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-extrabold text-[#1C1C1E] shadow-sm sm:text-xs">
-            {property.jenisListing === "dijual"
-              ? lang === "id"
-                ? "Dijual"
-                : "For Sale"
-              : lang === "id"
-                ? "Disewa"
-                : "For Rent"}
+            {listingLabel}
           </span>
 
-          {property.jenisListing === "disewa" &&
-          property.rentalType ? (
+          {hasRent && property.rentalType ? (
             <span
               className={`rounded-full border px-3 py-1.5 text-[10px] font-bold shadow-sm sm:text-xs ${rentalTypeBadgeClass(
                 property.rentalType
@@ -2783,11 +2868,51 @@ const detailPromoTheme = property.spotlight
 
           <div className="min-w-0">
 
-            <p className="text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#1C1C1E] sm:text-[34px]">
+            {property.jenisListing === "dijual_disewa" ? (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[26px] font-extrabold leading-tight tracking-[-0.04em] text-[#1C1C1E] sm:text-[30px]">
+                    {saleDisplayPrice} — {lang === "id" ? "Dijual" : "For Sale"}
+                  </p>
+
+                  {saleSecondaryPrices.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-400 sm:text-sm">
+                      {saleSecondaryPrices.map((item) => (
+                        <span key={item}>≈ {item}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div>
+                  <p className="text-[21px] font-extrabold leading-tight text-[#1C1C1E] sm:text-[24px]">
+                    {rentDisplayPrice}
+                    {rentalPeriod ? ` / ${rentalPeriod}` : ""} —{" "}
+                    {lang === "id" ? "Disewa" : "For Rent"}
+                  </p>
+
+                  {rentSecondaryPrices.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-400 sm:text-sm">
+                      {rentSecondaryPrices.map((item) => (
+                        <span key={item}>
+                          ≈ {item}
+                          {rentalPeriod ? ` / ${rentalPeriod}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <p className={`text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#1C1C1E] sm:text-[34px] ${
+              property.jenisListing === "dijual_disewa" ? "hidden" : ""
+            }`}>
               {displayPrice}
             </p>
 
-            {secondaryPrices.length > 0 ? (
+            {property.jenisListing !== "dijual_disewa" &&
+            secondaryPrices.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-400 sm:text-sm">
                 {secondaryPrices.map(
                   (item) => (
@@ -3530,8 +3655,16 @@ activeNearby.length > 0 ? (
 
         <div className="mt-6">
           <MortgageCalculator
-            price={property.priceValue}
-            jenisListing={property.jenisListing}
+            price={
+              property.jenisListing === "dijual_disewa"
+                ? property.salePriceValue
+                : property.priceValue
+            }
+            jenisListing={
+              property.jenisListing === "dijual_disewa"
+                ? "dijual"
+                : property.jenisListing
+            }
           />
         </div>
 
@@ -3621,7 +3754,7 @@ activeNearby.length > 0 ? (
             </p>
 
             <p className="mt-1 text-xs font-bold text-[#B8860B]">
-              {displayPrice}
+              {combinedPriceSummary}
             </p>
 
           </div>
