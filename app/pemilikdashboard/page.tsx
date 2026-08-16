@@ -53,6 +53,8 @@ type PropertyRow = {
   posted_date: string | null;
   title: string | null;
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
 
   listing_type: string | null;
   rental_type: string | null;
@@ -94,9 +96,11 @@ type Listing = {
   kode: string;
   title: string;
   price: number;
+  salePrice: number;
+  rentPrice: number;
   postedDate: string;
 
-  listingType: "dijual" | "disewa";
+  listingType: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   saleType: SaleType;
   propertyType: string;
@@ -372,9 +376,29 @@ function mapPropertiesWithImages(
       kode: property.kode || "-",
       title: property.title || "-",
       price: Number(property.price || 0),
+      salePrice: Number(
+        property.sale_price ??
+          (property.listing_type === "dijual" ||
+          property.listing_type === "dijual_disewa"
+            ? property.price
+            : 0) ??
+          0
+      ),
+      rentPrice: Number(
+        property.rent_price ??
+          (property.listing_type === "disewa"
+            ? property.price
+            : 0) ??
+          0
+      ),
       postedDate: pickPostedDate(property, locale),
 
-      listingType: property.listing_type === "disewa" ? "disewa" : "dijual",
+      listingType:
+        property.listing_type === "disewa" ||
+        property.listing_type === "dijual_disewa" ||
+        property.listing_type === "lelang"
+          ? property.listing_type
+          : "dijual",
       rentalType: normalizeRentalType(property.rental_type),
       saleType: normalizeSaleType(property.sale_type),
       propertyType: property.property_type || "",
@@ -762,7 +786,7 @@ export default function OwnerDashboardPage() {
       const { data: propertiesData, error: propertiesError } = await supabase
         .from("properties")
         .select(
-          "id, user_id, status, verified_ok, verification_status, kode, posted_date, title, price, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type, listing_expires_at, featured_expires_at, is_paused, created_at, plan_id, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, transaction_closed_at, transaction_closed_by"
+          "id, user_id, status, verified_ok, verification_status, kode, posted_date, title, price, sale_price, rent_price, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type, listing_expires_at, featured_expires_at, is_paused, created_at, plan_id, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, transaction_closed_at, transaction_closed_by"
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
@@ -1089,9 +1113,34 @@ export default function OwnerDashboardPage() {
                     effectiveStatus === "KADALUWARSA");
 
                 const listingTypeLabel =
-                  item.listingType === "disewa" ? t.forRent : t.forSale;
+                  item.listingType === "dijual_disewa"
+                    ? lang === "id"
+                      ? "Dijual + Disewa"
+                      : "For Sale + For Rent"
+                    : item.listingType === "lelang"
+                      ? lang === "id"
+                        ? "Lelang"
+                        : "Auction"
+                      : item.listingType === "disewa"
+                        ? t.forRent
+                        : t.forSale;
 
                 const rentalLabel = getRentalTypeLabel(item.rentalType, lang);
+
+                const rentalPeriod =
+                  item.rentalType === "monthly"
+                    ? lang === "id"
+                      ? "Bulan"
+                      : "Month"
+                    : item.rentalType === "yearly"
+                      ? lang === "id"
+                        ? "Tahun"
+                        : "Year"
+                      : item.rentalType === "daily"
+                        ? lang === "id"
+                          ? "Hari"
+                          : "Day"
+                        : "";
                 const saleLabel = getSaleTypeLabel(item.saleType, lang);
                 const propertyTypeLabel = formatPropertyType(
                   item.propertyType,
@@ -1141,15 +1190,17 @@ export default function OwnerDashboardPage() {
 
                           <span
                             className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${
-                              item.listingType === "dijual"
-                                ? "border-blue-200 bg-blue-50 text-blue-700"
-                                : "border-yellow-200 bg-yellow-50 text-yellow-700"
+                              item.listingType === "disewa"
+                                ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+                                : "border-blue-200 bg-blue-50 text-blue-700"
                             }`}
                           >
                             {listingTypeLabel}
                           </span>
 
-                          {item.listingType === "disewa" && rentalLabel ? (
+                          {(item.listingType === "disewa" ||
+                            item.listingType === "dijual_disewa") &&
+                          rentalLabel ? (
                             <span
                               className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getRentalTypeBadgeClass(
                                 item.rentalType
@@ -1159,7 +1210,10 @@ export default function OwnerDashboardPage() {
                             </span>
                           ) : null}
 
-                          {item.listingType === "dijual" && saleLabel ? (
+                          {(item.listingType === "dijual" ||
+                            item.listingType === "dijual_disewa" ||
+                            item.listingType === "lelang") &&
+                          saleLabel ? (
                             <span
                               className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getSaleTypeBadgeClass(
                                 item.saleType
@@ -1211,9 +1265,29 @@ export default function OwnerDashboardPage() {
                           {item.title}
                         </p>
 
-                        <p className="mt-1 text-sm text-gray-500">
-                          {formatCurrency(item.price, locale)}
-                        </p>
+                        {item.listingType === "dijual_disewa" ? (
+                          <div className="mt-1 space-y-1 text-sm text-gray-500">
+                            <p>
+                              {formatCurrency(item.salePrice, locale)} —{" "}
+                              {lang === "id" ? "Dijual" : "For Sale"}
+                            </p>
+                            <p>
+                              {formatCurrency(item.rentPrice, locale)}
+                              {rentalPeriod ? ` / ${rentalPeriod}` : ""} —{" "}
+                              {lang === "id" ? "Disewa" : "For Rent"}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-sm text-gray-500">
+                            {item.listingType === "disewa"
+                              ? `${formatCurrency(item.rentPrice, locale)}${
+                                  rentalPeriod ? ` / ${rentalPeriod}` : ""
+                                }`
+                              : item.listingType === "dijual"
+                                ? formatCurrency(item.salePrice, locale)
+                                : formatCurrency(item.price, locale)}
+                          </p>
+                        )}
 
                         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <DetailPill

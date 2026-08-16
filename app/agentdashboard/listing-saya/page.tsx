@@ -50,6 +50,8 @@ type Listing = {
   ownerId: string;
   title: string;
   price: string;
+  salePrice: string;
+  rentPrice: string;
   postedDate: string;
   listingExpiresAt: string | null;
   city: string;
@@ -60,7 +62,7 @@ type Listing = {
   transactionStatus: TransactionStatus;
   isPendingVerification: boolean;
 
-  listingType: "dijual" | "disewa";
+  listingType: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   saleType: SaleType;
   propertyType: string;
@@ -79,6 +81,8 @@ type PropertyRow = {
   kode: string | null;
   title: string | null;
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   city: string | null;
   area: string | null;
   province: string | null;
@@ -456,6 +460,19 @@ function mapPropertiesWithImages(
       ownerId: property.user_id || "",
       title: property.title || "Tanpa Judul",
       price: formatCurrency(property.price),
+      salePrice: formatCurrency(
+        property.sale_price ??
+          (property.listing_type === "dijual" ||
+          property.listing_type === "dijual_disewa"
+            ? property.price
+            : null)
+      ),
+      rentPrice: formatCurrency(
+        property.rent_price ??
+          (property.listing_type === "disewa"
+            ? property.price
+            : null)
+      ),
       postedDate: formatDisplayDate(property.posted_date || property.created_at),
       listingExpiresAt: property.listing_expires_at || null,
       city: property.city || property.area || property.province || "-",
@@ -469,7 +486,12 @@ function mapPropertiesWithImages(
       transactionStatus: mapTransactionStatus(property.transaction_status),
       isPendingVerification,
 
-      listingType: property.listing_type === "disewa" ? "disewa" : "dijual",
+      listingType:
+        property.listing_type === "disewa" ||
+        property.listing_type === "dijual_disewa" ||
+        property.listing_type === "lelang"
+          ? property.listing_type
+          : "dijual",
       rentalType: normalizeRentalType(property.rental_type),
       saleType: normalizeSaleType(property.sale_type),
       propertyType: property.property_type || "",
@@ -615,7 +637,7 @@ export default function AgentListingSayaPage() {
         supabase
           .from("properties")
           .select(
-            "id, user_id, kode, title, price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type"
+            "id, user_id, kode, title, price, sale_price, rent_price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type"
           )
           .eq("user_id", userId)
           .eq("source", "agent")
@@ -1168,8 +1190,24 @@ export default function AgentListingSayaPage() {
                 "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80";
 
               const listingTypeLabel =
-                item.listingType === "disewa" ? "Disewa" : "Dijual";
+                item.listingType === "dijual_disewa"
+                  ? "Dijual + Disewa"
+                  : item.listingType === "lelang"
+                    ? "Lelang"
+                    : item.listingType === "disewa"
+                      ? "Disewa"
+                      : "Dijual";
+
               const rentalLabel = getRentalTypeLabel(item.rentalType);
+
+              const rentalPeriod =
+                item.rentalType === "monthly"
+                  ? "Bulan"
+                  : item.rentalType === "yearly"
+                    ? "Tahun"
+                    : item.rentalType === "daily"
+                      ? "Hari"
+                      : "";
               const saleLabel = getSaleTypeLabel(item.saleType);
               const propertyTypeLabel = formatPropertyType(item.propertyType);
 
@@ -1205,15 +1243,17 @@ export default function AgentListingSayaPage() {
 
                             <span
                               className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${
-                                item.listingType === "dijual"
-                                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                                  : "border-yellow-200 bg-yellow-50 text-yellow-700"
+                                item.listingType === "disewa"
+                                  ? "border-yellow-200 bg-yellow-50 text-yellow-700"
+                                  : "border-blue-200 bg-blue-50 text-blue-700"
                               }`}
                             >
                               {listingTypeLabel}
                             </span>
 
-                            {item.listingType === "disewa" && rentalLabel ? (
+                            {(item.listingType === "disewa" ||
+                              item.listingType === "dijual_disewa") &&
+                            rentalLabel ? (
                               <span
                                 className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getRentalTypeBadgeClass(
                                   item.rentalType
@@ -1223,7 +1263,10 @@ export default function AgentListingSayaPage() {
                               </span>
                             ) : null}
 
-                            {item.listingType === "dijual" && saleLabel ? (
+                            {(item.listingType === "dijual" ||
+                              item.listingType === "dijual_disewa" ||
+                              item.listingType === "lelang") &&
+                            saleLabel ? (
                               <span
                                 className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] ${getSaleTypeBadgeClass(
                                   item.saleType
@@ -1266,7 +1309,25 @@ export default function AgentListingSayaPage() {
                             {item.title}
                           </p>
 
-                          <p className="mt-1 text-sm text-gray-500">{item.price}</p>
+                          {item.listingType === "dijual_disewa" ? (
+                            <div className="mt-1 space-y-1 text-sm text-gray-500">
+                              <p>{item.salePrice} — Dijual</p>
+                              <p>
+                                {item.rentPrice}
+                                {rentalPeriod ? ` / ${rentalPeriod}` : ""} — Disewa
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-sm text-gray-500">
+                              {item.listingType === "disewa"
+                                ? `${item.rentPrice}${
+                                    rentalPeriod ? ` / ${rentalPeriod}` : ""
+                                  }`
+                                : item.listingType === "dijual"
+                                  ? item.salePrice
+                                  : item.price}
+                            </p>
+                          )}
 
                           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                             <DetailPill
