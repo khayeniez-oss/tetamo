@@ -36,6 +36,8 @@ type PropertyRow = {
   created_at: string | null;
   title: string | null;
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -61,13 +63,15 @@ type SavedProperty = {
   kode: string;
   title: string;
   priceValue: number;
+  salePriceValue: number;
+  rentPriceValue: number;
   province: string;
   area: string;
   size: string;
   bed: string;
   furnished: string;
   propertyType: string;
-  jenisListing: "dijual" | "disewa";
+  jenisListing: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   postedDate: string;
   image: string;
@@ -349,6 +353,8 @@ export default function PemilikSavedPage() {
           created_at,
           title,
           price,
+          sale_price,
+          rent_price,
           province,
           city,
           area,
@@ -404,13 +410,31 @@ export default function PemilikSavedPage() {
           kode: row.kode ?? "-",
           title: row.title ?? "-",
           priceValue: Number(row.price ?? 0),
+          salePriceValue: Number(
+            row.sale_price ??
+              (row.listing_type === "dijual" ||
+              row.listing_type === "dijual_disewa"
+                ? row.price
+                : 0) ??
+              0
+          ),
+          rentPriceValue: Number(
+            row.rent_price ??
+              (row.listing_type === "disewa" ? row.price : 0) ??
+              0
+          ),
           province: row.province ?? "-",
           area: row.city || row.area || "-",
           size: `${row.building_size ?? row.land_size ?? 0} m²`,
           bed: `${row.bedrooms ?? 0} ${lang === "id" ? "Kamar" : "Bed"}`,
           furnished: mapFurnishing(row.furnishing, lang),
           propertyType: formatPropertyType(row.property_type, lang),
-          jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+          jenisListing:
+            row.listing_type === "disewa" ||
+            row.listing_type === "dijual_disewa" ||
+            row.listing_type === "lelang"
+              ? row.listing_type
+              : "dijual",
           rentalType: normalizeRentalType(row.rental_type),
           postedDate: formatPostedDate(row.posted_date || row.created_at),
           image,
@@ -508,14 +532,66 @@ export default function PemilikSavedPage() {
           ) : (
             <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {items.map((item) => {
+                const primaryPriceValue =
+                  item.jenisListing === "dijual"
+                    ? item.salePriceValue
+                    : item.jenisListing === "disewa"
+                      ? item.rentPriceValue
+                      : item.priceValue;
+
                 const displayPrice = formatPriceByCurrency(
-                  item.priceValue,
+                  primaryPriceValue,
                   currentCurrency
                 );
+
                 const secondaryPrice = formatSecondaryPrice(
-                  item.priceValue,
+                  primaryPriceValue,
                   currentCurrency
                 );
+
+                const saleDisplayPrice = formatPriceByCurrency(
+                  item.salePriceValue,
+                  currentCurrency
+                );
+
+                const saleSecondaryPrice = formatSecondaryPrice(
+                  item.salePriceValue,
+                  currentCurrency
+                );
+
+                const rentDisplayPrice = formatPriceByCurrency(
+                  item.rentPriceValue,
+                  currentCurrency
+                );
+
+                const rentSecondaryPrice = formatSecondaryPrice(
+                  item.rentPriceValue,
+                  currentCurrency
+                );
+
+                const rentalPeriod =
+                  item.rentalType === "monthly"
+                    ? lang === "id"
+                      ? "Bulan"
+                      : "Month"
+                    : item.rentalType === "yearly"
+                      ? lang === "id"
+                        ? "Tahun"
+                        : "Year"
+                      : "";
+
+                const listingTypeLabel =
+                  item.jenisListing === "dijual_disewa"
+                    ? lang === "id"
+                      ? "Dijual + Disewa"
+                      : "For Sale + For Rent"
+                    : item.jenisListing === "lelang"
+                      ? lang === "id"
+                        ? "Lelang"
+                        : "Auction"
+                      : item.jenisListing === "disewa"
+                        ? t.forRent
+                        : t.forSale;
 
                 return (
                   <div
@@ -531,12 +607,12 @@ export default function PemilikSavedPage() {
 
                       <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                         <span className="rounded-full border border-white/80 bg-white/95 px-3 py-1 text-[11px] font-semibold text-[#1C1C1E] shadow-sm">
-                          {item.jenisListing === "dijual"
-                            ? t.forSale
-                            : t.forRent}
+                          {listingTypeLabel}
                         </span>
 
-                        {item.jenisListing === "disewa" && item.rentalType ? (
+                        {(item.jenisListing === "disewa" ||
+                          item.jenisListing === "dijual_disewa") &&
+                        item.rentalType ? (
                           <span
                             className={`rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm ${rentalTypeBadgeClass(
                               item.rentalType
@@ -557,13 +633,51 @@ export default function PemilikSavedPage() {
                     </div>
 
                     <div className="p-4 sm:p-5">
-                      <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
-                        {displayPrice}
-                      </div>
+                      {item.jenisListing === "dijual_disewa" ? (
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
+                              {saleDisplayPrice}
+                            </div>
+                            <div className="mt-0.5 text-xs font-semibold text-[#1C1C1E]">
+                              {lang === "id" ? "Dijual" : "For Sale"}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 sm:text-sm">
+                              ≈ {saleSecondaryPrice}
+                            </div>
+                          </div>
 
-                      <div className="mt-1 text-xs text-gray-500 sm:text-sm">
-                        ≈ {secondaryPrice}
-                      </div>
+                          <div>
+                            <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
+                              {rentDisplayPrice}
+                              {rentalPeriod ? ` / ${rentalPeriod}` : ""}
+                            </div>
+                            <div className="mt-0.5 text-xs font-semibold text-[#1C1C1E]">
+                              {lang === "id" ? "Disewa" : "For Rent"}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 sm:text-sm">
+                              ≈ {rentSecondaryPrice}
+                              {rentalPeriod ? ` / ${rentalPeriod}` : ""}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-lg font-extrabold text-[#1C1C1E] sm:text-xl">
+                            {displayPrice}
+                            {item.jenisListing === "disewa" && rentalPeriod
+                              ? ` / ${rentalPeriod}`
+                              : ""}
+                          </div>
+
+                          <div className="mt-1 text-xs text-gray-500 sm:text-sm">
+                            ≈ {secondaryPrice}
+                            {item.jenisListing === "disewa" && rentalPeriod
+                              ? ` / ${rentalPeriod}`
+                              : ""}
+                          </div>
+                        </>
+                      )}
 
                       <Link href={`/properti/${item.id}`} className="mt-2 block">
                         <h3 className="text-sm font-semibold leading-snug text-[#1C1C1E] hover:underline sm:text-base">
