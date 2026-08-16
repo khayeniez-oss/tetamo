@@ -265,6 +265,28 @@ export default function AgentPropertiDetailPage() {
     const lt = getString(draftRecord, "lt").trim();
     const listingType = getString(draftRecord, "listingType").trim();
     const rentalType = getString(draftRecord, "rentalType").trim();
+    const salePriceRaw = getString(draftRecord, "salePrice").trim();
+    const rentPriceRaw = getString(draftRecord, "rentPrice").trim();
+
+    const hasSale =
+      listingType === "dijual" || listingType === "dijual_disewa";
+    const hasRent =
+      listingType === "disewa" || listingType === "dijual_disewa";
+    const isAuction = listingType === "lelang";
+
+    const salePrice = salePriceRaw || (hasSale ? price : "");
+    const rentPrice =
+      rentPriceRaw || (listingType === "disewa" ? price : "");
+
+    const hasRequiredPrice = isAuction
+      ? price.length > 0
+      : hasSale && hasRent
+        ? salePrice.length > 0 && rentPrice.length > 0
+        : hasSale
+          ? salePrice.length > 0
+          : hasRent
+            ? rentPrice.length > 0
+            : false;
 
     const sertifikat = getString(draftRecord, "sertifikat").trim();
     const jenisKepemilikan = getString(
@@ -276,13 +298,13 @@ export default function AgentPropertiDetailPage() {
 
     const isApartment = ["apartemen", "studio"].includes(propertyType);
     const usesLandSize = !isApartment;
-    const requiresRentalType = listingType === "disewa";
-    const requiresSaleLegal = listingType !== "disewa";
+    const requiresRentalType = hasRent;
+    const requiresSaleLegal = hasSale || isAuction;
     const requiresLandLegal = propertyType === "tanah" && requiresSaleLegal;
 
     const baseValid =
       propertyType.length > 0 &&
-      price.length > 0 &&
+      hasRequiredPrice &&
       (!usesLandSize || lt.length > 0);
 
     if (!baseValid) return false;

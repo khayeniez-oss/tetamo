@@ -210,6 +210,25 @@ export default function PemilikIklanEditPage() {
 
         propertyType: stringFrom(propertyRecord.property_type),
         price: stringFrom(propertyRecord.price),
+        salePrice: stringFrom(
+          propertyRecord.sale_price,
+          ["dijual", "dijual_disewa"].includes(
+            stringFrom(propertyRecord.listing_type)
+          )
+            ? propertyRecord.price
+            : undefined
+        ),
+        rentPrice: stringFrom(
+          propertyRecord.rent_price,
+          stringFrom(propertyRecord.listing_type) === "disewa"
+            ? propertyRecord.price
+            : undefined
+        ),
+
+        saleType: stringFrom(propertyRecord.sale_type),
+        leaseYears: stringFrom(propertyRecord.lease_years),
+        leaseUntilYear: stringFrom(propertyRecord.lease_until_year),
+        leaseExtendable: stringFrom(propertyRecord.lease_extendable),
 
         lt: stringFrom(propertyRecord.lt, propertyRecord.land_size),
         lb: stringFrom(propertyRecord.lb, propertyRecord.building_size),

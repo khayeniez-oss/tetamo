@@ -6,7 +6,7 @@ export type PemilikPlanType = "basic" | "priority" | "featured";
 export type PemilikPaymentGateway = "stripe" | "xendit" | "hitpay";
 
 export type PemilikListingDraft = {
-  listingType?: "dijual" | "disewa" | "lelang" | "";
+  listingType?: "dijual" | "disewa" | "dijual_disewa" | "lelang" | "";
   rentalType?: "bulanan" | "tahunan" | "";
   plan?: PemilikPlanType;
   mode?: "create" | "edit";
@@ -23,6 +23,8 @@ export type PemilikListingDraft = {
 
   propertyType?: string;
   price?: string;
+  salePrice?: string;
+  rentPrice?: string;
   lt?: string;
   lb?: string;
   bed?: string;
@@ -112,6 +114,8 @@ function getEmptyDraft(): PemilikListingDraft {
     propertyType: undefined,
     marketType: undefined,
     price: undefined,
+    salePrice: undefined,
+    rentPrice: undefined,
     lt: undefined,
     lb: undefined,
     bed: undefined,

@@ -748,6 +748,10 @@ export default function ListingIklan({
             {[
               { key: "dijual", label: lang === "id" ? "Dijual" : "For Sale" },
               { key: "disewa", label: lang === "id" ? "Disewa" : "For Rent" },
+              {
+                key: "dijual_disewa",
+                label: lang === "id" ? "Dijual + Disewa" : "For Sale + For Rent",
+              },
               { key: "lelang", label: lang === "id" ? "Lelang" : "Auction" },
             ].map((item) => {
               const active = listingType === item.key;
@@ -773,8 +777,8 @@ export default function ListingIklan({
           {!listingType && (
             <p className="mt-2 text-xs leading-5 text-gray-500">
               {lang === "id"
-                ? "Pilih salah satu: Dijual / Disewa / Lelang."
-                : "Choose one: For Sale / For Rent / Auction."}
+                ? "Pilih salah satu: Dijual / Disewa / Dijual + Disewa / Lelang."
+                : "Choose one: For Sale / For Rent / For Sale + For Rent / Auction."}
             </p>
           )}
         </div>

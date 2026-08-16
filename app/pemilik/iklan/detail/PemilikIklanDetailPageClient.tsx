@@ -39,6 +39,28 @@ export default function PemilikIklanDetailPageClient() {
     const lt = String(draft?.lt || "").trim();
     const listingType = String(draft?.listingType || "").trim();
     const rentalType = String(draft?.rentalType || "").trim();
+    const salePriceRaw = String(draft?.salePrice || "").trim();
+    const rentPriceRaw = String(draft?.rentPrice || "").trim();
+
+    const hasSale =
+      listingType === "dijual" || listingType === "dijual_disewa";
+    const hasRent =
+      listingType === "disewa" || listingType === "dijual_disewa";
+    const isAuction = listingType === "lelang";
+
+    const salePrice = salePriceRaw || (hasSale ? price : "");
+    const rentPrice =
+      rentPriceRaw || (listingType === "disewa" ? price : "");
+
+    const hasRequiredPrice = isAuction
+      ? price.length > 0
+      : hasSale && hasRent
+        ? salePrice.length > 0 && rentPrice.length > 0
+        : hasSale
+          ? salePrice.length > 0
+          : hasRent
+            ? rentPrice.length > 0
+            : false;
 
     const sertifikat = String(draft?.sertifikat || "").trim();
     const jenisKepemilikan = String(draft?.jenisKepemilikan || "").trim();
@@ -47,12 +69,12 @@ export default function PemilikIklanDetailPageClient() {
 
     const isApartment = ["apartemen", "studio"].includes(propertyType);
     const usesLandSize = !isApartment;
-    const requiresRentalType = listingType === "disewa";
-    const requiresLandLegal = propertyType === "tanah" && !requiresRentalType;
+    const requiresRentalType = hasRent;
+    const requiresLandLegal = propertyType === "tanah" && (hasSale || isAuction);
 
     const baseValid =
       propertyType.length > 0 &&
-      price.length > 0 &&
+      hasRequiredPrice &&
       (!usesLandSize || lt.length > 0);
 
     if (!baseValid) return false;
@@ -74,6 +96,8 @@ export default function PemilikIklanDetailPageClient() {
   }, [
     draft?.propertyType,
     draft?.price,
+    draft?.salePrice,
+    draft?.rentPrice,
     draft?.lt,
     draft?.listingType,
     draft?.rentalType,

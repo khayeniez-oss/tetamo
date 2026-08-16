@@ -133,8 +133,12 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   const ownershipType = getString(draftRecord, "jenisKepemilikan");
   const savedSaleType = getString(draftRecord, "saleType");
 
-  const isDisewa = listingType === "disewa";
-  const isSaleLike = !isDisewa;
+  const hasSale =
+    listingType === "dijual" || listingType === "dijual_disewa";
+  const hasRent =
+    listingType === "disewa" || listingType === "dijual_disewa";
+  const isAuction = listingType === "lelang";
+  const isSaleLike = hasSale || isAuction;
   const hasPlan = Boolean(getString(draftRecord, "plan"));
 
   const inferredSaleType =
@@ -192,7 +196,24 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   const showLandTypeField = showLegalFields && !isApartment;
   const showZoningField = showLegalFields && !isApartment;
 
-  const price = parseNumber(draftRecord.price);
+  const legacyPrice = getString(draftRecord, "price");
+  const storedSalePrice = getString(draftRecord, "salePrice");
+  const storedRentPrice = getString(draftRecord, "rentPrice");
+
+  const salePriceValue =
+    storedSalePrice || (hasSale && !storedRentPrice ? legacyPrice : "");
+
+  const rentPriceValue =
+    storedRentPrice ||
+    (listingType === "disewa" && !storedSalePrice ? legacyPrice : "");
+
+  const primaryPriceValue = hasSale
+    ? salePriceValue
+    : hasRent
+      ? rentPriceValue
+      : legacyPrice;
+
+  const price = parseNumber(primaryPriceValue);
   const landSize = parseNumber(draftRecord.lt);
   const buildingSize = parseNumber(draftRecord.lb);
   const landUnit = getString(draftRecord, "landUnit") || "m2";
@@ -642,7 +663,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   function sanitizeHiddenFieldsBeforeNext() {
     const patch: DraftRecord = {};
 
-    if (isDisewa) {
+    if (!isSaleLike) {
       patch.marketType = "";
       patch.saleType = "";
       patch.leaseYears = "";
@@ -654,8 +675,19 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
       patch.jenisZoning = "";
     }
 
-    if (!isDisewa) {
+    if (!hasSale) {
+      patch.salePrice = "";
+    }
+
+    if (!hasRent) {
       patch.rentalType = "";
+      patch.rentPrice = "";
+    }
+
+    if (hasSale) {
+      patch.price = salePriceValue;
+    } else if (hasRent) {
+      patch.price = rentPriceValue;
     }
 
     if (!isLeaseholdSale) {
@@ -854,93 +886,161 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
 
               {propertyType ? (
                 <>
-                  {isDisewa ? (
-                <div>
-                  <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Jenis Sewa" : "Rental Type"}
-                  </label>
-                  <div className="mt-2">
-                    <TetamoSelect
-                      value={getString(draftRecord, "rentalType")}
-                      placeholder={lang === "id" ? "Pilih" : "Select"}
-                      options={[
-                        {
-                          value: "bulanan",
-                          label: lang === "id" ? "Bulanan" : "Monthly",
-                        },
-                        {
-                          value: "tahunan",
-                          label: lang === "id" ? "Tahunan" : "Yearly",
-                        },
-                      ]}
-                      onChange={(value) => updateDraft({ rentalType: value })}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-sm font-semibold text-[#1C1C1E]">
-                    {lang === "id" ? "Jenis Penjualan" : "Sale Type"}
-                  </label>
-                  <div className="mt-2">
-                    <TetamoSelect
-                      value={saleType}
-                      placeholder={lang === "id" ? "Pilih" : "Select"}
-                      options={[
-                        {
-                          value: "freehold",
-                          label:
-                            lang === "id"
-                              ? "Freehold / Hak Milik"
-                              : "Freehold / Hak Milik",
-                        },
-                        {
-                          value: "leasehold",
-                          label:
-                            lang === "id"
-                              ? "Leasehold / Hak Sewa"
-                              : "Leasehold / Hak Sewa",
-                        },
-                        {
-                          value: "hgb",
-                          label:
-                            lang === "id"
-                              ? "HGB / Hak Guna Bangunan"
-                              : "HGB / Right to Build",
-                        },
-                        {
-                          value: "hak_pakai",
-                          label:
-                            lang === "id" ? "Hak Pakai" : "Right to Use",
-                        },
-                        {
-                          value: "lainnya",
-                          label: lang === "id" ? "Lainnya" : "Other",
-                        },
-                      ]}
-                      onChange={handleSaleTypeChange}
-                    />
-                  </div>
-                </div>
-              )}
+                  {hasRent ? (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1C1C1E]">
+                        {lang === "id" ? "Jenis Sewa" : "Rental Type"}
+                      </label>
+                      <div className="mt-2">
+                        <TetamoSelect
+                          value={getString(draftRecord, "rentalType")}
+                          placeholder={lang === "id" ? "Pilih" : "Select"}
+                          options={[
+                            {
+                              value: "bulanan",
+                              label: lang === "id" ? "Bulanan" : "Monthly",
+                            },
+                            {
+                              value: "tahunan",
+                              label: lang === "id" ? "Tahunan" : "Yearly",
+                            },
+                          ]}
+                          onChange={(value) =>
+                            updateDraft({ rentalType: value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : null}
 
-              <div>
-                <label className="block text-sm font-semibold text-[#1C1C1E]">
-                  {lang === "id" ? "Harga (Rp)" : "Price (Rp)"}{" "}
-                  <span className="text-gray-400">
-                    {lang === "id" ? "(Wajib)" : "(Required)"}
-                  </span>
-                </label>
-                <input
-                  className={inputBase}
-                  inputMode="numeric"
-                  placeholder={
-                    lang === "id" ? "Contoh: 1500000000" : "Example: 1500000000"
-                  }
-                  value={getString(draftRecord, "price")}
-                  onChange={(e) => updateDraft({ price: cleanNumber(e.target.value) })}
-                />
-              </div>
+                  {isSaleLike ? (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1C1C1E]">
+                        {lang === "id" ? "Jenis Penjualan" : "Sale Type"}
+                      </label>
+                      <div className="mt-2">
+                        <TetamoSelect
+                          value={saleType}
+                          placeholder={lang === "id" ? "Pilih" : "Select"}
+                          options={[
+                            {
+                              value: "freehold",
+                              label: "Freehold / Hak Milik",
+                            },
+                            {
+                              value: "leasehold",
+                              label: "Leasehold / Hak Sewa",
+                            },
+                            {
+                              value: "hgb",
+                              label:
+                                lang === "id"
+                                  ? "HGB / Hak Guna Bangunan"
+                                  : "HGB / Right to Build",
+                            },
+                            {
+                              value: "hak_pakai",
+                              label:
+                                lang === "id" ? "Hak Pakai" : "Right to Use",
+                            },
+                            {
+                              value: "lainnya",
+                              label: lang === "id" ? "Lainnya" : "Other",
+                            },
+                          ]}
+                          onChange={handleSaleTypeChange}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {hasSale ? (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1C1C1E]">
+                        {lang === "id" ? "Harga Jual (Rp)" : "Sale Price (Rp)"}{" "}
+                        <span className="text-gray-400">
+                          {lang === "id" ? "(Wajib)" : "(Required)"}
+                        </span>
+                      </label>
+                      <input
+                        className={inputBase}
+                        inputMode="numeric"
+                        placeholder={
+                          lang === "id"
+                            ? "Contoh: 1500000000"
+                            : "Example: 1500000000"
+                        }
+                        value={salePriceValue}
+                        onChange={(e) => {
+                          const value = cleanNumber(e.target.value);
+                          updateDraft({
+                            salePrice: value,
+                            price: value,
+                          });
+                        }}
+                      />
+                    </div>
+                  ) : null}
+
+                  {hasRent ? (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1C1C1E]">
+                        {lang === "id" ? "Harga Sewa (Rp)" : "Rental Price (Rp)"}{" "}
+                        <span className="text-gray-400">
+                          {lang === "id" ? "(Wajib)" : "(Required)"}
+                        </span>
+                      </label>
+                      <input
+                        className={inputBase}
+                        inputMode="numeric"
+                        placeholder={
+                          lang === "id"
+                            ? "Contoh: 150000000"
+                            : "Example: 150000000"
+                        }
+                        value={rentPriceValue}
+                        onChange={(e) => {
+                          const value = cleanNumber(e.target.value);
+
+                          if (listingType === "disewa") {
+                            updateDraft({
+                              rentPrice: value,
+                              price: value,
+                            });
+                            return;
+                          }
+
+                          updateDraft({ rentPrice: value });
+                        }}
+                      />
+                    </div>
+                  ) : null}
+
+                  {isAuction ? (
+                    <div>
+                      <label className="block text-sm font-semibold text-[#1C1C1E]">
+                        {lang === "id" ? "Harga Lelang (Rp)" : "Auction Price (Rp)"}{" "}
+                        <span className="text-gray-400">
+                          {lang === "id" ? "(Wajib)" : "(Required)"}
+                        </span>
+                      </label>
+                      <input
+                        className={inputBase}
+                        inputMode="numeric"
+                        placeholder={
+                          lang === "id"
+                            ? "Contoh: 1500000000"
+                            : "Example: 1500000000"
+                        }
+                        value={legacyPrice}
+                        onChange={(e) =>
+                          updateDraft({
+                            price: cleanNumber(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                  ) : null}
 
               {showMarketType ? (
                 <div>

@@ -255,20 +255,53 @@ export default function PemilikIklanVerifikasiPageClient() {
 
       const verification = (draft?.verification || {}) as Record<string, any>;
 
+      const listingTypeForSave = cleanText(draft?.listingType);
+      const legacyPriceForSave = cleanNumber(draft?.price);
+      const salePriceForSave = cleanNumber((draft as any)?.salePrice);
+      const rentPriceForSave = cleanNumber((draft as any)?.rentPrice);
+
+      const dbSalePrice =
+        listingTypeForSave === "dijual" ||
+        listingTypeForSave === "dijual_disewa"
+          ? salePriceForSave ?? legacyPriceForSave
+          : null;
+
+      const dbRentPrice =
+        listingTypeForSave === "disewa" ||
+        listingTypeForSave === "dijual_disewa"
+          ? rentPriceForSave ??
+            (listingTypeForSave === "disewa" ? legacyPriceForSave : null)
+          : null;
+
+      const dbPrice =
+        listingTypeForSave === "disewa"
+          ? dbRentPrice
+          : listingTypeForSave === "dijual" ||
+              listingTypeForSave === "dijual_disewa"
+            ? dbSalePrice
+            : legacyPriceForSave;
+
       const propertyPayload: Record<string, any> = {
         user_id: user.id,
 
         title: cleanText(draft?.title) || "",
         title_id: cleanText((draft as any)?.title_id),
 
-        listing_type: cleanText(draft?.listingType),
+        listing_type: listingTypeForSave,
         property_type: cleanText(draft?.propertyType),
-        price: cleanNumber(draft?.price),
+        price: dbPrice,
+        sale_price: dbSalePrice,
+        rent_price: dbRentPrice,
 
         description: cleanText(draft?.description) || "",
         description_id: cleanText((draft as any)?.description_id),
 
         market_type: cleanText(draft?.marketType),
+
+        sale_type: cleanText((draft as any)?.saleType),
+        lease_years: cleanNumber((draft as any)?.leaseYears),
+        lease_until_year: cleanNumber((draft as any)?.leaseUntilYear),
+        lease_extendable: cleanText((draft as any)?.leaseExtendable),
 
         status: "pending_payment",
 

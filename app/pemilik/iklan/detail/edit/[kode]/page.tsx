@@ -34,6 +34,28 @@ export default function Page() {
     const lt = String(draft?.lt || "").trim();
     const listingType = String(draft?.listingType || "").trim();
     const rentalType = String(draft?.rentalType || "").trim();
+    const salePriceRaw = String(draft?.salePrice || "").trim();
+    const rentPriceRaw = String(draft?.rentPrice || "").trim();
+
+    const hasSale =
+      listingType === "dijual" || listingType === "dijual_disewa";
+    const hasRent =
+      listingType === "disewa" || listingType === "dijual_disewa";
+    const isAuction = listingType === "lelang";
+
+    const salePrice = salePriceRaw || (hasSale ? price : "");
+    const rentPrice =
+      rentPriceRaw || (listingType === "disewa" ? price : "");
+
+    const hasRequiredPrice = isAuction
+      ? price.length > 0
+      : hasSale && hasRent
+        ? salePrice.length > 0 && rentPrice.length > 0
+        : hasSale
+          ? salePrice.length > 0
+          : hasRent
+            ? rentPrice.length > 0
+            : false;
 
     const sertifikat = String(draft?.sertifikat || "").trim();
     const jenisKepemilikan = String(draft?.jenisKepemilikan || "").trim();
@@ -42,16 +64,17 @@ export default function Page() {
 
     const baseValid =
       propertyType.length > 0 &&
-      price.length > 0 &&
+      hasRequiredPrice &&
       lt.length > 0;
 
-    if (propertyType === "tanah") {
-      if (listingType === "disewa") {
-        return baseValid && rentalType.length > 0;
-      }
+    if (!baseValid) return false;
 
+    if (hasRent && rentalType.length === 0) {
+      return false;
+    }
+
+    if (propertyType === "tanah" && (hasSale || isAuction)) {
       return (
-        baseValid &&
         sertifikat.length > 0 &&
         jenisKepemilikan.length > 0 &&
         jenisTanah.length > 0 &&
@@ -59,14 +82,12 @@ export default function Page() {
       );
     }
 
-    if (listingType === "disewa") {
-      return baseValid && rentalType.length > 0;
-    }
-
-    return baseValid;
+    return true;
   }, [
     draft?.propertyType,
     draft?.price,
+    draft?.salePrice,
+    draft?.rentPrice,
     draft?.lt,
     draft?.listingType,
     draft?.rentalType,

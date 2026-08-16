@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 
 export type AgentListingDraft = {
-  listingType?: "dijual" | "disewa" | "lelang" | "";
+  listingType?: "dijual" | "disewa" | "dijual_disewa" | "lelang" | "";
   rentalType?: "bulanan" | "tahunan" | "";
   mode?: "create" | "edit";
   source?: "agent";
@@ -19,6 +19,8 @@ export type AgentListingDraft = {
 
   propertyType?: string;
   price?: string;
+  salePrice?: string;
+  rentPrice?: string;
   lt?: string;
   lb?: string;
   bed?: string;
@@ -76,6 +78,8 @@ function getEmptyDraft(): AgentListingDraft {
     propertyType: undefined,
     marketType: undefined,
     price: undefined,
+    salePrice: undefined,
+    rentPrice: undefined,
     lt: undefined,
     lb: undefined,
     bed: undefined,

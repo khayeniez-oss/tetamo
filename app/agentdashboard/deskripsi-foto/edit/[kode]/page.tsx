@@ -157,6 +157,16 @@ export default function AgentEditDeskripsiFotoPage() {
           description_id: (property as any).description_id ?? "",
 
           price: toInputValue(property.price),
+          salePrice: toInputValue(
+            (property as any).sale_price ??
+              (["dijual", "dijual_disewa"].includes(property.listing_type)
+                ? property.price
+                : null)
+          ),
+          rentPrice: toInputValue(
+            (property as any).rent_price ??
+              (property.listing_type === "disewa" ? property.price : null)
+          ),
 
           address: property.address ?? "",
           province: property.province ?? "",
@@ -283,8 +293,34 @@ export default function AgentEditDeskripsiFotoPage() {
 
       const coverImageUrl = photos[coverIndex] || photos[0] || null;
 
+      const listingTypeForSave = cleanText(draft?.listingType);
+      const legacyPriceForSave = cleanNumber(draft?.price);
+      const salePriceForSave = cleanNumber((draft as any)?.salePrice);
+      const rentPriceForSave = cleanNumber((draft as any)?.rentPrice);
+
+      const dbSalePrice =
+        listingTypeForSave === "dijual" ||
+        listingTypeForSave === "dijual_disewa"
+          ? salePriceForSave ?? legacyPriceForSave
+          : null;
+
+      const dbRentPrice =
+        listingTypeForSave === "disewa" ||
+        listingTypeForSave === "dijual_disewa"
+          ? rentPriceForSave ??
+            (listingTypeForSave === "disewa" ? legacyPriceForSave : null)
+          : null;
+
+      const dbPrice =
+        listingTypeForSave === "disewa"
+          ? dbRentPrice
+          : listingTypeForSave === "dijual" ||
+              listingTypeForSave === "dijual_disewa"
+            ? dbSalePrice
+            : legacyPriceForSave;
+
       const updatePayload: Record<string, any> = {
-        listing_type: cleanText(draft?.listingType),
+        listing_type: listingTypeForSave,
         rental_type: cleanText(draft?.rentalType),
         property_type: cleanText(draft?.propertyType),
         market_type: cleanText(draft?.marketType),
@@ -300,7 +336,9 @@ export default function AgentEditDeskripsiFotoPage() {
         description: cleanText(draft?.description),
         description_id: cleanText((draft as any)?.description_id),
 
-        price: cleanNumber(draft?.price),
+        price: dbPrice,
+        sale_price: dbSalePrice,
+        rent_price: dbRentPrice,
 
         address: cleanText(draft?.address),
         province: cleanText(draft?.province),
