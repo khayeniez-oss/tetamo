@@ -865,10 +865,6 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
                       placeholder={lang === "id" ? "Pilih" : "Select"}
                       options={[
                         {
-                          value: "harian",
-                          label: lang === "id" ? "Harian" : "Daily",
-                        },
-                        {
                           value: "bulanan",
                           label: lang === "id" ? "Bulanan" : "Monthly",
                         },
