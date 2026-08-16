@@ -46,7 +46,7 @@ type Property = {
   id: string;
   slug?: string;
 
-  jenisListing: "dijual" | "disewa";
+  jenisListing: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   saleType?: string;
   propertyType: string;
@@ -64,6 +64,8 @@ type Property = {
   viewCount: number;
 
   priceValue: number;
+  salePriceValue: number;
+  rentPriceValue: number;
 
   province: string;
   area: string;
@@ -110,6 +112,8 @@ type PropertyRow = {
   view_count: number | null;
 
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -537,6 +541,45 @@ function PropertyCard({
       p.priceValue,
       currentCurrency
     );
+
+  const saleDisplayPrice =
+    formatPriceByCurrency(
+      p.salePriceValue,
+      currentCurrency
+    );
+
+  const saleSecondaryPrice =
+    formatSecondaryPrice(
+      p.salePriceValue,
+      currentCurrency
+    );
+
+  const rentDisplayPrice =
+    formatPriceByCurrency(
+      p.rentPriceValue,
+      currentCurrency
+    );
+
+  const rentSecondaryPrice =
+    formatSecondaryPrice(
+      p.rentPriceValue,
+      currentCurrency
+    );
+
+  const rentalPeriod =
+    p.rentalType === "monthly"
+      ? lang === "id"
+        ? "Bulan"
+        : "Month"
+      : p.rentalType === "yearly"
+        ? lang === "id"
+          ? "Tahun"
+          : "Year"
+        : p.rentalType === "daily"
+          ? lang === "id"
+            ? "Hari"
+            : "Day"
+          : "";
 
   const saleTypeLabel =
     getSaleTypeLabel(
@@ -1516,18 +1559,25 @@ Is this property still available?`;
         <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center gap-2">
 
           <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-extrabold text-[#1C1C1E] shadow-sm">
-            {p.jenisListing ===
-            "dijual"
+            {p.jenisListing === "dijual_disewa"
               ? lang === "id"
-                ? "Dijual"
-                : "For Sale"
-              : lang === "id"
-                ? "Disewa"
-                : "For Rent"}
+                ? "Dijual + Disewa"
+                : "For Sale + For Rent"
+              : p.jenisListing === "lelang"
+                ? lang === "id"
+                  ? "Lelang"
+                  : "Auction"
+                : p.jenisListing === "dijual"
+                  ? lang === "id"
+                    ? "Dijual"
+                    : "For Sale"
+                  : lang === "id"
+                    ? "Disewa"
+                    : "For Rent"}
           </span>
 
-          {p.jenisListing ===
-            "disewa" &&
+          {(p.jenisListing === "disewa" ||
+            p.jenisListing === "dijual_disewa") &&
           p.rentalType ? (
             <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
               {getRentalTypeLabel(
@@ -1537,8 +1587,9 @@ Is this property still available?`;
             </span>
           ) : null}
 
-          {p.jenisListing ===
-            "dijual" &&
+          {(p.jenisListing === "dijual" ||
+            p.jenisListing === "dijual_disewa" ||
+            p.jenisListing === "lelang") &&
           saleTypeLabel ? (
             <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
               {saleTypeLabel}
@@ -1570,13 +1621,40 @@ Is this property still available?`;
 
     {/* PRICE */}
     <div className="min-w-0">
-      <p className="text-[22px] font-extrabold leading-none tracking-[-0.035em] text-[#1C1C1E] sm:text-[24px]">
-        {displayPrice}
-      </p>
+      {p.jenisListing === "dijual_disewa" ? (
+        <div className="space-y-3">
+          <div>
+            <p className="text-[20px] font-extrabold leading-tight tracking-[-0.035em] text-[#1C1C1E] sm:text-[22px]">
+              {saleDisplayPrice} — {lang === "id" ? "Dijual" : "For Sale"}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-gray-400">
+              ≈ {saleSecondaryPrice}
+            </p>
+          </div>
 
-      <p className="mt-2 text-xs font-semibold text-gray-400">
-        ≈ {secondaryPrice}
-      </p>
+          <div>
+            <p className="text-[17px] font-bold leading-tight text-[#1C1C1E] sm:text-[19px]">
+              {rentDisplayPrice}
+              {rentalPeriod ? ` / ${rentalPeriod}` : ""} —{" "}
+              {lang === "id" ? "Disewa" : "For Rent"}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-gray-400">
+              ≈ {rentSecondaryPrice}
+              {rentalPeriod ? ` / ${rentalPeriod}` : ""}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-[22px] font-extrabold leading-none tracking-[-0.035em] text-[#1C1C1E] sm:text-[24px]">
+            {displayPrice}
+          </p>
+
+          <p className="mt-2 text-xs font-semibold text-gray-400">
+            ≈ {secondaryPrice}
+          </p>
+        </>
+      )}
     </div>
 
     {/* SAVE / SHARE */}
@@ -2306,6 +2384,8 @@ export default function PropertiPageClient({
         description_id,
         view_count,
         price,
+        sale_price,
+        rent_price,
         province,
         city,
         area,
@@ -2642,9 +2722,10 @@ export default function PropertiPageClient({
             undefined,
 
           jenisListing:
-            row.listing_type ===
-            "disewa"
-              ? "disewa"
+            row.listing_type === "disewa" ||
+            row.listing_type === "dijual_disewa" ||
+            row.listing_type === "lelang"
+              ? row.listing_type
               : "dijual",
 
           rentalType:
@@ -2697,6 +2778,25 @@ export default function PropertiPageClient({
           priceValue:
             Number(
               row.price ?? 0
+            ),
+
+          salePriceValue:
+            Number(
+              row.sale_price ??
+                (row.listing_type === "dijual" ||
+                row.listing_type === "dijual_disewa"
+                  ? row.price
+                  : 0) ??
+                0
+            ),
+
+          rentPriceValue:
+            Number(
+              row.rent_price ??
+                (row.listing_type === "disewa"
+                  ? row.price
+                  : 0) ??
+                0
             ),
 
           province:
@@ -3245,13 +3345,19 @@ export default function PropertiPageClient({
      LISTING FILTER
   ========================= */
 
-  if (
-    jenisListing === "dijual" ||
-    jenisListing === "disewa"
-  ) {
+  if (jenisListing === "dijual") {
     list = list.filter(
       (property) =>
-        property.jenisListing === jenisListing
+        property.jenisListing === "dijual" ||
+        property.jenisListing === "dijual_disewa"
+    );
+  }
+
+  if (jenisListing === "disewa") {
+    list = list.filter(
+      (property) =>
+        property.jenisListing === "disewa" ||
+        property.jenisListing === "dijual_disewa"
     );
   }
 
@@ -3262,7 +3368,8 @@ export default function PropertiPageClient({
   if (selectedRentalType) {
     list = list.filter(
       (property) =>
-        property.jenisListing === "disewa" &&
+        (property.jenisListing === "disewa" ||
+          property.jenisListing === "dijual_disewa") &&
         property.rentalType === selectedRentalType
     );
   }

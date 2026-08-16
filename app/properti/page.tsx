@@ -26,7 +26,7 @@ type Property = {
 
   id: string;
   slug?: string;
-  jenisListing: "dijual" | "disewa";
+  jenisListing: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   propertyType: string;
   kode?: string;
@@ -40,6 +40,8 @@ type Property = {
   viewCount: number;
 
   priceValue: number;
+  salePriceValue: number;
+  rentPriceValue: number;
   province: string;
   area: string;
   size: string;
@@ -79,6 +81,8 @@ type PropertyRow = {
   view_count: number | null;
 
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -227,6 +231,8 @@ async function getInitialProperties(): Promise<Property[]> {
       description_id,
       view_count,
       price,
+      sale_price,
+      rent_price,
       province,
       city,
       area,
@@ -368,7 +374,12 @@ async function getInitialProperties(): Promise<Property[]> {
 
       id: row.id,
       slug: row.slug ?? undefined,
-      jenisListing: row.listing_type === "disewa" ? "disewa" : "dijual",
+      jenisListing:
+        row.listing_type === "disewa" ||
+        row.listing_type === "dijual_disewa" ||
+        row.listing_type === "lelang"
+          ? row.listing_type
+          : "dijual",
       rentalType: normalizeRentalType(row.rental_type),
       propertyType: row.property_type || "",
       kode: row.kode ?? undefined,
@@ -382,6 +393,19 @@ async function getInitialProperties(): Promise<Property[]> {
       viewCount: Number(row.view_count ?? 0),
 
       priceValue: Number(row.price ?? 0),
+      salePriceValue: Number(
+        row.sale_price ??
+          (row.listing_type === "dijual" ||
+          row.listing_type === "dijual_disewa"
+            ? row.price
+            : 0) ??
+          0
+      ),
+      rentPriceValue: Number(
+        row.rent_price ??
+          (row.listing_type === "disewa" ? row.price : 0) ??
+          0
+      ),
       province: row.province ?? "-",
       area: row.city || row.area || "-",
       size: `${row.building_size ?? row.land_size ?? 0} m²`,

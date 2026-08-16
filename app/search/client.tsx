@@ -25,7 +25,7 @@ type PropertyItem = {
   id: string;
   slug?: string;
 
-  jenisListing: "dijual" | "disewa";
+  jenisListing: "dijual" | "disewa" | "dijual_disewa" | "lelang";
   rentalType: RentalType;
   saleType: SaleType;
   propertyType: string;
@@ -33,6 +33,8 @@ type PropertyItem = {
   title: string;
   price: string;
   priceValue: number;
+  salePriceValue: number;
+  rentPriceValue: number;
 
   province: string;
   area: string;
@@ -109,6 +111,8 @@ type DbProperty = {
   title_id: string | null;
 
   price: number | null;
+  sale_price: number | null;
+  rent_price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
@@ -518,11 +522,19 @@ function calculateRelevanceScore(item: PropertyItem, query: string) {
     score += 220;
   }
 
-  if (normalizedQuery.includes("dijual") && item.jenisListing === "dijual") {
+  if (
+    normalizedQuery.includes("dijual") &&
+    (item.jenisListing === "dijual" ||
+      item.jenisListing === "dijual_disewa")
+  ) {
     score += 120;
   }
 
-  if (normalizedQuery.includes("disewa") && item.jenisListing === "disewa") {
+  if (
+    normalizedQuery.includes("disewa") &&
+    (item.jenisListing === "disewa" ||
+      item.jenisListing === "dijual_disewa")
+  ) {
     score += 120;
   }
 
@@ -640,6 +652,19 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
       : item.description || item.description_id || "-";
 
   const priceValue = Number(item.price ?? 0);
+  const salePriceValue = Number(
+    item.sale_price ??
+      (item.listing_type === "dijual" ||
+      item.listing_type === "dijual_disewa"
+        ? item.price
+        : 0) ??
+      0
+  );
+  const rentPriceValue = Number(
+    item.rent_price ??
+      (item.listing_type === "disewa" ? item.price : 0) ??
+      0
+  );
 
   return {
     verifiedListing: Boolean(item.verified_ok),
@@ -650,7 +675,12 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
     id: item.id,
     slug: item.slug || undefined,
 
-    jenisListing: item.listing_type === "disewa" ? "disewa" : "dijual",
+    jenisListing:
+      item.listing_type === "disewa" ||
+      item.listing_type === "dijual_disewa" ||
+      item.listing_type === "lelang"
+        ? item.listing_type
+        : "dijual",
     rentalType: normalizeRentalType(item.rental_type),
     saleType: normalizeSaleType(item.sale_type),
     propertyType: item.property_type || "",
@@ -658,6 +688,8 @@ function mapDbPropertyToUi(item: DbProperty, lang: string): PropertyItem {
     title: localizedTitle,
     price: formatIdr(priceValue),
     priceValue,
+    salePriceValue,
+    rentPriceValue,
 
     province: item.province || "-",
     area: item.area || item.city || "-",
@@ -1001,6 +1033,8 @@ export default function SearchPageContent() {
           title,
           title_id,
           price,
+          sale_price,
+          rent_price,
           province,
           city,
           area,
@@ -1186,15 +1220,24 @@ export default function SearchPageContent() {
           searchable.includes(normalizedQuery);
 
         const matchesJenis =
-          !jenisListingParam || item.jenisListing === jenisListingParam;
+          !jenisListingParam ||
+          (jenisListingParam === "dijual"
+            ? item.jenisListing === "dijual" ||
+              item.jenisListing === "dijual_disewa"
+            : item.jenisListing === "disewa" ||
+              item.jenisListing === "dijual_disewa");
 
         const matchesRental =
           !rentalTypeParam ||
-          (item.jenisListing === "disewa" && item.rentalType === rentalTypeParam);
+          ((item.jenisListing === "disewa" ||
+            item.jenisListing === "dijual_disewa") &&
+            item.rentalType === rentalTypeParam);
 
         const matchesSale =
           !saleTypeParam ||
-          (item.jenisListing === "dijual" && item.saleType === saleTypeParam);
+          ((item.jenisListing === "dijual" ||
+            item.jenisListing === "dijual_disewa") &&
+            item.saleType === saleTypeParam);
 
         const matchesProvince =
           !provinceParam || item.province === provinceParam;
@@ -1809,6 +1852,34 @@ export default function SearchPageContent() {
                 const saleLabel = getSaleTypeLabel(item.saleType, lang);
                 const propertyTypeLabel = formatPropertyType(item.propertyType, lang);
 
+                const listingLabel =
+                  item.jenisListing === "dijual_disewa"
+                    ? lang === "id"
+                      ? "Dijual + Disewa"
+                      : "For Sale + For Rent"
+                    : item.jenisListing === "lelang"
+                      ? lang === "id"
+                        ? "Lelang"
+                        : "Auction"
+                      : item.jenisListing === "dijual"
+                        ? t.forSale
+                        : t.forRent;
+
+                const rentalPeriod =
+                  item.rentalType === "monthly"
+                    ? lang === "id"
+                      ? "Bulan"
+                      : "Month"
+                    : item.rentalType === "yearly"
+                      ? lang === "id"
+                        ? "Tahun"
+                        : "Year"
+                      : item.rentalType === "daily"
+                        ? lang === "id"
+                          ? "Hari"
+                          : "Day"
+                        : "";
+
                 return (
                   <Link
                     href={`${getPropertyHref(item)}?back=${encodeURIComponent(
@@ -1838,10 +1909,12 @@ export default function SearchPageContent() {
                               : "border-yellow-200 bg-yellow-50 text-yellow-700"
                           }`}
                         >
-                          {item.jenisListing === "dijual" ? t.forSale : t.forRent}
+                          {listingLabel}
                         </span>
 
-                        {item.jenisListing === "disewa" && rentalLabel ? (
+                        {(item.jenisListing === "disewa" ||
+                          item.jenisListing === "dijual_disewa") &&
+                        rentalLabel ? (
                           <span
                             className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${rentalTypeBadgeClass(
                               item.rentalType
@@ -1851,7 +1924,10 @@ export default function SearchPageContent() {
                           </span>
                         ) : null}
 
-                        {item.jenisListing === "dijual" && saleLabel ? (
+                        {(item.jenisListing === "dijual" ||
+                          item.jenisListing === "dijual_disewa" ||
+                          item.jenisListing === "lelang") &&
+                        saleLabel ? (
                           <span
                             className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${saleTypeBadgeClass(
                               item.saleType
@@ -1898,9 +1974,27 @@ export default function SearchPageContent() {
                         {item.title}
                       </h3>
 
-                      <p className="text-base font-bold text-[#1C1C1E] sm:text-lg">
-                        {item.price}
-                      </p>
+                      {item.jenisListing === "dijual_disewa" ? (
+                        <div className="space-y-1">
+                          <p className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                            {formatIdr(item.salePriceValue)} — {t.forSale}
+                          </p>
+                          <p className="text-sm font-semibold text-[#1C1C1E] sm:text-base">
+                            {formatIdr(item.rentPriceValue)}
+                            {rentalPeriod ? ` / ${rentalPeriod}` : ""} — {t.forRent}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-base font-bold text-[#1C1C1E] sm:text-lg">
+                          {item.jenisListing === "disewa"
+                            ? `${formatIdr(item.rentPriceValue)}${
+                                rentalPeriod ? ` / ${rentalPeriod}` : ""
+                              }`
+                            : item.jenisListing === "dijual"
+                              ? formatIdr(item.salePriceValue)
+                              : item.price}
+                        </p>
+                      )}
 
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                         <span>{item.size}</span>
