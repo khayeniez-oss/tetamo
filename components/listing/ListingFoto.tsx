@@ -81,6 +81,7 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
 const LISTING_TYPE_LABELS: Record<string, string> = {
   dijual: "For Sale",
   disewa: "For Rent",
+  dijual_disewa: "For Sale + For Rent",
   lelang: "Auction",
 };
 
@@ -788,17 +789,45 @@ export default function ListingFoto({
 
     const location = getDraftLocation(draft);
 
-    const price = getDraftText(draft, [
-      "price",
-      "harga",
-      "priceIdr",
-      "hargaIdr",
-      "salePrice",
-      "rentPrice",
-      "yearlyPrice",
-      "monthlyPrice",
-      "auctionPrice",
+    const listingTypeRaw = getDraftText(draft, [
+      "listingType",
+      "listing_type",
+      "transactionType",
+      "listingPurpose",
+      "purpose",
     ]);
+
+    const salePriceForAi = getDraftText(draft, [
+      "salePrice",
+      "sale_price",
+    ]);
+
+    const rentPriceForAi = getDraftText(draft, [
+      "rentPrice",
+      "rent_price",
+    ]);
+
+    const price =
+      listingTypeRaw === "dijual_disewa"
+        ? joinUniqueText([
+            salePriceForAi
+              ? `Sale price: ${salePriceForAi}`
+              : "",
+            rentPriceForAi
+              ? `Rent price: ${rentPriceForAi}`
+              : "",
+          ])
+        : getDraftText(draft, [
+            "price",
+            "harga",
+            "priceIdr",
+            "hargaIdr",
+            "salePrice",
+            "rentPrice",
+            "yearlyPrice",
+            "monthlyPrice",
+            "auctionPrice",
+          ]);
 
     const bedrooms = getDraftText(draft, [
       "bedrooms",

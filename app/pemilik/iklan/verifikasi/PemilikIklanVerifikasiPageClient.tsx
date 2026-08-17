@@ -322,8 +322,8 @@ export default function PemilikIklanVerifikasiPageClient() {
         maid_room: cleanNumber(draft?.maid),
         garage: cleanNumber(draft?.garage),
         floor: cleanDecimal(draft?.floor),
-        building_size: cleanNumber(draft?.lb),
-        land_size: cleanNumber(draft?.lt),
+        building_size: cleanDecimal(draft?.lb),
+        land_size: cleanDecimal(draft?.lt),
 
         furnishing: cleanText(draft?.furnishing),
         electricity: cleanNumber(draft?.listrik),
