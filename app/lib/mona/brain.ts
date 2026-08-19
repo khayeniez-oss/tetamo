@@ -1142,6 +1142,37 @@ oke makasih
 sudah jelas
 cukup
 
+Also recognize SHORT CONTEXTUAL ACKNOWLEDGEMENTS such as:
+
+ok
+oke
+baik
+baik kak
+baik kk
+sip
+siap
+iya baik
+
+These are acknowledgement-only messages ONLY when the real preceding conversation
+shows the customer is simply acknowledging Mona's completed explanation or next step.
+
+Do NOT treat "iya", "ok", "baik" or similar short replies as an ending when they are
+actually answering a question Mona asked or supplying information that moves the
+conversation forward.
+
+When the latest customer message is only an acknowledgement AND:
+
+- it contains no new question;
+- it contains no new fact, objection, request or decision;
+- Mona's immediately previous message already gave the relevant answer or next step;
+
+then normally:
+
+replyNeeded=false
+
+Do not create another reply merely to acknowledge the acknowledgement.
+Do not repeat, paraphrase or summarize Mona's immediately previous answer.
+
 Do not invent another sales question.
 
 replyNeeded may be false if silence is more natural.
@@ -1711,6 +1742,12 @@ function enforceBrainRouting(
       ? decision.recommendedNextStep
       : null;
 
+  // Preserve an intentional model decision to stay silent on a completed
+  // acknowledgement turn before normal commercial routing can re-open it.
+  const acknowledgementSilence =
+    decision.replyNeeded === false &&
+    decision.conversationSituation === "casual";
+
   // Model output may classify or recommend, but deterministic routing owns
   // whether Mona is actually paused for a human. Start every understood turn
   // with handover cleared and only enable it below for explicit human-only cases.
@@ -2055,6 +2092,30 @@ function enforceBrainRouting(
   }
 
   /*
+   * ACKNOWLEDGEMENT SILENCE
+   * ----------------------
+   * If Brain already determined that a casual acknowledgement needs no reply,
+   * ordinary package/sales routing must not reopen the conversation merely
+   * because remembered context contains a package, price or payment topic.
+   */
+  if (
+    acknowledgementSilence &&
+    !result.clarificationNeeded
+  ) {
+    result = {
+      ...result,
+      replyNeeded: false,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      directQuestion: null,
+      handoverRecommended: false,
+      handoverReason: null,
+    };
+  }
+
+  /*
    * DETERMINISTIC HUMAN-ONLY ROUTES
    * Refund, legal, support and an explicit request for a human belong to the
    * Tetamo team. Normal pricing, package questions, objections, hesitation and
@@ -2198,6 +2259,8 @@ OUTPUT RULES:
 - Campaign never establishes role.
 - clarificationNeeded=true only when understood=true but one material detail must be confirmed before answering safely.
 - clarificationNeeded=true means ask one clarification; do not guess and do not hand over merely for clarification.
+- If the latest message is only a contextual acknowledgement of Mona's already-complete previous answer and adds no new question, fact, request, objection or decision, normally set replyNeeded=false.
+- Never generate another turn merely to repeat or paraphrase Mona's immediately previous answer.
 - timingDependency.active=true only for a real future dependency, waiting condition, or stated later time.
 - Generic objection or hesitation alone does not activate timingDependency.
 - Do not write a WhatsApp reply.

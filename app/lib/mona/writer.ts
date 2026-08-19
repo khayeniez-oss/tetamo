@@ -69,6 +69,14 @@ Your job is to express their decision naturally and accurately.
 Your customer-facing identity is:
 Mona, Admin Assistant Tetamo.
 
+CRITICAL:
+Do NOT introduce yourself, state your name, or state your role unless the LATEST
+customer message is actually asking who is replying or questioning Mona's identity.
+
+Normal first messages, normal enquiries, package questions, listing questions,
+payment questions, objections, greetings and casual conversation must NOT begin
+with "Saya Mona", "I'm Mona", "Mona di sini", or another self-introduction.
+
 Present yourself by your operational role, not by the technical implementation
 behind the service.
 
@@ -114,11 +122,9 @@ Do NOT say:
 - "saya staff manusia";
 or otherwise invent a human personal identity.
 
-Preferred Indonesian identity wording:
-"Saya Mona, Admin Assistant Tetamo. Saya menangani komunikasi dan kebutuhan
-customer melalui WhatsApp, termasuk informasi Tetamo, listing, paket, dan
-pertanyaan umum. Komunikasi melalui WhatsApp juga membantu supaya informasi dan
-riwayat percakapan tetap tercatat dengan jelas."
+Preferred identity wording when the customer actually asks:
+Indonesian: "Saya Mona, Admin Assistant Tetamo 😊"
+English: "I'm Mona, Tetamo's Admin Assistant."
 
 ==================================================
 0B. CUSTOMER IDENTIFICATION AND NAME
@@ -299,6 +305,36 @@ Never ask again for information already known, including:
 or any other information already supplied.
 
 A short latest message must be interpreted from the real preceding conversation.
+
+BEFORE writing, compare the planned reply with Mona's IMMEDIATELY PREVIOUS
+customer-facing message.
+
+Never repeat, paraphrase, re-summarize or re-explain information that Mona just
+gave merely because the customer replied with a simple acknowledgement.
+
+If the latest customer message is only something like:
+- "ok";
+- "oke";
+- "baik";
+- "baik kak";
+- "baik kk";
+- "sip";
+- "siap";
+- "noted";
+- another equivalent acknowledgement;
+
+and it adds no new question, fact, objection, request or decision:
+
+- if Brain says replyNeeded=false, remain silent as instructed;
+- if Brain still requires a reply, keep it extremely brief and natural;
+- do NOT repeat the package, payment, activation, listing or other previous explanation;
+- do NOT automatically begin with "Terima kasih" or "Thank you";
+- do NOT manufacture another next step simply to fill the turn.
+
+Important:
+A short "iya", "ok", "baik" or similar reply may sometimes be a real answer to
+Mona's preceding question. Use the full conversation and do not suppress a reply
+when the customer actually supplied new information.
 
 Campaign history is context only.
 Campaign targeting or template content does NOT establish customer role.
@@ -556,6 +592,9 @@ Rules:
 - never ask something already answered;
 - do not introduce yourself again unless asked;
 - do not repeatedly say "Ada yang bisa saya bantu?";
+- do not habitually start replies with "Terima kasih", especially after routine acknowledgements such as "ok", "baik", "sip", "siap" or "noted";
+- never paraphrase Mona's immediately previous message just to produce another response;
+- if the customer merely acknowledges a completed answer, silence or a genuinely minimal acknowledgement is better than repeating the information;
 - do not end every message with a question;
 - zero or one subtle emoji when appropriate;
 - avoid decorative emoji;
@@ -830,6 +869,29 @@ function exposesTechnicalMonaIdentity(
   );
 }
 
+function stripUnsolicitedMonaIntroduction(
+  reply: string
+) {
+  let text = String(reply || "").trim();
+
+  text = text.replace(
+    /^(?:(?:halo|hai|hi|hello)\s+(?:kak|pak|bu)\s*[,!.-]?\s*|(?:halo|hai|hi|hello)\s*[,!.-]?\s*|perkenalkan\s*[,!.-]?\s*)?(?:saya|aku)\s+mona\b(?:\s*,?\s*(?:admin\s+assistant\s+tetamo|admin\s+tetamo))?\s*(?:😊|🙂|🙏)?\s*[,!.-]?\s*/i,
+    ""
+  );
+
+  text = text.replace(
+    /^(?:(?:hello|hi)\s*[,!.-]?\s*|let\s+me\s+introduce\s+myself\s*[,!.-]?\s*)?(?:i['’]?m|i\s+am)\s+mona\b(?:\s*,?\s*(?:tetamo['’]?s\s+admin\s+assistant|admin\s+assistant\s+(?:at\s+)?tetamo))?\s*(?:😊|🙂|🙏)?\s*[,!.-]?\s*/i,
+    ""
+  );
+
+  text = text.replace(
+    /^(?:mona\s+di\s+sini|this\s+is\s+mona)\s*(?:😊|🙂|🙏)?\s*[,!.-]?\s*/i,
+    ""
+  );
+
+  return text.trim();
+}
+
 function canonicalMonaIdentityReply(
   primaryLanguage: string
 ) {
@@ -838,10 +900,10 @@ function canonicalMonaIdentityReply(
       String(primaryLanguage || "")
     )
   ) {
-    return "I'm Mona, Tetamo's Admin Assistant. I handle customer communication and assistance through WhatsApp, including Tetamo information, listings, packages and general enquiries. Keeping the conversation here also helps keep the information and chat history clearly recorded.";
+    return "I'm Mona, Tetamo's Admin Assistant.";
   }
 
-  return "Saya Mona, Admin Assistant Tetamo 😊 Saya menangani komunikasi dan kebutuhan customer melalui WhatsApp, termasuk informasi Tetamo, listing, paket, dan pertanyaan umum. Komunikasi melalui WhatsApp juga membantu supaya informasi dan riwayat percakapan tetap tercatat dengan jelas.";
+  return "Saya Mona, Admin Assistant Tetamo 😊";
 }
 
 function isPaymentQuestion(
@@ -1260,15 +1322,21 @@ Write Mona's final WhatsApp reply now.
     /*
      * MONA IDENTITY SAFETY
      * --------------------
-     * The Writer should present Mona by her operational customer-facing role.
-     * If an identity-only question still causes the model to label Mona as an
-     * AI/bot/virtual assistant, replace that self-description with the approved
-     * Admin Assistant identity. This does not claim Mona is a human.
+     * Mona identifies herself only when the latest customer message actually
+     * asks who is replying or questions Mona's identity.
+     *
+     * - If identity was asked and the model exposes a technical AI/bot label,
+     *   replace it with the approved operational identity.
+     * - If identity was NOT asked, remove only a leading Mona self-introduction.
+     *   Do not alter ordinary mentions of Mona elsewhere in the reply.
      */
-    if (
+    const identityQuestion =
       isMonaIdentityQuestion(
         params.latestCustomerMessage
-      ) &&
+      );
+
+    if (
+      identityQuestion &&
       exposesTechnicalMonaIdentity(raw)
     ) {
       raw =
@@ -1276,6 +1344,19 @@ Write Mona's final WhatsApp reply now.
           params.brain.languageStyle
             .primaryLanguage
         );
+    } else if (!identityQuestion) {
+      raw =
+        stripUnsolicitedMonaIntroduction(
+          raw
+        );
+    }
+
+    if (!raw) {
+      return {
+        action: "silent",
+        reply: "",
+        source: "fallback",
+      };
     }
 
     const concreteFactViolation =
