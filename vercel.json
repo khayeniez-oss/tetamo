@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/whatsapp/mona-followup",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

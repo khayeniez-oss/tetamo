@@ -39,19 +39,23 @@ export async function routeMonaSalesStrategy(
     };
   }
 
-  const strategist = params.brain.salesStrategist;
+  const customerType = params.brain.customerType;
 
   if (
-    strategist === "agent" ||
-    params.brain.customerType === "agent" ||
-    params.brain.customerType === "agency"
+    customerType === "agent" ||
+    customerType === "agency"
   ) {
-    const guidance = await generateAgentSalesGuidance({
-      customerMessage: params.customerMessage,
-      conversationContext: params.conversationContext,
-      salesStage: params.salesStage,
-      brainRecommendedNextStep: params.brain.recommendedNextStep,
-    });
+    const guidance =
+      await generateAgentSalesGuidance({
+        customerMessage:
+          params.customerMessage,
+        conversationContext:
+          params.conversationContext,
+        salesStage:
+          params.salesStage,
+        brainRecommendedNextStep:
+          params.brain.recommendedNextStep,
+      });
 
     return {
       strategist: "agent",
@@ -59,15 +63,16 @@ export async function routeMonaSalesStrategy(
     };
   }
 
-  if (
-    strategist === "owner" ||
-    params.brain.customerType === "owner"
-  ) {
-    const guidance = await generateOwnerSalesGuidance({
-      customerMessage: params.customerMessage,
-      conversationContext: params.conversationContext,
-      salesStage: params.salesStage,
-    });
+  if (customerType === "owner") {
+    const guidance =
+      await generateOwnerSalesGuidance({
+        customerMessage:
+          params.customerMessage,
+        conversationContext:
+          params.conversationContext,
+        salesStage:
+          params.salesStage,
+      });
 
     return {
       strategist: "owner",
@@ -75,6 +80,11 @@ export async function routeMonaSalesStrategy(
     };
   }
 
+  // Developer, buyer/renter and unknown customers do not enter
+  // the Agent or Owner commercial strategist.
+  //
+  // customerType is authoritative for routing.
+  // salesStrategist must never override an established or unresolved role.
   return {
     strategist: "none",
     guidance: null,

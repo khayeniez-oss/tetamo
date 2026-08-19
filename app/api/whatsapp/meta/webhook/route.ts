@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { runMonaOrchestrator } from "../../../../lib/mona/orchestrator";
+import {
+  runMonaOrchestrator,
+  markMonaReplySuccessfullySent,
+} from "../../../../lib/mona/orchestrator";
 import { waitForMonaHumanDelay } from "../../../../lib/mona/timing";
 
 export const runtime = "nodejs";
@@ -118,17 +121,29 @@ type ConversationRow = {
   channel?: string | null;
   business_sender_key?: string | null;
   conversation_key?: string | null;
+
+  status?: string | null;
   ai_enabled?: boolean | null;
   handover_to_admin?: boolean | null;
   handover_reason?: string | null;
+  opted_out_at?: string | null;
+
   free_entry_point_expires_at?: string | null;
   free_entry_point_source?: string | null;
   ad_referral_source?: string | null;
+
   sales_stage?: SalesStage | null;
   suggested_sales_stage?: SalesStage | null;
   suggested_sales_stage_reason?: string | null;
   suggested_sales_stage_confidence?: number | null;
   suggested_sales_stage_at?: string | null;
+
+  mona_followup_count?: number | null;
+  mona_followup_waiting_since?: string | null;
+  mona_first_followup_sent_at?: string | null;
+  mona_next_followup_due_at?: string | null;
+  mona_dependency_controlled?: boolean | null;
+  mona_dependency_reason?: string | null;
 };
 
 type StoredMessageRow = {
@@ -256,11 +271,6 @@ function getMetaConversationKey(phoneNumberId: string, customerPhone: string) {
   return `${getMetaBusinessSenderKey(phoneNumberId)}:${customerPhone}`;
 }
 
-function isMonaAiEnabled(value: unknown) {
-  return value !== false;
-}
-
-
 function getTextFromMetaMessage(message: MetaMessage) {
   const type = String(message.type || "").toLowerCase();
 
@@ -303,101 +313,6 @@ function getMessageDisplayText(message: MetaMessage) {
 
   return labels[type] || `[Customer sent unsupported WhatsApp content: ${type}]`;
 }
-
-function isTextLikeMessage(message: MetaMessage) {
-  const type = String(message.type || "").toLowerCase();
-  return type === "text" || type === "button" || type === "interactive";
-}
-
-function isReactionMessage(message: MetaMessage) {
-  return String(message.type || "").toLowerCase() === "reaction";
-}
-
-function isMediaOrUnsupportedMessage(message: MetaMessage) {
-  const type = String(message.type || "").toLowerCase();
-
-  return [
-    "image",
-    "video",
-    "audio",
-    "document",
-    "sticker",
-    "location",
-    "contacts",
-    "contact",
-  ].includes(type);
-}
-
-function isEmojiOnlyText(value?: string | null) {
-  const raw = String(value || "").trim();
-  if (!raw) return false;
-
-  const remaining = raw
-    // Remove keycap emoji sequences first so their digit/#/* base is removed too.
-    .replace(/[0-9#*]\uFE0F?\u20E3/gu, "")
-    .replace(/\p{Extended_Pictographic}/gu, "")
-    .replace(/\p{Regional_Indicator}/gu, "")
-    .replace(/\p{Emoji_Modifier}/gu, "")
-    .replace(/[\u200D\uFE0E\uFE0F]/gu, "")
-    // Allow punctuation around an emoji, e.g. "😂!!"
-    .replace(/[\s\p{P}]/gu, "")
-    .trim();
-
-  return remaining.length === 0;
-}
-
-function isRecentCampaignContext(
-  context: CampaignContext | null,
-  hours = 48
-) {
-  if (!context?.sentAt) return false;
-
-  const sentAt = new Date(context.sentAt).getTime();
-  const age = Date.now() - sentAt;
-
-  return (
-    Number.isFinite(age) &&
-    age >= 0 &&
-    age <= hours * 60 * 60 * 1000
-  );
-}
-
-function isLikelyAutomaticBusinessReply(
-  message: string,
-  campaignContext: CampaignContext | null
-) {
-  if (!isRecentCampaignContext(campaignContext)) return false;
-
-  const normalized = String(message || "")
-    .toLowerCase()
-    .replace(/[’‘]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!normalized) return false;
-
-  const strongAutomaticPatterns = [
-    /terima kasih (?:telah )?menghubungi(?: kami)?/i,
-    /pesan (?:anda|kamu) (?:sudah )?(?:kami )?terima/i,
-    /kami (?:akan )?(?:segera )?(?:membalas|merespons|merespon) pesan/i,
-    /kami sedang (?:tidak tersedia|offline|di luar jam operasional)/i,
-    /jam operasional (?:kami|kantor)/i,
-    /di luar jam (?:kerja|operasional)/i,
-    /balasan otomatis/i,
-    /pesan otomatis/i,
-    /automated (?:reply|response|message)/i,
-    /auto(?:matic)? reply/i,
-    /thank you for (?:contacting|messaging|reaching) (?:us|out)/i,
-    /we (?:have )?received your message/i,
-    /we (?:will|shall) (?:reply|respond|get back to you)/i,
-    /we are currently (?:unavailable|offline|away|closed)/i,
-    /outside (?:our )?business hours/i,
-    /our business hours (?:are|is)/i,
-  ];
-
-  return strongAutomaticPatterns.some((pattern) => pattern.test(normalized));
-}
-
 
 async function saveSalesStageSuggestion(params: {
   conversationId: string;
@@ -581,7 +496,7 @@ async function upsertConversation(params: {
       onConflict: "conversation_key",
     })
     .select(
-      "id, phone, phone_e164, channel, business_sender_key, conversation_key, ai_enabled, handover_to_admin, handover_reason, free_entry_point_expires_at, free_entry_point_source, ad_referral_source, sales_stage, suggested_sales_stage, suggested_sales_stage_reason, suggested_sales_stage_confidence, suggested_sales_stage_at"
+      "id, phone, phone_e164, channel, business_sender_key, conversation_key, status, ai_enabled, handover_to_admin, handover_reason, opted_out_at, free_entry_point_expires_at, free_entry_point_source, ad_referral_source, sales_stage, suggested_sales_stage, suggested_sales_stage_reason, suggested_sales_stage_confidence, suggested_sales_stage_at, mona_followup_count, mona_followup_waiting_since, mona_first_followup_sent_at, mona_next_followup_due_at, mona_dependency_controlled, mona_dependency_reason"
     )
     .single();
 
@@ -698,6 +613,7 @@ async function saveOutboundMessage(params: {
   metaSendError: unknown;
   aiGenerated: boolean;
   source: string;
+  sendSucceeded: boolean;
 }) {
   const outboundAt = new Date().toISOString();
 
@@ -728,6 +644,18 @@ async function saveOutboundMessage(params: {
     console.error("Failed to save Meta outbound WhatsApp message:", messageError);
   }
 
+  /*
+   * A failed Meta send remains stored above for audit/debugging,
+   * but it must NOT make the conversation look as though Mona
+   * successfully replied.
+   */
+  if (!params.sendSucceeded) {
+    return {
+      outboundAt,
+      stored: !messageError,
+    };
+  }
+
   const { error: conversationError } = await supabaseAdmin
     .from("whatsapp_conversations")
     .update({
@@ -739,10 +667,15 @@ async function saveOutboundMessage(params: {
 
   if (conversationError) {
     console.error(
-      "Failed to update Meta conversation after reply:",
+      "Failed to update Meta conversation after successful reply:",
       conversationError
     );
   }
+
+  return {
+    outboundAt,
+    stored: !messageError,
+  };
 }
 
 
@@ -1077,69 +1010,14 @@ export async function POST(request: Request) {
         continue;
       }
 
-      if (blockedNumber) {
-        processedCount += 1;
-        ignoredCount += 1;
-        continue;
-      }
-
-      if (
-        !isMonaAiEnabled(conversation.ai_enabled) ||
-        conversation.handover_to_admin === true
-      ) {
-        console.log(
-          "Meta Mona remains silent while the conversation is with admin.",
-          {
-            conversationId: conversation.id,
-            handoverReason: conversation.handover_reason || null,
-          }
-        );
-
-        processedCount += 1;
-        continue;
-      }
-
-      if (isReactionMessage(item.message)) {
-        processedCount += 1;
-        ignoredCount += 1;
-        continue;
-      }
-
-      if (
-        String(item.message.type || "").toLowerCase() === "text" &&
-        isEmojiOnlyText(readableText)
-      ) {
-        console.log("Ignored emoji-only customer message.", {
-          conversationId: conversation.id,
-        });
-
-        processedCount += 1;
-        ignoredCount += 1;
-        continue;
-      }
-
-      if (isMediaOrUnsupportedMessage(item.message)) {
-        await pauseMonaForAdmin({
-          conversationId: conversation.id,
-          reason: `Customer sent ${messageType} content for admin review`,
-        });
-
-        processedCount += 1;
-        handoverCount += 1;
-        continue;
-      }
-
-      if (!isTextLikeMessage(item.message) || !readableText) {
-        await pauseMonaForAdmin({
-          conversationId: conversation.id,
-          reason: "Customer sent unsupported or unreadable WhatsApp content",
-        });
-
-        processedCount += 1;
-        handoverCount += 1;
-        continue;
-      }
-
+      /*
+       * Do not make Mona/Safety decisions here.
+       *
+       * The message has already been safely persisted.
+       * Safety inside Orchestrator receives the actual message type and
+       * conversation state and decides whether Mona should continue,
+       * remain silent, or hand over.
+       */
       const burst = await collectRecentInboundBurst({
         conversationId: conversation.id,
         currentMessageId: inboundSave.messageId,
@@ -1153,24 +1031,15 @@ export async function POST(request: Request) {
 
       const combinedMessage = burst.combinedMessage || readableText;
 
-      const campaignContext = await getLatestCampaignContext(conversation.id);
-
-      if (isLikelyAutomaticBusinessReply(combinedMessage, campaignContext)) {
-        console.log(
-          "Meta Mona ignored an automatic business reply after a Tetamo campaign.",
-          {
-            conversationId: conversation.id,
-            campaignId: campaignContext?.campaignId || null,
-            templateName: campaignContext?.templateName || null,
-          }
+      const campaignContext =
+        await getLatestCampaignContext(
+          conversation.id
         );
 
-        processedCount += 1;
-        ignoredCount += 1;
-        continue;
-      }
-
-      const salesStage = normalizeSalesStage(conversation.sales_stage);
+      const salesStage =
+        normalizeSalesStage(
+          conversation.sales_stage
+        );
 
       const generation = await runMonaOrchestrator({
         supabase: supabaseAdmin,
@@ -1190,7 +1059,33 @@ export async function POST(request: Request) {
             }
           : null,
         salesStage,
-        adminTakeover: conversation.ai_enabled === false,
+
+        /*
+         * Inbound event origin.
+         * This is a genuine Meta customer event saved above.
+         */
+        messageDirection: "inbound",
+        messageSource: "meta",
+        aiGenerated: false,
+        adminGenerated: false,
+        isCampaign: false,
+        isSystem: false,
+
+        /*
+         * Conversation/account Safety state.
+         */
+        blocked: blockedNumber,
+        optedOut:
+          Boolean(conversation.opted_out_at) ||
+          String(conversation.status || "")
+            .trim()
+            .toLowerCase() === "opted_out",
+
+        aiPaused:
+          conversation.ai_enabled === false,
+
+        adminTakeover:
+          conversation.handover_to_admin === true,
       });
 
       await saveSalesStageSuggestion({
@@ -1296,12 +1191,48 @@ export async function POST(request: Request) {
         source: sendResult.success
           ? sourcePrefix
           : `${sourcePrefix}_send_failed`,
+        sendSucceeded:
+          sendResult.success,
       });
 
       processedCount += 1;
 
       if (sendResult.success) {
         replyCount += 1;
+
+        const dependencyControlled =
+          generation.brain.timingDependency.active ===
+          true;
+
+        const dependencyReason =
+          dependencyControlled
+            ? (
+                generation.brain.timingDependency.reason ||
+                generation.brain.latestMeaning ||
+                "Customer has an explicit timing dependency."
+              )
+            : null;
+
+        try {
+          await markMonaReplySuccessfullySent({
+            supabase: supabaseAdmin,
+            conversationId:
+              conversation.id,
+            dependencyControlled,
+            dependencyReason,
+          });
+        } catch (error) {
+          /*
+           * Do not resend the WhatsApp message if Timing persistence fails.
+           * The customer already received the reply.
+           *
+           * Log the failure so we can repair follow-up state safely.
+           */
+          console.error(
+            "Mona reply sent successfully but follow-up timing state could not be started:",
+            error
+          );
+        }
       }
     }
 

@@ -36,6 +36,11 @@ export type MonaBrainDecision = {
   latestMeaning: string;
   conversationSituation: MonaConversationSituation;
 
+  timingDependency: {
+    active: boolean;
+    reason: string | null;
+  };
+
   knownContext: {
     summary: string;
     importantFacts: string[];
@@ -43,6 +48,7 @@ export type MonaBrainDecision = {
   };
 
   replyNeeded: boolean;
+
   handoverRecommended: boolean;
   handoverReason: string | null;
 
@@ -77,43 +83,170 @@ type AnalyseMonaBrainParams = {
 };
 
 const MONA_BRAIN_PROMPT = `
-You are the internal reasoning brain for Mona, Tetamo's WhatsApp assistant.
+TETAMO MONA BRAIN
 
-You do NOT write the customer-facing WhatsApp reply.
+==================================================
+IDENTITY
+==================================================
 
-Your job is to understand the customer and the entire available conversation
-before any sales strategist or Tetamo Knowledge Base is used.
+You are the internal understanding and routing brain for Mona,
+Tetamo's WhatsApp assistant.
 
-CORE RULES
+You NEVER write the final customer-facing WhatsApp reply.
 
-- Read the conversation from the beginning.
-- Use the latest message together with the full conversation context.
-- Never treat the latest message as isolated if earlier messages change its meaning.
-- Never ask or recommend asking for information the customer already provided.
-- Never invent Tetamo facts.
-- Never invent prices, packages, policies, features, performance claims, links,
-  payment instructions, guarantees or company information.
-- Tetamo factual information must come from approved knowledge later.
-- Understand natural WhatsApp language rather than requiring formal grammar.
+You are NOT:
 
+- Conversation Memory;
+- Agent Sales AI;
+- Owner Sales AI;
+- Tetamo Knowledge;
+- Writer;
+- Inbound Safety Gate;
+- Orchestrator/Scheduler.
+
+Your role is to understand the conversation and decide what component
+should act next.
+
+==================================================
+ABSOLUTE THINKING ORDER
+==================================================
+
+Always follow this order.
+
+DO NOT begin by analysing the newest message in isolation.
+
+STEP 1 — READ FULL MEMORY FROM THE BEGINNING.
+
+First reconstruct everything that has already happened.
+
+Understand:
+
+- whether Customer, Mona or Admin spoke;
+- whether meaningful conversation already exists;
+- what Mona already explained;
+- what the customer already answered;
+- whether role was already established;
+- whether there is an existing Agent sales journey;
+- whether there is an existing Owner sales journey;
+- whether a package was discussed;
+- whether a package was selected;
+- whether payment started;
+- whether there was an objection;
+- whether there was hesitation;
+- whether there was a timing dependency;
+- whether the customer rejected further selling;
+- whether the conversation previously ended naturally.
+
+STEP 2 — UNDERSTAND THE CONTACT / CONVERSATION STATE.
+
+Internally determine whether this looks like:
+
+NEW CONTACT
+- no meaningful previous customer conversation exists.
+
+RETURNING IDENTIFIED CUSTOMER
+- there is previous conversation and the customer's role is established.
+
+RETURNING UNIDENTIFIED CONTACT
+- previous conversation exists but role was never established.
+
+CAMPAIGN-ONLY CONTACT
+- Tetamo sent a campaign/template but the customer has not yet had a
+  meaningful conversation establishing who they are.
+
+EXISTING SALES JOURNEY
+- Agent, Agency or Owner role is established and a commercial journey
+  is already underway.
+
+EXISTING PAYMENT / SUPPORT JOURNEY
+- payment, account, listing verification or another support matter is
+  already underway.
+
+PREVIOUSLY REJECTED / CLOSED
+- previous conversation contains clear rejection, opt-out or a completed
+  conversational ending that materially affects this turn.
+
+These labels are only internal reasoning concepts.
+Do not expose them to the customer.
+
+STEP 3 — RECOVER ESTABLISHED IDENTITY.
+
+Before using the newest message to classify somebody, recover any reliable
+role already established in Memory.
+
+Possible roles:
+
+- agent
+- owner
+- agency
+- developer
+- buyer_renter
+- unknown
+
+An established role has priority over weak clues in a new message.
+
+Do not casually change an established role.
+
+STEP 4 — RECOVER KNOWN FACTS.
+
+Preserve useful information already provided, including when relevant:
+
+- customer role;
+- relationship to a property owner;
+- agency/company context;
+- experience;
+- listing quantity;
+- property goal;
+- property location;
+- existing advertising;
+- stated problem;
+- objection;
+- package discussed;
+- package selected;
+- payment status;
+- timing;
+- future dependency;
+- prior commitment;
+- topics already answered.
+
+Never recommend asking again for known information.
+
+STEP 5 — ONLY NOW INTERPRET THE LATEST MESSAGE.
+
+Understand the newest message using everything above.
+
+STEP 6 — APPLY THE ROLE GATE.
+
+No confirmed role means no Agent Sales AI and no Owner Sales AI.
+
+STEP 7 — DETERMINE WHAT THE CUSTOMER NEEDS NOW.
+
+Identify the immediate question, intent or situation.
+
+STEP 8 — ROUTE TO THE CORRECT COMPONENT.
+
+STEP 9 — RETURN AN INTERNAL NEXT OBJECTIVE.
+
+Never write Mona's final reply.
+
+==================================================
 LANGUAGE UNDERSTANDING
+==================================================
 
 Customers may use:
 
 - Indonesian;
 - English;
-- mixed Indonesian and English;
-- slang;
+- mixed Indonesian/English;
+- WhatsApp slang;
 - abbreviations;
 - typos;
 - incomplete sentences;
 - informal grammar;
 - property jargon;
-- sales jargon;
-- regional conversational language;
-- short follow-up messages whose meaning depends on earlier conversation.
+- sales jargon.
 
-Examples include forms such as:
+Examples may include:
 
 brp
 gmn
@@ -148,228 +281,900 @@ agent
 developer
 agency
 
-Do NOT rely only on these examples.
-Understand language naturally from context.
+Do not rely only on those examples.
 
-IMPORTANT
+Understand language naturally.
 
-Laughter, casual expressions and slang are not automatically unreadable.
+Laughter such as:
 
-Examples:
 wkwk
-wkwkwk
 haha
 hehe
 lol
 
-If the message can reasonably be understood from the conversation, mark it understood.
+is not automatically unreadable.
 
-If the message genuinely cannot be understood even after reading the whole
-conversation, set understood=false and recommend handover.
+If meaning can reasonably be understood from Memory and context,
+set understood=true.
 
-CUSTOMER TYPES
+Use understood=false only when the meaning genuinely cannot be recovered.
 
-Identify the customer from the conversation, not from a single keyword.
+==================================================
+STRICT ROLE GATE
+==================================================
 
-Possible customer types:
+THE CUSTOMER'S ROLE MUST BE ESTABLISHED BEFORE AGENT OR OWNER SALES AI RUNS.
 
-- agent
-- owner
-- agency
-- developer
-- buyer_renter
-- unknown
+NO ROLE = NO SALES AI.
 
-Do not switch an established customer type casually because one message mentions
-another customer type in a different context.
+When customerType="unknown":
 
-CONVERSATION SITUATION
+- salesStrategyNeeded=false;
+- salesStrategist="none";
+- Agent Sales AI must not run;
+- Owner Sales AI must not run;
+- do not guess;
+- establish role.
 
-Choose the best description of what is happening now:
+Normally the role question is:
 
-- information
-- interest
-- comparison
-- objection
-- hesitation
-- rejection
-- closing
-- payment
-- support
-- casual
-- unknown
+Agent or Property Owner.
+
+Do not infer role merely because somebody:
+
+- received an Agent campaign;
+- received an Owner campaign;
+- asks a price;
+- asks about packages;
+- says "listing";
+- says "property";
+- says "jual";
+- says "sewa";
+- says "bayar";
+- says "iya";
+- says "mau";
+- says "ok";
+- says "info";
+- says "lanjut".
+
+If the customer explicitly identifies as Developer or Buyer/Renter,
+route directly to those journeys instead.
+
+==================================================
+AGENT
+==================================================
+
+Use customerType="agent" for an INDIVIDUAL property sales professional.
+
+Examples include:
+
+- property agent;
+- real-estate agent;
+- independent agent;
+- freelance agent;
+- broker;
+- property salesperson;
+- individual property marketing professional;
+- individual sales/marketing person operating as an Agent.
 
 Examples:
 
-A customer asking what Tetamo is:
-information
+"Saya agen."
 
-A customer asking how to join or showing buying intent:
-interest
+"Saya agent independent."
 
-A customer comparing Tetamo with another portal:
-comparison
+"Saya marketing property sendiri."
 
-A customer saying the fee is expensive:
-objection
+"Saya freelance agent."
 
-A customer saying they will think about it or proceed next month:
-hesitation
+"Saya punya sekitar 80 listing sebagai agen."
 
-A customer clearly saying they do not want to continue:
-rejection
+"Saya mau join sebagai agent."
 
-A customer who has chosen an option and wants the next step:
-closing
+Do not require a formal agent licence merely to identify an Agent role.
 
-A customer asking how or where to pay:
-payment
+==================================================
+OWNER
+==================================================
 
-A customer reporting payment/account/verification problems:
-support
+Use customerType="owner" for:
 
-A simple conversational acknowledgement:
-casual
+- actual property owner;
+- spouse acting for owner;
+- husband/wife handling owner's property;
+- child handling parent's property;
+- sibling handling sibling's property;
+- family member;
+- relative;
+- assistant;
+- representative clearly acting for that owner.
 
+Examples:
+
+"Saya pemilik rumahnya."
+
+"Saya bantu jual rumah kakak saya."
+
+"Villa ini punya orang tua saya, saya yang urus."
+
+"Saya bantu suami pasang iklan rumah."
+
+"Properti ini punya keluarga saya."
+
+These are OWNER journey customers.
+
+IMPORTANT:
+
+Do NOT classify somebody as Agent merely because they are helping
+sell or rent a family member's property.
+
+Relationship to the owner is what matters.
+
+==================================================
+AGENCY
+==================================================
+
+Use customerType="agency" when the customer clearly represents a property
+business/company/team rather than simply themselves as one individual Agent.
+
+Examples include:
+
+- real-estate agency;
+- property agency;
+- property marketing company;
+- property sales company;
+- agency team;
+- staff speaking for agency/company.
+
+Examples:
+
+"Saya dari ABC Property."
+
+"Kami agency."
+
+"Kami property marketing company."
+
+"Agency kami punya 20 agent."
+
+Agency follows Agent Sales AI for now.
+
+When commercial reasoning is useful:
+
+customerType="agency"
+salesStrategyNeeded=true
+salesStrategist="agent"
+
+==================================================
+DEVELOPER
+==================================================
+
+Use customerType="developer" when customer clearly represents:
+
+- a property developer;
+- developer company;
+- development company;
+- a development project;
+- developer/project business.
+
+Examples:
+
+"Kami developer."
+
+"Saya dari developer XYZ."
+
+"Kami mau advertise project kami."
+
+"Project kami ada 200 unit."
+
+DEVELOPER IS A DIRECT ROUTE.
+
+Developer does NOT go to Agent Sales AI.
+
+Developer does NOT go to Owner Sales AI.
+
+For Developer:
+
+customerType="developer"
+salesStrategyNeeded=false
+salesStrategist="none"
+factualKnowledgeNeeded=true
+
+Request the approved Developer destination.
+
+The response should direct them to:
+
+https://www.tetamo.com/developer-license
+
+Do not continue Agent/Owner qualification.
+
+==================================================
+BUYER / RENTER
+==================================================
+
+Use customerType="buyer_renter" when the person is primarily looking for
+property to buy or rent.
+
+This includes somebody searching:
+
+- for themselves;
+- for family;
+- for investment;
+- for a company.
+
+Examples:
+
+"Saya cari rumah."
+
+"Saya mau beli villa."
+
+"Cari apartment untuk sewa."
+
+"Saya cari properti untuk keluarga."
+
+BUYER/RENTER IS A DIRECT ROUTE.
+
+Buyer/Renter does NOT go to Agent Sales AI.
+
+Buyer/Renter does NOT go to Owner Sales AI.
+
+For Buyer/Renter:
+
+customerType="buyer_renter"
+salesStrategyNeeded=false
+salesStrategist="none"
+factualKnowledgeNeeded=true
+
+Request the approved Buyer/Renter destination.
+
+The response should direct them to:
+
+https://www.tetamo.com/pembeli
+
+==================================================
+BOTH AGENT AND OWNER
+==================================================
+
+If customer clearly says they are BOTH an Agent and Owner:
+
+do not choose arbitrarily.
+
+Use:
+
+customerType="unknown"
+salesStrategyNeeded=false
+salesStrategist="none"
+
+The immediate next step is to ask which journey they want to handle first:
+
+Agent or Owner.
+
+==================================================
+NEW / UNKNOWN CUSTOMER
+==================================================
+
+If no role has been established:
+
+NO SALES AI.
+
+If the customer asks a GENERAL Tetamo question:
+
+Examples:
+
+"Tetamo itu apa?"
+
+"Cover seluruh Indonesia?"
+
+"Ada app?"
+
+"Tetamo baru ya?"
+
+Brain may request the exact approved general Tetamo facts needed.
+
+The direct question may be answered first.
+
+But the reply must still move toward establishing role afterward.
+
+If the customer asks a ROLE-DEPENDENT commercial question:
+
+Examples:
+
+"Berapa harganya?"
+
+"Paketnya apa?"
+
+"Bayar ya?"
+
+"Membership berapa?"
+
+"Berapa listing?"
+
+"Caranya join?"
+
+do NOT guess Agent or Owner.
+
+Role comes first because the applicable commercial product depends on role.
+
+==================================================
+FIRST INQUIRY PRINCIPLE
+==================================================
+
+For a genuinely new or unidentified contact:
+
+Mona must not pretend she already knows whether they are Agent or Owner.
+
+Mona must not imply Tetamo/Mona will personally create or upload their listing.
+
+The conversational objective is:
+
+1. respond appropriately to the immediate inquiry when a general factual
+   answer is genuinely needed;
+2. establish whether they are Agent or Property Owner;
+3. only after role is established may the applicable Sales AI take over.
+
+==================================================
+CAMPAIGN CONTEXT
+==================================================
+
+Campaign context is WEAK CONTEXT ONLY.
+
+It can help understand what campaign the customer may be reacting to.
+
+IT CAN NEVER ESTABLISH CUSTOMER ROLE.
+
+An Agent campaign does not make someone an Agent.
+
+An Owner campaign does not make someone an Owner.
+
+Example:
+
+Agent campaign sent.
+Customer: "iya"
+
+Role remains unknown unless actual conversation establishes role.
+
+Do not force Agent because templateName contains "agent" or "agen".
+
+Do not force Owner because templateName contains "owner" or "pemilik".
+
+==================================================
+SHORT REPLIES
+==================================================
+
+Short replies must inherit meaning from the immediately preceding REAL
+conversation when that context exists.
+
+Examples:
+
+Mona:
+"Gold sampai 100 listing. Mau saya jelaskan Gold?"
+
+Customer:
+"iya"
+
+If Agent role was already established, this can mean continue the Gold
+conversation.
+
+Another example:
+
+Mona:
+"Properti Ibu mau dijual atau disewakan?"
+
+Customer:
+"disewakan"
+
+If Owner role was already established, this continues Owner journey.
+
+But:
+
+Campaign sent.
+Customer:
+"iya"
+
+does NOT establish role by itself.
+
+The same rule applies to:
+
+ya
+iya
+mau
+boleh
+ok
+oke
+lanjut
+info
+yes
+interested
+
+==================================================
 DIRECT QUESTIONS
+==================================================
 
-If the latest message contains a direct question, identify what the customer is
-actually asking.
+Identify what the customer is actually asking.
 
-The direct question takes priority over unnecessary discovery.
+Do not replace a direct question with unnecessary discovery.
 
-FACTUAL KNOWLEDGE
+However, role gate still applies.
 
-Set factualKnowledgeNeeded=true only when the final reply requires approved
-Tetamo facts.
+GENERAL QUESTION + UNKNOWN ROLE:
 
-IMPORTANT PERFORMANCE-CLAIM RULE
+- use general Tetamo Knowledge if needed;
+- answer the relevant factual question;
+- then establish role.
 
-If the customer complains about:
-- low-quality enquiries;
-- people who are only curious;
-- weak leads;
-- conversion;
-- closing;
-- sales performance;
-- rental performance;
-- enquiry quality;
+ROLE-DEPENDENT COMMERCIAL QUESTION + UNKNOWN ROLE:
 
-do NOT assume Tetamo improves, filters, qualifies or converts those leads.
+- establish role first;
+- do not guess the applicable package/product.
 
-Do NOT create a knowledgeRequest such as:
-- how Tetamo improves lead quality;
-- how Tetamo converts enquiries;
-- how Tetamo filters serious buyers;
-- how Tetamo reduces non-serious enquiries.
+==================================================
+CONVERSATION SITUATION
+==================================================
 
-Instead request only approved Tetamo FEATURES that may be relevant to the
-customer's workflow or stated problem.
+Choose one:
 
-For example:
-- direct WhatsApp enquiry features;
-- leads dashboard;
-- viewing scheduling;
-- listing presentation features;
-- other approved platform tools.
-
-The final sales strategist and writer may explain those features, but must not
-turn them into an unsupported commercial outcome.
-
-Set factualKnowledgeNeeded=true only when the final reply requires approved
-Tetamo facts.
+information
+interest
+comparison
+objection
+hesitation
+rejection
+closing
+payment
+support
+casual
+unknown
 
 Examples:
 
-- pricing;
-- packages;
-- features;
-- listing duration;
-- payment instructions;
-- company information;
-- policies;
+"What is Tetamo?"
+-> information
+
+"Bedanya sama Rumah123?"
+-> comparison
+
+"Mahal."
+-> objection
+
+"Bulan depan aja."
+-> hesitation
+
+"Nggak tertarik."
+-> rejection
+
+"Saya pilih Gold."
+-> closing
+
+"Kirim link bayar."
+-> payment
+
+"Payment saya error."
+-> support
+
+"Makasih."
+-> casual or closing depending context.
+
+==================================================
+PAYMENT DISTINCTION
+==================================================
+
+Do NOT treat these as readiness to pay:
+
+"Bayar ya?"
+
+"Ada fee?"
+
+"Berbayar?"
+
+"Kena biaya?"
+
+"Harus bayar?"
+
+These are fee/value questions.
+
+Strong payment intent is more like:
+
+"Saya mau bayar."
+
+"Kirim link bayar."
+
+"Cara bayar gimana?"
+
+"QRIS mana?"
+
+"Saya sudah transfer."
+
+"Payment error."
+
+==================================================
+SALES AI OWNERSHIP
+==================================================
+
+Once role is established:
+
+AGENT
+-> Agent Sales AI owns commercial reasoning when needed.
+
+AGENCY
+-> Agent Sales AI owns commercial reasoning when needed.
+
+OWNER
+-> Owner Sales AI owns commercial reasoning when needed.
+
+DEVELOPER
+-> no Agent/Owner Sales AI.
+
+BUYER_RENTER
+-> no Agent/Owner Sales AI.
+
+UNKNOWN
+-> no Agent/Owner Sales AI.
+
+IMPORTANT:
+
+Once Agent/Agency/Owner role is established, a temporary general factual
+question does NOT remove the customer from their commercial journey.
+
+Example:
+
+Established Agent:
+"Tetamo punya buyer?"
+
+Brain keeps customerType="agent".
+
+Agent Sales AI remains commercial strategist.
+
+Agent Sales AI can request general Tetamo Knowledge for approved buyer facts.
+
+After answering that factual question, Sales AI can naturally decide when
+to return to the commercial conversation.
+
+Do NOT reset the journey.
+
+==================================================
+COMMERCIAL KNOWLEDGE OWNERSHIP
+==================================================
+
+Agent commercial facts belong to Agent Sales AI.
+
+Examples:
+
+- Silver;
+- Gold;
+- Agent Pro;
+- Agent package price;
+- Agent package capacity;
+- Agent package features;
+- Agent package recommendation.
+
+Owner commercial facts belong to Owner Sales AI.
+
+Examples:
+
+- Basic;
+- Priority;
+- Featured;
+- Owner package price;
+- Owner package features;
+- Owner package recommendation.
+
+Boost and Spotlight commercial pricing are also available inside Sales AIs.
+
+Brain should NOT request general Tetamo Knowledge merely to answer those
+commercial package facts.
+
+==================================================
+GENERAL TETAMO KNOWLEDGE
+==================================================
+
+Set factualKnowledgeNeeded=true only when approved general Tetamo facts
+are required.
+
+Examples include:
+
+- what Tetamo is;
+- official Tetamo destinations;
+- website/app;
+- buyer/renter database;
+- buyer matching;
+- international buyers;
+- lead workflow;
+- buyer quality boundaries;
+- Tetamo coverage;
+- nationwide Indonesia coverage;
+- growth;
+- traffic;
+- advertising;
+- social media exposure;
+- search exposure;
+- comparison with another portal;
+- comparison with posting yourself;
+- proof;
+- testimonials;
+- results;
 - verification;
-- registration;
-- listing process;
-- links;
-- supported services;
-- factual comparisons involving Tetamo.
+- listing status;
+- commission/business model;
+- cancellation;
+- refund;
+- subscription policy;
+- payment methods;
+- support contact;
+- general platform capabilities;
+- registration requirements;
+- proposal/portfolio capability;
+- push notifications;
+- Developer destination;
+- Buyer/Renter destination.
 
-knowledgeRequest must contain concise descriptions of the exact approved facts
-needed.
+knowledgeRequest must describe ONLY the exact facts needed.
 
-Do not put invented answers into knowledgeRequest.
+==================================================
+KNOWLEDGE EPISTEMIC RULE
+==================================================
 
-SALES STRATEGY
+Approved Knowledge explicitly supports something:
+-> it may be stated.
 
-Sales strategy is separate from factual knowledge.
+Approved Knowledge explicitly says something is unsupported:
+-> it may be stated as unsupported.
 
-Set salesStrategyNeeded=true when the customer is in a commercial conversation
-that would benefit from specialist sales reasoning.
+Information is absent:
+-> UNKNOWN / UNVERIFIED.
 
-Routing:
+Never turn missing information into:
 
-agent -> agent strategist
-owner -> owner strategist
-developer -> developer strategist
-buyer_renter -> buyer/renter strategist
+"Tetamo doesn't have it."
 
-For agency customers, use agent strategist unless the conversation clearly
-requires future agency-specific logic.
+==================================================
+BUYER / LEAD / PERFORMANCE QUESTIONS
+==================================================
 
-If no specialist strategy is needed, use "none".
+Questions may include:
 
-Do NOT create sales strategy here.
-Only decide whether specialist strategy is needed and which specialist should
-handle it.
+"Buyer serius gak?"
 
-REPLY DECISION
+"Qualified gak?"
 
-replyNeeded=false when the message should naturally receive no conversational
-reply.
+"Cuma kepo?"
 
-However, deterministic safety such as media, reaction, emoji-only messages and
-admin takeover is handled before this brain.
+"Lead bagus?"
 
-If the conversation is understandable but is simply a casual acknowledgement,
-you may still set replyNeeded=false when silence would be more human.
+"Jamin dapat lead?"
 
+"Jamin closing?"
+
+"Berapa lama closing?"
+
+"Berapa lama sampai laku?"
+
+Request the approved Buyer Quality / Lead Expectations / no-guarantee facts.
+
+Do NOT automatically turn every concern into:
+
+- Direct WhatsApp;
+- Leads Dashboard;
+- Viewing Schedule;
+- listing presentation;
+- generic feature dumping.
+
+Retrieve only facts relevant to the actual concern.
+
+==================================================
+MEMORY / DO NOT RESTART
+==================================================
+
+Memory is authoritative for what has already happened.
+
+If earlier:
+
+"Saya agent, 2 tahun, sekitar 80 listing."
+
+and later:
+
+"Kalau Gold gimana?"
+
+do NOT ask role again.
+
+Do NOT ask listing count again.
+
+If earlier:
+
+"Saya bantu jual rumah kakak saya."
+
+and later:
+
+"Fotonya sudah siap."
+
+keep Owner journey.
+
+If earlier package was selected:
+
+do not restart package discovery.
+
+If payment started:
+
+do not restart sales qualification.
+
+If objection was already answered:
+
+do not blindly repeat the same explanation.
+
+==================================================
+REJECTION
+==================================================
+
+Hard rejection includes:
+
+tidak tertarik
+nggak tertarik
+gak tertarik
+tidak mau
+nggak mau
+gak mau
+jangan hubungi lagi
+jangan chat lagi
+stop
+unsubscribe
+hapus nomor saya
+don't contact me
+not interested
+
+For hard rejection:
+
+conversationSituation="rejection"
+salesStrategyNeeded=false
+salesStrategist="none"
+factualKnowledgeNeeded=false
+knowledgeRequest=[]
+
+Do not recommend another sales question.
+
+==================================================
+HESITATION / FUTURE DEPENDENCY
+==================================================
+
+Examples:
+
+nanti dulu
+bulan depan
+belum sekarang
+habis gajian
+tunggu foto
+tunggu dokumen
+tanya suami
+tanya istri
+tanya keluarga
+tanya bos
+diskusi partner
+
+These are hesitation, not hard rejection.
+
+Do not pressure.
+
+Do not restart discovery.
+
+Preserve the future dependency in knownContext when useful.
+
+You MUST also classify it explicitly in timingDependency.
+
+timingDependency.active=true ONLY when the customer has a real future
+condition, waiting point, dependency, or stated later time before continuing.
+
+Examples that ARE timing dependencies:
+
+- bulan depan
+- minggu depan
+- nanti setelah gajian
+- habis gajian
+- tunggu foto
+- tunggu dokumen
+- saya tanya suami dulu
+- saya tanya istri dulu
+- tunggu keluarga
+- tunggu bos
+- saya diskusi partner dulu
+- setelah owner jawab
+- nanti saya kabari setelah meeting
+
+Examples that are NOT automatically timing dependencies:
+
+- mahal ya
+- saya ragu
+- saya pikir-pikir dulu
+- belum yakin
+- saya bandingkan dulu
+- kurang cocok
+- ada diskon?
+
+Do not mark timingDependency.active=true merely because
+conversationSituation="hesitation".
+
+timingDependency.reason must briefly state the actual dependency when active.
+Otherwise reason=null.
+
+Actual follow-up timing belongs to Orchestrator/Scheduler.
+
+==================================================
+POLITE ENDING
+==================================================
+
+Examples:
+
+makasih
+terima kasih
+thanks
+noted
+sip
+oke makasih
+sudah jelas
+cukup
+
+Do not invent another sales question.
+
+replyNeeded may be false if silence is more natural.
+
+==================================================
 HANDOVER
+==================================================
 
-Set handoverRecommended=true only when:
+Recommend handover only when:
 
-- the message genuinely cannot be understood after considering context; or
-- the customer needs a human for something the AI should not handle.
+- meaning genuinely cannot be understood even after Memory; or
+- human access/action is genuinely required.
 
-Do not use handover merely because the message contains slang, typo or jargon.
+Do NOT hand over merely because:
 
-MEMORY
+- slang is used;
+- customer asks normal Tetamo information;
+- customer asks package questions;
+- customer asks how to list;
+- customer asks about buyers;
+- customer asks about features.
 
-Extract important remembered information from the whole conversation.
+==================================================
+INBOUND SAFETY BOUNDARY
+==================================================
 
-importantFacts should include useful customer-provided facts such as:
+Brain does NOT own webhook/event filtering.
 
-- customer role;
-- experience;
-- listing quantity;
-- property goal;
-- property location;
-- advertising channels;
-- stated problem;
-- package preference;
-- payment status;
-- timing;
-- objection;
-- decision dependency;
-- relevant prior commitment.
+Inbound Gate will separately own:
 
-alreadyAnsweredTopics should identify subjects that Mona should not ask again.
+- emoji/reaction-only events;
+- sticker-only events;
+- attachment-only handling;
+- delivery/status events;
+- campaign/template echoes;
+- Mona-generated events;
+- Admin-generated events;
+- human takeover suppression;
+- opt-out suppression;
+- duplicate webhook idempotency;
+- message burst grouping.
 
+==================================================
+ORCHESTRATOR BOUNDARY
+==================================================
+
+Brain does NOT schedule follow-ups.
+
+Brain may recognize:
+
+- future dependency;
+- silence-sensitive sales state;
+- payment pending;
+- photos pending;
+- approval pending;
+- customer will return later.
+
+But actual timing belongs to Orchestrator/Scheduler.
+
+==================================================
 OUTPUT
+==================================================
 
 Return internal reasoning only.
 
-Never write Mona's customer-facing WhatsApp message.
+Never write Mona's customer-facing WhatsApp reply.
 `.trim();
 
 function fallbackBrainDecision(
@@ -387,9 +1192,15 @@ function fallbackBrainDecision(
     },
 
     latestMeaning:
-      String(latestCustomerMessage || "").trim() || "No readable message.",
+      String(latestCustomerMessage || "").trim() ||
+      "No readable message.",
 
     conversationSituation: "unknown",
+
+    timingDependency: {
+      active: false,
+      reason: null,
+    },
 
     knownContext: {
       summary: "",
@@ -398,6 +1209,7 @@ function fallbackBrainDecision(
     },
 
     replyNeeded: true,
+
     handoverRecommended: false,
     handoverReason: null,
 
@@ -410,7 +1222,7 @@ function fallbackBrainDecision(
     directQuestion: null,
 
     recommendedNextStep:
-      "Understand the customer's current message conservatively and avoid inventing Tetamo facts.",
+      "Establish the customer's role before any Agent or Owner Sales AI can run. Do not guess.",
   };
 }
 
@@ -418,13 +1230,19 @@ function cleanString(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function cleanNullableString(value: unknown): string | null {
+function cleanNullableString(
+  value: unknown
+): string | null {
   const text = cleanString(value);
   return text || null;
 }
 
-function cleanStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+function cleanStringArray(
+  value: unknown
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
 
   return value
     .map((item) => cleanString(item))
@@ -445,28 +1263,30 @@ function parseBrainDecision(
         .trim()
     ) as Record<string, any>;
 
-    const allowedCustomerTypes = new Set<MonaCustomerType>([
-      "agent",
-      "owner",
-      "agency",
-      "developer",
-      "buyer_renter",
-      "unknown",
-    ]);
+    const allowedCustomerTypes =
+      new Set<MonaCustomerType>([
+        "agent",
+        "owner",
+        "agency",
+        "developer",
+        "buyer_renter",
+        "unknown",
+      ]);
 
-    const allowedSituations = new Set<MonaConversationSituation>([
-      "information",
-      "interest",
-      "comparison",
-      "objection",
-      "hesitation",
-      "rejection",
-      "closing",
-      "payment",
-      "support",
-      "casual",
-      "unknown",
-    ]);
+    const allowedSituations =
+      new Set<MonaConversationSituation>([
+        "information",
+        "interest",
+        "comparison",
+        "objection",
+        "hesitation",
+        "rejection",
+        "closing",
+        "payment",
+        "support",
+        "casual",
+        "unknown",
+      ]);
 
     const allowedLanguages = new Set([
       "id",
@@ -484,16 +1304,25 @@ function parseBrainDecision(
     ]);
 
     const languageStyle =
-      parsed.languageStyle && typeof parsed.languageStyle === "object"
+      parsed.languageStyle &&
+      typeof parsed.languageStyle === "object"
         ? parsed.languageStyle
         : {};
 
     const knownContext =
-      parsed.knownContext && typeof parsed.knownContext === "object"
+      parsed.knownContext &&
+      typeof parsed.knownContext === "object"
         ? parsed.knownContext
         : {};
 
-    const confidenceNumber = Number(parsed.confidence);
+    const timingDependency =
+      parsed.timingDependency &&
+      typeof parsed.timingDependency === "object"
+        ? parsed.timingDependency
+        : {};
+
+    const confidenceNumber =
+      Number(parsed.confidence);
 
     return {
       understood:
@@ -503,28 +1332,38 @@ function parseBrainDecision(
 
       confidence:
         Number.isFinite(confidenceNumber)
-          ? Math.max(0, Math.min(1, confidenceNumber))
+          ? Math.max(
+              0,
+              Math.min(1, confidenceNumber)
+            )
           : fallback.confidence,
 
-      customerType: allowedCustomerTypes.has(
-        parsed.customerType as MonaCustomerType
-      )
-        ? (parsed.customerType as MonaCustomerType)
-        : fallback.customerType,
+      customerType:
+        allowedCustomerTypes.has(
+          parsed.customerType as MonaCustomerType
+        )
+          ? (parsed.customerType as MonaCustomerType)
+          : fallback.customerType,
 
       languageStyle: {
-        primaryLanguage: allowedLanguages.has(
-          String(languageStyle.primaryLanguage)
-        )
-          ? (languageStyle.primaryLanguage as
-              | "id"
-              | "en"
-              | "mixed"
-              | "unknown")
-          : fallback.languageStyle.primaryLanguage,
+        primaryLanguage:
+          allowedLanguages.has(
+            String(
+              languageStyle.primaryLanguage
+            )
+          )
+            ? (languageStyle.primaryLanguage as
+                | "id"
+                | "en"
+                | "mixed"
+                | "unknown")
+            : fallback.languageStyle
+                .primaryLanguage,
 
         style:
-          cleanString(languageStyle.style) ||
+          cleanString(
+            languageStyle.style
+          ) ||
           fallback.languageStyle.style,
       },
 
@@ -532,18 +1371,41 @@ function parseBrainDecision(
         cleanString(parsed.latestMeaning) ||
         fallback.latestMeaning,
 
-      conversationSituation: allowedSituations.has(
-        parsed.conversationSituation as MonaConversationSituation
-      )
-        ? (parsed.conversationSituation as MonaConversationSituation)
-        : fallback.conversationSituation,
+      conversationSituation:
+        allowedSituations.has(
+          parsed.conversationSituation as
+            MonaConversationSituation
+        )
+          ? (parsed.conversationSituation as
+              MonaConversationSituation)
+          : fallback.conversationSituation,
+
+      timingDependency: {
+        active:
+          timingDependency.active === true,
+        reason:
+          timingDependency.active === true
+            ? cleanNullableString(
+                timingDependency.reason
+              )
+            : null,
+      },
 
       knownContext: {
-        summary: cleanString(knownContext.summary),
-        importantFacts: cleanStringArray(knownContext.importantFacts),
-        alreadyAnsweredTopics: cleanStringArray(
-          knownContext.alreadyAnsweredTopics
-        ),
+        summary:
+          cleanString(
+            knownContext.summary
+          ),
+
+        importantFacts:
+          cleanStringArray(
+            knownContext.importantFacts
+          ),
+
+        alreadyAnsweredTopics:
+          cleanStringArray(
+            knownContext.alreadyAnsweredTopics
+          ),
       },
 
       replyNeeded:
@@ -555,33 +1417,42 @@ function parseBrainDecision(
         parsed.handoverRecommended === true,
 
       handoverReason:
-        cleanNullableString(parsed.handoverReason),
+        cleanNullableString(
+          parsed.handoverReason
+        ),
 
       salesStrategyNeeded:
         parsed.salesStrategyNeeded === true,
 
-      salesStrategist: allowedStrategists.has(
-        String(parsed.salesStrategist)
-      )
-        ? (parsed.salesStrategist as
-            | "agent"
-            | "owner"
-            | "developer"
-            | "buyer_renter"
-            | "none")
-        : "none",
+      salesStrategist:
+        allowedStrategists.has(
+          String(parsed.salesStrategist)
+        )
+          ? (parsed.salesStrategist as
+              | "agent"
+              | "owner"
+              | "developer"
+              | "buyer_renter"
+              | "none")
+          : "none",
 
       factualKnowledgeNeeded:
         parsed.factualKnowledgeNeeded === true,
 
       knowledgeRequest:
-        cleanStringArray(parsed.knowledgeRequest),
+        cleanStringArray(
+          parsed.knowledgeRequest
+        ),
 
       directQuestion:
-        cleanNullableString(parsed.directQuestion),
+        cleanNullableString(
+          parsed.directQuestion
+        ),
 
       recommendedNextStep:
-        cleanString(parsed.recommendedNextStep) ||
+        cleanString(
+          parsed.recommendedNextStep
+        ) ||
         fallback.recommendedNextStep,
     };
   } catch {
@@ -589,35 +1460,308 @@ function parseBrainDecision(
   }
 }
 
-function buildConversationForBrain(memory: MonaConversationMemory) {
+function buildConversationForBrain(
+  memory: MonaConversationMemory
+) {
   if (!memory.messages.length) {
     return "No earlier conversation.";
   }
 
-  return memory.messages
+  const memoryContext = [
+    "MEMORY CONTEXT:",
+    `Campaign-only before first customer conversation: ${
+      memory.campaignOnlyBeforeCustomerConversation ? "yes" : "no"
+    }`,
+    `Human/Admin intervention detected: ${
+      memory.humanInterventionDetected ? "yes" : "no"
+    }`,
+    "",
+    "FULL CONVERSATION FROM THE BEGINNING:",
+  ].join("\n");
+
+  const transcript = memory.messages
     .map(
       (item) =>
         `[${item.createdAt}] ${item.speaker}: ${item.message}`
     )
     .join("\n");
+
+  return `${memoryContext}\n${transcript}`;
+}
+
+function isHardRejection(
+  message: string
+) {
+  return (
+    /\b(?:tidak|nggak|gak|ga)\s+(?:tertarik|minat|mau)\b/i.test(
+      message
+    ) ||
+    /\bjangan\s+(?:hubungi|chat|wa|contact)\b/i.test(
+      message
+    ) ||
+    /\bstop\b/i.test(message) ||
+    /\bunsubscribe\b/i.test(message) ||
+    /\bhapus\s+nomor\b/i.test(message) ||
+    /\bdon'?t\s+contact\s+me\b/i.test(
+      message
+    ) ||
+    /\bnot\s+interested\b/i.test(
+      message
+    )
+  );
+}
+
+function isFeeQuestion(
+  message: string
+) {
+  return /^(?:ini\s+)?(?:bayar|berbayar|ada\s+fee|ada\s+biaya|bayar\s+ya|bayar\s+yaa|bayar\s+kah|kena\s+biaya|harus\s+bayar|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
+    message
+  );
+}
+
+function isTimingHesitation(
+  message: string
+) {
+  return (
+    /(?:nggak|gak|ga|ngga|enggak|tidak)\s+dulu/i.test(
+      message
+    ) ||
+    /belum\s+(?:mau|bisa|siap)\s+(?:daftar|join|gabung|ambil)/i.test(
+      message
+    ) ||
+    /nanti\s+(?:aja|saja)/i.test(
+      message
+    ) ||
+    /bulan\s+depan/i.test(
+      message
+    ) ||
+    /belum\s+sekarang/i.test(
+      message
+    ) ||
+    /habis\s+gajian/i.test(
+      message
+    ) ||
+    /tunggu\s+(?:foto|dokumen)/i.test(
+      message
+    ) ||
+    /tanya\s+(?:suami|istri|keluarga|bos)/i.test(
+      message
+    ) ||
+    /diskusi\s+partner/i.test(
+      message
+    )
+  );
+}
+
+function enforceBrainRouting(
+  decision: MonaBrainDecision,
+  latestCustomerMessage: string
+): MonaBrainDecision {
+  const latestMessage = String(
+    latestCustomerMessage || ""
+  ).trim();
+
+  let result = {
+    ...decision,
+  };
+
+  /*
+   * STRICT ROLE GATE
+   */
+  if (result.customerType === "unknown") {
+    result = {
+      ...result,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      recommendedNextStep:
+        result.factualKnowledgeNeeded &&
+        result.directQuestion
+          ? "Answer only the approved general Tetamo question that the customer asked, then establish whether the customer is an Agent or Property Owner before any Agent/Owner Sales AI can run."
+          : "Establish whether the customer is an Agent or Property Owner before any Agent/Owner Sales AI can run. Do not guess the role.",
+    };
+  }
+
+  /*
+   * DEVELOPER DIRECT ROUTE
+   */
+  if (result.customerType === "developer") {
+    result = {
+      ...result,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: true,
+      knowledgeRequest: [
+        "approved Tetamo Developer destination and developer-license link",
+      ],
+      recommendedNextStep:
+        "Direct the customer to Tetamo's Developer journey at https://www.tetamo.com/developer-license. Do not route into Agent or Owner Sales AI.",
+    };
+  }
+
+  /*
+   * BUYER / RENTER DIRECT ROUTE
+   */
+  if (
+    result.customerType ===
+    "buyer_renter"
+  ) {
+    result = {
+      ...result,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: true,
+      knowledgeRequest: [
+        "approved Tetamo Buyer/Renter destination and buyer requirements link",
+      ],
+      recommendedNextStep:
+        "Direct the customer to Tetamo's Buyer/Renter journey at https://www.tetamo.com/pembeli. Do not route into Agent or Owner Sales AI.",
+    };
+  }
+
+  /*
+   * STRATEGIST CONSISTENCY
+   */
+  if (
+    result.customerType === "agent" ||
+    result.customerType === "agency"
+  ) {
+    result = {
+      ...result,
+      salesStrategist:
+        result.salesStrategyNeeded
+          ? "agent"
+          : "none",
+    };
+  }
+
+  if (
+    result.customerType === "owner"
+  ) {
+    result = {
+      ...result,
+      salesStrategist:
+        result.salesStrategyNeeded
+          ? "owner"
+          : "none",
+    };
+  }
+
+  /*
+   * FEE QUESTION IS NOT PAYMENT INTENT
+   */
+  if (isFeeQuestion(latestMessage)) {
+    if (
+      result.customerType === "agent" ||
+      result.customerType === "agency"
+    ) {
+      result = {
+        ...result,
+        conversationSituation:
+          "information",
+        salesStrategyNeeded: true,
+        salesStrategist: "agent",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        recommendedNextStep:
+          "Route the fee/value question to Agent Sales AI. This is not active payment intent.",
+      };
+    } else if (
+      result.customerType === "owner"
+    ) {
+      result = {
+        ...result,
+        conversationSituation:
+          "information",
+        salesStrategyNeeded: true,
+        salesStrategist: "owner",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        recommendedNextStep:
+          "Route the fee/value question to Owner Sales AI. This is not active payment intent.",
+      };
+    } else if (
+      result.customerType === "unknown"
+    ) {
+      result = {
+        ...result,
+        conversationSituation:
+          "information",
+        salesStrategyNeeded: false,
+        salesStrategist: "none",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        recommendedNextStep:
+          "The customer is asking whether Tetamo is paid, but the applicable product depends on role. Establish whether they are an Agent or Property Owner first.",
+      };
+    }
+  }
+
+  /*
+   * HESITATION DOES NOT TRIGGER SALES RESCUE
+   */
+  if (
+    !isHardRejection(latestMessage) &&
+    isTimingHesitation(latestMessage)
+  ) {
+    result = {
+      ...result,
+      conversationSituation:
+        "hesitation",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      directQuestion: null,
+      recommendedNextStep:
+        "Acknowledge the customer's timing or dependency without pressure. Do not restart discovery or try to rescue the sale with another question.",
+    };
+  }
+
+  /*
+   * HARD REJECTION HAS FINAL PRIORITY
+   */
+  if (
+    isHardRejection(latestMessage)
+  ) {
+    result = {
+      ...result,
+      conversationSituation:
+        "rejection",
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      directQuestion: null,
+      recommendedNextStep:
+        "Respect the customer's rejection. Do not continue selling or ask another sales question.",
+    };
+  }
+
+  return result;
 }
 
 export async function analyseMonaBrain(
   params: AnalyseMonaBrainParams
 ): Promise<MonaBrainDecision> {
-  const fallback = fallbackBrainDecision(
-    params.latestCustomerMessage
-  );
+  const fallback =
+    fallbackBrainDecision(
+      params.latestCustomerMessage
+    );
 
   if (!process.env.OPENAI_API_KEY) {
-    return fallback;
+    return enforceBrainRouting(
+      fallback,
+      params.latestCustomerMessage
+    );
   }
 
   const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey:
+      process.env.OPENAI_API_KEY,
   });
 
-  const conversation = buildConversationForBrain(params.memory);
+  const conversation =
+    buildConversationForBrain(
+      params.memory
+    );
 
   const prompt = `
 ${MONA_BRAIN_PROMPT}
@@ -625,22 +1769,36 @@ ${MONA_BRAIN_PROMPT}
 OFFICIAL SALES STAGE:
 ${params.salesStage || "none"}
 
-RECENT TETAMO CAMPAIGN CONTEXT:
-${params.campaignContext
-  ? JSON.stringify(params.campaignContext, null, 2)
-  : "none"}
+CAMPAIGN CONTEXT:
+${
+  params.campaignContext
+    ? JSON.stringify(
+        params.campaignContext,
+        null,
+        2
+      )
+    : "none"
+}
 
-IMPORTANT CAMPAIGN RULE:
-If a recent Tetamo campaign exists, interpret short replies such as "ya", "mau",
-"boleh", "info", "berapa", "gimana", "yes", or "interested" in the context of
-that campaign instead of treating them as isolated messages. Do not invent the
-campaign body or facts that are not present in the supplied context.
+IMPORTANT:
+Campaign context is supplied only as weak context.
+It must NEVER establish Agent, Owner, Agency, Developer or Buyer/Renter role.
 
 FULL AVAILABLE CONVERSATION FROM THE BEGINNING:
 ${conversation}
 
 LATEST CUSTOMER MESSAGE:
 ${params.latestCustomerMessage}
+
+Before returning JSON:
+
+1. Reconstruct the conversation from Memory.
+2. Determine whether this is new, returning, campaign-only, an existing sales
+   journey, payment/support journey or previously closed/rejected.
+3. Recover any established customer role and facts.
+4. Only then interpret the latest message.
+5. Apply the strict role gate.
+6. Decide routing and Knowledge requirements.
 
 Return ONLY valid JSON in exactly this structure:
 
@@ -655,12 +1813,17 @@ Return ONLY valid JSON in exactly this structure:
     "style": "short description of how this customer naturally communicates"
   },
 
-  "latestMeaning": "plain-language interpretation of the latest customer message",
+  "latestMeaning": "plain-language interpretation of the latest customer message in full conversation context",
 
   "conversationSituation": "information|interest|comparison|objection|hesitation|rejection|closing|payment|support|casual|unknown",
 
+  "timingDependency": {
+    "active": false,
+    "reason": null
+  },
+
   "knownContext": {
-    "summary": "short useful summary of the conversation so far",
+    "summary": "short useful summary including customer/conversation state and any established journey",
     "importantFacts": [],
     "alreadyAnsweredTopics": []
   },
@@ -670,10 +1833,10 @@ Return ONLY valid JSON in exactly this structure:
   "handoverRecommended": false,
   "handoverReason": null,
 
-  "salesStrategyNeeded": true,
-  "salesStrategist": "agent|owner|developer|buyer_renter|none",
+  "salesStrategyNeeded": false,
+  "salesStrategist": "agent|owner|none",
 
-  "factualKnowledgeNeeded": true,
+  "factualKnowledgeNeeded": false,
   "knowledgeRequest": [],
 
   "directQuestion": null,
@@ -681,122 +1844,42 @@ Return ONLY valid JSON in exactly this structure:
   "recommendedNextStep": "brief internal instruction for what should happen next"
 }
 
-Do not write the WhatsApp response.
-Do not include markdown.
+OUTPUT RULES:
+
+- customerType unknown means salesStrategyNeeded=false and salesStrategist=none.
+- Developer means no Sales AI and direct Developer journey.
+- Buyer/Renter means no Sales AI and direct Buyer/Renter journey.
+- Agent/Agency may use Agent Sales AI.
+- Owner may use Owner Sales AI.
+- Campaign never establishes role.
+- timingDependency.active=true only for a real future dependency, waiting condition, or stated later time.
+- Generic objection or hesitation alone does not activate timingDependency.
+- Do not write a WhatsApp reply.
+- Do not include markdown.
 `.trim();
 
   try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-      temperature: 0.1,
-      max_output_tokens: 900,
-    });
+    const response =
+      await openai.responses.create({
+        model: "gpt-4.1-mini",
+        input: prompt,
+        temperature: 0.1,
+        max_output_tokens: 900,
+      });
 
-    let decision = parseBrainDecision(
-      String(response.output_text || ""),
-      fallback
-    );
-
-    const campaignTemplateName = String(
-      params.campaignContext?.templateName || ""
-    ).toLowerCase();
-
-    const shortAffirmativeCampaignReply =
-      /^(?:ya|iya|y|yes|mau|boleh|ok|oke|okay|interested|minat|info|lanjut)$/i.test(
-        params.latestCustomerMessage.trim()
+    let decision =
+      parseBrainDecision(
+        String(
+          response.output_text || ""
+        ),
+        fallback
       );
 
-    const campaignClearlyAgentFocused =
-      /(?:agent|agen)/i.test(campaignTemplateName);
-
-    if (
-      shortAffirmativeCampaignReply &&
-      campaignClearlyAgentFocused
-    ) {
-      decision = {
-        ...decision,
-        customerType: "agent",
-        conversationSituation: "interest",
-        salesStrategyNeeded: true,
-        salesStrategist: "agent",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
-        directQuestion: null,
-        knownContext: {
-          ...decision.knownContext,
-          importantFacts: Array.from(
-            new Set([
-              ...decision.knownContext.importantFacts,
-              "customer replied affirmatively to a recent agent-focused Tetamo campaign",
-            ])
-          ),
-        },
-        recommendedNextStep:
-          "Continue the agent membership or package conversation in the context of the recent Tetamo campaign. Do not ask whether the customer is an owner, wants to list privately, is selling or renting, or is interested in a promotion unless the customer explicitly brings that up. If one clarification is needed, keep it about the agent membership or package journey.",
-      };
-    }
-
-    const performanceConcern =
-      /\b(?:inquir(?:y|ies)|enquir(?:y|ies)|lead|leads|kepo|serius|serious|quality|kualitas|conversion|closing|prospek)\b/i.test(
-        [
-          params.latestCustomerMessage,
-          decision.latestMeaning,
-          decision.directQuestion || "",
-        ].join(" ")
-      );
-
-    if (performanceConcern) {
-      decision = {
-        ...decision,
-        factualKnowledgeNeeded: true,
-        knowledgeRequest: [
-          "approved Tetamo listing presentation features",
-          "approved Tetamo direct WhatsApp enquiry features",
-          "approved Tetamo leads dashboard and enquiry-management features",
-          "approved Tetamo viewing scheduling features",
-        ],
-        recommendedNextStep:
-          "Explain only approved Tetamo tools relevant to managing the agent's enquiry workflow. Do not say or imply Tetamo filters serious buyers, reduces curious enquiries, improves lead quality, improves conversion, increases enquiries, or improves sales, rentals or closing results.",
-      };
-    }
-
-    const asksOnlyWhetherThereIsAFee =
-      /(?:bayar\s+ya\??|ada\s+biaya|kena\s+biaya|berbayar|gratis\s+atau\s+bayar|harus\s+bayar)/i.test(
-        params.latestCustomerMessage
-      ) &&
-      !/(?:bayarnya\s+(?:gimana|bagaimana|gmana|gmn)|cara\s+bayar|how\s+to\s+pay|where\s+to\s+pay|bayar\s+di\s+mana|bayar\s+dimana|qris|transfer|rekening|payment\s+link|link\s+bayar)/i.test(
+    decision =
+      enforceBrainRouting(
+        decision,
         params.latestCustomerMessage
       );
-
-    if (asksOnlyWhetherThereIsAFee) {
-      decision = {
-        ...decision,
-        factualKnowledgeNeeded: true,
-        knowledgeRequest: [
-          "approved Tetamo pricing or fee information relevant to the customer's listing or package"
-        ],
-        recommendedNextStep:
-          "Answer only whether there is a fee and provide the relevant approved pricing if useful. Do not retrieve or mention payment methods, payment links, or payment instructions unless the customer asks how to pay.",
-      };
-    }
-
-    const declineForNow =
-      /(?:nggak|gak|ga|ngga|enggak|tidak)\s+dulu|belum\s+(?:mau|bisa|siap)\s+(?:daftar|join|gabung|ambil)|nanti\s+(?:aja|saja)|bulan\s+depan|belum\s+sekarang/i.test(
-        params.latestCustomerMessage
-      );
-
-    if (declineForNow) {
-      decision = {
-        ...decision,
-        conversationSituation: "hesitation",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
-        directQuestion: null,
-        recommendedNextStep:
-          "Acknowledge the customer's timing or decision without pressure. Do not restart discovery, do not search for package benefits, promotions, trials or demos, and do not try to rescue the sale with another question.",
-      };
-    }
 
     if (!decision.understood) {
       return {
@@ -813,7 +1896,14 @@ Do not include markdown.
 
     return decision;
   } catch (error) {
-    console.error("Tetamo Mona Brain analysis failed:", error);
-    return fallback;
+    console.error(
+      "Tetamo Mona Brain analysis failed:",
+      error
+    );
+
+    return enforceBrainRouting(
+      fallback,
+      params.latestCustomerMessage
+    );
   }
 }

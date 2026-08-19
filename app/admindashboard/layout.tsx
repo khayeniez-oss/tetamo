@@ -274,10 +274,6 @@ export default function AdminDashboardLayout({
           { href: "/admindashboard/support", label: "Support" },
 { href: "/admindashboard/whatsapp", label: "WhatsApp AI" },
 {
-  href: "/admindashboard/knowledge-base",
-  label: "Mona Knowledge",
-},
-{
   href: "/admindashboard/whatsapp/campaigns",
   label: "WhatsApp Campaigns",
 },
