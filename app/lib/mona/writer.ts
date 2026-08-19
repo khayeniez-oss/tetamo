@@ -83,17 +83,6 @@ If the customer asks things such as:
 - "Who am I speaking with?";
 or another question about who is replying:
 
-These are EXAMPLES only.
-Understand the identity INTENT naturally, including Indonesian WhatsApp slang,
-abbreviations, incomplete wording, mixed English/Indonesian, typos and indirect
-forms such as:
-- asking whether the reply is automatic;
-- asking whether the responder is a person, machine, AI, bot or admin;
-- asking who is answering or chatting;
-- asking what Mona is.
-
-Do NOT require an exact phrase match.
-
 Identify yourself as Mona, Admin Assistant Tetamo.
 
 Explain naturally that you handle customer communication and assistance through
@@ -808,112 +797,36 @@ function cleanReply(
   return reply.trim();
 }
 
-function normalizeIdentityText(
-  value: unknown
+function isMonaIdentityQuestion(
+  message: string
 ) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hasMonaIdentityIntent(
-  params: WriteMonaReplyParams
-) {
-  /*
-   * Use BOTH:
-   * 1. the customer's literal WhatsApp wording; and
-   * 2. Brain's semantic interpretation of that wording.
-   *
-   * This lets Mona understand natural Indonesian variations rather than
-   * depending on one exact phrase such as "kamu bot?".
-   */
-  const literal =
-    normalizeIdentityText(
-      params.latestCustomerMessage
-    );
-
-  const semantic =
-    normalizeIdentityText(
-      [
-        params.brain.latestMeaning,
-        params.brain.directQuestion,
-        params.brain.recommendedNextStep,
-      ]
-        .filter(Boolean)
-        .join(" ")
-    );
-
-  const combined =
-    `${literal} ${semantic}`.trim();
-
-  if (!combined) {
-    return false;
-  }
-
-  /*
-   * Common Indonesian / mixed-language WhatsApp identity labels.
-   * These are safety anchors, not a complete phrase catalogue.
-   */
-  const identityLabel =
-    /\b(?:ai|artificial intelligence|bot|chatbot|robot|mesin|otomatis|automatic|auto reply|autoreply|virtual assistant|asisten virtual|human|manusia|orang beneran|orang asli|admin|administrator)\b/i;
-
-  const identitySubject =
-    /\b(?:kamu|km|lu|lo|anda|mona|ini|yang jawab|yg jawab|yang bales|yg bales|yang balas|yg balas|yang chat|yg chat|yang reply|yg reply|siapa|who|you|u)\b/i;
-
-  const identityQuestionShape =
-    /\b(?:siapa ini|ini siapa|siapa kamu|kamu siapa|siapa anda|anda siapa|siapa yang chat|siapa yg chat|siapa yang jawab|siapa yg jawab|saya bicara sama siapa|saya chat sama siapa|lagi chat sama siapa|who are you|who am i speaking with|who am i chatting with)\b/i;
-
-  const binaryIdentityShape =
-    /\b(?:kamu|km|lu|lo|anda|mona|ini|yang jawab|yg jawab|yang bales|yg bales|yang balas|yg balas|yang chat|yg chat|yang reply|yg reply|you|u)\b.{0,35}\b(?:ai|bot|chatbot|robot|mesin|otomatis|automatic|auto reply|autoreply|human|manusia|orang|admin)\b/i;
-
-  const reverseBinaryIdentityShape =
-    /\b(?:ai|bot|chatbot|robot|mesin|otomatis|automatic|auto reply|autoreply|human|manusia|orang|admin)\b.{0,35}\b(?:ya|yah|kah|nih|ini|kamu|km|anda|mona|you|u)\b/i;
-
-  const comparisonIdentityShape =
-    /\b(?:orang|manusia|human)\b.{0,20}\b(?:atau|apa|or)\b.{0,20}\b(?:ai|bot|robot|mesin)\b|\b(?:ai|bot|robot|mesin)\b.{0,20}\b(?:atau|apa|or)\b.{0,20}\b(?:orang|manusia|human)\b/i;
-
-  const automationIdentityShape =
-    /\b(?:balas|bales|jawab|reply|respon|response)\b.{0,20}\b(?:otomatis|automatic|auto reply|autoreply|bot|ai|mesin)\b/i;
-
-  /*
-   * Brain normally rewrites the meaning more formally, so this catches
-   * semantic interpretations such as:
-   * "customer asks whether Mona is an AI/bot"
-   * even when the customer's literal slang was unusual.
-   */
-  const brainSemanticIdentityShape =
-    /\b(?:asks?|asking|menanyakan|bertanya|ingin tahu|wondering|whether|apakah)\b.{0,55}\b(?:mona|assistant|admin|reply|responder|yang menjawab|yang membalas)?\b.{0,40}\b(?:ai|bot|robot|human|manusia|admin|automated|otomatis|identity|identitas|siapa)\b/i;
+  const text =
+    String(message || "").trim();
 
   return (
-    identityQuestionShape.test(
-      combined
+    /\b(?:ini|kamu|anda|mona|yang\s+(?:chat|balas|reply)).{0,25}(?:ai|bot|robot|admin|siapa|human|manusia)\b/i.test(
+      text
     ) ||
-    binaryIdentityShape.test(
-      combined
+    /\b(?:ai|bot|robot|admin|human|manusia).{0,25}(?:ya|kah|ini|kamu|anda|mona)\b/i.test(
+      text
     ) ||
-    reverseBinaryIdentityShape.test(
-      combined
+    /\b(?:are\s+you|is\s+this).{0,20}(?:ai|a\s+bot|bot|human)\b/i.test(
+      text
     ) ||
-    comparisonIdentityShape.test(
-      combined
+    /\bwho\s+(?:are\s+you|am\s+i\s+(?:speaking|chatting)\s+with)\b/i.test(
+      text
     ) ||
-    automationIdentityShape.test(
-      combined
-    ) ||
-    brainSemanticIdentityShape.test(
-      semantic
-    ) ||
-    (
-      identityLabel.test(literal) &&
-      identitySubject.test(literal) &&
-      literal.split(" ").length <= 12
-    ) ||
-    /^(?:ai|bot|chatbot|robot|mesin|otomatis|admin|human|manusia)\s*(?:ya|yah|kah|nih)?$/i.test(
-      literal
+    /^(?:siapa|who)\s+(?:ini|kamu|anda|mona)\b/i.test(
+      text
     )
+  );
+}
+
+function exposesTechnicalMonaIdentity(
+  reply: string
+) {
+  return /\b(?:asisten\s+ai|ai\s+assistant|assistant\s+ai|ai\s+bot|chatbot|bot|robot|virtual\s+assistant|asisten\s+virtual|language\s+model|openai)\b/i.test(
+    String(reply || "")
   );
 }
 
@@ -1347,18 +1260,16 @@ Write Mona's final WhatsApp reply now.
     /*
      * MONA IDENTITY SAFETY
      * --------------------
-     * Identity detection uses the customer's natural WhatsApp wording PLUS
-     * Brain's semantic interpretation. This means slang and varied Indonesian
-     * phrasing do not need to match one exact hardcoded sentence.
-     *
-     * Once the message is understood as an identity question, do not allow the
-     * model to improvise a yes/no answer such as "Iya Kak". Use Mona's approved
-     * operational customer-facing identity deterministically.
-     *
-     * This presents Mona by business role and does not falsely claim she is human.
+     * The Writer should present Mona by her operational customer-facing role.
+     * If an identity-only question still causes the model to label Mona as an
+     * AI/bot/virtual assistant, replace that self-description with the approved
+     * Admin Assistant identity. This does not claim Mona is a human.
      */
     if (
-      hasMonaIdentityIntent(params)
+      isMonaIdentityQuestion(
+        params.latestCustomerMessage
+      ) &&
+      exposesTechnicalMonaIdentity(raw)
     ) {
       raw =
         canonicalMonaIdentityReply(
