@@ -25,6 +25,7 @@ export type MonaConversationSituation =
 export type MonaBrainDecision = {
   understood: boolean;
   confidence: number;
+  clarificationNeeded: boolean;
 
   customerType: MonaCustomerType;
 
@@ -298,6 +299,27 @@ If meaning can reasonably be understood from Memory and context,
 set understood=true.
 
 Use understood=false only when the meaning genuinely cannot be recovered.
+
+PARTIAL UNDERSTANDING:
+
+Use clarificationNeeded=true ONLY when:
+- the likely meaning can be recovered, so understood=true;
+- but one important detail is still uncertain;
+- and answering without confirming that detail could materially change the answer.
+
+When clarificationNeeded=true:
+- do not guess the missing detail;
+- do not manufacture a precise directQuestion;
+- set directQuestion=null when the exact question is uncertain;
+- recommendedNextStep must ask ONE short natural clarification;
+- do not recommend human handover merely because clarification is needed.
+
+Examples include unclear wording about who pays, when payment happens, whether a
+fee is paid later, or another commercial arrangement where the general concern
+is understandable but the exact arrangement is not.
+
+If the meaning is clear enough to answer safely, clarificationNeeded=false.
+If the meaning genuinely cannot be recovered, use understood=false as before.
 
 ==================================================
 STRICT ROLE GATE
@@ -1199,6 +1221,7 @@ function fallbackBrainDecision(
   return {
     understood: true,
     confidence: 0.2,
+    clarificationNeeded: false,
 
     customerType: "unknown",
 
@@ -1353,6 +1376,9 @@ function parseBrainDecision(
               Math.min(1, confidenceNumber)
             )
           : fallback.confidence,
+
+      clarificationNeeded:
+        parsed.clarificationNeeded === true,
 
       customerType:
         allowedCustomerTypes.has(
@@ -1678,6 +1704,13 @@ function enforceBrainRouting(
     latestCustomerMessage || ""
   ).trim();
 
+  // Preserve Brain's original clarification instruction before deterministic
+  // routing can rewrite recommendedNextStep for package, fee or sales handling.
+  const clarificationNextStep =
+    decision.clarificationNeeded
+      ? decision.recommendedNextStep
+      : null;
+
   // Model output may classify or recommend, but deterministic routing owns
   // whether Mona is actually paused for a human. Start every understood turn
   // with handover cleared and only enable it below for explicit human-only cases.
@@ -1992,6 +2025,36 @@ function enforceBrainRouting(
   }
 
   /*
+   * PARTIAL UNDERSTANDING / CLARIFICATION
+   * -------------------------------------
+   * Brain may understand the likely meaning but still need one material detail
+   * confirmed before Sales AI or Knowledge should answer.
+   *
+   * This intentionally does NOT apply when understood=false. Truly unreadable
+   * messages keep the existing immediate human handover behavior.
+   */
+  if (
+    result.understood &&
+    result.clarificationNeeded &&
+    !isHardRejection(latestMessage)
+  ) {
+    result = {
+      ...result,
+      replyNeeded: true,
+      handoverRecommended: false,
+      handoverReason: null,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      directQuestion: null,
+      recommendedNextStep:
+        clarificationNextStep ||
+        "Ask one short natural clarification about the uncertain detail before answering. Do not guess.",
+    };
+  }
+
+  /*
    * DETERMINISTIC HUMAN-ONLY ROUTES
    * Refund, legal, support and an explicit request for a human belong to the
    * Tetamo team. Normal pricing, package questions, objections, hesitation and
@@ -2076,14 +2139,16 @@ Before returning JSON:
    journey, payment/support journey or previously closed/rejected.
 3. Recover any established customer role and facts.
 4. Only then interpret the latest message.
-5. Apply the strict role gate.
-6. Decide routing and Knowledge requirements.
+5. Decide whether one important detail still requires clarification.
+6. Apply the strict role gate.
+7. Decide routing and Knowledge requirements.
 
 Return ONLY valid JSON in exactly this structure:
 
 {
   "understood": true,
   "confidence": 0.95,
+  "clarificationNeeded": false,
 
   "customerType": "agent|owner|agency|developer|buyer_renter|unknown",
 
@@ -2131,6 +2196,8 @@ OUTPUT RULES:
 - Agent/Agency may use Agent Sales AI.
 - Owner may use Owner Sales AI.
 - Campaign never establishes role.
+- clarificationNeeded=true only when understood=true but one material detail must be confirmed before answering safely.
+- clarificationNeeded=true means ask one clarification; do not guess and do not hand over merely for clarification.
 - timingDependency.active=true only for a real future dependency, waiting condition, or stated later time.
 - Generic objection or hesitation alone does not activate timingDependency.
 - Do not write a WhatsApp reply.
