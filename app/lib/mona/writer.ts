@@ -47,7 +47,7 @@ const BUYER_RENTER_DESTINATION =
   "https://www.tetamo.com/pembeli";
 
 const MONA_WRITER_PROMPT = `
-You are Mona, Tetamo's customer-facing WhatsApp assistant.
+You are Mona, Tetamo's Admin Assistant for customer-facing WhatsApp conversations.
 
 You are writing the FINAL customer-facing WhatsApp reply.
 
@@ -61,6 +61,64 @@ You are NOT:
 
 The internal systems have already analysed the conversation.
 Your job is to express their decision naturally and accurately.
+
+==================================================
+0. MONA CUSTOMER-FACING IDENTITY
+==================================================
+
+Your customer-facing identity is:
+Mona, Admin Assistant Tetamo.
+
+Present yourself by your operational role, not by the technical implementation
+behind the service.
+
+If the customer asks things such as:
+- "Ini AI ya?";
+- "Ini bot?";
+- "Kamu siapa?";
+- "Siapa yang chat?";
+- "Ini admin?";
+- "Are you AI?";
+- "Are you a bot?";
+- "Who am I speaking with?";
+or another question about who is replying:
+
+Identify yourself as Mona, Admin Assistant Tetamo.
+
+Explain naturally that you handle customer communication and assistance through
+Tetamo's WhatsApp, including Tetamo information, listing/property questions,
+packages and normal customer enquiries.
+
+When useful, explain that communication is handled through WhatsApp so information
+and conversation history can remain clearly recorded.
+
+Do NOT introduce yourself to customers as:
+- "AI assistant";
+- "asisten AI";
+- "AI bot";
+- "bot";
+- "chatbot";
+- "virtual assistant";
+- "asisten virtual";
+- a language model;
+- an OpenAI model;
+- or any other technical implementation label.
+
+Do NOT discuss internal model/provider/automation architecture in a normal
+customer-facing reply.
+
+Do NOT falsely claim to be a human person.
+Do NOT say:
+- "saya manusia";
+- "I am human";
+- "saya staff manusia";
+or otherwise invent a human personal identity.
+
+Preferred Indonesian identity wording:
+"Saya Mona, Admin Assistant Tetamo. Saya menangani komunikasi dan kebutuhan
+customer melalui WhatsApp, termasuk informasi Tetamo, listing, paket, dan
+pertanyaan umum. Komunikasi melalui WhatsApp juga membantu supaya informasi dan
+riwayat percakapan tetap tercatat dengan jelas."
 
 ==================================================
 1. ABSOLUTE ROLE GATE
@@ -656,6 +714,53 @@ function cleanReply(
   return reply.trim();
 }
 
+function isMonaIdentityQuestion(
+  message: string
+) {
+  const text =
+    String(message || "").trim();
+
+  return (
+    /\b(?:ini|kamu|anda|mona|yang\s+(?:chat|balas|reply)).{0,25}(?:ai|bot|robot|admin|siapa|human|manusia)\b/i.test(
+      text
+    ) ||
+    /\b(?:ai|bot|robot|admin|human|manusia).{0,25}(?:ya|kah|ini|kamu|anda|mona)\b/i.test(
+      text
+    ) ||
+    /\b(?:are\s+you|is\s+this).{0,20}(?:ai|a\s+bot|bot|human)\b/i.test(
+      text
+    ) ||
+    /\bwho\s+(?:are\s+you|am\s+i\s+(?:speaking|chatting)\s+with)\b/i.test(
+      text
+    ) ||
+    /^(?:siapa|who)\s+(?:ini|kamu|anda|mona)\b/i.test(
+      text
+    )
+  );
+}
+
+function exposesTechnicalMonaIdentity(
+  reply: string
+) {
+  return /\b(?:asisten\s+ai|ai\s+assistant|assistant\s+ai|ai\s+bot|chatbot|bot|robot|virtual\s+assistant|asisten\s+virtual|language\s+model|openai)\b/i.test(
+    String(reply || "")
+  );
+}
+
+function canonicalMonaIdentityReply(
+  primaryLanguage: string
+) {
+  if (
+    /english|\ben\b/i.test(
+      String(primaryLanguage || "")
+    )
+  ) {
+    return "I'm Mona, Tetamo's Admin Assistant. I handle customer communication and assistance through WhatsApp, including Tetamo information, listings, packages and general enquiries. Keeping the conversation here also helps keep the information and chat history clearly recorded.";
+  }
+
+  return "Saya Mona, Admin Assistant Tetamo 😊 Saya menangani komunikasi dan kebutuhan customer melalui WhatsApp, termasuk informasi Tetamo, listing, paket, dan pertanyaan umum. Komunikasi melalui WhatsApp juga membantu supaya informasi dan riwayat percakapan tetap tercatat dengan jelas.";
+}
+
 function isPaymentQuestion(
   message: string
 ) {
@@ -1024,7 +1129,7 @@ Write Mona's final WhatsApp reply now.
         max_output_tokens: 700,
       });
 
-    const raw =
+    let raw =
       cleanReply(
         String(
           response.output_text || ""
@@ -1067,6 +1172,27 @@ Write Mona's final WhatsApp reply now.
 
     if (!raw) {
       return fallbackReply(params);
+    }
+
+    /*
+     * MONA IDENTITY SAFETY
+     * --------------------
+     * The Writer should present Mona by her operational customer-facing role.
+     * If an identity-only question still causes the model to label Mona as an
+     * AI/bot/virtual assistant, replace that self-description with the approved
+     * Admin Assistant identity. This does not claim Mona is a human.
+     */
+    if (
+      isMonaIdentityQuestion(
+        params.latestCustomerMessage
+      ) &&
+      exposesTechnicalMonaIdentity(raw)
+    ) {
+      raw =
+        canonicalMonaIdentityReply(
+          params.brain.languageStyle
+            .primaryLanguage
+        );
     }
 
     const concreteFactViolation =
