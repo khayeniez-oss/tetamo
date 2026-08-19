@@ -1022,12 +1022,23 @@ not interested
 For hard rejection:
 
 conversationSituation="rejection"
-salesStrategyNeeded=false
-salesStrategist="none"
 factualKnowledgeNeeded=false
 knowledgeRequest=[]
 
-Do not recommend another sales question.
+If an Agent/Agency role is already established:
+salesStrategyNeeded=true
+salesStrategist="agent"
+
+If an Owner role is already established:
+salesStrategyNeeded=true
+salesStrategist="owner"
+
+If role is unknown:
+salesStrategyNeeded=false
+salesStrategist="none"
+
+The established Sales AI owns the stop_selling strategy and natural acknowledgement.
+Do not recommend another sales question. Do not hand over merely because the customer rejected the sale.
 
 ==================================================
 HESITATION / FUTURE DEPENDENCY
@@ -1122,11 +1133,16 @@ Recommend handover only when:
 - meaning genuinely cannot be understood even after Memory; or
 - human access/action is genuinely required.
 
+The handover flag is advisory reasoning only. Deterministic application code decides
+whether Mona is actually paused for a human.
+
 Do NOT hand over merely because:
 
 - slang is used;
 - customer asks normal Tetamo information;
-- customer asks package questions;
+- customer asks package questions or whether Tetamo is paid;
+- customer raises an objection or hesitation;
+- customer rejects the sales offer;
 - customer asks how to list;
 - customer asks about buyers;
 - customer asks about features.
@@ -1413,8 +1429,11 @@ function parseBrainDecision(
           ? parsed.replyNeeded
           : fallback.replyNeeded,
 
-      handoverRecommended:
-        parsed.handoverRecommended === true,
+      // HANDOVER SAFETY:
+      // The model may describe that human help could be useful, but it does
+      // not get final authority to pause Mona. enforceBrainRouting() below
+      // owns deterministic handover decisions.
+      handoverRecommended: false,
 
       handoverReason:
         cleanNullableString(
@@ -1514,8 +1533,27 @@ function isHardRejection(
 function isFeeQuestion(
   message: string
 ) {
-  return /^(?:ini\s+)?(?:bayar|berbayar|ada\s+fee|ada\s+biaya|bayar\s+ya|bayar\s+yaa|bayar\s+kah|kena\s+biaya|harus\s+bayar|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
+  return /^(?:ini\s+)?(?:(?:bayar|berbayar|kena\s+biaya|harus\s+bayar)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|ada\s+(?:fee|biaya)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
     message
+  );
+}
+
+function isExplicitHumanRequest(
+  message: string
+) {
+  return (
+    /(?:hubungkan|sambungkan|connect).{0,20}(?:admin|cs|customer service|human|orang|staff)/i.test(
+      message
+    ) ||
+    /(?:mau|ingin|pengen|boleh|bisa).{0,20}(?:bicara|ngobrol|chat|talk|speak).{0,20}(?:admin|cs|customer service|human|orang|staff)/i.test(
+      message
+    ) ||
+    /(?:speak|talk|chat).{0,20}(?:to|with).{0,10}(?:a\s+)?(?:human|admin|staff|customer service)/i.test(
+      message
+    ) ||
+    /^(?:admin|human|cs|customer service|staff)\s*(?:please|pls|ya|dong)?[?.! ]*$/i.test(
+      message
+    )
   );
 }
 
@@ -1561,8 +1599,13 @@ function enforceBrainRouting(
     latestCustomerMessage || ""
   ).trim();
 
-  let result = {
+  // Model output may classify or recommend, but deterministic routing owns
+  // whether Mona is actually paused for a human. Start every understood turn
+  // with handover cleared and only enable it below for explicit human-only cases.
+  let result: MonaBrainDecision = {
     ...decision,
+    handoverRecommended: false,
+    handoverReason: null,
   };
 
   /*
@@ -1647,6 +1690,45 @@ function enforceBrainRouting(
   }
 
   /*
+   * SALES CONVERSATION OWNERSHIP
+   *
+   * Brain classifies the situation; Agent/Owner Sales AI owns the commercial
+   * response strategy for objections, comparisons, hesitation and rejection.
+   * These normal sales situations must never be escalated merely because the
+   * model suggested a handover.
+   */
+  const salesConversationSituation =
+    result.conversationSituation === "objection" ||
+    result.conversationSituation === "comparison" ||
+    result.conversationSituation === "hesitation" ||
+    result.conversationSituation === "rejection";
+
+  if (salesConversationSituation) {
+    if (
+      result.customerType === "agent" ||
+      result.customerType === "agency"
+    ) {
+      result = {
+        ...result,
+        replyNeeded: true,
+        salesStrategyNeeded: true,
+        salesStrategist: "agent",
+        handoverRecommended: false,
+        handoverReason: null,
+      };
+    } else if (result.customerType === "owner") {
+      result = {
+        ...result,
+        replyNeeded: true,
+        salesStrategyNeeded: true,
+        salesStrategist: "owner",
+        handoverRecommended: false,
+        handoverReason: null,
+      };
+    }
+  }
+
+  /*
    * FEE QUESTION IS NOT PAYMENT INTENT
    */
   if (isFeeQuestion(latestMessage)) {
@@ -1658,10 +1740,13 @@ function enforceBrainRouting(
         ...result,
         conversationSituation:
           "information",
+        replyNeeded: true,
         salesStrategyNeeded: true,
         salesStrategist: "agent",
         factualKnowledgeNeeded: false,
         knowledgeRequest: [],
+        handoverRecommended: false,
+        handoverReason: null,
         recommendedNextStep:
           "Route the fee/value question to Agent Sales AI. This is not active payment intent.",
       };
@@ -1672,10 +1757,13 @@ function enforceBrainRouting(
         ...result,
         conversationSituation:
           "information",
+        replyNeeded: true,
         salesStrategyNeeded: true,
         salesStrategist: "owner",
         factualKnowledgeNeeded: false,
         knowledgeRequest: [],
+        handoverRecommended: false,
+        handoverReason: null,
         recommendedNextStep:
           "Route the fee/value question to Owner Sales AI. This is not active payment intent.",
       };
@@ -1686,12 +1774,17 @@ function enforceBrainRouting(
         ...result,
         conversationSituation:
           "information",
+        replyNeeded: true,
         salesStrategyNeeded: false,
         salesStrategist: "none",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
+        factualKnowledgeNeeded: true,
+        knowledgeRequest: [
+          "approved Tetamo business model and whether Tetamo charges applicable paid services",
+        ],
+        handoverRecommended: false,
+        handoverReason: null,
         recommendedNextStep:
-          "The customer is asking whether Tetamo is paid, but the applicable product depends on role. Establish whether they are an Agent or Property Owner first.",
+          "Answer from approved general Tetamo business-model knowledge that Tetamo has applicable paid services, then establish whether the customer is an Agent or Property Owner before giving role-specific prices.",
       };
     }
   }
@@ -1703,15 +1796,35 @@ function enforceBrainRouting(
     !isHardRejection(latestMessage) &&
     isTimingHesitation(latestMessage)
   ) {
+    const isAgentRole =
+      result.customerType === "agent" ||
+      result.customerType === "agency";
+    const isOwnerRole =
+      result.customerType === "owner";
+
     result = {
       ...result,
       conversationSituation:
         "hesitation",
+      replyNeeded: true,
+      salesStrategyNeeded:
+        isAgentRole || isOwnerRole
+          ? true
+          : result.salesStrategyNeeded,
+      salesStrategist: isAgentRole
+        ? "agent"
+        : isOwnerRole
+          ? "owner"
+          : result.salesStrategist,
       factualKnowledgeNeeded: false,
       knowledgeRequest: [],
       directQuestion: null,
+      handoverRecommended: false,
+      handoverReason: null,
       recommendedNextStep:
-        "Acknowledge the customer's timing or dependency without pressure. Do not restart discovery or try to rescue the sale with another question.",
+        isAgentRole || isOwnerRole
+          ? "Route the hesitation to the established Sales AI. Acknowledge the customer's timing or dependency without pressure and do not restart discovery."
+          : "Acknowledge the customer's timing or dependency without pressure. Do not restart discovery or try to rescue the sale with another question.",
     };
   }
 
@@ -1721,17 +1834,54 @@ function enforceBrainRouting(
   if (
     isHardRejection(latestMessage)
   ) {
+    const isAgentRole =
+      result.customerType === "agent" ||
+      result.customerType === "agency";
+    const isOwnerRole =
+      result.customerType === "owner";
+
     result = {
       ...result,
       conversationSituation:
         "rejection",
-      salesStrategyNeeded: false,
-      salesStrategist: "none",
+      replyNeeded: true,
+      salesStrategyNeeded:
+        isAgentRole || isOwnerRole,
+      salesStrategist: isAgentRole
+        ? "agent"
+        : isOwnerRole
+          ? "owner"
+          : "none",
       factualKnowledgeNeeded: false,
       knowledgeRequest: [],
       directQuestion: null,
+      handoverRecommended: false,
+      handoverReason: null,
       recommendedNextStep:
-        "Respect the customer's rejection. Do not continue selling or ask another sales question.",
+        isAgentRole || isOwnerRole
+          ? "Route the rejection to the established Sales AI so it can stop selling, acknowledge the rejection naturally and prevent another sales question."
+          : "Respect the customer's rejection, acknowledge it naturally and do not ask the customer to establish a role.",
+    };
+  }
+
+  /*
+   * EXPLICIT HUMAN REQUEST
+   * This is one of the few Brain-level cases that may deterministically pause
+   * Mona. Asking a normal Tetamo question, fee question, objection, rejection
+   * or listing question is never enough.
+   */
+  if (
+    !isHardRejection(latestMessage) &&
+    isExplicitHumanRequest(latestMessage)
+  ) {
+    result = {
+      ...result,
+      replyNeeded: false,
+      handoverRecommended: true,
+      handoverReason:
+        "The customer explicitly requested a human/admin conversation.",
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
     };
   }
 

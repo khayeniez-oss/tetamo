@@ -498,6 +498,7 @@ PRICE
 Examples:
 - "mahal";
 - "bayar ya?";
+- "berbayar ya?";
 - "kemahalan";
 - "nggak ada budget".
 
@@ -666,12 +667,20 @@ If information is already known from conversation memory, do not ask again.
 HANDOVER
 Recommend human handover only when genuinely necessary, for example:
 - unresolved account-specific payment issue;
-- exceptional contract request;
-- unapproved discount request;
+- exceptional contract or custom negotiated pricing request outside approved products;
 - account-specific problem requiring staff access;
-- information unavailable to Mona where human action is required.
+- information unavailable to Mona where human action is required;
+- the customer explicitly requests a human/admin conversation.
+
+A normal discount question is a price objection for Sales AI to handle using approved facts;
+it is not automatically a handover.
+
+The handover field is advisory reasoning only. Deterministic application code decides
+whether Mona is actually paused for a human.
 
 Do not recommend handover merely because:
+- customer raises an objection, hesitation or rejection;
+- customer asks whether Tetamo is paid;
 - customer asks how to list;
 - customer asks Tetamo to upload a listing for them;
 - customer asks a normal package question;
@@ -833,7 +842,10 @@ function parseAgentSalesGuidance(raw: string): AgentSalesGuidance {
       commercialFacts: [],
       needsTetamoFacts: parsed.needsTetamoFacts === true,
       factsNeeded: cleanStringArray(parsed.factsNeeded),
-      handoverRecommended: parsed.handoverRecommended === true,
+      // HANDOVER SAFETY:
+      // Model-authored handover flags are not authoritative. Deterministic
+      // guards below decide whether a human is actually required.
+      handoverRecommended: false,
     };
   } catch {
     return fallback;
@@ -929,6 +941,20 @@ function includesAny(
   patterns: RegExp[]
 ) {
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function requiresDeterministicHumanHandover(
+  message: string
+) {
+  return includesAny(message, [
+    /(?:sudah|udah|telah).{0,20}(?:bayar|transfer).{0,35}(?:belum|nggak|gak|tidak).{0,20}(?:aktif|masuk|tercatat|update|muncul)/i,
+    /(?:uang|saldo).{0,15}(?:terpotong|kepotong|deducted|charged).{0,35}(?:belum|nggak|gak|tidak).{0,20}(?:aktif|masuk|tercatat|update|muncul)/i,
+    /(?:double|duplicate|dua\s+kali).{0,20}(?:charge|charged|payment|bayar|debit|potong)/i,
+    /(?:payment|pembayaran|qris|transfer).{0,25}(?:gagal|error|failed).{0,25}(?:terus|berulang|lagi|still|repeated)/i,
+    /(?:akun|account).{0,25}(?:terkunci|locked|suspended|ditangguhkan|disabled)/i,
+    /(?:hubungkan|sambungkan|connect).{0,20}(?:admin|cs|customer service|human|orang|staff)/i,
+    /(?:mau|ingin|pengen).{0,20}(?:bicara|ngobrol|chat|talk|speak).{0,20}(?:admin|cs|human|staff)/i,
+  ]);
 }
 
 function relevantCommercialFacts(
@@ -1110,8 +1136,8 @@ function applyDeterministicAgentSalesGuards(
   let packageRecommendationReason =
     guidance.packageRecommendationReason;
 
-  let handoverRecommended =
-    guidance.handoverRecommended;
+  // Final handover authority belongs to deterministic code, never the Sales LLM.
+  let handoverRecommended = false;
 
   let needsTetamoFacts =
     guidance.needsTetamoFacts;
@@ -1123,6 +1149,19 @@ function applyDeterministicAgentSalesGuards(
   // IMPORTANT: start empty. Never promote model-authored strings to
   // approved commercial truth. Only deterministic code below may add facts.
   const commercialFacts = new Set<string>();
+
+  if (
+    /handover|hand over|escalat|human(?: review| assistance| help)|admin(?: review| assistance| help)|staff(?: review| assistance| help)|pass.{0,20}(?:admin|human|staff)/i.test(
+      String(recommendedObjective || "") + " " + String(recommendedDirection || "")
+    )
+  ) {
+    recommendedObjective = "answer_current_question";
+    recommendedDirection =
+      "Handle the customer's normal Agent conversation inside Mona unless a deterministic human-only condition below is actually met.";
+    reason =
+      "Model-only handover recommendations are not authoritative.";
+    shouldAskQuestion = false;
+  }
 
   const hardRejection = includesAny(
     latestMessage,
@@ -1281,7 +1320,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const asksOnlyWhetherPaid =
-    /^(?:ini\s+)?(?:bayar|berbayar|ada\s+fee|ada\s+biaya|bayar\s+ya|bayar\s+yaa|bayar\s+kah|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
+    /^(?:ini\s+)?(?:(?:bayar|berbayar|kena\s+biaya|harus\s+bayar)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|ada\s+(?:fee|biaya)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
       latestMessage
     );
 
@@ -1600,6 +1639,19 @@ function applyDeterministicAgentSalesGuards(
     factsNeeded.add(
       "approved Tetamo facts relevant to the agent's stated problem"
     );
+  }
+
+  if (
+    !hardRejection &&
+    requiresDeterministicHumanHandover(latestMessage)
+  ) {
+    handoverRecommended = true;
+    recommendedObjective = "handover";
+    recommendedDirection =
+      "A human Tetamo team member is required because this appears to be an account-specific/payment-action issue or the customer explicitly requested a human.";
+    reason =
+      "Deterministic human-only handover condition matched.";
+    shouldAskQuestion = false;
   }
 
   return {
