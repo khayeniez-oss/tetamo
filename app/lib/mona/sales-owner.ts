@@ -890,10 +890,11 @@ function parseOwnerSalesGuidance(
         cleanString(
           parsed.packageRecommendationReason
         ),
-      commercialFacts:
-        cleanStringArray(
-          parsed.commercialFacts
-        ),
+      // SECURITY / FACT-SAFETY:
+      // Commercial facts are NEVER trusted from model output.
+      // applyDeterministicOwnerSalesGuards() rebuilds them from
+      // OWNER_PACKAGES / BOOST_FACTS / SPOTLIGHT_FACTS / fixed flows.
+      commercialFacts: [],
       needsTetamoFacts:
         parsed.needsTetamoFacts === true,
       factsNeeded:
@@ -1019,18 +1020,9 @@ function relevantOwnerCommercialFacts(
     }
   }
 
-  if (
-    guidance.recommendedPackage
-  ) {
-    for (
-      const fact of
-      OWNER_PACKAGES[
-        guidance.recommendedPackage
-      ].facts
-    ) {
-      facts.add(fact);
-    }
-  }
+  // Do not add facts merely because the Sales LLM suggested a package.
+  // Deterministic recommendation logic below will add canonical facts only
+  // after the current customer message actually justifies the recommendation.
 
   return Array.from(facts);
 }
@@ -1130,9 +1122,9 @@ function applyDeterministicOwnerSalesGuards(
     guidance.factsNeeded
   );
 
-  const commercialFacts = new Set(
-    guidance.commercialFacts
-  );
+  // IMPORTANT: start empty. Never promote model-authored strings to
+  // approved commercial truth. Only deterministic code below may add facts.
+  const commercialFacts = new Set<string>();
 
   const hardRejection = includesAny(
     latestMessage,
@@ -1713,19 +1705,30 @@ function applyDeterministicOwnerSalesGuards(
     }
   }
 
-  const ownerPriceQuestion =
-    /\b(?:harga|price|biaya|fee|berapa)\b/i.test(
+  const genericOwnerPriceQuestion =
+    /\b(?:harga|price|cost|biaya|fee|berapa|berbayar|bayar)\b/i.test(
+      latestMessage
+    ) &&
+    !/\b(?:basic|priority|featured|boost|spotlight)\b/i.test(
       latestMessage
     );
 
   if (
     !hardRejection &&
-    ownerPriceQuestion &&
-    !recommendedPackage &&
-    !/\b(?:basic|priority|featured|boost|spotlight)\b/i.test(
-      latestMessage
-    )
+    genericOwnerPriceQuestion
   ) {
+    // A generic price question is not permission for the model to choose
+    // one Owner package. Give canonical options and let the customer decide.
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective =
+      "answer_current_question";
+    recommendedDirection =
+      "Answer the Owner's price/fee question directly using the canonical Basic, Priority and Featured prices. Do not invent, estimate or change any amount.";
+    reason =
+      "The Owner asked a generic package price or fee question. Canonical package prices are supplied deterministically.";
+    shouldAskQuestion = false;
+
     for (
       const packageId of [
         "basic",
@@ -1733,11 +1736,8 @@ function applyDeterministicOwnerSalesGuards(
         "featured",
       ] as OwnerPackageId[]
     ) {
-      const pkg =
-        OWNER_PACKAGES[packageId];
-
       commercialFacts.add(
-        `${pkg.name} costs Rp${pkg.priceIdr.toLocaleString("id-ID")} and is active for 1 year.`
+        OWNER_PACKAGES[packageId].facts[0]
       );
     }
   }

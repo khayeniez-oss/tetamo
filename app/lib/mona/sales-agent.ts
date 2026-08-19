@@ -826,7 +826,11 @@ function parseAgentSalesGuidance(raw: string): AgentSalesGuidance {
       packageRecommendationReason: cleanString(
         parsed.packageRecommendationReason
       ),
-      commercialFacts: cleanStringArray(parsed.commercialFacts),
+      // SECURITY / FACT-SAFETY:
+      // Commercial facts are NEVER trusted from model output.
+      // applyDeterministicAgentSalesGuards() rebuilds them from
+      // AGENT_PACKAGES / BOOST_FACTS / SPOTLIGHT_FACTS / fixed flows.
+      commercialFacts: [],
       needsTetamoFacts: parsed.needsTetamoFacts === true,
       factsNeeded: cleanStringArray(parsed.factsNeeded),
       handoverRecommended: parsed.handoverRecommended === true,
@@ -1116,9 +1120,9 @@ function applyDeterministicAgentSalesGuards(
     guidance.factsNeeded
   );
 
-  const commercialFacts = new Set(
-    guidance.commercialFacts
-  );
+  // IMPORTANT: start empty. Never promote model-authored strings to
+  // approved commercial truth. Only deterministic code below may add facts.
+  const commercialFacts = new Set<string>();
 
   const hardRejection = includesAny(
     latestMessage,
@@ -1459,6 +1463,46 @@ function applyDeterministicAgentSalesGuards(
 
   for (const fact of relevantFacts) {
     commercialFacts.add(fact);
+  }
+
+  /*
+   * GENERIC AGENT PRICE / FEE QUESTION
+   * ----------------------------------
+   * A known Agent may ask simply "berapa harganya?", "ada fee?",
+   * "bayar ya?" etc. Do not depend on the Sales LLM to author prices.
+   * Supply the canonical package prices directly from AGENT_PACKAGES.
+   */
+  const genericAgentPriceQuestion =
+    /\b(?:harga|price|cost|biaya|fee|berapa|berbayar|bayar)\b/i.test(
+      latestMessage
+    ) &&
+    !/\b(?:silver|gold|agent\s*pro|agent-pro|boost|spotlight)\b/i.test(
+      latestMessage
+    );
+
+  if (
+    !hardRejection &&
+    genericAgentPriceQuestion
+  ) {
+    // A generic price question is not a package recommendation request.
+    // Do not let a speculative model recommendation narrow the answer.
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_current_question";
+    recommendedDirection =
+      "Answer the Agent's price/fee question directly using the canonical Silver, Gold and Agent Pro prices. Do not invent, estimate or change any amount.";
+    reason =
+      "The Agent asked a generic package price or fee question. Canonical package prices are supplied deterministically.";
+    shouldAskQuestion = false;
+
+    commercialFacts.add(AGENT_PACKAGES.silver.facts[0]);
+    commercialFacts.add(AGENT_PACKAGES.gold.facts[0]);
+    commercialFacts.add(AGENT_PACKAGES.agent_pro.facts[0]);
+
+    // Include the approved monthly Agent Pro alternative too.
+    if (AGENT_PACKAGES.agent_pro.facts[1]) {
+      commercialFacts.add(AGENT_PACKAGES.agent_pro.facts[1]);
+    }
   }
 
   const asksForPackageRecommendation =

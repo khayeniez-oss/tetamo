@@ -173,11 +173,15 @@ When customer type is AGENT or AGENCY and Agent Sales Guidance is supplied:
 - Agent Sales AI owns commercial strategy.
 - Follow its recommended objective and direction.
 - Use its supplied COMMERCIAL FACTS as approved commercial truth.
+- NEVER treat an earlier Mona message in Memory as a factual source. Memory preserves conversation history, not authoritative Tetamo facts.
+- When stating a Tetamo price, copy the exact Rp amount supplied in APPROVED COMMERCIAL FACTS. Do not abbreviate, estimate, round, convert to "jt/juta", or reconstruct an amount from memory.
 
 When customer type is OWNER and Owner Sales Guidance is supplied:
 - Owner Sales AI owns commercial strategy.
 - Follow its recommended objective and direction.
 - Use its supplied COMMERCIAL FACTS as approved commercial truth.
+- NEVER treat an earlier Mona message in Memory as a factual source. Memory preserves conversation history, not authoritative Tetamo facts.
+- When stating a Tetamo price, copy the exact Rp amount supplied in APPROVED COMMERCIAL FACTS. Do not abbreviate, estimate, round, convert to "jt/juta", or reconstruct an amount from memory.
 
 Commercial facts may include:
 - package names;
@@ -681,6 +685,102 @@ function approvedPaymentInformationExists(
   );
 }
 
+function normalizeIdrAmount(value: string) {
+  return String(value || "")
+    .replace(/[^0-9]/g, "")
+    .replace(/^0+/, "") || "0";
+}
+
+function extractIdrAmounts(value: string) {
+  const amounts = new Set<string>();
+  const text = String(value || "");
+  const regex = /\bRp\s*([0-9][0-9.,\s]*)/gi;
+
+  for (const match of text.matchAll(regex)) {
+    const normalized = normalizeIdrAmount(match[1] || "");
+    if (normalized) amounts.add(normalized);
+  }
+
+  return amounts;
+}
+
+function extractHttpUrls(value: string) {
+  return Array.from(
+    new Set(
+      String(value || "").match(/https?:\/\/[^\s<>"')\]]+/gi) || []
+    )
+  ).map((url) => url.replace(/[.,;!?]+$/g, ""));
+}
+
+function trustedCustomerAdminText(memory: MonaConversationMemory) {
+  return memory.messages
+    .filter(
+      (message) =>
+        message.speaker === "Customer" ||
+        message.speaker === "Admin"
+    )
+    .map((message) => message.message)
+    .join("\n");
+}
+
+/**
+ * Final deterministic fact gate.
+ *
+ * The Writer is allowed to be creative about wording, never about facts.
+ * This gate blocks the highest-risk concrete hallucinations before Meta sends:
+ * - invented Tetamo Rp prices;
+ * - invented http/https destinations.
+ *
+ * Price rule:
+ * - when approved facts contain Rp amounts, every Rp amount Mona sends must
+ *   exactly match one of those approved amounts;
+ * - when no approved Rp amount exists, Mona may only repeat an Rp amount that
+ *   came from the Customer/Admin conversation (e.g. the property's asking price).
+ */
+function validateConcreteReplyFacts(
+  reply: string,
+  params: WriteMonaReplyParams | WriteMonaFollowUpParams,
+  combinedApprovedFacts: string
+): string | null {
+  const replyAmounts = extractIdrAmounts(reply);
+  const approvedAmounts = extractIdrAmounts(combinedApprovedFacts);
+
+  if (replyAmounts.size > 0) {
+    if (approvedAmounts.size > 0) {
+      for (const amount of replyAmounts) {
+        if (!approvedAmounts.has(amount)) {
+          return `Mona generated Rp${amount}, which is not present in the approved facts for this turn.`;
+        }
+      }
+    } else {
+      const conversationalAmounts = extractIdrAmounts(
+        trustedCustomerAdminText(params.memory)
+      );
+
+      for (const amount of replyAmounts) {
+        if (!conversationalAmounts.has(amount)) {
+          return `Mona generated an unsupported Rp amount (Rp${amount}).`;
+        }
+      }
+    }
+  }
+
+  const allowedUrls = new Set([
+    ...extractHttpUrls(combinedApprovedFacts),
+    "https://www.tetamo.com",
+    DEVELOPER_DESTINATION,
+    BUYER_RENTER_DESTINATION,
+  ]);
+
+  for (const url of extractHttpUrls(reply)) {
+    if (!allowedUrls.has(url)) {
+      return `Mona generated an unapproved URL: ${url}`;
+    }
+  }
+
+  return null;
+}
+
 function fallbackReply(
   params: WriteMonaReplyParams
 ): MonaWriterResult {
@@ -969,6 +1069,23 @@ Write Mona's final WhatsApp reply now.
       return fallbackReply(params);
     }
 
+    const concreteFactViolation =
+      validateConcreteReplyFacts(
+        raw,
+        params,
+        combinedApprovedFacts
+      );
+
+    if (concreteFactViolation) {
+      return {
+        action: "handover",
+        reply: "",
+        source: "fallback",
+        reason: concreteFactViolation,
+      };
+    }
+
+
     const unsupportedPerformanceClaim =
       /(?:jamin|menjamin|guarantee|guaranteed)\s+(?:lead|leads|closing|sales|penjualan|rentals?|penyewaan|viewing|buyer|buyers|pembeli)|(?:serious|serius|qualified|terkualifikasi)\s+(?:buyer|buyers|pembeli|lead|leads)\s+(?:pasti|guaranteed|terjamin)|(?:pasti|dijamin)\s+(?:closing|laku|terjual|tersewa|dapat\s+lead)/i.test(
         raw
@@ -1131,6 +1248,14 @@ export async function writeMonaFollowUp(
   const approvedGeneralFacts =
     generalFactsText ||
     "No general Tetamo facts were required or retrieved for this follow-up.";
+
+  const combinedApprovedFacts =
+    [
+      commercialFactsText,
+      generalFactsText,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
   const followUpInstruction =
     params.followUpNumber === 1
@@ -1314,6 +1439,22 @@ If no follow-up should be sent, output exactly:
        * A scheduled silence follow-up should not force an Admin takeover
        * merely because the AI could not safely phrase a follow-up.
        */
+      return {
+        action: "silent",
+        reply: "",
+        source: "fallback",
+      };
+    }
+
+    const concreteFactViolation =
+      validateConcreteReplyFacts(
+        raw,
+        params,
+        combinedApprovedFacts
+      );
+
+    if (concreteFactViolation) {
+      // Scheduled follow-up should fail closed silently rather than force Admin.
       return {
         action: "silent",
         reply: "",
