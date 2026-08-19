@@ -703,6 +703,11 @@ export default function AgentDashboardLayout({
                       "AI Social Media",
                       { requiresMembership: true }
                     )}
+                    {renderMenuLink(
+                      "/agentdashboard/proposal",
+                      "Proposal & Portfolio",
+                      { requiresMembership: true }
+                    )}
                     {renderMenuLink("/agentdashboard/leads", "Leads", {
                       requiresMembership: true,
                     })}
