@@ -1538,6 +1538,37 @@ function isFeeQuestion(
   );
 }
 
+function isCommercialPackageQuestion(
+  decision: MonaBrainDecision,
+  latestMessage: string
+) {
+  const signal = [
+    latestMessage,
+    decision.latestMeaning,
+    decision.directQuestion || "",
+    ...decision.knowledgeRequest,
+    decision.recommendedNextStep,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const mentionsCommercialPackage =
+    /\b(?:harga|harganya|price|pricing|cost|biaya|fee|berbayar|paket|package|membership|silver|gold|agent\s*pro|basic|priority|featured|boost|spotlight)\b/i.test(
+      signal
+    );
+
+  const looksLikeAccountOrPaymentSupport =
+    decision.conversationSituation === "support" ||
+    /\b(?:error|gagal|failed|double|dua\s*kali|sudah\s+bayar|udah\s+bayar|sudah\s+transfer|udah\s+transfer|belum\s+aktif|tidak\s+aktif|nggak\s+aktif)\b/i.test(
+      latestMessage
+    );
+
+  return (
+    mentionsCommercialPackage &&
+    !looksLikeAccountOrPaymentSupport
+  );
+}
+
 function isExplicitHumanRequest(
   message: string
 ) {
@@ -1555,6 +1586,54 @@ function isExplicitHumanRequest(
       message
     )
   );
+}
+
+function deterministicHumanHandoverReason(
+  decision: MonaBrainDecision,
+  latestMessage: string
+): string | null {
+  const signal = [
+    latestMessage,
+    decision.latestMeaning,
+    decision.directQuestion || "",
+    ...decision.knowledgeRequest,
+    decision.recommendedNextStep,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  // Refund belongs to the human team. Mona may know the policy, but an actual
+  // refund/refund-eligibility conversation should be escalated rather than
+  // negotiated or decided by Sales AI.
+  if (
+    /\b(?:refund|chargeback)\b|pengembalian\s+uang|uang\s+kembali|balikin\s+uang|kembalikan\s+uang/i.test(
+      signal
+    )
+  ) {
+    return "The customer is asking about a refund/refund action that requires the Tetamo team.";
+  }
+
+  // Legal disputes, notices and legal-action requests must never be handled as
+  // ordinary sales objections.
+  if (
+    /\b(?:legal|lawyer|attorney|lawsuit|sue|litigation)\b|pengacara|somasi|gugatan|sengketa|legal\s+notice|surat\s+hukum/i.test(
+      signal
+    )
+  ) {
+    return "The customer raised a legal matter that requires human handling.";
+  }
+
+  // Brain already classifies account/payment/verification problems as support.
+  // Support is a human-owned route, not a Sales AI objection route.
+  if (decision.conversationSituation === "support") {
+    return "The customer has a support issue that requires the Tetamo team.";
+  }
+
+  if (isExplicitHumanRequest(latestMessage)) {
+    return "The customer explicitly requested a human/admin conversation.";
+  }
+
+  return null;
 }
 
 function isTimingHesitation(
@@ -1729,6 +1808,54 @@ function enforceBrainRouting(
   }
 
   /*
+   * COMMERCIAL PACKAGE / PRICE QUESTIONS
+   *
+   * Owner/Agent package names, prices and package features belong to the
+   * relevant Sales AI, not general Tetamo Knowledge. This also covers short
+   * contextual follow-ups such as "Harganya mana?" when Brain's semantic
+   * interpretation identifies the package/pricing topic.
+   */
+  if (
+    isCommercialPackageQuestion(
+      result,
+      latestMessage
+    )
+  ) {
+    if (
+      result.customerType === "agent" ||
+      result.customerType === "agency"
+    ) {
+      result = {
+        ...result,
+        replyNeeded: true,
+        salesStrategyNeeded: true,
+        salesStrategist: "agent",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        handoverRecommended: false,
+        handoverReason: null,
+        recommendedNextStep:
+          "Route the Agent package/price question to Agent Sales AI so canonical commercial facts can answer it. Do not hand over for a normal package or price question.",
+      };
+    } else if (
+      result.customerType === "owner"
+    ) {
+      result = {
+        ...result,
+        replyNeeded: true,
+        salesStrategyNeeded: true,
+        salesStrategist: "owner",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        handoverRecommended: false,
+        handoverReason: null,
+        recommendedNextStep:
+          "Route the Owner package/price question to Owner Sales AI so canonical commercial facts can answer it. Do not hand over for a normal package or price question.",
+      };
+    }
+  }
+
+  /*
    * FEE QUESTION IS NOT PAYMENT INTENT
    */
   if (isFeeQuestion(latestMessage)) {
@@ -1865,21 +1992,23 @@ function enforceBrainRouting(
   }
 
   /*
-   * EXPLICIT HUMAN REQUEST
-   * This is one of the few Brain-level cases that may deterministically pause
-   * Mona. Asking a normal Tetamo question, fee question, objection, rejection
-   * or listing question is never enough.
+   * DETERMINISTIC HUMAN-ONLY ROUTES
+   * Refund, legal, support and an explicit request for a human belong to the
+   * Tetamo team. Normal pricing, package questions, objections, hesitation and
+   * rejection do NOT belong here.
    */
-  if (
-    !isHardRejection(latestMessage) &&
-    isExplicitHumanRequest(latestMessage)
-  ) {
+  const humanHandoverReason =
+    deterministicHumanHandoverReason(
+      result,
+      latestMessage
+    );
+
+  if (humanHandoverReason) {
     result = {
       ...result,
       replyNeeded: false,
       handoverRecommended: true,
-      handoverReason:
-        "The customer explicitly requested a human/admin conversation.",
+      handoverReason: humanHandoverReason,
       salesStrategyNeeded: false,
       salesStrategist: "none",
     };

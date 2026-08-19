@@ -1505,6 +1505,51 @@ function applyDeterministicAgentSalesGuards(
   }
 
   /*
+   * GENERIC AGENT PACKAGE OPTIONS
+   * -----------------------------
+   * A customer may ask for "paket agent", "kirim paketnya", or "package
+   * options" without using the word harga. Because model-authored commercial
+   * facts are intentionally discarded, supply all canonical Agent package
+   * facts deterministically for a neutral package-options request.
+   */
+  const genericAgentPackageOptionsQuestion =
+    /\b(?:paket|package|membership)\b/i.test(
+      latestMessage
+    ) &&
+    !/\b(?:silver|gold|agent\s*pro|agent-pro|boost|spotlight)\b/i.test(
+      latestMessage
+    ) &&
+    !/(?:paket|package).{0,20}(?:cocok|sesuai|recommend|rekomendasi|mana)|(?:cocok|sesuai).{0,20}(?:paket|package)/i.test(
+      latestMessage
+    );
+
+  if (
+    !hardRejection &&
+    genericAgentPackageOptionsQuestion
+  ) {
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective =
+      "answer_current_question";
+    recommendedDirection =
+      "Give the Agent the available Silver, Gold and Agent Pro options using only the canonical commercial facts supplied below. Summarize naturally and do not invent package benefits.";
+    reason =
+      "The Agent asked to see the available package options. Canonical package facts are supplied deterministically.";
+    shouldAskQuestion = false;
+
+    for (const packageId of [
+      "silver",
+      "gold",
+      "agent_pro",
+    ] as AgentPackageId[]) {
+      for (const fact of
+        AGENT_PACKAGES[packageId].facts) {
+        commercialFacts.add(fact);
+      }
+    }
+  }
+
+  /*
    * GENERIC AGENT PRICE / FEE QUESTION
    * ----------------------------------
    * A known Agent may ask simply "berapa harganya?", "ada fee?",

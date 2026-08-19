@@ -1743,6 +1743,50 @@ function applyDeterministicOwnerSalesGuards(
     }
   }
 
+  /*
+   * GENERIC OWNER PACKAGE OPTIONS
+   * -----------------------------
+   * A customer may ask for "paket pemilik", "kirim paket owner", or
+   * "package options" without saying harga. Supply the canonical facts
+   * deterministically instead of relying on model-authored commercial facts.
+   */
+  const genericOwnerPackageOptionsQuestion =
+    /\b(?:paket|package)\b/i.test(
+      latestMessage
+    ) &&
+    !/\b(?:basic|priority|featured|boost|spotlight)\b/i.test(
+      latestMessage
+    ) &&
+    !/(?:paket|package).{0,20}(?:cocok|sesuai|recommend|rekomendasi|mana)|(?:cocok|sesuai).{0,20}(?:paket|package)/i.test(
+      latestMessage
+    );
+
+  if (
+    !hardRejection &&
+    genericOwnerPackageOptionsQuestion
+  ) {
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective =
+      "answer_current_question";
+    recommendedDirection =
+      "Give the Owner the available Basic, Priority and Featured options using only the canonical commercial facts supplied below. Summarize naturally and do not invent package benefits.";
+    reason =
+      "The Owner asked to see the available package options. Canonical package facts are supplied deterministically.";
+    shouldAskQuestion = false;
+
+    for (const packageId of [
+      "basic",
+      "priority",
+      "featured",
+    ] as OwnerPackageId[]) {
+      for (const fact of
+        OWNER_PACKAGES[packageId].facts) {
+        commercialFacts.add(fact);
+      }
+    }
+  }
+
   const genericOwnerPriceQuestion =
     /\b(?:harga|price|cost|biaya|fee|berapa|berbayar|bayar)\b/i.test(
       latestMessage
