@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { MonaBrainDecision } from "./brain";
 
 export type OwnerSalesGuidance = {
   customerType: "owner";
@@ -35,10 +36,17 @@ export type OwnerSalesGuidance = {
   needsTetamoFacts: boolean;
   factsNeeded: string[];
 
+  semanticConflict: {
+    detected: boolean;
+    reason: string | null;
+    suggestedMeaning: string | null;
+  };
+
   handoverRecommended: boolean;
 };
 
 type GenerateOwnerSalesGuidanceParams = {
+  brain: MonaBrainDecision;
   customerMessage: string;
   conversationContext: string | null;
   salesStage?: string | null;
@@ -140,12 +148,24 @@ const SPOTLIGHT_FACTS = [
   "Homepage Spotlight does not guarantee views, enquiries, leads, sales, rentals or closing.",
 ];
 
+const OWNER_PAYMENT_FACTS = [
+  "For Owner listing payment in Indonesia, payment is completed through Tetamo's Owner listing checkout.",
+  "The Owner completes the property listing, reviews the listing, and then proceeds to payment.",
+  "Owner listing payment in Indonesia is completed via QRIS.",
+  "The QRIS can be paid using a banking app or e-wallet that supports QRIS.",
+  "After successful payment, the Owner listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.",
+  "Do not tell the Owner to transfer directly to a Tetamo bank account.",
+  "Do not promise to send Tetamo bank-account details.",
+  "Do not describe direct bank transfer as the standard Owner listing payment method in Indonesia.",
+];
+
 const OWNER_REGISTRATION_STEPS = [
-  "Open www.tetamo.com or the Tetamo Partner app.",
-  "Register or log in as an Owner.",
+  "Open www.tetamo.com and register or log in as an Owner.",
   "Choose the Owner listing package that fits the property owner's needs.",
-  "Start creating the property listing.",
-  "Complete the listing and applicable payment to activate the listing.",
+  "Create and complete the property listing.",
+  "Review the listing and proceed to checkout.",
+  "Complete payment via QRIS using a banking app or e-wallet that supports QRIS.",
+  "After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.",
 ];
 
 const OWNER_LISTING_STEPS = [
@@ -156,7 +176,7 @@ const OWNER_LISTING_STEPS = [
   "Use Generate AI to create the listing title and description when desired.",
   "Complete the required listing verification information.",
   "Review the property information.",
-  "Complete payment through the supported Tetamo checkout/payment method.",
+  "Complete payment via QRIS through the Tetamo Owner checkout using a banking app or e-wallet that supports QRIS.",
   "After payment is successfully confirmed, the listing becomes active.",
   "The listing automatically appears publicly with Pending Verification status while awaiting Tetamo verification.",
   "Tetamo reviews and verifies the listing.",
@@ -196,6 +216,58 @@ Do NOT infer Owner merely because:
 - they reply with "iya", "ya", "mau", "ok", "boleh" or another short reply.
 
 Role identification belongs to Mona Brain.
+
+BRAIN AUTHORITY
+
+Brain has already read full Memory and resolved the customer's semantic meaning
+before this Sales AI runs.
+
+Treat the following Brain fields as authoritative semantic context:
+
+- customerType;
+- latestMeaning;
+- directQuestion;
+- conversationSituation;
+- knownContext;
+- clarification state;
+- languageStyle;
+- confidence;
+- recommendedNextStep.
+
+The raw customer message is still supplied so you can understand:
+
+- the customer's tone;
+- WhatsApp style;
+- sales nuance;
+- emphasis;
+- emotional intensity;
+- slang nuance that does NOT change Brain's resolved meaning.
+
+You must understand Indonesian slang, abbreviations, typos, mixed language and
+informal WhatsApp writing yourself, but you must NOT silently reinterpret a
+meaning that Brain has already resolved.
+
+Example:
+
+Raw message:
+"ada byr?"
+
+Brain latestMeaning:
+"The owner is asking whether there is a fee / whether they need to pay."
+
+For Indonesian WhatsApp shorthand in this system, "byr" means "bayar" / payment,
+not buyer. Treat that meaning consistently unless the customer explicitly writes
+"buyer", "pembeli", "penyewa", or other clear buyer/renter language.
+
+If the raw message contains clear explicit evidence that makes Brain's resolved
+meaning genuinely contradictory or impossible, do NOT invent a different
+meaning. Set semanticConflict.detected=true, explain the contradiction briefly,
+and provide suggestedMeaning only when the evidence supports it.
+
+A semantic conflict is exceptional. Ordinary slang, shorthand, spelling errors,
+or your own uncertainty are NOT semantic conflicts.
+
+If Brain says clarification.needed=true, Sales AI should not be running yet.
 
 CORE PRINCIPLES
 
@@ -384,7 +456,6 @@ Examples:
 - transaction commission;
 - verification policy;
 - refund/cancellation policy;
-- supported payment methods;
 - general platform features.
 
 OWNER REGISTRATION
@@ -402,11 +473,12 @@ Do not restart discovery.
 
 OWNER REGISTRATION FLOW
 
-1. Open www.tetamo.com or Tetamo Partner.
-2. Register/login as Owner.
-3. Choose the Owner listing package.
-4. Start the property listing.
-5. Complete the listing and payment to activate it.
+1. Open www.tetamo.com and register/login as Owner.
+2. Choose the Owner listing package.
+3. Create and complete the property listing.
+4. Review the listing and proceed to checkout.
+5. Pay via QRIS using a banking app or e-wallet that supports QRIS.
+6. After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.
 
 OWNER LISTING FLOW
 
@@ -427,7 +499,7 @@ recommend a clear numbered step-by-step answer.
 5. Use Generate AI to create title and description when desired.
 6. Complete required verification information.
 7. Review the listing.
-8. Complete payment through supported Tetamo checkout/payment method.
+8. Complete payment via QRIS through the Tetamo Owner checkout using a banking app or e-wallet that supports QRIS.
 9. After successful payment confirmation, listing becomes active.
 10. Listing automatically appears publicly as Pending Verification.
 11. Tetamo reviews/verifies the listing.
@@ -528,17 +600,159 @@ Strong payment intent is more like:
 - "sudah transfer";
 - "payment error".
 
-Package prices and billing terms are built-in commercial knowledge.
+Package prices, billing terms AND the Indonesia Owner payment method are
+built-in commercial knowledge owned directly by Owner Sales.
 
-If customer asks about actual payment methods such as QRIS, cards, bank,
-e-wallet or payment-link mechanics, request approved general Tetamo payment
-facts.
+APPROVED INDONESIA OWNER PAYMENT FLOW
+1. Complete the Owner property listing and review it.
+2. Proceed to Tetamo Owner checkout.
+3. Pay via QRIS.
+4. The QRIS can be paid with a banking app or e-wallet that supports QRIS.
+5. After successful payment, the listing becomes active and can appear publicly
+   as Pending Verification while Tetamo completes verification.
+
+Never invent a direct bank-transfer flow.
+Never say Tetamo will send bank-account details.
+Never describe transfer to a Tetamo bank account as the normal Owner listing
+payment method in Indonesia.
+
+For ordinary Owner questions such as:
+- "bayarnya gimana?";
+- "cara bayar?";
+- "pake apa bayarnya?";
+- "bisa QRIS?";
+- "ada byr?";
+- "paymentnya lewat mana?";
+answer from the built-in Owner payment facts.
+Do NOT request general Tetamo Knowledge just to answer the standard Indonesia
+Owner payment method.
+
+
+UNIVERSAL SALES OBJECTION FRAMEWORK
+
+Sales objections are normal sales conversations. They are NOT Admin cases.
+
+For every objection:
+1. Identify the real concern.
+2. Acknowledge it briefly without agreeing with an incorrect assumption.
+3. Answer the concern directly.
+4. Use only approved Tetamo commercial facts and approved Knowledge facts.
+5. Reframe around the customer's actual goal.
+6. Never attack a competitor.
+7. Never guarantee leads, views, buyers, sales, rentals or closing.
+8. Never force a question when a complete answer can be given.
+9. Ask at most ONE question only when it materially changes the next sales step.
+10. Respect timing, budget and hard rejection.
+
+Recognize these objection families semantically, including slang, typos and mixed Indonesian/English:
+
+PRICE / VALUE
+Examples: "mahal", "kemahalan", "kok bayar", "kenapa bayar", "ada yg murah",
+"worth it ga", "mahal bgt", "facebook gratis", "ig gratis".
+Strategy: do not argue or instantly discount. Explain relevant value and package fit.
+If the objection compares paid Tetamo with free self-posting, request approved
+Tetamo comparison/advertising/differentiator facts.
+
+BUDGET / CASH FLOW
+Examples: "belum ada duit", "budget blm ada", "habis gajian", "bulan depan".
+Strategy: acknowledge timing. Do not pressure. Do not invent discounts.
+Treat a real future dependency as timing, not rejection.
+
+COMPETITOR / EXISTING PLATFORM
+Examples: "sudah pakai Rumah123", "udah di 99.co", "portal lain",
+"listing saya tenggelam", "ngapain tambah platform".
+Strategy: never invent competitor facts or attack competitors. Position Tetamo as
+an additional channel using approved differentiator/comparison facts.
+
+TRUST / CREDIBILITY
+Examples: "Tetamo baru?", "aman?", "beneran?", "siapa yg pakai?",
+"ada kantor?", "company mana?".
+Strategy: use approved company/growth/proof facts only. Never fabricate scale.
+
+TRAFFIC / ADOPTION
+Examples: "rame ga?", "traffic berapa?", "berapa user?", "ada yg lihat?".
+Strategy: use approved growth/coverage facts. If no approved number exists,
+do not invent one.
+
+LEADS / BUYER AVAILABILITY
+Examples: "ada lead?", "punya buyer?", "ada penyewa?", "buyer drmn?".
+Strategy: use approved buyer/leads/matching facts.
+
+LEAD QUALITY
+Examples: "buyer serius ga?", "qualified?", "cuma kepo", "lead bagus ga?".
+Strategy: explain matching and available lead information, but never promise that
+every buyer is serious, qualified, verified or ready to transact.
+
+RESULT / GUARANTEE
+Examples: "jamin laku?", "jamin closing?", "berapa lama sold?",
+"kalau ga dapat lead gimana?".
+Strategy: clearly state no guaranteed result, then explain what Tetamo actually
+provides and factors that affect outcomes.
+
+PROOF / SOCIAL PROOF
+Examples: "ada testimonial?", "ada yg closing?", "bukti?", "contohnya?".
+Strategy: use only approved proof/testimonial facts and only give a specific
+example/link if actually supplied and verified.
+
+DIY / SELF-MARKETING
+Examples: "saya bisa post FB sendiri", "IG sendiri gratis",
+"Facebook Marketplace gratis", "saya punya database sendiri".
+Strategy: agree that self-posting can remain useful. Do not frame Tetamo as a
+replacement. Explain the additional property-specific marketplace, matching,
+enquiry, lead, viewing, app and exposure value using approved Knowledge facts.
+
+FEATURE / FIT
+Examples: "buat apa fiturnya?", "saya cuma punya sedikit listing",
+"kenapa perlu paket ini?".
+Strategy: explain only the features relevant to the customer's stated need.
+Never upsell automatically.
+
+COMMITMENT / SUBSCRIPTION
+Examples: "kenapa setahun?", "bisa bulanan?", "auto renew?",
+"kalau cancel gimana?".
+Strategy: answer from approved package/subscription facts. Never invent a billing
+option or refund promise.
+
+PAYMENT
+Examples: "cara bayar?", "bisa QRIS?", "byr gmn?", "payment error".
+Strategy: use the built-in approved role-specific payment flow. Normal payment
+questions are not Admin cases. Account-specific unresolved payment failures may
+require Admin only when staff access/action is genuinely needed.
+
+EFFORT / FRICTION
+Examples: "ribet ga?", "harus download app?", "lama ga?",
+"males upload satu2".
+Strategy: explain the actual steps concisely. Do not pretend Tetamo staff will
+perform self-service actions for the customer.
+
+BAD PAST EXPERIENCE
+Examples: "pernah bayar portal ga dapet apa2", "kapok bayar iklan",
+"dulu ga ada lead".
+Strategy: acknowledge the concern, avoid promising a different outcome, and
+explain Tetamo's actual differentiators and no-guarantee boundary.
+
+DISCOUNT / NEGOTIATION
+Examples: "ada diskon?", "harga net?", "bisa kurang?", "special price?".
+Strategy: use only an approved promotion/discount if one exists in supplied
+facts. Otherwise do not invent one. A normal discount request is not Admin.
+
+AUTHORITY / OTHER DECISION MAKER
+Examples: "tanya bos dulu", "diskusi partner", "tanya suami/istri".
+Strategy: respect the dependency. Do not push. Do not schedule follow-up yourself.
+
+SOFT STALL
+Examples: "kirim info aja", "pikir2 dulu", "nanti saya kabarin".
+Strategy: answer any pending direct question, then leave the door open without
+restarting discovery.
+
+HARD REJECTION
+Examples: "ga tertarik", "jangan chat lagi", "stop", "hapus nomor saya".
+Strategy: stop selling immediately. No follow-up pressure.
 
 PRICE / VALUE OBJECTION
 
 Examples:
 - "bayar ya?";
-- "berbayar ya?";
 - "kok bayar?";
 - "mahal";
 - "Facebook gratis";
@@ -711,26 +925,26 @@ Do not ask again for facts the owner already supplied.
 
 HANDOVER
 
+Human handover is exceptional.
+
 Recommend human handover only when genuinely necessary, such as:
 - account-specific issue requiring staff access;
-- unresolved payment problem;
-- exceptional contract or custom negotiated pricing request outside approved products;
+- unresolved payment problem requiring staff access;
+- exceptional contract or custom negotiated commercial request outside approved products;
 - unusual commercial requirement outside the standard Owner products;
-- information unavailable where human action is genuinely required;
+- a manual action that Mona cannot perform;
 - the customer explicitly requests a human/admin conversation.
 
-A normal discount question is a price objection for Owner Sales AI to handle using approved facts;
-it is not automatically a handover.
-
-The handover field is advisory reasoning only. Deterministic application code decides
-whether Mona is actually paused for a human.
+A normal discount question is a price/value objection. Handle it using approved facts.
+It is NOT automatically a human handover.
 
 Do NOT hand over merely because:
-- owner raises an objection, hesitation or rejection;
+- owner raises an objection or hesitation;
 - owner asks whether Tetamo is paid;
 - owner asks how to list;
 - owner asks Tetamo to list it for them;
 - owner asks package price;
+- owner asks a buyer/renter question;
 - owner asks a normal Tetamo question;
 - owner asks how Tetamo helps find buyers/renters.
 
@@ -772,6 +986,11 @@ function fallbackGuidance(): OwnerSalesGuidance {
     commercialFacts: [],
     needsTetamoFacts: false,
     factsNeeded: [],
+    semanticConflict: {
+      detected: false,
+      reason: null,
+      suggestedMeaning: null,
+    },
     handoverRecommended: false,
   };
 }
@@ -842,6 +1061,12 @@ function parseOwnerSalesGuidance(
         ? parsed.knownInformation
         : {};
 
+    const semanticConflict =
+      parsed.semanticConflict &&
+      typeof parsed.semanticConflict === "object"
+        ? parsed.semanticConflict
+        : {};
+
     const buyingSignal = ["low", "medium", "high"].includes(
       String(parsed.buyingSignal)
     )
@@ -899,18 +1124,22 @@ function parseOwnerSalesGuidance(
         cleanString(
           parsed.packageRecommendationReason
         ),
-      // SECURITY / FACT-SAFETY:
-      // Commercial facts are NEVER trusted from model output.
-      // applyDeterministicOwnerSalesGuards() rebuilds them from
-      // OWNER_PACKAGES / BOOST_FACTS / SPOTLIGHT_FACTS / fixed flows.
+      // Commercial facts are never trusted from model output.
+      // Deterministic guards rebuild them only from approved Owner package data.
       commercialFacts: [],
       needsTetamoFacts:
         parsed.needsTetamoFacts === true,
       factsNeeded:
         cleanStringArray(parsed.factsNeeded),
-      // HANDOVER SAFETY:
-      // Model-authored handover flags are not authoritative. Deterministic
-      // guards below decide whether a human is actually required.
+      semanticConflict: {
+        detected: semanticConflict.detected === true,
+        reason: cleanString(semanticConflict.reason),
+        suggestedMeaning: cleanString(
+          semanticConflict.suggestedMeaning
+        ),
+      },
+      // Model-authored handover is advisory only.
+      // Deterministic rules own actual human escalation.
       handoverRecommended: false,
     };
   } catch {
@@ -950,20 +1179,6 @@ function includesAny(
   return patterns.some((pattern) =>
     pattern.test(text)
   );
-}
-
-function requiresDeterministicHumanHandover(
-  message: string
-) {
-  return includesAny(message, [
-    /(?:sudah|udah|telah).{0,20}(?:bayar|transfer).{0,35}(?:belum|nggak|gak|tidak).{0,20}(?:aktif|masuk|tercatat|update|muncul|tayang)/i,
-    /(?:uang|saldo).{0,15}(?:terpotong|kepotong|deducted|charged).{0,35}(?:belum|nggak|gak|tidak).{0,20}(?:aktif|masuk|tercatat|update|muncul|tayang)/i,
-    /(?:double|duplicate|dua\s+kali).{0,20}(?:charge|charged|payment|bayar|debit|potong)/i,
-    /(?:payment|pembayaran|qris|transfer).{0,25}(?:gagal|error|failed).{0,25}(?:terus|berulang|lagi|still|repeated)/i,
-    /(?:akun|account).{0,25}(?:terkunci|locked|suspended|ditangguhkan|disabled)/i,
-    /(?:hubungkan|sambungkan|connect).{0,20}(?:admin|cs|customer service|human|orang|staff)/i,
-    /(?:mau|ingin|pengen).{0,20}(?:bicara|ngobrol|chat|talk|speak).{0,20}(?:admin|cs|human|staff)/i,
-  ]);
 }
 
 function relevantOwnerCommercialFacts(
@@ -1045,9 +1260,18 @@ function relevantOwnerCommercialFacts(
     }
   }
 
-  // Do not add facts merely because the Sales LLM suggested a package.
-  // Deterministic recommendation logic below will add canonical facts only
-  // after the current customer message actually justifies the recommendation.
+  if (
+    guidance.recommendedPackage
+  ) {
+    for (
+      const fact of
+      OWNER_PACKAGES[
+        guidance.recommendedPackage
+      ].facts
+    ) {
+      facts.add(fact);
+    }
+  }
 
   return Array.from(facts);
 }
@@ -1056,14 +1280,37 @@ function applyDeterministicOwnerSalesGuards(
   guidance: OwnerSalesGuidance,
   params: GenerateOwnerSalesGuidanceParams
 ): OwnerSalesGuidance {
-  const fullConversation = [
-    params.conversationContext || "",
-    params.customerMessage || "",
-  ].join("\n");
-
   const latestMessage = String(
     params.customerMessage || ""
   ).trim();
+
+  const brainContextText = [
+    params.brain.knownContext.summary || "",
+    ...params.brain.knownContext.importantFacts,
+    ...params.brain.knownContext.alreadyAnsweredTopics,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const fullConversation = [
+    params.conversationContext || "",
+    brainContextText,
+    latestMessage,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  /*
+   * Brain's resolved meaning is the primary semantic signal.
+   * Raw text is retained only as supporting evidence and tone context.
+   */
+  const semanticSignal = [
+    params.brain.latestMeaning || "",
+    params.brain.directQuestion || "",
+    latestMessage,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const known = {
     ...guidance.knownInformation,
@@ -1106,6 +1353,15 @@ function applyDeterministicOwnerSalesGuards(
     doNotAsk.add("payment_status");
   }
 
+  if (
+    !known.hesitationReason &&
+    params.brain.timingDependency.active &&
+    params.brain.timingDependency.reason
+  ) {
+    known.hesitationReason =
+      params.brain.timingDependency.reason;
+  }
+
   if (known.hesitationReason) {
     doNotAsk.add("hesitation_reason");
   }
@@ -1138,35 +1394,29 @@ function applyDeterministicOwnerSalesGuards(
     guidance.packageRecommendationReason;
 
   let needsTetamoFacts =
-    guidance.needsTetamoFacts;
+    guidance.needsTetamoFacts ||
+    params.brain.factualKnowledgeNeeded;
 
-  // Final handover authority belongs to deterministic code, never the Sales LLM.
+  // Sales model never has final handover authority.
   let handoverRecommended = false;
 
-  const factsNeeded = new Set(
-    guidance.factsNeeded
-  );
+  const factsNeeded = new Set([
+    ...guidance.factsNeeded,
+    ...params.brain.knowledgeRequest,
+  ]);
 
-  // IMPORTANT: start empty. Never promote model-authored strings to
-  // approved commercial truth. Only deterministic code below may add facts.
+  // Never promote model-authored strings to approved commercial truth.
   const commercialFacts = new Set<string>();
 
-  if (
-    /handover|hand over|escalat|human(?: review| assistance| help)|admin(?: review| assistance| help)|staff(?: review| assistance| help)|pass.{0,20}(?:admin|human|staff)/i.test(
-      String(recommendedObjective || "") + " " + String(recommendedDirection || "")
-    )
-  ) {
-    recommendedObjective = "answer_current_question";
-    recommendedDirection =
-      "Handle the owner's normal sales conversation inside Mona unless a deterministic human-only condition below is actually met.";
-    reason =
-      "Model-only handover recommendations are not authoritative.";
-    shouldAskQuestion = false;
-  }
+  const semanticConflict = {
+    ...guidance.semanticConflict,
+  };
 
-  const hardRejection = includesAny(
-    latestMessage,
-    [
+  const hardRejection =
+    params.brain.conversationSituation === "rejection" ||
+    includesAny(
+      semanticSignal,
+      [
       /\b(?:tidak|nggak|gak|ga)\s+(?:tertarik|minat|mau)\b/i,
       /\bjangan\s+(?:hubungi|chat|wa|contact)\b/i,
       /\bstop\b/i,
@@ -1190,12 +1440,14 @@ function applyDeterministicOwnerSalesGuards(
     handoverRecommended = false;
   }
 
-  const politeClosing = includesAny(
-    latestMessage,
-    [
-      /^(?:makasih|terima kasih|thanks|thank you|thx|noted|sip|baik|oke makasih|ok makasih|sudah jelas|cukup)[.! ]*$/i,
-    ]
-  );
+  const politeClosing =
+    params.brain.conversationSituation === "casual" &&
+    includesAny(
+      latestMessage,
+      [
+        /^(?:ok|oke|okay|baik|baik\s+(?:kak|kk)|siap|iya\s+baik|ya\s+baik|makasih|terima\s+kasih|thanks|thank\s+you|thx|noted|sip|oke\s+makasih|ok\s+makasih|sudah\s+jelas|cukup)[.! ]*$/i,
+      ]
+    );
 
   if (!hardRejection && politeClosing) {
     recommendedObjective =
@@ -1209,7 +1461,7 @@ function applyDeterministicOwnerSalesGuards(
 
   const assistedListingRequest =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /(?:bisa|boleh|tolong).{0,35}(?:listing|upload|pasang).{0,25}(?:buat|untuk|property|properti|saya)/i,
         /(?:listing|upload|pasang).{0,35}(?:untuk|buat).{0,15}(?:saya|aku|kami)/i,
@@ -1241,7 +1493,7 @@ function applyDeterministicOwnerSalesGuards(
   }
 
   const asksHowToList = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /cara.{0,20}(?:listing|pasang iklan)/i,
       /gimana.{0,20}(?:listing|pasang iklan)/i,
@@ -1280,7 +1532,7 @@ function applyDeterministicOwnerSalesGuards(
   }
 
   const asksHowToRegister = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /cara.{0,20}(?:daftar|register|join)/i,
       /gimana.{0,20}(?:daftar|register|join)/i,
@@ -1320,7 +1572,7 @@ function applyDeterministicOwnerSalesGuards(
   }
 
   const selectedPackageMatch =
-    latestMessage.match(
+    semanticSignal.match(
       /\b(?:pilih|ambil|mau|choose|take)\s+(basic(?:\s+listing)?|priority(?:\s+listing)?|featured(?:\s+listing)?)\b/i
     );
 
@@ -1361,25 +1613,47 @@ function applyDeterministicOwnerSalesGuards(
       ) {
         commercialFacts.add(fact);
       }
+
+      for (const fact of OWNER_PAYMENT_FACTS) {
+        commercialFacts.add(fact);
+      }
     }
   }
 
   const asksOnlyWhetherPaid =
-    /^(?:ini\s+)?(?:(?:bayar|berbayar|kena\s+biaya|harus\s+bayar)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|ada\s+(?:fee|biaya)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
-      latestMessage
+    params.brain.conversationSituation === "information" &&
+    (
+      /^(?:ini\s+)?(?:bayar|byr|berbayar|ada\s+(?:fee|biaya|byr)|bayar\s+ya|bayar\s+yaa|bayar\s+kah|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
+        latestMessage
+      ) ||
+      /(?:asking|asks|question).{0,40}(?:whether|if).{0,20}(?:tetamo|listing|package).{0,20}(?:paid|has a fee|costs money)/i.test(
+        params.brain.latestMeaning
+      )
+    );
+
+  const asksOwnerPaymentMethod =
+    includesAny(
+      semanticSignal,
+      [
+        /(?:cara|gimana|gmana|gmn|bagaimana|how).{0,25}(?:bayar|byr|payment)/i,
+        /(?:bayar|byr|payment).{0,25}(?:gimana|gmana|gmn|bagaimana|lewat mana|via apa|pakai apa|pake apa)/i,
+        /(?:qris).{0,20}(?:bisa|pakai|pake|bayar|payment|gimana|gmn|mana)/i,
+        /(?:bisa|boleh|pakai|pake|via).{0,20}(?:qris)/i,
+        /(?:payment|pembayaran).{0,20}(?:method|metode|cara|via|lewat)/i,
+      ]
     );
 
   const hasStrongPaymentIntent =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
-        /(?:saya|aku|kami|sy)\s+(?:mau|ingin|mo|pengen)\s+(?:bayar|payment|lanjut\s+bayar)/i,
+        /(?:saya|aku|kami|sy)\s+(?:mau|ingin|mo|pengen)\s+(?:bayar|byr|payment|lanjut\s+bayar)/i,
         /(?:mau|ingin|boleh|tolong|kirim|send).{0,20}(?:payment link|link bayar)/i,
         /(?:payment link|link bayar).{0,20}(?:mana|dong|please|pls)/i,
-        /(?:cara|gimana|bagaimana|how).{0,20}(?:bayar|payment)/i,
-        /(?:qris|rekening|transfer|kartu|card|bank|ewallet|e-wallet).{0,20}(?:mana|bisa|boleh|pakai|gunakan|bayar)/i,
-        /(?:sudah|udah|telah).{0,15}(?:bayar|payment|transfer)/i,
-        /(?:gagal|error|problem|masalah).{0,20}(?:bayar|payment|qris|transfer)/i,
+        /(?:cara|gimana|gmana|gmn|bagaimana|how).{0,20}(?:bayar|byr|payment)/i,
+        /(?:qris|rekening|transfer|kartu|card|bank|ewallet|e-wallet).{0,20}(?:mana|bisa|boleh|pakai|pake|gunakan|bayar)/i,
+        /(?:sudah|udah|telah).{0,15}(?:bayar|byr|payment|transfer)/i,
+        /(?:gagal|error|problem|masalah).{0,20}(?:bayar|byr|payment|qris|transfer)/i,
       ]
     );
 
@@ -1403,7 +1677,7 @@ function applyDeterministicOwnerSalesGuards(
     }
   } else if (
     !hardRejection &&
-    hasStrongPaymentIntent
+    (asksOwnerPaymentMethod || hasStrongPaymentIntent)
   ) {
     buyingSignal = "high";
 
@@ -1415,24 +1689,27 @@ function applyDeterministicOwnerSalesGuards(
         "move_to_payment";
     }
 
+    recommendedDirection =
+      "Answer the Owner payment question directly using the approved Indonesia Owner payment flow: complete/review listing -> Tetamo Owner checkout -> QRIS -> pay with a QRIS-supported banking app or e-wallet -> listing activates after successful payment and can appear as Pending Verification. Do not invent bank-transfer instructions.";
+
+    reason =
+      "The Owner is asking how to pay or is ready to proceed with the listing payment.";
+
     shouldAskQuestion = false;
 
-    if (
-      /\b(?:qris|transfer|rekening|kartu|card|bank|ewallet|e-wallet|payment link|link bayar)\b/i.test(
-        latestMessage
-      )
-    ) {
-      needsTetamoFacts = true;
-
-      factsNeeded.add(
-        "approved Tetamo payment methods and payment instructions"
-      );
+    for (const fact of OWNER_PAYMENT_FACTS) {
+      commercialFacts.add(fact);
     }
+
+    needsTetamoFacts = false;
+    factsNeeded.delete(
+      "approved Tetamo payment methods and payment instructions"
+    );
   }
 
   const asksBuyerDatabase =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /punya.{0,15}(?:buyer|pembeli|penyewa|renter)/i,
         /database.{0,15}(?:buyer|pembeli|penyewa|renter)/i,
@@ -1456,7 +1733,7 @@ function applyDeterministicOwnerSalesGuards(
 
   const asksBuyerQuality =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /(?:buyer|pembeli|penyewa).{0,15}(?:serius|serious|qualified|verified)/i,
         /lead.{0,15}(?:bagus|berkualitas|quality|serius)/i,
@@ -1484,7 +1761,7 @@ function applyDeterministicOwnerSalesGuards(
   }
 
   const asksGuarantee = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /jamin.{0,20}(?:buyer|lead|closing|jual|sewa|laku|terjual|tersewa)/i,
       /guarantee.{0,20}(?:lead|closing|sale|rent)/i,
@@ -1513,7 +1790,7 @@ function applyDeterministicOwnerSalesGuards(
 
   const competitorConcern =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /rumah\s*123/i,
         /99\.?co/i,
@@ -1541,13 +1818,51 @@ function applyDeterministicOwnerSalesGuards(
     );
   }
 
+  const badPastExperienceConcern =
+    includesAny(
+      semanticSignal,
+      [
+        /(?:pernah|dulu|udah|sudah).{0,30}(?:bayar|iklan|portal|platform).{0,40}(?:ga|gak|nggak|tidak).{0,15}(?:dapet|dapat|ada).{0,15}(?:lead|hasil|closing|buyer|penyewa)/i,
+        /(?:kapok|trauma).{0,20}(?:bayar|iklan|portal|platform)/i,
+        /(?:waste|buang).{0,15}(?:uang|duit|budget)/i,
+      ]
+    );
+
+  if (
+    !hardRejection &&
+    badPastExperienceConcern
+  ) {
+    objection =
+      objection ||
+      "bad_past_advertising_experience";
+
+    recommendedObjective =
+      "handle_objection";
+
+    recommendedDirection =
+      "Acknowledge the owner's bad past advertising experience. Do not promise Tetamo will produce a different result. Explain only approved Tetamo differentiators and the no-guarantee boundary.";
+
+    reason =
+      "The owner is hesitant because of a disappointing previous paid advertising experience.";
+
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+
+    factsNeeded.add(
+      "approved Tetamo differentiators, advertising value, buyer/renter matching, lead tools and no-guarantee boundaries relevant to an owner disappointed by another paid portal or advertising channel"
+    );
+  }
+
   const selfMarketingConcern =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
-        /(?:post|posting|iklan).{0,25}(?:instagram|ig|facebook|fb).{0,25}(?:sendiri|saya sendiri)/i,
-        /kenapa.{0,15}bayar.{0,30}(?:instagram|facebook|sosmed|social media)/i,
-        /(?:instagram|facebook|fb|ig).{0,25}(?:gratis|free)/i,
+        /(?:post|posting|pasang|iklan).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free)/i,
+        /(?:post|posting|pasang|iklan).{0,45}(?:sendiri|saya sendiri|gratis|free).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace)/i,
+        /(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free|post|posting|pasang|iklan)/i,
+        /(?:sendiri|saya sendiri|gratis|free).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace)/i,
+        /kenapa.{0,15}bayar.{0,30}(?:instagram|facebook|fb|ig|sosmed|social media|marketplace)/i,
+        /(?:ngapain|buat apa).{0,20}bayar.{0,40}(?:instagram|facebook|fb|ig|sosmed|social media|marketplace)/i,
       ]
     );
 
@@ -1562,16 +1877,23 @@ function applyDeterministicOwnerSalesGuards(
     recommendedObjective =
       "handle_objection";
 
+    recommendedDirection =
+      "Handle the self-marketing/value objection directly. Acknowledge that the owner can continue posting on Facebook/Instagram for free, then explain Tetamo as an additional property-specific marketplace and sales/rental channel using approved Tetamo buyer/renter matching, direct WhatsApp enquiry, lead, viewing, app, verification and exposure facts. Do not attack free channels and do not guarantee a sale, rental, enquiry or lead.";
+
+    reason =
+      "The owner is questioning the value of paying for Tetamo when self-posting on social media or Facebook Marketplace can be free.";
+
+    shouldAskQuestion = false;
     needsTetamoFacts = true;
 
     factsNeeded.add(
-      "approved Tetamo advertising, marketplace and social media value compared with self-posting"
+      "approved Tetamo comparison, advertising, property-marketplace, buyer/renter-matching, direct-enquiry, lead, viewing, app, verification and exposure facts for an owner who says they can post on Facebook or Instagram themselves for free"
     );
   }
 
   const credibilityConcern =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /tetamo.{0,10}(?:baru|new)/i,
         /(?:traffic|rame|ramai|user|pengguna).{0,20}tetamo/i,
@@ -1598,9 +1920,36 @@ function applyDeterministicOwnerSalesGuards(
     );
   }
 
+  /*
+   * CURRENT-TURN OBJECTION PRIORITY LOCK
+   * ------------------------------------
+   *
+   * Once the latest Owner turn is deterministically classified as a normal
+   * sales objection, that objection owns this turn. Older recommendation or
+   * discovery objectives must not pull Mona away from answering it.
+   */
+  const currentTurnObjectionLocked =
+    !hardRejection &&
+    recommendedObjective ===
+      "handle_objection" &&
+    Boolean(objection);
+
+  if (currentTurnObjectionLocked) {
+    shouldAskQuestion = false;
+    handoverRecommended = false;
+
+    /*
+     * A deterministic current-turn objection is already semantically resolved.
+     * Do not let a model-authored semantic conflict derail the objection.
+     */
+    semanticConflict.detected = false;
+    semanticConflict.reason = null;
+    semanticConflict.suggestedMeaning = null;
+  }
+
   const asksTetamoToSellOrManage =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /tetamo.{0,25}(?:jualin|sewain|carikan pembeli|carikan penyewa|nego|manage|kelola)/i,
         /(?:kalian|mona).{0,25}(?:jualin|sewain|carikan pembeli|carikan penyewa|nego|manage|kelola)/i,
@@ -1631,7 +1980,7 @@ function applyDeterministicOwnerSalesGuards(
 
   const commercialFromMessage =
     relevantOwnerCommercialFacts(
-      latestMessage,
+      semanticSignal,
       guidance
     );
 
@@ -1643,7 +1992,7 @@ function applyDeterministicOwnerSalesGuards(
 
   const asksOwnerPackageRecommendation =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /paket.{0,20}(?:cocok|sesuai|recommend|rekomendasi)/i,
         /(?:cocok|sesuai).{0,20}paket/i,
@@ -1656,26 +2005,27 @@ function applyDeterministicOwnerSalesGuards(
 
   if (
     !hardRejection &&
+    !currentTurnObjectionLocked &&
     asksOwnerPackageRecommendation
   ) {
     const wantsCheapest =
       /\b(?:paling murah|termurah|cheapest|lowest price)\b/i.test(
-        latestMessage
+        semanticSignal
       );
 
     const wantsSocial =
       /\b(?:social media|sosmed|instagram|facebook|tiktok|posting sosmed)\b/i.test(
-        latestMessage
+        semanticSignal
       );
 
     const wantsHighestVisibility =
       /\b(?:tertinggi|highest|maksimal|maximal|maximum|premium exposure|paling kelihatan)\b/i.test(
-        latestMessage
+        semanticSignal
       );
 
     const wantsPriority =
       /\b(?:priority|prioritas|lebih tinggi|higher visibility)\b/i.test(
-        latestMessage
+        semanticSignal
       );
 
     if (
@@ -1743,26 +2093,37 @@ function applyDeterministicOwnerSalesGuards(
     }
   }
 
-  /*
-   * GENERIC OWNER PACKAGE OPTIONS
-   * -----------------------------
-   * A customer may ask for "paket pemilik", "kirim paket owner", or
-   * "package options" without saying harga. Supply the canonical facts
-   * deterministically instead of relying on model-authored commercial facts.
-   */
+  const namesSpecificOwnerPackage =
+    /\b(?:basic(?:\s+listing)?|priority(?:\s+listing)?|featured(?:\s+listing)?|boost|spotlight)\b/i.test(
+      semanticSignal
+    );
+
+  const ownerRecommendationWording = includesAny(
+    semanticSignal,
+    [
+      /paket.{0,20}(?:cocok|sesuai|recommend|rekomendasi)/i,
+      /(?:cocok|sesuai).{0,20}paket/i,
+      /paket.{0,15}mana/i,
+      /which.{0,15}package/i,
+    ]
+  );
+
   const genericOwnerPackageOptionsQuestion =
-    /\b(?:paket|package)\b/i.test(
-      latestMessage
-    ) &&
-    !/\b(?:basic|priority|featured|boost|spotlight)\b/i.test(
-      latestMessage
-    ) &&
-    !/(?:paket|package).{0,20}(?:cocok|sesuai|recommend|rekomendasi|mana)|(?:cocok|sesuai).{0,20}(?:paket|package)/i.test(
-      latestMessage
+    !ownerRecommendationWording &&
+    !namesSpecificOwnerPackage &&
+    includesAny(
+      semanticSignal,
+      [
+        /(?:kirim|send|lihat|show|minta).{0,25}(?:paket|package)/i,
+        /(?:paket|package).{0,25}(?:apa\s*saja|apa aja|pilihan|opsi|options|tersedia|available)/i,
+        /(?:ada|punya).{0,15}(?:paket|package)/i,
+        /(?:paket|package)\s*(?:owner|pemilik)?\s*(?:apa|gimana|mana saja)?/i,
+      ]
     );
 
   if (
     !hardRejection &&
+    !currentTurnObjectionLocked &&
     genericOwnerPackageOptionsQuestion
   ) {
     recommendedPackage = null;
@@ -1770,58 +2131,65 @@ function applyDeterministicOwnerSalesGuards(
     recommendedObjective =
       "answer_current_question";
     recommendedDirection =
-      "Give the Owner the available Basic, Priority and Featured options using only the canonical commercial facts supplied below. Summarize naturally and do not invent package benefits.";
+      "Show the Owner the available Basic, Priority and Featured listing choices using only the canonical commercial facts. Answer the request directly and do not ask about visibility preferences unless the customer later asks for a recommendation.";
     reason =
-      "The Owner asked to see the available package options. Canonical package facts are supplied deterministically.";
+      "The Owner asked to see the available package choices, not for a personalized recommendation.";
     shouldAskQuestion = false;
+
+    commercialFacts.clear();
 
     for (const packageId of [
       "basic",
       "priority",
       "featured",
     ] as OwnerPackageId[]) {
-      for (const fact of
-        OWNER_PACKAGES[packageId].facts) {
+      for (
+        const fact of
+        OWNER_PACKAGES[packageId].facts
+      ) {
         commercialFacts.add(fact);
       }
     }
   }
 
   const genericOwnerPriceQuestion =
-    /\b(?:harga|price|cost|biaya|fee|berapa|berbayar|bayar)\b/i.test(
-      latestMessage
-    ) &&
-    !/\b(?:basic|priority|featured|boost|spotlight)\b/i.test(
-      latestMessage
+    !ownerRecommendationWording &&
+    !namesSpecificOwnerPackage &&
+    includesAny(
+      semanticSignal,
+      [
+        /(?:harga|price|biaya|fee).{0,25}(?:paket|package|listing|owner|pemilik)/i,
+        /(?:paket|package|listing).{0,25}(?:harga|price|biaya|fee|berapa)/i,
+        /(?:berapa).{0,20}(?:harga|biaya|paket|package|listing)/i,
+      ]
     );
 
   if (
     !hardRejection &&
+    !currentTurnObjectionLocked &&
     genericOwnerPriceQuestion
   ) {
-    // A generic price question is not permission for the model to choose
-    // one Owner package. Give canonical options and let the customer decide.
     recommendedPackage = null;
     packageRecommendationReason = null;
     recommendedObjective =
       "answer_current_question";
     recommendedDirection =
-      "Answer the Owner's price/fee question directly using the canonical Basic, Priority and Featured prices. Do not invent, estimate or change any amount.";
+      "Answer the Owner's generic price question directly with the canonical Basic, Priority and Featured prices. Do not ask another discovery question just to answer price.";
     reason =
-      "The Owner asked a generic package price or fee question. Canonical package prices are supplied deterministically.";
+      "The Owner asked for Owner listing pricing, not for a personalized recommendation.";
     shouldAskQuestion = false;
 
-    for (
-      const packageId of [
-        "basic",
-        "priority",
-        "featured",
-      ] as OwnerPackageId[]
-    ) {
-      commercialFacts.add(
-        OWNER_PACKAGES[packageId].facts[0]
-      );
-    }
+    commercialFacts.clear();
+
+    commercialFacts.add(
+      OWNER_PACKAGES.basic.facts[0]
+    );
+    commercialFacts.add(
+      OWNER_PACKAGES.priority.facts[0]
+    );
+    commercialFacts.add(
+      OWNER_PACKAGES.featured.facts[0]
+    );
   }
 
   const ownerGoalKnown =
@@ -1829,12 +2197,13 @@ function applyDeterministicOwnerSalesGuards(
 
   const genericListingIntent =
     /\b(?:mau|ingin|pengen|mo).{0,20}(?:iklan|listing|pasang).{0,20}(?:rumah|villa|property|properti|tanah|apartemen|apartment)?/i.test(
-      latestMessage
+      semanticSignal
     );
 
   const directQuestionPresent =
+    Boolean(params.brain.directQuestion) ||
     /\?|berapa|harga|paket|cara|gimana|bagaimana|buyer|pembeli|penyewa|tetamo|boost|spotlight|featured|priority|basic/i.test(
-      latestMessage
+      semanticSignal
     );
 
   if (
@@ -1871,17 +2240,29 @@ function applyDeterministicOwnerSalesGuards(
     shouldAskQuestion = false;
   }
 
+  /*
+   * A genuine semantic conflict goes back to Brain.
+   *
+   * Do not answer from a Sales reinterpretation and do not request Knowledge
+   * for a meaning that has not been semantically resolved.
+   * Orchestrator will intercept this before Writer.
+   */
   if (
-    !hardRejection &&
-    requiresDeterministicHumanHandover(latestMessage)
+    semanticConflict.detected &&
+    !currentTurnObjectionLocked
   ) {
-    handoverRecommended = true;
-    recommendedObjective = "handover";
+    recommendedObjective =
+      "semantic_conflict";
     recommendedDirection =
-      "A human Tetamo team member is required because this appears to be an account-specific/payment-action issue or the customer explicitly requested a human.";
+      "Return this turn to Mona Brain for semantic re-evaluation. Do not reinterpret Brain silently and do not write a customer-facing answer from the conflicting meaning.";
     reason =
-      "Deterministic human-only handover condition matched.";
+      semanticConflict.reason ||
+      "Owner Sales detected explicit evidence that conflicts with Brain's resolved meaning.";
     shouldAskQuestion = false;
+    needsTetamoFacts = false;
+    factsNeeded.clear();
+    commercialFacts.clear();
+    handoverRecommended = false;
   }
 
   return {
@@ -1907,6 +2288,7 @@ function applyDeterministicOwnerSalesGuards(
       Array.from(
         factsNeeded
       ).slice(0, 20),
+    semanticConflict,
     handoverRecommended,
   };
 }
@@ -1928,8 +2310,44 @@ export async function generateOwnerSalesGuidance(
   const prompt = `
 ${OWNER_SALES_PLAYBOOK}
 
-OFFICIAL SALES STAGE:
+CRM SALES STAGE (OBSERVATIONAL CONTEXT ONLY):
 ${params.salesStage || "none"}
+
+Do not let CRM stage override the actual conversation or Brain understanding.
+
+BRAIN RESOLVED UNDERSTANDING:
+${JSON.stringify(
+  {
+    customerType: params.brain.customerType,
+    normalizedMessage: params.brain.normalizedMessage,
+    latestMeaning: params.brain.latestMeaning,
+    confidence: params.brain.confidence,
+    conversationSituation:
+      params.brain.conversationSituation,
+    directQuestion: params.brain.directQuestion,
+    knownContext: params.brain.knownContext,
+    clarification: params.brain.clarification,
+    languageStyle: params.brain.languageStyle,
+    factualKnowledgeNeeded:
+      params.brain.factualKnowledgeNeeded,
+    knowledgeRequest:
+      params.brain.knowledgeRequest,
+    recommendedNextStep:
+      params.brain.recommendedNextStep,
+  },
+  null,
+  2
+)}
+
+IMPORTANT SEMANTIC AUTHORITY:
+- Brain has already read full Memory and resolved the customer's meaning.
+- Trust Brain's customerType, normalizedMessage and resolved latestMeaning.
+- Treat normalizedMessage as Brain's recovered Indonesian WhatsApp wording.
+- Understand slang, abbreviations, typos and mixed language yourself for commercial nuance.
+- Do NOT silently reinterpret ambiguous shorthand differently from Brain.
+- Use the raw customer message mainly for tone, emphasis and commercial nuance.
+- If explicit wording genuinely contradicts Brain's resolved meaning, set semanticConflict.detected=true instead of inventing a different interpretation.
+- Ordinary uncertainty is not a semantic conflict.
 
 RECENT / AVAILABLE CONVERSATION:
 ${params.conversationContext || "No earlier conversation."}
@@ -1969,14 +2387,24 @@ Return ONLY valid JSON in exactly this structure:
   "commercialFacts": [],
   "needsTetamoFacts": false,
   "factsNeeded": [],
+  "semanticConflict": {
+    "detected": false,
+    "reason": null,
+    "suggestedMeaning": null
+  },
   "handoverRecommended": false
 }
 
 RULES FOR commercialFacts:
-- Include only approved Owner commercial facts actually relevant to this turn.
-- Owner package prices/features come from the built-in Owner Sales knowledge.
-- Do not invent commercial facts.
+- Commercial truth comes only from the built-in Owner package data and deterministic guards.
+- Do not invent, estimate or alter package facts.
 - Do not use commercialFacts for general Tetamo platform facts.
+
+RULES FOR semanticConflict:
+- false in normal cases.
+- true only when explicit wording makes Brain's resolved meaning genuinely contradictory or impossible.
+- do not use semanticConflict merely because slang is unfamiliar or the message is short.
+- never silently replace Brain's meaning with your own.
 
 RULES FOR needsTetamoFacts:
 - true only when general Tetamo Knowledge is required.
@@ -1992,7 +2420,7 @@ Do not include markdown.
         model: "gpt-4.1-mini",
         input: prompt,
         temperature: 0.1,
-        max_output_tokens: 850,
+        max_output_tokens: 950,
       });
 
     return applyDeterministicOwnerSalesGuards(

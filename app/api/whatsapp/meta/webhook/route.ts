@@ -1,7 +1,11 @@
+
+
+
 import { createClient } from "@supabase/supabase-js";
 import {
   runMonaOrchestrator,
   markMonaReplySuccessfullySent,
+  resetMonaFollowUpCycleForCustomerReply,
 } from "../../../../lib/mona/orchestrator";
 import { waitForMonaHumanDelay } from "../../../../lib/mona/timing";
 
@@ -318,15 +322,36 @@ async function saveSalesStageSuggestion(params: {
   conversationId: string;
   suggestion: SalesStageSuggestion | null;
 }) {
-  // Do not erase a pending admin-review suggestion merely because a later
-  // acknowledgement such as "ok" or "thank you" has no reliable stage evidence.
+  /*
+   * No new evidence means "leave the CRM state alone".
+   *
+   * When Stage does provide a suggestion, persist it as the actual CRM stage
+   * as well as the suggestion/audit fields. Otherwise sales_stage remains stale
+   * forever and Stage protection rules cannot work correctly on later turns.
+   */
   if (!params.suggestion) return true;
 
+  const updatedAt = new Date().toISOString();
+
   const updatePayload = {
-    suggested_sales_stage: params.suggestion.stage,
-    suggested_sales_stage_reason: params.suggestion.reason,
-    suggested_sales_stage_confidence: params.suggestion.confidence,
-    suggested_sales_stage_at: new Date().toISOString(),
+    /*
+     * Stage is an automatic CRM observer now.
+     *
+     * A valid Stage decision becomes the actual CRM stage immediately.
+     * It is NOT placed into a manual "Mona suggestion" approval queue.
+     */
+    sales_stage: params.suggestion.stage,
+    sales_stage_updated_at: updatedAt,
+    sales_stage_updated_by: null,
+
+    /*
+     * Clear any legacy review suggestion so the Admin dashboard does not
+     * show a stale Approve / Ignore task for an already-applied stage.
+     */
+    suggested_sales_stage: null,
+    suggested_sales_stage_reason: null,
+    suggested_sales_stage_confidence: null,
+    suggested_sales_stage_at: null,
   };
 
   const { error } = await supabaseAdmin
@@ -353,6 +378,17 @@ async function pauseMonaForAdmin(params: {
       ai_enabled: false,
       handover_to_admin: true,
       handover_reason: params.reason,
+
+      /*
+       * Admin now owns the conversation. An old Mona silence timer must not
+       * survive the handover and fire after an eventual Resume AI.
+       */
+      mona_followup_count: 0,
+      mona_followup_waiting_since: null,
+      mona_first_followup_sent_at: null,
+      mona_next_followup_due_at: null,
+      mona_dependency_controlled: false,
+      mona_dependency_reason: null,
     })
     .eq("id", params.conversationId);
 
@@ -468,7 +504,12 @@ async function upsertConversation(params: {
     channel: "meta_whatsapp",
     business_sender_key: businessSenderKey,
     conversation_key: conversationKey,
-    status: params.isBlocked ? "blocked" : "active",
+    /*
+     * Do not force an existing conversation back to "active" on every inbound.
+     * Status such as opted_out / admin-owned state must survive ordinary
+     * customer messages. New rows can use the database default.
+     */
+    ...(params.isBlocked ? { status: "blocked" } : {}),
     last_inbound_at: now,
     window_expires_at: getWindowExpiry(),
     last_message: params.messageText,
@@ -621,21 +662,30 @@ async function saveOutboundMessage(params: {
     .from("whatsapp_messages")
     .insert({
       conversation_id: params.conversationId,
-      direction: "outbound",
+
+      /*
+       * A failed outbound attempt is a system/audit event, not a conversational
+       * Mona turn. Memory must never conclude that the customer saw text that
+       * Meta failed to deliver.
+       */
+      direction: params.sendSucceeded ? "outbound" : "system",
       from_number: params.businessPhoneNumberId,
       to_number: params.customerPhone,
       phone: `whatsapp:+${params.customerPhone}`,
       profile_name: params.profileName,
-      message: params.reply,
+      message: params.sendSucceeded
+        ? params.reply
+        : "[Mona outbound send failed]",
       source: params.source,
       provider: "meta",
       provider_message_id: params.metaSendId,
-      ai_generated: params.aiGenerated,
+      ai_generated: params.sendSucceeded ? params.aiGenerated : false,
       admin_generated: false,
       media_count: 0,
       raw_payload: {
         meta_send_id: params.metaSendId,
         meta_send_error: params.metaSendError,
+        intended_reply: params.sendSucceeded ? null : params.reply,
       },
       created_at: outboundAt,
     });
@@ -774,6 +824,39 @@ async function isStillLatestInboundMessage(
   }
 
   return String(data?.id || "") === String(messageId);
+}
+
+
+async function isMonaStillAllowedToReply(
+  conversationId: string
+) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .select("ai_enabled, handover_to_admin, opted_out_at, status")
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error(
+      "Failed to recheck Mona conversation state before reply:",
+      error
+    );
+
+    // Fail closed: never send if current ownership/state cannot be verified.
+    return false;
+  }
+
+  const status = String(data.status || "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    data.ai_enabled !== false &&
+    data.handover_to_admin !== true &&
+    !data.opted_out_at &&
+    status !== "blocked" &&
+    status !== "opted_out"
+  );
 }
 
 
@@ -1011,6 +1094,28 @@ export async function POST(request: Request) {
       }
 
       /*
+       * If Admin already owns this conversation, Safety will intentionally stop
+       * Mona before the normal Orchestrator reset runs. The customer's new reply
+       * must still cancel any stale Mona silence timer.
+       */
+      if (
+        conversation.ai_enabled === false ||
+        conversation.handover_to_admin === true
+      ) {
+        try {
+          await resetMonaFollowUpCycleForCustomerReply({
+            supabase: supabaseAdmin,
+            conversationId: conversation.id,
+          });
+        } catch (error) {
+          console.error(
+            "Failed to clear stale Mona follow-up state while AI is paused:",
+            error
+          );
+        }
+      }
+
+      /*
        * Do not make Mona/Safety decisions here.
        *
        * The message has already been safely persisted.
@@ -1154,12 +1259,18 @@ export async function POST(request: Request) {
         inboundSave.messageId
       );
 
-      if (!stillLatestAfterDelay) {
+      const stillAllowedToReply = await isMonaStillAllowedToReply(
+        conversation.id
+      );
+
+      if (!stillLatestAfterDelay || !stillAllowedToReply) {
         console.log(
-          "Mona V2 cancelled outdated reply because customer sent another message during human delay.",
+          "Mona V2 cancelled reply because the conversation changed during human delay.",
           {
             conversationId: conversation.id,
             humanDelayMs,
+            stillLatestAfterDelay,
+            stillAllowedToReply,
           }
         );
 

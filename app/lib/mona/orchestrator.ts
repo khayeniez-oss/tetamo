@@ -1,3 +1,4 @@
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -168,6 +169,305 @@ function memoryToSalesContext(
       return `[${item.createdAt}] ${item.speaker}${source}: ${item.message}`;
     })
     .join("\n");
+}
+
+type MonaSalesSemanticConflict = {
+  source: "agent_sales" | "owner_sales";
+  reason: string;
+  suggestedMeaning: string | null;
+};
+
+function getSalesSemanticConflict(
+  salesGuidance: MonaSalesGuidance
+): MonaSalesSemanticConflict | null {
+  const guidance =
+    salesGuidance.guidance;
+
+  if (
+    !guidance ||
+    !guidance.semanticConflict.detected
+  ) {
+    return null;
+  }
+
+  return {
+    source:
+      salesGuidance.strategist === "owner"
+        ? "owner_sales"
+        : "agent_sales",
+    reason:
+      guidance.semanticConflict.reason ||
+      "Sales detected a genuine contradiction with Brain's resolved meaning.",
+    suggestedMeaning:
+      guidance.semanticConflict.suggestedMeaning ||
+      null,
+  };
+}
+
+function recoverExplicitCommercialRoleFromMemory(
+  memory: MonaConversationMemory
+): "agent" | "agency" | "owner" | null {
+  for (
+    let index = memory.messages.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const item = memory.messages[index];
+
+    if (item.speaker !== "Customer") {
+      continue;
+    }
+
+    const message = String(
+      item.message || ""
+    )
+      .toLowerCase()
+      .trim();
+
+    if (!message) continue;
+
+    if (
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:agen|agent|broker|property\s+agent|real\s*estate\s+agent|marketing\s+property)\b/i.test(
+        message
+      ) ||
+      /\b(?:agen|agent)\s+(?:independent|freelance)\b/i.test(
+        message
+      )
+    ) {
+      return "agent";
+    }
+
+    if (
+      /\b(?:kami|saya|aku|sy)\s+(?:dari\s+)?(?:agency|agensi|property\s+agency|real\s*estate\s+agency|property\s+marketing\s+company)\b/i.test(
+        message
+      ) ||
+      /\bagency\s+(?:kami|saya)\b/i.test(
+        message
+      )
+    ) {
+      return "agency";
+    }
+
+    if (
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:owner|pemilik)\b/i.test(
+        message
+      ) ||
+      /\b(?:properti|property|rumah|villa|vila|apartemen|tanah)\s+(?:ini\s+)?(?:punya\s+saya|milik\s+saya)\b/i.test(
+        message
+      )
+    ) {
+      return "owner";
+    }
+  }
+
+  return null;
+}
+
+function looksLikeNormalCommercialObjection(
+  message: string
+) {
+  const text = String(message || "")
+    .toLowerCase()
+    .trim();
+
+  if (!text) return false;
+
+  return (
+    /\b(?:mahal|kemahalan|pricey|expensive|kapok|trauma|zonk)\b/i.test(
+      text
+    ) ||
+    /(?:pernah|dulu|udah|sudah).{0,40}(?:bayar|pakai|coba|iklan|portal|platform).{0,60}(?:ga|gak|nggak|ngga|tidak|belum).{0,35}(?:dapet|dapat|ada|masuk).{0,20}(?:lead|inquiry|closing|hasil|buyer|pembeli|penyewa)/i.test(
+      text
+    ) ||
+    /(?:ga|gak|nggak|ngga|tidak).{0,30}(?:dapet|dapat|ada).{0,20}(?:lead|inquiry|closing|hasil)/i.test(
+      text
+    ) ||
+    /(?:post|posting|pasang|iklan).{0,50}(?:sendiri).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace)/i.test(
+      text
+    ) ||
+    /(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace).{0,50}(?:gratis|free|sendiri|post|posting|pasang|iklan)/i.test(
+      text
+    ) ||
+    /(?:gratis|free).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace|post|posting|iklan)/i.test(
+      text
+    ) ||
+    /\b(?:rumah\s*123|99\.?co|propertyguru|lamudi|facebook\s+marketplace|portal\s+lain|platform\s+lain)\b/i.test(
+      text
+    ) ||
+    /(?:lead|buyer|pembeli|penyewa).{0,40}(?:serius|qualified|bagus|kepo|asal|beneran|benaran)/i.test(
+      text
+    ) ||
+    /(?:serius|qualified|kepo|asal).{0,40}(?:lead|buyer|pembeli|penyewa)/i.test(
+      text
+    ) ||
+    /(?:jamin|garansi|guarantee|pasti).{0,30}(?:lead|closing|laku|terjual|tersewa|buyer|pembeli|penyewa)/i.test(
+      text
+    ) ||
+    /\b(?:percaya|trust|yakin|bukti|proof|testimoni|testimonial)\b/i.test(
+      text
+    )
+  );
+}
+
+function brainReasonRequiresRealHuman(
+  reason: string | null
+) {
+  if (!reason) return false;
+
+  return /(?:explicitly requested|requested a human|human\/admin|human action|staff access|admin access|account-specific|payment check|payment verification|refund|legal|lawyer|pengacara|somasi|manual verification|manual review|account check|locked|blocked|rejected|formal complaint)/i.test(
+    reason
+  );
+}
+
+function salesReasonRequiresRealHuman(
+  reason: string | null
+) {
+  if (!reason) return false;
+
+  return /(?:beyond the standard|exceeds the standard|more than 500|over 500|custom negotiated|custom contract|exceptional contract|manual action|staff access|account-specific|payment issue|payment verification|refund|legal|human assistance)/i.test(
+    reason
+  );
+}
+
+function repairNormalObjectionBrainRouting(
+  brain: MonaBrainDecision,
+  memory: MonaConversationMemory,
+  latestCustomerMessage: string
+): MonaBrainDecision {
+  if (
+    !looksLikeNormalCommercialObjection(
+      latestCustomerMessage
+    ) ||
+    brainReasonRequiresRealHuman(
+      brain.handoverReason
+    )
+  ) {
+    return brain;
+  }
+
+  const recoveredRole =
+    brain.customerType === "agent" ||
+    brain.customerType === "agency" ||
+    brain.customerType === "owner"
+      ? brain.customerType
+      : recoverExplicitCommercialRoleFromMemory(
+          memory
+        );
+
+  if (!recoveredRole) {
+    /*
+     * With no reliable role, do not guess Agent vs Owner.
+     * Brain may still use its normal role clarification flow.
+     */
+    return brain;
+  }
+
+  return {
+    ...brain,
+    understood: true,
+    customerType: recoveredRole,
+    conversationSituation:
+      "objection",
+    clarification: {
+      needed: false,
+      kind: "none",
+      alreadyAttempted:
+        brain.clarification
+          .alreadyAttempted,
+      attemptCount:
+        brain.clarification
+          .attemptCount,
+      goal: null,
+    },
+    replyNeeded: true,
+    handoverRecommended: false,
+    handoverReason: null,
+    salesStrategyNeeded: true,
+    salesStrategist:
+      recoveredRole === "owner"
+        ? "owner"
+        : "agent",
+    recommendedNextStep:
+      "Route this normal commercial objection to the relevant Sales AI. Do not pause Mona or send the customer to Admin merely because they are skeptical, comparing platforms, questioning value, or describing a bad previous advertising experience.",
+  };
+}
+
+function repairNormalObjectionSalesRouting(
+  salesGuidance: MonaSalesGuidance,
+  brain: MonaBrainDecision,
+  latestCustomerMessage: string
+): MonaSalesGuidance {
+  const guidance =
+    salesGuidance.guidance;
+
+  if (
+    !guidance ||
+    !looksLikeNormalCommercialObjection(
+      latestCustomerMessage
+    ) ||
+    !(
+      brain.customerType === "agent" ||
+      brain.customerType === "agency" ||
+      brain.customerType === "owner"
+    ) ||
+    salesReasonRequiresRealHuman(
+      guidance.reason
+    )
+  ) {
+    return salesGuidance;
+  }
+
+  /*
+   * Agent/Owner deterministic Sales guards are expected to classify these as
+   * handle_objection. If the model still returned a false handover or a spurious
+   * semantic conflict, do not let that normal objection become Needs Admin.
+   *
+   * We do NOT change a genuine out-of-product/custom/manual-action handover.
+   */
+  const shouldRepair =
+    guidance.recommendedObjective ===
+      "handle_objection" ||
+    Boolean(guidance.objection) ||
+    brain.conversationSituation ===
+      "objection";
+
+  if (!shouldRepair) {
+    return salesGuidance;
+  }
+
+  /*
+   * Preserve MonaSalesGuidance's discriminated-union shape.
+   * Rebuilding the nested guidance object with spread syntax widens the union and
+   * causes TypeScript to reject the return value. Mutating the already-narrowed
+   * shared guidance fields keeps the original strategist/guidance pairing intact.
+   */
+  if (
+    guidance.recommendedObjective ===
+      "semantic_conflict" ||
+    guidance.recommendedObjective ===
+      "handover"
+  ) {
+    guidance.recommendedObjective =
+      "handle_objection";
+  }
+
+  if (
+    guidance.recommendedObjective ===
+      "handle_objection" ||
+    Boolean(guidance.objection)
+  ) {
+    guidance.shouldAskQuestion = false;
+  }
+
+  guidance.semanticConflict = {
+    detected: false,
+    reason: null,
+    suggestedMeaning: null,
+  };
+
+  guidance.handoverRecommended = false;
+
+  return salesGuidance;
 }
 
 function resolveWriterResult(
@@ -861,6 +1161,24 @@ export async function runMonaScheduledFollowUp(
         null,
     });
 
+  /*
+   * A scheduled silence follow-up is never important enough to chase through
+   * a disputed semantic interpretation. If Sales sees a genuine conflict,
+   * stay silent and wait for a real customer message instead.
+   */
+  if (
+    getSalesSemanticConflict(
+      salesGuidance
+    )
+  ) {
+    return {
+      action: "silent",
+      reason:
+        "Sales detected a semantic conflict during scheduled follow-up reconstruction; Mona will not send a follow-up from disputed meaning.",
+      followUpNumber,
+    };
+  }
+
   const knowledge =
     await retrieveMonaKnowledge({
       supabase: params.supabase,
@@ -926,8 +1244,9 @@ export async function runMonaScheduledFollowUp(
  * Safety
  * -> Memory
  * -> Brain
- * -> Stage
  * -> Sales Router
+ * -> optional ONE-TIME Brain semantic review if Sales reports a genuine conflict
+ * -> Stage observer
  * -> Knowledge
  * -> Writer
  *
@@ -938,15 +1257,13 @@ export async function runMonaScheduledFollowUp(
 export async function runMonaOrchestrator(
   params: RunMonaOrchestratorParams
 ): Promise<MonaOrchestratorResult> {
-  const explicitTransactionStage =
-    evaluateExplicitTransactionStage({
-      latestCustomerMessage:
-        params.latestCustomerMessage,
-      currentStage:
-        params.salesStage ||
-        null,
-    });
-
+  /*
+   * SAFETY FIRST.
+   *
+   * If AI is paused/Admin has takeover, Safety prevents Mona from processing
+   * the customer turn. Do not create a fresh CRM-stage suggestion from a turn
+   * Mona is not allowed to process.
+   */
   const safety =
     evaluateMonaSafety({
       message: {
@@ -996,8 +1313,7 @@ export async function runMonaOrchestrator(
     return {
       action: "silent",
       reason: safety.reason,
-      suggestedSalesStage:
-        explicitTransactionStage,
+      suggestedSalesStage: null,
     };
   }
 
@@ -1008,14 +1324,31 @@ export async function runMonaOrchestrator(
     return {
       action: "handover",
       reason: safety.reason,
-      suggestedSalesStage:
-        explicitTransactionStage,
+      suggestedSalesStage: null,
     };
   }
 
   /*
-   * A genuine customer inbound message cancels any previous
-   * unanswered-Mona silence cycle.
+   * Explicit transaction evidence is a deterministic CRM observation only.
+   * It never controls semantic understanding or routing.
+   */
+  const explicitTransactionStage =
+    evaluateExplicitTransactionStage({
+      latestCustomerMessage:
+        params.latestCustomerMessage,
+      currentStage:
+        params.salesStage ||
+        null,
+    });
+
+  /*
+   * A genuine customer inbound should cancel the old silence-follow-up cycle.
+   *
+   * IMPORTANT:
+   * Failure to reset this persistence state is an infrastructure problem, NOT
+   * a reason to create Needs Admin. Log it and continue processing the real
+   * customer message. A successfully sent new Mona reply will establish a new
+   * follow-up cycle anyway.
    */
   try {
     await resetMonaFollowUpCycleForCustomerReply({
@@ -1029,14 +1362,6 @@ export async function runMonaOrchestrator(
       "Mona follow-up reset failed:",
       error
     );
-
-    return {
-      action: "handover",
-      reason:
-        "Mona could not safely reset the previous follow-up cycle.",
-      suggestedSalesStage:
-        explicitTransactionStage,
-    };
   }
 
   let memory:
@@ -1059,16 +1384,21 @@ export async function runMonaOrchestrator(
       error
     );
 
+    /*
+     * Memory is required for safe understanding. This is still a technical
+     * failure, not a customer case requiring Admin. Do not pause AI or create
+     * Needs Admin merely because storage temporarily failed.
+     */
     return {
-      action: "handover",
+      action: "silent",
       reason:
-        "Mona could not load the conversation memory safely.",
+        "Mona could not load conversation memory because of a technical failure, so no AI reply was generated.",
       suggestedSalesStage:
         explicitTransactionStage,
     };
   }
 
-  const brain =
+  let brain =
     await analyseMonaBrain({
       memory,
       latestCustomerMessage:
@@ -1081,6 +1411,178 @@ export async function runMonaOrchestrator(
         null,
     });
 
+  brain =
+    repairNormalObjectionBrainRouting(
+      brain,
+      memory,
+      params.latestCustomerMessage
+    );
+
+  /*
+   * Brain owns the ONE clarification rule and true human handover.
+   *
+   * First unresolved meaning/role:
+   *   understood=true + clarification.needed=true -> Writer asks once.
+   *
+   * Still unresolved after that one clarification:
+   *   handoverRecommended=true -> Admin.
+   */
+  if (
+    !brain.understood ||
+    brain.handoverRecommended
+  ) {
+    return {
+      action: "handover",
+      reason:
+        brain.handoverReason ||
+        "Mona Brain determined that human review is genuinely required.",
+      suggestedSalesStage:
+        explicitTransactionStage ||
+        null,
+    };
+  }
+
+  const conversationContext =
+    memoryToSalesContext(
+      memory
+    );
+
+  let salesGuidance =
+    await routeMonaSalesStrategy({
+      brain,
+      customerMessage:
+        params.latestCustomerMessage,
+      conversationContext,
+      salesStage:
+        params.salesStage ||
+        null,
+    });
+
+  salesGuidance =
+    repairNormalObjectionSalesRouting(
+      salesGuidance,
+      brain,
+      params.latestCustomerMessage
+    );
+
+  /*
+   * ONE-TIME BRAIN <-> SALES SEMANTIC REVIEW
+   * ----------------------------------------
+   *
+   * Sales normally trusts Brain's resolved meaning.
+   * If Sales detects a genuine explicit contradiction, return that private
+   * semantic issue to Brain exactly ONCE.
+   *
+   * This is NOT Knowledge lookup and NOT Admin handover.
+   */
+  const initialSemanticConflict =
+    getSalesSemanticConflict(
+      salesGuidance
+    );
+
+  if (initialSemanticConflict) {
+    brain =
+      await analyseMonaBrain({
+        memory,
+        latestCustomerMessage:
+          params.latestCustomerMessage,
+        salesStage:
+          params.salesStage ||
+          null,
+        campaignContext:
+          params.campaignContext ||
+          null,
+        semanticReview: {
+          source:
+            initialSemanticConflict.source,
+          reason:
+            initialSemanticConflict.reason,
+          suggestedMeaning:
+            initialSemanticConflict.suggestedMeaning,
+        },
+      });
+
+    brain =
+      repairNormalObjectionBrainRouting(
+        brain,
+        memory,
+        params.latestCustomerMessage
+      );
+
+    if (
+      !brain.understood ||
+      brain.handoverRecommended
+    ) {
+      return {
+        action: "handover",
+        reason:
+          brain.handoverReason ||
+          "Brain re-evaluation determined that the disputed meaning still requires human review.",
+        suggestedSalesStage:
+          explicitTransactionStage ||
+          null,
+      };
+    }
+
+    /*
+     * Re-route once using Brain's reviewed meaning.
+     * There is deliberately no second Brain/Sales loop.
+     */
+    salesGuidance =
+      await routeMonaSalesStrategy({
+        brain,
+        customerMessage:
+          params.latestCustomerMessage,
+        conversationContext,
+        salesStage:
+          params.salesStage ||
+          null,
+      });
+
+    salesGuidance =
+      repairNormalObjectionSalesRouting(
+        salesGuidance,
+        brain,
+        params.latestCustomerMessage
+      );
+
+    const repeatedSemanticConflict =
+      getSalesSemanticConflict(
+        salesGuidance
+      );
+
+    if (repeatedSemanticConflict) {
+      const stageAfterReview =
+        explicitTransactionStage ||
+        evaluateMonaSalesStage({
+          brain,
+          latestCustomerMessage:
+            params.latestCustomerMessage,
+          currentStage:
+            params.salesStage ||
+            null,
+        });
+
+      /*
+       * No infinite loop and no false Admin handover.
+       * Brain already received one specialist review. If Sales still disputes
+       * it, do not send a possibly-wrong customer answer. Wait for a new real
+       * customer turn rather than bouncing internally forever.
+       */
+      return {
+        action: "silent",
+        reason:
+          "Sales still reported a semantic conflict after the one allowed Brain re-evaluation, so Mona did not send a disputed reply.",
+        suggestedSalesStage:
+          stageAfterReview,
+      };
+    }
+  }
+
+  /*
+   * Stage is evaluated only after the final Brain interpretation for this turn.
+   * Stage remains observational and never feeds back into current routing.
+   */
   const suggestedSalesStage =
     explicitTransactionStage ||
     evaluateMonaSalesStage({
@@ -1092,22 +1594,9 @@ export async function runMonaOrchestrator(
         null,
     });
 
-  if (
-    !brain.understood ||
-    brain.handoverRecommended
-  ) {
-    return {
-      action: "handover",
-      reason:
-        brain.handoverReason ||
-        "Mona could not reliably understand the conversation.",
-      suggestedSalesStage,
-    };
-  }
-
   /*
-   * Persist dependency state after Brain has interpreted the
-   * new customer message.
+   * Persist timing dependency after the final Brain interpretation.
+   * Persistence failure is technical and must not create Needs Admin.
    */
   try {
     await persistMonaDependencyState({
@@ -1133,21 +1622,50 @@ export async function runMonaOrchestrator(
     };
   }
 
-  const conversationContext =
-    memoryToSalesContext(
-      memory
-    );
+  /*
+   * Human handover from Sales is allowed only for genuine human commercial
+   * action/access. Normal objections, prices, package questions and knowledge
+   * requests must stay inside Mona.
+   */
+  if (
+    salesGuidance.guidance
+      ?.handoverRecommended
+  ) {
+    const genuineHumanSalesReason =
+      salesReasonRequiresRealHuman(
+        salesGuidance.guidance.reason
+      );
 
-  const salesGuidance =
-    await routeMonaSalesStrategy({
-      brain,
-      customerMessage:
-        params.latestCustomerMessage,
-      conversationContext,
-      salesStage:
-        params.salesStage ||
-        null,
-    });
+    const normalObjection =
+      looksLikeNormalCommercialObjection(
+        params.latestCustomerMessage
+      ) &&
+      (
+        brain.customerType === "agent" ||
+        brain.customerType === "agency" ||
+        brain.customerType === "owner"
+      );
+
+    if (
+      genuineHumanSalesReason ||
+      !normalObjection
+    ) {
+      return {
+        action: "handover",
+        reason:
+          salesGuidance.guidance.reason ||
+          "Sales determined that genuine human commercial action is required.",
+        suggestedSalesStage,
+      };
+    }
+
+    salesGuidance =
+      repairNormalObjectionSalesRouting(
+        salesGuidance,
+        brain,
+        params.latestCustomerMessage
+      );
+  }
 
   const knowledge =
     await retrieveMonaKnowledge({
@@ -1160,6 +1678,11 @@ export async function runMonaOrchestrator(
           .primaryLanguage,
     });
 
+  /*
+   * Knowledge status="not_found" is NOT a handover by itself.
+   * Writer must stay inside approved facts and may safely remain silent if a
+   * technically reliable answer cannot be produced.
+   */
   const writer =
     await writeMonaReply({
       memory,

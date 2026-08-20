@@ -30,6 +30,14 @@ const CONVERSATION_SELECT = `
   suggested_sales_stage_reason,
   suggested_sales_stage_confidence,
   suggested_sales_stage_at,
+  mona_followup_count,
+  mona_followup_waiting_since,
+  mona_first_followup_sent_at,
+  mona_next_followup_due_at,
+  mona_dependency_controlled,
+  mona_dependency_reason,
+  mona_followup_claimed_at,
+  mona_followup_claim_token,
   last_inbound_at,
   window_expires_at,
   free_entry_point_expires_at,
@@ -89,7 +97,6 @@ type ConversationStats = {
   activeAi: number;
   pausedAi: number;
   handled: number;
-  needsStageReview: number;
   salesStages: SalesStageStats;
 };
 
@@ -163,10 +170,6 @@ function applyStatusFilter(query: any, filter: string) {
 
   if (filter === "handled") {
     return query.eq("status", "handled");
-  }
-
-  if (filter === "needs_stage_review") {
-    return query.not("suggested_sales_stage", "is", null);
   }
 
   return query;
@@ -312,7 +315,6 @@ async function getConversationStats(): Promise<ConversationStats> {
     activeAi,
     pausedAi,
     handled,
-    needsStageReview,
     newInquiry,
     lead,
     agentPackage,
@@ -337,9 +339,6 @@ async function getConversationStats(): Promise<ConversationStats> {
     countConversations((query) => query.eq("ai_enabled", false)),
     countConversations((query) => query.eq("status", "handled")),
     countConversations((query) =>
-      query.not("suggested_sales_stage", "is", null)
-    ),
-    countConversations((query) =>
       query.or("sales_stage.eq.new_inquiry,sales_stage.is.null")
     ),
     countConversations((query) => query.eq("sales_stage", "lead")),
@@ -362,7 +361,6 @@ async function getConversationStats(): Promise<ConversationStats> {
     activeAi,
     pausedAi,
     handled,
-    needsStageReview,
     salesStages: {
       new_inquiry: newInquiry,
       lead,
@@ -379,12 +377,34 @@ async function getConversationStats(): Promise<ConversationStats> {
 }
 
 function getActionUpdate(action: string) {
+  /*
+   * Any explicit Admin ownership / lifecycle action clears Mona's current
+   * automated silence-follow-up cycle.
+   *
+   * This prevents an old 1-hour / 12-hour timer from surviving a manual
+   * pause/handled state and suddenly firing after Resume AI.
+   *
+   * Resume AI starts clean. A NEW timer will begin only after Mona later
+   * sends a NEW successful customer-facing reply.
+   */
+  const clearMonaFollowUpCycle = {
+    mona_followup_count: 0,
+    mona_followup_waiting_since: null,
+    mona_first_followup_sent_at: null,
+    mona_next_followup_due_at: null,
+    mona_dependency_controlled: false,
+    mona_dependency_reason: null,
+    mona_followup_claimed_at: null,
+    mona_followup_claim_token: null,
+  };
+
   if (action === "mark_handled") {
     return {
       status: "handled",
       handover_to_admin: false,
       ai_enabled: false,
       handover_reason: null,
+      ...clearMonaFollowUpCycle,
     };
   }
 
@@ -394,6 +414,7 @@ function getActionUpdate(action: string) {
       handover_to_admin: false,
       ai_enabled: true,
       handover_reason: null,
+      ...clearMonaFollowUpCycle,
     };
   }
 
@@ -403,6 +424,7 @@ function getActionUpdate(action: string) {
       handover_to_admin: true,
       ai_enabled: false,
       handover_reason: "AI paused by admin - needs admin attention",
+      ...clearMonaFollowUpCycle,
     };
   }
 
@@ -671,162 +693,12 @@ export async function PATCH(req: Request) {
       });
     }
 
-    if (action === "approve_stage_suggestion") {
-      const suggestedStage = String(
-        existingConversation.suggested_sales_stage || ""
-      ).trim();
-
-      if (!SALES_STAGES.includes(suggestedStage as SalesStage)) {
-        return Response.json(
-          { success: false, error: "There is no valid stage suggestion to approve." },
-          { status: 400 }
-        );
-      }
-
-      const previousStage = existingConversation.sales_stage || null;
-      const updatedAt = new Date().toISOString();
-
-      const { data: updatedConversation, error: updateError } =
-        await supabaseAdmin
-          .from("whatsapp_conversations")
-          .update({
-            sales_stage: suggestedStage,
-            sales_stage_updated_at: updatedAt,
-            sales_stage_updated_by: auth.userId || null,
-            suggested_sales_stage: null,
-            suggested_sales_stage_reason: null,
-            suggested_sales_stage_confidence: null,
-            suggested_sales_stage_at: null,
-          })
-          .eq("id", conversationId)
-          .select(CONVERSATION_SELECT)
-          .maybeSingle();
-
-      if (updateError) {
-        console.error("Failed to approve WhatsApp stage suggestion:", updateError);
-
-        return Response.json(
-          { success: false, error: "Failed to approve stage suggestion." },
-          { status: 500 }
-        );
-      }
-
-      const { error: historyError } = await supabaseAdmin
-        .from("whatsapp_sales_stage_history")
-        .insert({
-          conversation_id: conversationId,
-          previous_stage: previousStage,
-          new_stage: suggestedStage,
-          changed_by: auth.userId || null,
-          changed_at: updatedAt,
-        });
-
-      if (historyError) {
-        console.error("Failed to save approved stage history:", historyError);
-      }
-
-      const stageLabel =
-        SALES_STAGE_LABELS[suggestedStage as SalesStage] || suggestedStage;
-
-      await supabaseAdmin.from("whatsapp_messages").insert({
-        conversation_id: conversationId,
-        direction: "system",
-        from_number: "tetamo_admin_dashboard",
-        to_number: phoneE164 || null,
-        phone: phoneE164 || null,
-        profile_name: existingConversation.profile_name || null,
-        message: `Admin approved Mona's suggestion and moved this conversation to ${stageLabel}.`,
-        source: "admin_dashboard",
-        ai_generated: false,
-        admin_generated: true,
-        media_count: 0,
-        raw_payload: {
-          action,
-          previous_stage: previousStage,
-          new_stage: suggestedStage,
-          suggested_reason:
-            existingConversation.suggested_sales_stage_reason || null,
-          suggested_confidence:
-            existingConversation.suggested_sales_stage_confidence || null,
-          admin_user_id: auth.userId,
-        },
-        created_at: updatedAt,
-      });
-
-      return Response.json({
-        success: true,
-        conversation: updatedConversation,
-      });
-    }
-
-    if (action === "ignore_stage_suggestion") {
-      const ignoredStage = String(
-        existingConversation.suggested_sales_stage || ""
-      ).trim();
-
-      if (!ignoredStage) {
-        return Response.json(
-          { success: false, error: "There is no stage suggestion to ignore." },
-          { status: 400 }
-        );
-      }
-
-      const updatedAt = new Date().toISOString();
-
-      const { data: updatedConversation, error: updateError } =
-        await supabaseAdmin
-          .from("whatsapp_conversations")
-          .update({
-            suggested_sales_stage: null,
-            suggested_sales_stage_reason: null,
-            suggested_sales_stage_confidence: null,
-            suggested_sales_stage_at: null,
-          })
-          .eq("id", conversationId)
-          .select(CONVERSATION_SELECT)
-          .maybeSingle();
-
-      if (updateError) {
-        console.error("Failed to ignore WhatsApp stage suggestion:", updateError);
-
-        return Response.json(
-          { success: false, error: "Failed to ignore stage suggestion." },
-          { status: 500 }
-        );
-      }
-
-      const ignoredLabel =
-        SALES_STAGE_LABELS[ignoredStage as SalesStage] || ignoredStage;
-
-      await supabaseAdmin.from("whatsapp_messages").insert({
-        conversation_id: conversationId,
-        direction: "system",
-        from_number: "tetamo_admin_dashboard",
-        to_number: phoneE164 || null,
-        phone: phoneE164 || null,
-        profile_name: existingConversation.profile_name || null,
-        message: `Admin ignored Mona's ${ignoredLabel} stage suggestion.`,
-        source: "admin_dashboard",
-        ai_generated: false,
-        admin_generated: true,
-        media_count: 0,
-        raw_payload: {
-          action,
-          ignored_stage: ignoredStage,
-          ignored_reason:
-            existingConversation.suggested_sales_stage_reason || null,
-          ignored_confidence:
-            existingConversation.suggested_sales_stage_confidence || null,
-          admin_user_id: auth.userId,
-        },
-        created_at: updatedAt,
-      });
-
-      return Response.json({
-        success: true,
-        conversation: updatedConversation,
-      });
-    }
+    /*
+     * Mona Stage is now automatically persisted by the Meta webhook.
+     *
+     * There is no Approve / Ignore queue anymore. Admin can still override
+     * the CRM stage manually through update_sales_stage above.
+     */
 
     if (action === "block_number") {
       if (!phoneE164) {
@@ -870,6 +742,14 @@ export async function PATCH(req: Request) {
             handover_to_admin: false,
             ai_enabled: false,
             handover_reason: "Number blocked by admin",
+            mona_followup_count: 0,
+            mona_followup_waiting_since: null,
+            mona_first_followup_sent_at: null,
+            mona_next_followup_due_at: null,
+            mona_dependency_controlled: false,
+            mona_dependency_reason: null,
+            mona_followup_claimed_at: null,
+            mona_followup_claim_token: null,
           })
           .eq("id", conversationId)
           .select(CONVERSATION_SELECT)
@@ -950,6 +830,14 @@ export async function PATCH(req: Request) {
             handover_to_admin: false,
             ai_enabled: false,
             handover_reason: null,
+            mona_followup_count: 0,
+            mona_followup_waiting_since: null,
+            mona_first_followup_sent_at: null,
+            mona_next_followup_due_at: null,
+            mona_dependency_controlled: false,
+            mona_dependency_reason: null,
+            mona_followup_claimed_at: null,
+            mona_followup_claim_token: null,
           })
           .eq("id", conversationId)
           .select(CONVERSATION_SELECT)

@@ -1,3 +1,4 @@
+
 import OpenAI from "openai";
 import type { MonaConversationMemory } from "./memory";
 
@@ -22,18 +23,32 @@ export type MonaConversationSituation =
   | "casual"
   | "unknown";
 
+export type MonaBrainClarificationKind =
+  | "role"
+  | "meaning"
+  | "journey_choice"
+  | "none";
+
 export type MonaBrainDecision = {
   understood: boolean;
   confidence: number;
-  clarificationNeeded: boolean;
 
   customerType: MonaCustomerType;
+
+  clarification: {
+    needed: boolean;
+    kind: MonaBrainClarificationKind;
+    alreadyAttempted: boolean;
+    attemptCount: 0 | 1;
+    goal: string | null;
+  };
 
   languageStyle: {
     primaryLanguage: "id" | "en" | "mixed" | "unknown";
     style: string;
   };
 
+  normalizedMessage: string;
   latestMeaning: string;
   conversationSituation: MonaConversationSituation;
 
@@ -76,11 +91,26 @@ type MonaBrainCampaignContext = {
   sentAt?: string | null;
 } | null;
 
+type MonaBrainSemanticReview = {
+  source: "agent_sales" | "owner_sales";
+  reason: string;
+  suggestedMeaning?: string | null;
+} | null;
+
 type AnalyseMonaBrainParams = {
   memory: MonaConversationMemory;
   latestCustomerMessage: string;
   salesStage?: string | null;
   campaignContext?: MonaBrainCampaignContext;
+
+  /*
+   * Optional one-time private feedback from a Sales specialist when the
+   * specialist detects a genuine contradiction in Brain's resolved meaning.
+   *
+   * This is NOT customer text and must never be treated as a new customer
+   * message or as factual truth. Brain remains the semantic authority.
+   */
+  semanticReview?: MonaBrainSemanticReview;
 };
 
 const MONA_BRAIN_PROMPT = `
@@ -239,7 +269,14 @@ Customers may use:
 - Indonesian;
 - English;
 - mixed Indonesian/English;
-- WhatsApp slang;
+- Indonesian WhatsApp slang;
+- shortened words;
+- omitted vowels;
+- omitted prefixes or suffixes;
+- words joined together;
+- words split apart;
+- phonetic spelling;
+- regional/informal spelling;
 - abbreviations;
 - typos;
 - incomplete sentences;
@@ -247,44 +284,148 @@ Customers may use:
 - property jargon;
 - sales jargon.
 
-Examples may include:
+INDONESIAN WHATSAPP IS OFTEN COMPRESSED.
 
-brp
-gmn
-gimana
-udh
-udah
-sy
-saya
-gw
-aku
-ga
-gak
-nggak
-ngga
-yg
-dgn
-bgt
-msh
-blm
-mau
-minat
-kepo
-closing
-listing
-lead
-inquiry
-enquiry
-prospek
-owner
-agen
-agent
-developer
-agency
+Do NOT require formal Indonesian spelling before understanding a message.
+Recover the intended normal Indonesian meaning from the conversation.
 
-Do not rely only on those examples.
+Common high-confidence forms include, but are NOT limited to:
 
-Understand language naturally.
+brp -> berapa
+gmn -> gimana / bagaimana
+dmn -> di mana
+drmn -> dari mana
+knp -> kenapa
+krn -> karena
+klo / kl -> kalau
+kpn -> kapan
+hrg -> harga
+hrgnya -> harganya
+byr -> bayar
+byrnya -> bayarnya
+udh / udh -> sudah
+blm -> belum
+msh -> masih
+sy / sya -> saya
+gw / gue -> aku / saya
+aq -> aku
+yg -> yang
+dgn -> dengan
+bgt / bngt -> banget
+gk / ga / gak / nggak / ngga / enggak -> tidak / no
+bs / bsa -> bisa
+mw / mo -> mau
+pgn -> pengen / ingin
+jd / jdi -> jadi
+tp -> tapi
+lg -> lagi
+org -> orang
+sm -> sama (when context supports it)
+dpt / dapet -> dapat
+trs -> terus
+trus -> terus
+sgt -> sangat
+skrg -> sekarang
+bsk -> besok
+kmrn -> kemarin
+mingdep -> minggu depan
+blndpn / bln dpn -> bulan depan
+adminnya -> admin
+cs -> customer service / admin depending context
+wa -> WhatsApp
+no wa / nowa -> nomor WhatsApp
+sosmed -> social media
+ig -> Instagram
+fb -> Facebook
+tt -> TikTok only when context clearly supports it
+app -> application / aplikasi
+web -> website
+
+PROPERTY / SALES-SPECIFIC COMPRESSED INDONESIAN MAY INCLUDE:
+
+djual -> dijual
+d jual -> dijual
+di jual -> dijual
+djualin -> dijualkan / jualkan
+jualin -> jualkan / menjualkan
+jualkn -> jualkan
+mw jual / mo jual -> mau menjual
+dsewa -> disewa
+d sewa -> disewa
+di sewa -> disewa
+disewain -> disewakan
+sewain -> sewakan / disewakan
+sewakan -> sewakan
+rmh -> rumah
+aprt / apt -> apartemen / apartment
+villa / vila -> villa
+tnh -> tanah
+ruko -> ruko
+kav -> kavling when context supports it
+prop -> properti / property when context supports it
+properti sy -> properti saya
+listing sy -> listing saya
+list -> listing when property context supports it
+listingan -> listing / daftar listing
+agen -> agent
+agt -> agent only when property context clearly supports it
+marketing property -> property sales/marketing context
+buyer -> buyer / pembeli
+renter -> penyewa
+lead -> lead / calon pelanggan
+prospek -> prospect / lead
+closing -> closing / transaksi berhasil
+komisi -> commission
+fee -> biaya
+member / membership -> membership
+paket -> package
+fitur -> feature
+boost -> Boost listing
+spotlight -> Homepage Spotlight
+featured -> Featured listing / placement depending context
+
+NUMBER / QUANTITY FORMS:
+
+30an -> approximately 30
+50an -> approximately 50
+100+ -> more than 100
+50 lebih -> more than 50
+sekitar 60 -> approximately 60
+60 listingan -> around 60 listings
+
+Do not interpret every token literally. Interpret the SENTENCE.
+
+Examples:
+
+"rmh sy mw djual gmn"
+-> normalized meaning: "rumah saya mau dijual, bagaimana caranya?"
+
+"klo dsewa byr brp"
+-> normalized meaning: "kalau disewakan, bayar berapa?"
+
+"sy agent ada 60an listing paket yg cocok yg mn"
+-> normalized meaning: "saya agent, punya sekitar 60 listing, paket yang cocok yang mana?"
+
+"udh byr tp blm aktif"
+-> normalized meaning: "sudah bayar tetapi belum aktif"
+
+"bs listing dr app ga"
+-> normalized meaning: "bisa listing dari aplikasi tidak?"
+
+"ada byr?"
+-> normally means "ada bayar? / apakah berbayar? / ada biaya?"
+It does NOT normally mean "ada buyer?".
+Use buyer/pembeli meaning only when the actual wording or strong context supports buyer.
+
+VERY IMPORTANT:
+
+- The examples above are a guide, not a closed dictionary.
+- Indonesians create new abbreviations constantly.
+- Use linguistic reasoning, Memory and local conversational context to recover unseen compressed forms.
+- Missing vowels, dropped "di-", shortened suffixes, merged words and phonetic spellings are normal WhatsApp behaviour.
+- Do not mark a message unreadable merely because the spelling is informal.
+- Do not ask clarification when a normal Indonesian reader could reasonably recover the meaning from context.
+- If multiple materially different meanings remain genuinely plausible after Memory/context, use ONE clarification.
 
 Laughter such as:
 
@@ -298,28 +439,23 @@ is not automatically unreadable.
 If meaning can reasonably be understood from Memory and context,
 set understood=true.
 
-Use understood=false only when the meaning genuinely cannot be recovered.
+Use understood=false only when the meaning genuinely cannot be recovered
+after the one allowed clarification attempt.
 
-PARTIAL UNDERSTANDING:
+NORMALIZED MESSAGE OUTPUT:
 
-Use clarificationNeeded=true ONLY when:
-- the likely meaning can be recovered, so understood=true;
-- but one important detail is still uncertain;
-- and answering without confirming that detail could materially change the answer.
+Return normalizedMessage as a short, natural-language normalization of the
+LATEST customer message only.
 
-When clarificationNeeded=true:
-- do not guess the missing detail;
-- do not manufacture a precise directQuestion;
-- set directQuestion=null when the exact question is uncertain;
-- recommendedNextStep must ask ONE short natural clarification;
-- do not recommend human handover merely because clarification is needed.
+Examples:
+raw: "rmh sy mw djual byr brp"
+normalizedMessage: "Rumah saya mau dijual, bayar berapa?"
 
-Examples include unclear wording about who pays, when payment happens, whether a
-fee is paid later, or another commercial arrangement where the general concern
-is understandable but the exact arrangement is not.
+raw: "sy agent 60an listing yg cocok mn"
+normalizedMessage: "Saya agent, punya sekitar 60 listing. Paket yang cocok mana?"
 
-If the meaning is clear enough to answer safely, clarificationNeeded=false.
-If the meaning genuinely cannot be recovered, use understood=false as before.
+normalizedMessage is an internal semantic aid.
+It must preserve the customer's intended meaning and must not invent facts.
 
 ==================================================
 STRICT ROLE GATE
@@ -757,6 +893,31 @@ Examples:
 "Mahal."
 -> objection
 
+"Dulu saya pernah bayar portal tapi tidak dapat lead, kapok."
+-> objection
+
+"Saya bisa post sendiri di Facebook gratis."
+-> objection
+
+"Lead-nya serius tidak? Saya tidak mau cuma orang kepo."
+-> objection
+
+"Rumah123 sudah ramai banget, listing saya tenggelam."
+-> comparison or objection depending the immediate intent.
+
+IMPORTANT OBJECTION ROUTING:
+- Normal sales objections are processable conversation, not Admin cases.
+- Price/value concern, bad past portal experience, competitor concern, self-marketing,
+  lead-quality concern, trust concern, proof concern, guarantee concern, and "kapok"
+  language must normally keep understood=true and handoverRecommended=false.
+- When Agent/Agency/Owner role is already established, route a normal objection to
+  the relevant Sales AI.
+- Do not recommend human handover merely because a customer is skeptical, frustrated,
+  disappointed by another portal, says "kapok", says "mahal", compares Tetamo with
+  another platform, or challenges Tetamo's value.
+- Human handover remains appropriate only for an explicit human request or a genuine
+  human-action/account/legal/payment-review condition.
+
 "Bulan depan aja."
 -> hesitation
 
@@ -1044,23 +1205,12 @@ not interested
 For hard rejection:
 
 conversationSituation="rejection"
+salesStrategyNeeded=false
+salesStrategist="none"
 factualKnowledgeNeeded=false
 knowledgeRequest=[]
 
-If an Agent/Agency role is already established:
-salesStrategyNeeded=true
-salesStrategist="agent"
-
-If an Owner role is already established:
-salesStrategyNeeded=true
-salesStrategist="owner"
-
-If role is unknown:
-salesStrategyNeeded=false
-salesStrategist="none"
-
-The established Sales AI owns the stop_selling strategy and natural acknowledgement.
-Do not recommend another sales question. Do not hand over merely because the customer rejected the sale.
+Do not recommend another sales question.
 
 ==================================================
 HESITATION / FUTURE DEPENDENCY
@@ -1142,60 +1292,61 @@ oke makasih
 sudah jelas
 cukup
 
-Also recognize SHORT CONTEXTUAL ACKNOWLEDGEMENTS such as:
-
-ok
-oke
-baik
-baik kak
-baik kk
-sip
-siap
-iya baik
-
-These are acknowledgement-only messages ONLY when the real preceding conversation
-shows the customer is simply acknowledging Mona's completed explanation or next step.
-
-Do NOT treat "iya", "ok", "baik" or similar short replies as an ending when they are
-actually answering a question Mona asked or supplying information that moves the
-conversation forward.
-
-When the latest customer message is only an acknowledgement AND:
-
-- it contains no new question;
-- it contains no new fact, objection, request or decision;
-- Mona's immediately previous message already gave the relevant answer or next step;
-
-then normally:
-
-replyNeeded=false
-
-Do not create another reply merely to acknowledge the acknowledgement.
-Do not repeat, paraphrase or summarize Mona's immediately previous answer.
-
 Do not invent another sales question.
 
 replyNeeded may be false if silence is more natural.
 
 ==================================================
-HANDOVER
+CLARIFICATION / HANDOVER PROTOCOL
 ==================================================
+
+Brain gets ONE clarification attempt before handing an unclear conversation
+to Admin.
+
+Use clarification.needed=true when either:
+
+- the latest message meaning is materially unclear after reading Memory; or
+- the customer role is required for this turn but still unknown; or
+- the customer is both Agent and Owner and must choose which journey to handle first.
+
+FIRST unresolved attempt:
+
+- keep understood=true because the conversation is still processable;
+- set clarification.needed=true;
+- set clarification.kind to "meaning", "role", or "journey_choice";
+- set replyNeeded=true;
+- do NOT route to Sales AI yet if the unresolved point affects routing;
+- do NOT recommend human handover yet;
+- recommendedNextStep must tell Writer the ONE clarification goal.
+
+If a previous Mona clarification of the SAME unresolved type was already asked
+and the customer's newest reply still does not resolve it:
+
+- set understood=false;
+- set replyNeeded=false;
+- set handoverRecommended=true;
+- explain the unresolved point in handoverReason;
+- do not ask another clarification;
+- do not route to Sales AI or Knowledge.
+
+A general Tetamo question may still be answered with approved Knowledge before
+asking the ONE role clarification if role is not required to answer that
+general fact.
 
 Recommend handover only when:
 
-- meaning genuinely cannot be understood even after Memory; or
-- human access/action is genuinely required.
-
-The handover flag is advisory reasoning only. Deterministic application code decides
-whether Mona is actually paused for a human.
+- a clarification was already attempted and the required meaning/role remains
+  unresolved; or
+- human access/action is genuinely required; or
+- the customer explicitly asks for a human/admin.
 
 Do NOT hand over merely because:
 
 - slang is used;
+- a message is short;
+- spelling is poor;
 - customer asks normal Tetamo information;
-- customer asks package questions or whether Tetamo is paid;
-- customer raises an objection or hesitation;
-- customer rejects the sales offer;
+- customer asks package questions;
 - customer asks how to list;
 - customer asks about buyers;
 - customer asks about features.
@@ -1252,14 +1403,25 @@ function fallbackBrainDecision(
   return {
     understood: true,
     confidence: 0.2,
-    clarificationNeeded: false,
 
     customerType: "unknown",
+
+    clarification: {
+      needed: false,
+      kind: "none",
+      alreadyAttempted: false,
+      attemptCount: 0,
+      goal: null,
+    },
 
     languageStyle: {
       primaryLanguage: "unknown",
       style: "natural WhatsApp conversation",
     },
+
+    normalizedMessage:
+      String(latestCustomerMessage || "").trim() ||
+      "No readable message.",
 
     latestMeaning:
       String(latestCustomerMessage || "").trim() ||
@@ -1373,6 +1535,20 @@ function parseBrainDecision(
       "none",
     ]);
 
+    const allowedClarificationKinds =
+      new Set<MonaBrainClarificationKind>([
+        "role",
+        "meaning",
+        "journey_choice",
+        "none",
+      ]);
+
+    const clarification =
+      parsed.clarification &&
+      typeof parsed.clarification === "object"
+        ? parsed.clarification
+        : {};
+
     const languageStyle =
       parsed.languageStyle &&
       typeof parsed.languageStyle === "object"
@@ -1408,15 +1584,33 @@ function parseBrainDecision(
             )
           : fallback.confidence,
 
-      clarificationNeeded:
-        parsed.clarificationNeeded === true,
-
       customerType:
         allowedCustomerTypes.has(
           parsed.customerType as MonaCustomerType
         )
           ? (parsed.customerType as MonaCustomerType)
           : fallback.customerType,
+
+      clarification: {
+        needed:
+          clarification.needed === true,
+        kind:
+          allowedClarificationKinds.has(
+            clarification.kind as
+              MonaBrainClarificationKind
+          )
+            ? (clarification.kind as
+                MonaBrainClarificationKind)
+            : "none",
+        alreadyAttempted:
+          clarification.alreadyAttempted === true,
+        attemptCount:
+          clarification.attemptCount === 1 ? 1 : 0,
+        goal:
+          cleanNullableString(
+            clarification.goal
+          ),
+      },
 
       languageStyle: {
         primaryLanguage:
@@ -1439,6 +1633,10 @@ function parseBrainDecision(
           ) ||
           fallback.languageStyle.style,
       },
+
+      normalizedMessage:
+        cleanString(parsed.normalizedMessage) ||
+        fallback.normalizedMessage,
 
       latestMeaning:
         cleanString(parsed.latestMeaning) ||
@@ -1486,11 +1684,8 @@ function parseBrainDecision(
           ? parsed.replyNeeded
           : fallback.replyNeeded,
 
-      // HANDOVER SAFETY:
-      // The model may describe that human help could be useful, but it does
-      // not get final authority to pause Mona. enforceBrainRouting() below
-      // owns deterministic handover decisions.
-      handoverRecommended: false,
+      handoverRecommended:
+        parsed.handoverRecommended === true,
 
       handoverReason:
         cleanNullableString(
@@ -1534,6 +1729,79 @@ function parseBrainDecision(
   } catch {
     return fallback;
   }
+}
+
+const INDONESIAN_WHATSAPP_NORMALIZATION_RULES: Array<[RegExp, string]> = [
+  [/\bhrgnya\b/gi, "harganya"],
+  [/\bhrg\b/gi, "harga"],
+  [/\bbyrnya\b/gi, "bayarnya"],
+  [/\bbyr\b/gi, "bayar"],
+  [/\bbrp\b/gi, "berapa"],
+  [/\bgmn\b/gi, "gimana"],
+  [/\bdmn\b/gi, "di mana"],
+  [/\bdrmn\b/gi, "dari mana"],
+  [/\bknp\b/gi, "kenapa"],
+  [/\bkrn\b/gi, "karena"],
+  [/\bklo\b/gi, "kalau"],
+  [/\bkpn\b/gi, "kapan"],
+  [/\budh\b/gi, "sudah"],
+  [/\bblm\b/gi, "belum"],
+  [/\bmsh\b/gi, "masih"],
+  [/\bsya\b/gi, "saya"],
+  [/\bsy\b/gi, "saya"],
+  [/\byg\b/gi, "yang"],
+  [/\bdgn\b/gi, "dengan"],
+  [/\bbngt\b/gi, "banget"],
+  [/\bbgt\b/gi, "banget"],
+  [/\b(?:gk|ga|gak|nggak|ngga|enggak)\b/gi, "tidak"],
+  [/\bbsa\b/gi, "bisa"],
+  [/\bbs\b/gi, "bisa"],
+  [/\bpgn\b/gi, "pengen"],
+  [/\b(?:mw|mo)\b/gi, "mau"],
+  [/\bjdi\b/gi, "jadi"],
+  [/\bjd\b/gi, "jadi"],
+  [/\bskrg\b/gi, "sekarang"],
+  [/\bbsk\b/gi, "besok"],
+  [/\bkmrn\b/gi, "kemarin"],
+  [/\bdjualin\b/gi, "dijualkan"],
+  [/\bdjual\b/gi, "dijual"],
+  [/\bd\s+jual\b/gi, "dijual"],
+  [/\bdi\s+jual\b/gi, "dijual"],
+  [/\bdisewain\b/gi, "disewakan"],
+  [/\bdsewa\b/gi, "disewa"],
+  [/\bd\s+sewa\b/gi, "disewa"],
+  [/\bdi\s+sewa\b/gi, "disewa"],
+  [/\brmh\b/gi, "rumah"],
+  [/\baprt\b/gi, "apartemen"],
+  [/\bapt\b/gi, "apartemen"],
+  [/\btnh\b/gi, "tanah"],
+  [/\bsosmed\b/gi, "social media"],
+  [/\bnowa\b/gi, "nomor WhatsApp"],
+  [/\bno\s+wa\b/gi, "nomor WhatsApp"],
+];
+
+function buildIndonesianWhatsAppNormalizationHint(
+  message: string
+): string {
+  let normalized = String(message || "").trim();
+
+  if (!normalized) {
+    return "No readable message.";
+  }
+
+  for (const [pattern, replacement] of
+    INDONESIAN_WHATSAPP_NORMALIZATION_RULES) {
+    normalized = normalized.replace(
+      pattern,
+      replacement
+    );
+  }
+
+  normalized = normalized
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized;
 }
 
 function buildConversationForBrain(
@@ -1590,107 +1858,9 @@ function isHardRejection(
 function isFeeQuestion(
   message: string
 ) {
-  return /^(?:ini\s+)?(?:(?:bayar|berbayar|kena\s+biaya|harus\s+bayar)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|ada\s+(?:fee|biaya)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
+  return /^(?:ini\s+)?(?:bayar|berbayar|ada\s+fee|ada\s+biaya|bayar\s+ya|bayar\s+yaa|bayar\s+kah|kena\s+biaya|harus\s+bayar|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
     message
   );
-}
-
-function isCommercialPackageQuestion(
-  decision: MonaBrainDecision,
-  latestMessage: string
-) {
-  const signal = [
-    latestMessage,
-    decision.latestMeaning,
-    decision.directQuestion || "",
-    ...decision.knowledgeRequest,
-    decision.recommendedNextStep,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  const mentionsCommercialPackage =
-    /\b(?:harga|harganya|price|pricing|cost|biaya|fee|berbayar|paket|package|membership|silver|gold|agent\s*pro|basic|priority|featured|boost|spotlight)\b/i.test(
-      signal
-    );
-
-  const looksLikeAccountOrPaymentSupport =
-    decision.conversationSituation === "support" ||
-    /\b(?:error|gagal|failed|double|dua\s*kali|sudah\s+bayar|udah\s+bayar|sudah\s+transfer|udah\s+transfer|belum\s+aktif|tidak\s+aktif|nggak\s+aktif)\b/i.test(
-      latestMessage
-    );
-
-  return (
-    mentionsCommercialPackage &&
-    !looksLikeAccountOrPaymentSupport
-  );
-}
-
-function isExplicitHumanRequest(
-  message: string
-) {
-  return (
-    /(?:hubungkan|sambungkan|connect).{0,20}(?:admin|cs|customer service|human|orang|staff)/i.test(
-      message
-    ) ||
-    /(?:mau|ingin|pengen|boleh|bisa).{0,20}(?:bicara|ngobrol|chat|talk|speak).{0,20}(?:admin|cs|customer service|human|orang|staff)/i.test(
-      message
-    ) ||
-    /(?:speak|talk|chat).{0,20}(?:to|with).{0,10}(?:a\s+)?(?:human|admin|staff|customer service)/i.test(
-      message
-    ) ||
-    /^(?:admin|human|cs|customer service|staff)\s*(?:please|pls|ya|dong)?[?.! ]*$/i.test(
-      message
-    )
-  );
-}
-
-function deterministicHumanHandoverReason(
-  decision: MonaBrainDecision,
-  latestMessage: string
-): string | null {
-  const signal = [
-    latestMessage,
-    decision.latestMeaning,
-    decision.directQuestion || "",
-    ...decision.knowledgeRequest,
-    decision.recommendedNextStep,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  // Refund belongs to the human team. Mona may know the policy, but an actual
-  // refund/refund-eligibility conversation should be escalated rather than
-  // negotiated or decided by Sales AI.
-  if (
-    /\b(?:refund|chargeback)\b|pengembalian\s+uang|uang\s+kembali|balikin\s+uang|kembalikan\s+uang/i.test(
-      signal
-    )
-  ) {
-    return "The customer is asking about a refund/refund action that requires the Tetamo team.";
-  }
-
-  // Legal disputes, notices and legal-action requests must never be handled as
-  // ordinary sales objections.
-  if (
-    /\b(?:legal|lawyer|attorney|lawsuit|sue|litigation)\b|pengacara|somasi|gugatan|sengketa|legal\s+notice|surat\s+hukum/i.test(
-      signal
-    )
-  ) {
-    return "The customer raised a legal matter that requires human handling.";
-  }
-
-  // Brain already classifies account/payment/verification problems as support.
-  // Support is a human-owned route, not a Sales AI objection route.
-  if (decision.conversationSituation === "support") {
-    return "The customer has a support issue that requires the Tetamo team.";
-  }
-
-  if (isExplicitHumanRequest(latestMessage)) {
-    return "The customer explicitly requested a human/admin conversation.";
-  }
-
-  return null;
 }
 
 function isTimingHesitation(
@@ -1727,49 +1897,494 @@ function isTimingHesitation(
   );
 }
 
+
+function looksLikeNormalSalesObjection(
+  message: string
+) {
+  const text = String(message || "")
+    .toLowerCase()
+    .trim();
+
+  if (!text) return false;
+
+  return (
+    /\b(?:mahal|kemahalan|pricey|expensive|keberatan\s+harga)\b/i.test(text) ||
+    /\b(?:kapok|trauma|zonk|buang\s+(?:duit|uang)|rugi)\b/i.test(text) ||
+    /(?:pernah|dulu|sudah|udah).{0,40}(?:bayar|pakai|coba|join|pasang).{0,50}(?:portal|platform|iklan).{0,60}(?:tidak|nggak|gak|ga|ngga|belum).{0,35}(?:lead|inquiry|closing|hasil|buyer|pembeli|penyewa)/i.test(text) ||
+    /(?:tidak|nggak|gak|ga|ngga).{0,30}(?:dapat|dapet|ada).{0,20}(?:lead|inquiry|closing|hasil)/i.test(text) ||
+    /(?:post|posting|pasang|iklan).{0,50}(?:sendiri).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace)/i.test(text) ||
+    /(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace).{0,50}(?:gratis|free|sendiri|post|posting|pasang|iklan)/i.test(text) ||
+    /(?:gratis|free).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace|post|posting|iklan)/i.test(text) ||
+    /\b(?:rumah123|99\.?co|propertyguru|lamudi|facebook\s+marketplace)\b/i.test(text) ||
+    /(?:lead|buyer|pembeli|penyewa).{0,40}(?:serius|qualified|bagus|kepo|asal|beneran|benaran)/i.test(text) ||
+    /(?:serius|qualified|kepo|asal).{0,40}(?:lead|buyer|pembeli|penyewa)/i.test(text) ||
+    /(?:jamin|garansi|guarantee|pasti).{0,30}(?:lead|closing|laku|terjual|tersewa|buyer|pembeli|penyewa)/i.test(text) ||
+    /\b(?:percaya|trust|yakin|bukti|proof|testimoni|testimonial)\b/i.test(text)
+  );
+}
+
+function recoverEstablishedCustomerType(
+  memory: MonaConversationMemory
+): MonaCustomerType | null {
+  /*
+   * Recover only HIGH-CONFIDENCE explicit role statements from Customer history.
+   * This is defense-in-depth for cases where the model accidentally forgets a role
+   * that the customer already stated clearly.
+   */
+  for (
+    let index = memory.messages.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const item = memory.messages[index];
+
+    if (item.speaker !== "Customer") {
+      continue;
+    }
+
+    const text = String(item.message || "")
+      .toLowerCase()
+      .trim();
+
+    if (!text) continue;
+
+    if (
+      /\b(?:kami|saya|aku|sy|gue|gw)\s+(?:dari\s+)?(?:developer|pengembang)\b/i.test(text) ||
+      /\b(?:kami|perusahaan|company)\s+(?:adalah\s+)?developer\b/i.test(text)
+    ) {
+      return "developer";
+    }
+
+    if (
+      /\b(?:kami|saya|aku|sy)\s+(?:dari\s+)?(?:agency|agensi|property\s+agency|real\s*estate\s+agency|property\s+marketing\s+company)\b/i.test(text) ||
+      /\bagency\s+(?:kami|saya)\b/i.test(text)
+    ) {
+      return "agency";
+    }
+
+    if (
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:agen|agent|broker|property\s+agent|real\s*estate\s+agent|marketing\s+property)\b/i.test(text) ||
+      /\b(?:agen|agent)\s+(?:independent|freelance)\b/i.test(text)
+    ) {
+      return "agent";
+    }
+
+    if (
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:owner|pemilik)\b/i.test(text) ||
+      /\b(?:properti|property|rumah|villa|vila|apartemen|tanah)\s+(?:ini\s+)?(?:punya\s+saya|milik\s+saya)\b/i.test(text)
+    ) {
+      return "owner";
+    }
+
+    if (
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:lagi\s+|sedang\s+|mau\s+|ingin\s+)?(?:cari|mencari)\s+(?:rumah|villa|vila|apartemen|property|properti|tanah)\b/i.test(text) ||
+      /\b(?:saya|aku|sy|gue|gw)\s+mau\s+(?:beli|sewa)\s+(?:rumah|villa|vila|apartemen|property|properti|tanah)\b/i.test(text)
+    ) {
+      return "buyer_renter";
+    }
+  }
+
+  return null;
+}
+
+type PriorClarificationState = {
+  attempted: boolean;
+  kind: MonaBrainClarificationKind;
+  question: string | null;
+};
+
+function classifyMonaClarification(
+  message: string
+): MonaBrainClarificationKind {
+  const text = String(message || "").trim();
+
+  if (!text) {
+    return "none";
+  }
+
+  const hasAgent =
+    /\b(?:agent|agen)\b/i.test(text);
+
+  const hasOwner =
+    /\b(?:owner|pemilik)\b/i.test(text);
+
+  if (
+    hasAgent &&
+    hasOwner &&
+    /(?:atau|or|sebagai|yang mana|pilih|which)/i.test(
+      text
+    )
+  ) {
+    if (
+      /(?:dulu|first|mana yang mau|which journey|handle first)/i.test(
+        text
+      )
+    ) {
+      return "journey_choice";
+    }
+
+    return "role";
+  }
+
+  if (
+    /\b(?:maksud|maksudnya|yang dimaksud|what do you mean|which one do you mean|could you clarify|can you clarify)\b/i.test(
+      text
+    ) ||
+    /(?:boleh|bisa|could|can).{0,20}(?:jelas|jelasin|jelaskan|perjelas|clarify)/i.test(
+      text
+    ) ||
+    /(?:buyer|pembeli).{0,20}(?:atau|or).{0,20}(?:bayar|payment|pembayaran)/i.test(
+      text
+    ) ||
+    /(?:bayar|payment|pembayaran).{0,20}(?:atau|or).{0,20}(?:buyer|pembeli)/i.test(
+      text
+    )
+  ) {
+    return "meaning";
+  }
+
+  return "none";
+}
+
+function detectPriorClarificationAttempt(
+  memory: MonaConversationMemory
+): PriorClarificationState {
+  for (
+    let index = memory.messages.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const item = memory.messages[index];
+
+    if (item.speaker === "Customer") {
+      continue;
+    }
+
+    if (item.speaker === "Mona") {
+      const kind =
+        classifyMonaClarification(
+          item.message
+        );
+
+      return {
+        attempted: kind !== "none",
+        kind,
+        question:
+          kind !== "none"
+            ? item.message
+            : null,
+      };
+    }
+
+    if (item.speaker === "Admin") {
+      return {
+        attempted: false,
+        kind: "none",
+        question: null,
+      };
+    }
+  }
+
+  return {
+    attempted: false,
+    kind: "none",
+    question: null,
+  };
+}
+
+function isExplicitHumanRequest(
+  message: string
+) {
+  return (
+    /\b(?:admin|cs|customer service|human|orang|staff)\b/i.test(
+      message
+    ) &&
+    /\b(?:mau|ingin|pengen|boleh|bisa|hubungkan|sambungkan|bicara|ngobrol|chat|talk|speak)\b/i.test(
+      message
+    )
+  );
+}
+
+function looksLikeHumanActionRequired(
+  message: string
+) {
+  return (
+    /\b(?:refund|pengembalian dana|legal|lawyer|pengacara|somasi)\b/i.test(
+      message
+    ) ||
+    /(?:sudah|udah|telah).{0,25}(?:bayar|transfer).{0,35}(?:belum|tidak|nggak|gak|ga).{0,20}(?:aktif|masuk|terverifikasi|verified)/i.test(
+      message
+    ) ||
+    /(?:double|dua kali|2x).{0,20}(?:charge|charged|bayar|debit|terpotong)/i.test(
+      message
+    ) ||
+    /(?:akun|account).{0,20}(?:locked|terkunci|diblokir|blocked)/i.test(
+      message
+    )
+  );
+}
+
+function modelHandoverLooksHumanOnly(
+  reason: string | null
+) {
+  if (!reason) {
+    return false;
+  }
+
+  return /(?:human access|staff access|admin access|account-specific|refund|legal|contract|custom negotiated|manual verification|manual review|payment check|account check)/i.test(
+    reason
+  );
+}
+
 function enforceBrainRouting(
   decision: MonaBrainDecision,
-  latestCustomerMessage: string
+  latestCustomerMessage: string,
+  priorClarification: PriorClarificationState,
+  memory: MonaConversationMemory
 ): MonaBrainDecision {
   const latestMessage = String(
     latestCustomerMessage || ""
   ).trim();
 
-  // Preserve Brain's original clarification instruction before deterministic
-  // routing can rewrite recommendedNextStep for package, fee or sales handling.
-  const clarificationNextStep =
-    decision.clarificationNeeded
-      ? decision.recommendedNextStep
-      : null;
+  const originalHandoverReason =
+    decision.handoverReason;
 
-  // Preserve an intentional model decision to stay silent on a completed
-  // acknowledgement turn before normal commercial routing can re-open it.
-  const acknowledgementSilence =
-    decision.replyNeeded === false &&
-    decision.conversationSituation === "casual";
+  const modelRequestedHumanOnly =
+    decision.handoverRecommended &&
+    modelHandoverLooksHumanOnly(
+      originalHandoverReason
+    );
 
-  // Model output may classify or recommend, but deterministic routing owns
-  // whether Mona is actually paused for a human. Start every understood turn
-  // with handover cleared and only enable it below for explicit human-only cases.
   let result: MonaBrainDecision = {
     ...decision,
     handoverRecommended: false,
     handoverReason: null,
+    clarification: {
+      ...decision.clarification,
+      alreadyAttempted:
+        priorClarification.attempted,
+      attemptCount:
+        priorClarification.attempted
+          ? 1
+          : 0,
+    },
   };
 
+  const establishedCustomerType =
+    recoverEstablishedCustomerType(memory);
+
   /*
-   * STRICT ROLE GATE
+   * Memory wins over an accidental model regression to UNKNOWN when the customer
+   * explicitly established their role earlier (for example: "saya agen").
    */
-  if (result.customerType === "unknown") {
+  if (
+    result.customerType === "unknown" &&
+    establishedCustomerType
+  ) {
     result = {
       ...result,
+      customerType: establishedCustomerType,
+    };
+  }
+
+  const normalSalesObjection =
+    looksLikeNormalSalesObjection(
+      latestMessage
+    );
+
+  /*
+   * Deterministic objection protection.
+   *
+   * A normal, understandable commercial objection must not become Needs Admin just
+   * because the model used an overly cautious handover reason. Explicit human
+   * requests and genuine human-action cases are still handled below.
+   */
+  if (
+    normalSalesObjection &&
+    (
+      result.customerType === "agent" ||
+      result.customerType === "agency" ||
+      result.customerType === "owner"
+    )
+  ) {
+    result = {
+      ...result,
+      understood: true,
+      replyNeeded: true,
+      conversationSituation: "objection",
+      clarification: {
+        needed: false,
+        kind: "none",
+        alreadyAttempted:
+          priorClarification.attempted,
+        attemptCount:
+          priorClarification.attempted
+            ? 1
+            : 0,
+        goal: null,
+      },
+      handoverRecommended: false,
+      handoverReason: null,
+      salesStrategyNeeded: true,
+      salesStrategist:
+        result.customerType === "owner"
+          ? "owner"
+          : "agent",
+      recommendedNextStep:
+        "Route this normal sales objection to the relevant Sales AI. Handle the concern directly and do not pause AI merely because the customer is skeptical, disappointed, comparing platforms, or describing a bad past advertising experience.",
+    };
+  }
+
+  /*
+   * HUMAN-ONLY CONDITIONS HAVE PRIORITY.
+   *
+   * Brain may understand the conversation perfectly and still determine that
+   * a real person must act because account access, payment verification,
+   * legal/refund handling or an explicitly requested human is required.
+   */
+  if (
+    isExplicitHumanRequest(latestMessage) ||
+    looksLikeHumanActionRequired(
+      latestMessage
+    ) ||
+    (
+      modelRequestedHumanOnly &&
+      !normalSalesObjection
+    )
+  ) {
+    return {
+      ...result,
+      understood: true,
+      clarification: {
+        needed: false,
+        kind: "none",
+        alreadyAttempted:
+          priorClarification.attempted,
+        attemptCount:
+          priorClarification.attempted
+            ? 1
+            : 0,
+        goal: null,
+      },
+      replyNeeded: false,
+      handoverRecommended: true,
+      handoverReason:
+        isExplicitHumanRequest(
+          latestMessage
+        )
+          ? "The customer explicitly requested a human/admin."
+          : looksLikeHumanActionRequired(
+                latestMessage
+              )
+            ? "The customer needs a human action or account-specific review."
+            : originalHandoverReason ||
+              "A human action is required.",
       salesStrategyNeeded: false,
       salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
       recommendedNextStep:
-        result.factualKnowledgeNeeded &&
-        result.directQuestion
-          ? "Answer only the approved general Tetamo question that the customer asked, then establish whether the customer is an Agent or Property Owner before any Agent/Owner Sales AI can run."
-          : "Establish whether the customer is an Agent or Property Owner before any Agent/Owner Sales AI can run. Do not guess the role.",
+        "Pause AI and hand this conversation to Admin. Do not send another Mona reply until Admin resumes AI.",
+    };
+  }
+
+  /*
+   * HARD REJECTION IS CLEAR ENOUGH TO PROCESS.
+   */
+  if (isHardRejection(latestMessage)) {
+    return {
+      ...result,
+      understood: true,
+      conversationSituation:
+        "rejection",
+      clarification: {
+        needed: false,
+        kind: "none",
+        alreadyAttempted:
+          priorClarification.attempted,
+        attemptCount:
+          priorClarification.attempted
+            ? 1
+            : 0,
+        goal: null,
+      },
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      directQuestion: null,
+      handoverRecommended: false,
+      handoverReason: null,
+      recommendedNextStep:
+        "Respect the customer's rejection. Do not continue selling or ask another sales question.",
+    };
+  }
+
+  /*
+   * MEANING CLARIFICATION.
+   *
+   * The first unresolved meaning does NOT become an immediate handover.
+   * Brain gets exactly one clarification attempt.
+   */
+  const meaningStillUnresolved =
+    !result.understood ||
+    (
+      result.clarification.needed &&
+      result.clarification.kind ===
+        "meaning"
+    );
+
+  if (meaningStillUnresolved) {
+    const meaningWasAlreadyClarified =
+      priorClarification.attempted &&
+      priorClarification.kind ===
+        "meaning";
+
+    if (meaningWasAlreadyClarified) {
+      return {
+        ...result,
+        understood: false,
+        clarification: {
+          needed: false,
+          kind: "none",
+          alreadyAttempted: true,
+          attemptCount: 1,
+          goal: null,
+        },
+        replyNeeded: false,
+        handoverRecommended: true,
+        handoverReason:
+          "Mona already asked one meaning clarification, but the customer's latest reply is still not reliably understandable.",
+        salesStrategyNeeded: false,
+        salesStrategist: "none",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        recommendedNextStep:
+          "Pause AI and hand the conversation to Admin for review. Do not ask another clarification.",
+      };
+    }
+
+    return {
+      ...result,
+      understood: true,
+      clarification: {
+        needed: true,
+        kind: "meaning",
+        alreadyAttempted: false,
+        attemptCount: 0,
+        goal:
+          result.clarification.goal ||
+          "Clarify the exact meaning of the customer's latest message with one short, natural question.",
+      },
+      replyNeeded: true,
+      handoverRecommended: false,
+      handoverReason: null,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      recommendedNextStep:
+        "Ask ONE short clarification about the unresolved meaning. Do not guess, do not route to Sales yet, and do not hand over on the first ambiguity.",
     };
   }
 
@@ -1777,14 +2392,28 @@ function enforceBrainRouting(
    * DEVELOPER DIRECT ROUTE
    */
   if (result.customerType === "developer") {
-    result = {
+    return {
       ...result,
+      understood: true,
+      clarification: {
+        needed: false,
+        kind: "none",
+        alreadyAttempted:
+          priorClarification.attempted,
+        attemptCount:
+          priorClarification.attempted
+            ? 1
+            : 0,
+        goal: null,
+      },
       salesStrategyNeeded: false,
       salesStrategist: "none",
       factualKnowledgeNeeded: true,
       knowledgeRequest: [
         "approved Tetamo Developer destination and developer-license link",
       ],
+      handoverRecommended: false,
+      handoverReason: null,
       recommendedNextStep:
         "Direct the customer to Tetamo's Developer journey at https://www.tetamo.com/developer-license. Do not route into Agent or Owner Sales AI.",
     };
@@ -1797,21 +2426,186 @@ function enforceBrainRouting(
     result.customerType ===
     "buyer_renter"
   ) {
-    result = {
+    return {
       ...result,
+      understood: true,
+      clarification: {
+        needed: false,
+        kind: "none",
+        alreadyAttempted:
+          priorClarification.attempted,
+        attemptCount:
+          priorClarification.attempted
+            ? 1
+            : 0,
+        goal: null,
+      },
       salesStrategyNeeded: false,
       salesStrategist: "none",
       factualKnowledgeNeeded: true,
       knowledgeRequest: [
         "approved Tetamo Buyer/Renter destination and buyer requirements link",
       ],
+      handoverRecommended: false,
+      handoverReason: null,
       recommendedNextStep:
         "Direct the customer to Tetamo's Buyer/Renter journey at https://www.tetamo.com/pembeli. Do not route into Agent or Owner Sales AI.",
     };
   }
 
   /*
-   * STRATEGIST CONSISTENCY
+   * STRICT ROLE GATE + ONE ROLE CLARIFICATION.
+   *
+   * If role is still unknown, Sales AI cannot run.
+   * A general Tetamo factual question may still use Knowledge before the role
+   * clarification is appended by Writer.
+   */
+  if (result.customerType === "unknown") {
+    const looksLikeBothRoles =
+      (
+        /\b(?:agent|agen)\b/i.test(
+          latestMessage
+        ) &&
+        /\b(?:owner|pemilik)\b/i.test(
+          latestMessage
+        )
+      );
+
+    const clarificationKind:
+      MonaBrainClarificationKind =
+        result.clarification.kind ===
+        "journey_choice" ||
+        looksLikeBothRoles
+          ? "journey_choice"
+          : "role";
+
+    const sameClarificationAlreadyAsked =
+      priorClarification.attempted &&
+      priorClarification.kind ===
+        clarificationKind;
+
+    /*
+     * Do not force a role question on a natural acknowledgement / ending.
+     */
+    if (
+      result.replyNeeded === false ||
+      (
+        result.conversationSituation ===
+          "casual" &&
+        !result.directQuestion &&
+        !result.factualKnowledgeNeeded
+      )
+    ) {
+      return {
+        ...result,
+        salesStrategyNeeded: false,
+        salesStrategist: "none",
+        clarification: {
+          needed: false,
+          kind: "none",
+          alreadyAttempted:
+            priorClarification.attempted,
+          attemptCount:
+            priorClarification.attempted
+              ? 1
+              : 0,
+          goal: null,
+        },
+        handoverRecommended: false,
+        handoverReason: null,
+      };
+    }
+
+    if (sameClarificationAlreadyAsked) {
+      return {
+        ...result,
+        understood: false,
+        clarification: {
+          needed: false,
+          kind: "none",
+          alreadyAttempted: true,
+          attemptCount: 1,
+          goal: null,
+        },
+        replyNeeded: false,
+        handoverRecommended: true,
+        handoverReason:
+          clarificationKind ===
+          "journey_choice"
+            ? "Mona already asked which Agent/Owner journey the customer wants to handle first, but the latest reply still does not resolve it."
+            : "Mona already asked one role clarification, but the customer's latest reply still does not establish whether they are an Agent/Agency, Owner, Developer or Buyer/Renter.",
+        salesStrategyNeeded: false,
+        salesStrategist: "none",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        recommendedNextStep:
+          "Pause AI and hand the conversation to Admin for review. Do not ask the same role clarification again.",
+      };
+    }
+
+    const canAnswerGeneralFactFirst =
+      result.factualKnowledgeNeeded &&
+      Boolean(result.directQuestion);
+
+    return {
+      ...result,
+      understood: true,
+      clarification: {
+        needed: true,
+        kind: clarificationKind,
+        alreadyAttempted: false,
+        attemptCount: 0,
+        goal:
+          clarificationKind ===
+          "journey_choice"
+            ? "Ask which journey the customer wants to handle first: Agent or Owner."
+            : "Establish whether the customer is an Agent/Agency, Property Owner, Developer, or Buyer/Renter.",
+      },
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded:
+        canAnswerGeneralFactFirst
+          ? result.factualKnowledgeNeeded
+          : false,
+      knowledgeRequest:
+        canAnswerGeneralFactFirst
+          ? result.knowledgeRequest
+          : [],
+      handoverRecommended: false,
+      handoverReason: null,
+      recommendedNextStep:
+        canAnswerGeneralFactFirst
+          ? "Answer the customer's approved general Tetamo question first, then ask ONE short role clarification. Do not guess the commercial journey."
+          : clarificationKind ===
+              "journey_choice"
+            ? "Ask ONE short question to determine whether the customer wants to handle the Agent or Owner journey first. Do not route to Sales until they choose."
+            : "Ask ONE short role clarification. Do not route to Agent or Owner Sales AI until the role is established.",
+    };
+  }
+
+  /*
+   * A KNOWN ROLE MEANS ANY PREVIOUS ROLE CLARIFICATION HAS BEEN RESOLVED.
+   */
+  result = {
+    ...result,
+    understood: true,
+    clarification: {
+      needed: false,
+      kind: "none",
+      alreadyAttempted:
+        priorClarification.attempted,
+      attemptCount:
+        priorClarification.attempted
+          ? 1
+          : 0,
+      goal: null,
+    },
+    handoverRecommended: false,
+    handoverReason: null,
+  };
+
+  /*
+   * STRATEGIST CONSISTENCY.
    */
   if (
     result.customerType === "agent" ||
@@ -1839,94 +2633,53 @@ function enforceBrainRouting(
   }
 
   /*
-   * SALES CONVERSATION OWNERSHIP
-   *
-   * Brain classifies the situation; Agent/Owner Sales AI owns the commercial
-   * response strategy for objections, comparisons, hesitation and rejection.
-   * These normal sales situations must never be escalated merely because the
-   * model suggested a handover.
+   * NORMAL COMMERCIAL SITUATIONS BELONG TO THE RELEVANT SALES AI.
    */
-  const salesConversationSituation =
-    result.conversationSituation === "objection" ||
-    result.conversationSituation === "comparison" ||
-    result.conversationSituation === "hesitation" ||
-    result.conversationSituation === "rejection";
+  const commercialSituation =
+    result.conversationSituation ===
+      "interest" ||
+    result.conversationSituation ===
+      "comparison" ||
+    result.conversationSituation ===
+      "objection" ||
+    result.conversationSituation ===
+      "hesitation" ||
+    result.conversationSituation ===
+      "closing" ||
+    result.conversationSituation ===
+      "payment";
 
-  if (salesConversationSituation) {
-    if (
-      result.customerType === "agent" ||
-      result.customerType === "agency"
-    ) {
-      result = {
-        ...result,
-        replyNeeded: true,
-        salesStrategyNeeded: true,
-        salesStrategist: "agent",
-        handoverRecommended: false,
-        handoverReason: null,
-      };
-    } else if (result.customerType === "owner") {
-      result = {
-        ...result,
-        replyNeeded: true,
-        salesStrategyNeeded: true,
-        salesStrategist: "owner",
-        handoverRecommended: false,
-        handoverReason: null,
-      };
-    }
-  }
-
-  /*
-   * COMMERCIAL PACKAGE / PRICE QUESTIONS
-   *
-   * Owner/Agent package names, prices and package features belong to the
-   * relevant Sales AI, not general Tetamo Knowledge. This also covers short
-   * contextual follow-ups such as "Harganya mana?" when Brain's semantic
-   * interpretation identifies the package/pricing topic.
-   */
   if (
-    isCommercialPackageQuestion(
-      result,
-      latestMessage
+    result.replyNeeded &&
+    commercialSituation &&
+    (
+      result.customerType ===
+        "agent" ||
+      result.customerType ===
+        "agency"
     )
   ) {
-    if (
-      result.customerType === "agent" ||
-      result.customerType === "agency"
-    ) {
-      result = {
-        ...result,
-        replyNeeded: true,
-        salesStrategyNeeded: true,
-        salesStrategist: "agent",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
-        handoverRecommended: false,
-        handoverReason: null,
-        recommendedNextStep:
-          "Route the Agent package/price question to Agent Sales AI so canonical commercial facts can answer it. Do not hand over for a normal package or price question.",
-      };
-    } else if (
-      result.customerType === "owner"
-    ) {
-      result = {
-        ...result,
-        replyNeeded: true,
-        salesStrategyNeeded: true,
-        salesStrategist: "owner",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
-        handoverRecommended: false,
-        handoverReason: null,
-        recommendedNextStep:
-          "Route the Owner package/price question to Owner Sales AI so canonical commercial facts can answer it. Do not hand over for a normal package or price question.",
-      };
-    }
+    result = {
+      ...result,
+      salesStrategyNeeded: true,
+      salesStrategist: "agent",
+    };
+  }
+
+  if (
+    result.replyNeeded &&
+    commercialSituation &&
+    result.customerType === "owner"
+  ) {
+    result = {
+      ...result,
+      salesStrategyNeeded: true,
+      salesStrategist: "owner",
+    };
   }
 
   /*
-   * FEE QUESTION IS NOT PAYMENT INTENT
+   * FEE QUESTION IS NOT PAYMENT INTENT.
    */
   if (isFeeQuestion(latestMessage)) {
     if (
@@ -1937,13 +2690,10 @@ function enforceBrainRouting(
         ...result,
         conversationSituation:
           "information",
-        replyNeeded: true,
         salesStrategyNeeded: true,
         salesStrategist: "agent",
         factualKnowledgeNeeded: false,
         knowledgeRequest: [],
-        handoverRecommended: false,
-        handoverReason: null,
         recommendedNextStep:
           "Route the fee/value question to Agent Sales AI. This is not active payment intent.",
       };
@@ -1954,188 +2704,52 @@ function enforceBrainRouting(
         ...result,
         conversationSituation:
           "information",
-        replyNeeded: true,
         salesStrategyNeeded: true,
         salesStrategist: "owner",
         factualKnowledgeNeeded: false,
         knowledgeRequest: [],
-        handoverRecommended: false,
-        handoverReason: null,
         recommendedNextStep:
           "Route the fee/value question to Owner Sales AI. This is not active payment intent.",
-      };
-    } else if (
-      result.customerType === "unknown"
-    ) {
-      result = {
-        ...result,
-        conversationSituation:
-          "information",
-        replyNeeded: true,
-        salesStrategyNeeded: false,
-        salesStrategist: "none",
-        factualKnowledgeNeeded: true,
-        knowledgeRequest: [
-          "approved Tetamo business model and whether Tetamo charges applicable paid services",
-        ],
-        handoverRecommended: false,
-        handoverReason: null,
-        recommendedNextStep:
-          "Answer from approved general Tetamo business-model knowledge that Tetamo has applicable paid services, then establish whether the customer is an Agent or Property Owner before giving role-specific prices.",
       };
     }
   }
 
   /*
-   * HESITATION DOES NOT TRIGGER SALES RESCUE
+   * HESITATION IS STILL A SALES SITUATION, BUT SALES MUST NOT PRESSURE.
    */
   if (
     !isHardRejection(latestMessage) &&
     isTimingHesitation(latestMessage)
   ) {
-    const isAgentRole =
-      result.customerType === "agent" ||
-      result.customerType === "agency";
-    const isOwnerRole =
-      result.customerType === "owner";
-
     result = {
       ...result,
       conversationSituation:
         "hesitation",
-      replyNeeded: true,
-      salesStrategyNeeded:
-        isAgentRole || isOwnerRole
-          ? true
-          : result.salesStrategyNeeded,
-      salesStrategist: isAgentRole
-        ? "agent"
-        : isOwnerRole
-          ? "owner"
-          : result.salesStrategist,
       factualKnowledgeNeeded: false,
       knowledgeRequest: [],
       directQuestion: null,
-      handoverRecommended: false,
-      handoverReason: null,
       recommendedNextStep:
-        isAgentRole || isOwnerRole
-          ? "Route the hesitation to the established Sales AI. Acknowledge the customer's timing or dependency without pressure and do not restart discovery."
-          : "Acknowledge the customer's timing or dependency without pressure. Do not restart discovery or try to rescue the sale with another question.",
+        "Let the relevant Sales AI handle the hesitation with low pressure: acknowledge the timing/dependency, do not restart discovery, and do not force another question.",
     };
-  }
 
-  /*
-   * HARD REJECTION HAS FINAL PRIORITY
-   */
-  if (
-    isHardRejection(latestMessage)
-  ) {
-    const isAgentRole =
+    if (
       result.customerType === "agent" ||
-      result.customerType === "agency";
-    const isOwnerRole =
-      result.customerType === "owner";
-
-    result = {
-      ...result,
-      conversationSituation:
-        "rejection",
-      replyNeeded: true,
-      salesStrategyNeeded:
-        isAgentRole || isOwnerRole,
-      salesStrategist: isAgentRole
-        ? "agent"
-        : isOwnerRole
-          ? "owner"
-          : "none",
-      factualKnowledgeNeeded: false,
-      knowledgeRequest: [],
-      directQuestion: null,
-      handoverRecommended: false,
-      handoverReason: null,
-      recommendedNextStep:
-        isAgentRole || isOwnerRole
-          ? "Route the rejection to the established Sales AI so it can stop selling, acknowledge the rejection naturally and prevent another sales question."
-          : "Respect the customer's rejection, acknowledge it naturally and do not ask the customer to establish a role.",
-    };
-  }
-
-  /*
-   * PARTIAL UNDERSTANDING / CLARIFICATION
-   * -------------------------------------
-   * Brain may understand the likely meaning but still need one material detail
-   * confirmed before Sales AI or Knowledge should answer.
-   *
-   * This intentionally does NOT apply when understood=false. Truly unreadable
-   * messages keep the existing immediate human handover behavior.
-   */
-  if (
-    result.understood &&
-    result.clarificationNeeded &&
-    !isHardRejection(latestMessage)
-  ) {
-    result = {
-      ...result,
-      replyNeeded: true,
-      handoverRecommended: false,
-      handoverReason: null,
-      salesStrategyNeeded: false,
-      salesStrategist: "none",
-      factualKnowledgeNeeded: false,
-      knowledgeRequest: [],
-      directQuestion: null,
-      recommendedNextStep:
-        clarificationNextStep ||
-        "Ask one short natural clarification about the uncertain detail before answering. Do not guess.",
-    };
-  }
-
-  /*
-   * ACKNOWLEDGEMENT SILENCE
-   * ----------------------
-   * If Brain already determined that a casual acknowledgement needs no reply,
-   * ordinary package/sales routing must not reopen the conversation merely
-   * because remembered context contains a package, price or payment topic.
-   */
-  if (
-    acknowledgementSilence &&
-    !result.clarificationNeeded
-  ) {
-    result = {
-      ...result,
-      replyNeeded: false,
-      salesStrategyNeeded: false,
-      salesStrategist: "none",
-      factualKnowledgeNeeded: false,
-      knowledgeRequest: [],
-      directQuestion: null,
-      handoverRecommended: false,
-      handoverReason: null,
-    };
-  }
-
-  /*
-   * DETERMINISTIC HUMAN-ONLY ROUTES
-   * Refund, legal, support and an explicit request for a human belong to the
-   * Tetamo team. Normal pricing, package questions, objections, hesitation and
-   * rejection do NOT belong here.
-   */
-  const humanHandoverReason =
-    deterministicHumanHandoverReason(
-      result,
-      latestMessage
-    );
-
-  if (humanHandoverReason) {
-    result = {
-      ...result,
-      replyNeeded: false,
-      handoverRecommended: true,
-      handoverReason: humanHandoverReason,
-      salesStrategyNeeded: false,
-      salesStrategist: "none",
-    };
+      result.customerType === "agency"
+    ) {
+      result = {
+        ...result,
+        salesStrategyNeeded: true,
+        salesStrategist: "agent",
+      };
+    } else if (
+      result.customerType === "owner"
+    ) {
+      result = {
+        ...result,
+        salesStrategyNeeded: true,
+        salesStrategist: "owner",
+      };
+    }
   }
 
   return result;
@@ -2149,10 +2763,17 @@ export async function analyseMonaBrain(
       params.latestCustomerMessage
     );
 
+  const priorClarification =
+    detectPriorClarificationAttempt(
+      params.memory
+    );
+
   if (!process.env.OPENAI_API_KEY) {
     return enforceBrainRouting(
       fallback,
-      params.latestCustomerMessage
+      params.latestCustomerMessage,
+      priorClarification,
+      params.memory
     );
   }
 
@@ -2169,8 +2790,41 @@ export async function analyseMonaBrain(
   const prompt = `
 ${MONA_BRAIN_PROMPT}
 
-OFFICIAL SALES STAGE:
+CURRENT CRM SALES STAGE (OBSERVATIONAL CONTEXT ONLY):
 ${params.salesStage || "none"}
+
+IMPORTANT ABOUT STAGE:
+- Stage is NOT authority for customer identity or meaning.
+- Full conversation Memory outranks Stage if they conflict.
+- Stage must never force routing by itself.
+
+PRIOR MONA CLARIFICATION STATE:
+${JSON.stringify(priorClarification, null, 2)}
+
+IMPORTANT ABOUT CLARIFICATION:
+- If priorClarification.attempted=false and meaning/role is unresolved, ask ONE clarification.
+- If priorClarification.attempted=true for the same unresolved issue and the newest reply still does not resolve it, recommend Admin handover and no further AI reply.
+
+ONE-TIME SALES SEMANTIC REVIEW FEEDBACK:
+${
+  params.semanticReview
+    ? JSON.stringify(
+        params.semanticReview,
+        null,
+        2
+      )
+    : "none"
+}
+
+IMPORTANT ABOUT SALES SEMANTIC REVIEW:
+- This is private internal feedback from Agent Sales or Owner Sales, NOT a customer message.
+- It is supplied only when Sales detected a genuine contradiction with Brain's prior resolved meaning.
+- Re-read the RAW customer message, normalized wording, and full Memory yourself.
+- Do NOT blindly accept Sales' suggested meaning. Brain remains the semantic authority.
+- If the earlier Brain meaning was wrong, correct normalizedMessage/latestMeaning and routing.
+- If the meaning remains genuinely ambiguous, use the normal ONE-clarification rule.
+- If that same clarification was already attempted and ambiguity still remains, recommend Admin handover.
+- Never invent a second clarification or an infinite Brain/Sales loop.
 
 CAMPAIGN CONTEXT:
 ${
@@ -2190,7 +2844,16 @@ It must NEVER establish Agent, Owner, Agency, Developer or Buyer/Renter role.
 FULL AVAILABLE CONVERSATION FROM THE BEGINNING:
 ${conversation}
 
-LATEST CUSTOMER MESSAGE:
+DETERMINISTIC INDONESIAN WHATSAPP NORMALIZATION HINT:
+${buildIndonesianWhatsAppNormalizationHint(params.latestCustomerMessage)}
+
+IMPORTANT ABOUT THE NORMALIZATION HINT:
+- This hint contains only conservative, high-confidence text normalization.
+- It is supporting context, not authority.
+- Raw message + Memory + linguistic reasoning remain authoritative.
+- Recover additional slang/compressed forms naturally even when they are not present in the deterministic hint.
+
+LATEST CUSTOMER MESSAGE (RAW):
 ${params.latestCustomerMessage}
 
 Before returning JSON:
@@ -2199,24 +2862,34 @@ Before returning JSON:
 2. Determine whether this is new, returning, campaign-only, an existing sales
    journey, payment/support journey or previously closed/rejected.
 3. Recover any established customer role and facts.
-4. Only then interpret the latest message.
-5. Decide whether one important detail still requires clarification.
+4. Normalize Indonesian WhatsApp shorthand/compressed language into normalizedMessage.
+5. Interpret the latest message using raw text + normalizedMessage + Memory/context.
 6. Apply the strict role gate.
-7. Decide routing and Knowledge requirements.
+7. If ONE-TIME SALES SEMANTIC REVIEW FEEDBACK is present, explicitly re-check the disputed meaning before deciding routing.
+8. Decide routing and Knowledge requirements.
 
 Return ONLY valid JSON in exactly this structure:
 
 {
   "understood": true,
   "confidence": 0.95,
-  "clarificationNeeded": false,
 
   "customerType": "agent|owner|agency|developer|buyer_renter|unknown",
+
+  "clarification": {
+    "needed": false,
+    "kind": "role|meaning|journey_choice|none",
+    "alreadyAttempted": false,
+    "attemptCount": 0,
+    "goal": null
+  },
 
   "languageStyle": {
     "primaryLanguage": "id|en|mixed|unknown",
     "style": "short description of how this customer naturally communicates"
   },
+
+  "normalizedMessage": "natural Indonesian/English normalization of the latest raw customer message without inventing facts",
 
   "latestMeaning": "plain-language interpretation of the latest customer message in full conversation context",
 
@@ -2251,16 +2924,21 @@ Return ONLY valid JSON in exactly this structure:
 
 OUTPUT RULES:
 
+- normalizedMessage must normalize the latest customer message only and must not invent information.
+- Common Indonesian WhatsApp shorthand such as byr=bayar, djual=dijual, dsewa=disewa, brp=berapa must be understood when context supports it.
+- Use broader linguistic/context reasoning for slang not listed in the examples.
+- If meaning is unclear for the first time, do NOT set understood=false just to force handover. Set clarification.needed=true and clarification.kind="meaning".
+- If role is required but unknown for the first time, set clarification.needed=true and clarification.kind="role".
+- If both Agent and Owner are established and the journey must be chosen, use clarification.kind="journey_choice".
+- If the same clarification was already attempted and still remains unresolved, set understood=false, replyNeeded=false and handoverRecommended=true.
+- If semanticReview is present, independently re-evaluate the disputed meaning; do not simply echo Sales feedback.
+- If semanticReview reveals genuine unresolved ambiguity, use the same one-clarification rule rather than silently choosing a meaning.
 - customerType unknown means salesStrategyNeeded=false and salesStrategist=none.
 - Developer means no Sales AI and direct Developer journey.
 - Buyer/Renter means no Sales AI and direct Buyer/Renter journey.
 - Agent/Agency may use Agent Sales AI.
 - Owner may use Owner Sales AI.
 - Campaign never establishes role.
-- clarificationNeeded=true only when understood=true but one material detail must be confirmed before answering safely.
-- clarificationNeeded=true means ask one clarification; do not guess and do not hand over merely for clarification.
-- If the latest message is only a contextual acknowledgement of Mona's already-complete previous answer and adds no new question, fact, request, objection or decision, normally set replyNeeded=false.
-- Never generate another turn merely to repeat or paraphrase Mona's immediately previous answer.
 - timingDependency.active=true only for a real future dependency, waiting condition, or stated later time.
 - Generic objection or hesitation alone does not activate timingDependency.
 - Do not write a WhatsApp reply.
@@ -2273,7 +2951,7 @@ OUTPUT RULES:
         model: "gpt-4.1-mini",
         input: prompt,
         temperature: 0.1,
-        max_output_tokens: 900,
+        max_output_tokens: 1050,
       });
 
     let decision =
@@ -2287,7 +2965,9 @@ OUTPUT RULES:
     decision =
       enforceBrainRouting(
         decision,
-        params.latestCustomerMessage
+        params.latestCustomerMessage,
+        priorClarification,
+        params.memory
       );
 
     if (!decision.understood) {
@@ -2312,7 +2992,9 @@ OUTPUT RULES:
 
     return enforceBrainRouting(
       fallback,
-      params.latestCustomerMessage
+      params.latestCustomerMessage,
+      priorClarification,
+      params.memory
     );
   }
 }

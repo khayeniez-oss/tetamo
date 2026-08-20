@@ -29,32 +29,60 @@ type RouteMonaSalesParams = {
   salesStage?: string | null;
 };
 
+function noSalesGuidance(): MonaSalesGuidance {
+  return {
+    strategist: "none",
+    guidance: null,
+  };
+}
+
 export async function routeMonaSalesStrategy(
   params: RouteMonaSalesParams
 ): Promise<MonaSalesGuidance> {
-  if (!params.brain.salesStrategyNeeded) {
-    return {
-      strategist: "none",
-      guidance: null,
-    };
+  const { brain } = params;
+
+  /*
+   * Sales must not run while Brain still does not understand
+   * the message or while clarification / handover is required.
+   */
+  if (
+    !brain.understood ||
+    brain.handoverRecommended ||
+    brain.clarification.needed
+  ) {
+    return noSalesGuidance();
   }
 
-  const customerType = params.brain.customerType;
+  /*
+   * Brain decides whether commercial Sales reasoning
+   * is needed for this customer turn.
+   */
+  if (!brain.salesStrategyNeeded) {
+    return noSalesGuidance();
+  }
 
+  const customerType = brain.customerType;
+
+  /*
+   * AGENT / AGENCY
+   *
+   * Agent Sales receives the complete Brain result:
+   * raw message + normalized message + resolved meaning +
+   * conversation context.
+   */
   if (
     customerType === "agent" ||
     customerType === "agency"
   ) {
     const guidance =
       await generateAgentSalesGuidance({
+        brain,
         customerMessage:
           params.customerMessage,
         conversationContext:
           params.conversationContext,
         salesStage:
           params.salesStage,
-        brainRecommendedNextStep:
-          params.brain.recommendedNextStep,
       });
 
     return {
@@ -63,9 +91,15 @@ export async function routeMonaSalesStrategy(
     };
   }
 
+  /*
+   * OWNER
+   *
+   * Owner Sales receives the same complete Brain context.
+   */
   if (customerType === "owner") {
     const guidance =
       await generateOwnerSalesGuidance({
+        brain,
         customerMessage:
           params.customerMessage,
         conversationContext:
@@ -80,13 +114,9 @@ export async function routeMonaSalesStrategy(
     };
   }
 
-  // Developer, buyer/renter and unknown customers do not enter
-  // the Agent or Owner commercial strategist.
-  //
-  // customerType is authoritative for routing.
-  // salesStrategist must never override an established or unresolved role.
-  return {
-    strategist: "none",
-    guidance: null,
-  };
+  /*
+   * Buyer/Renter, Developer and Unknown do not enter
+   * Agent or Owner Sales AI.
+   */
+  return noSalesGuidance();
 }

@@ -1,3 +1,6 @@
+
+
+
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -67,7 +70,6 @@ type SalesStageFilterValue = "all_stages" | SalesStage;
 type FilterValue =
   | "all"
   | "needs_admin"
-  | "needs_stage_review"
   | "active_ai"
   | "paused_ai"
   | "handled";
@@ -91,7 +93,6 @@ type ConversationStats = {
   activeAi: number;
   pausedAi: number;
   handled: number;
-  needsStageReview: number;
   salesStages: Record<SalesStage, number>;
 };
 
@@ -109,7 +110,6 @@ type PaginationState = {
 const FILTERS: { value: FilterValue; label: string }[] = [
   { value: "all", label: "All" },
   { value: "needs_admin", label: "Needs Admin" },
-  { value: "needs_stage_review", label: "Needs Stage Review" },
   { value: "active_ai", label: "AI Active" },
   { value: "paused_ai", label: "AI Paused" },
   { value: "handled", label: "Handled" },
@@ -155,7 +155,6 @@ const EMPTY_STATS: ConversationStats = {
   activeAi: 0,
   pausedAi: 0,
   handled: 0,
-  needsStageReview: 0,
   salesStages: {
     new_inquiry: 0,
     lead: 0,
@@ -555,12 +554,6 @@ export default function AdminWhatsappInboxPage() {
         throw new Error(result.error || "Failed to update conversation.");
       }
 
-      if (action === "approve_stage_suggestion") {
-        setSuccessMessage("Mona's stage suggestion was approved.");
-      } else if (action === "ignore_stage_suggestion") {
-        setSuccessMessage("Mona's stage suggestion was ignored.");
-      }
-
       await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
       await loadMessages(selectedConversationId);
     } catch (err: any) {
@@ -880,7 +873,7 @@ export default function AdminWhatsappInboxPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-8">
+        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-7">
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
               Total
@@ -921,15 +914,6 @@ export default function AdminWhatsappInboxPage() {
             </p>
             <p className="mt-2 text-2xl font-bold text-red-700">
               {stats.needsAdmin}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-purple-500">
-              Stage Review
-            </p>
-            <p className="mt-2 text-2xl font-bold text-purple-700">
-              {stats.needsStageReview}
             </p>
           </div>
 
@@ -1147,20 +1131,6 @@ export default function AdminWhatsappInboxPage() {
                         ? SALES_STAGE_LABELS[conversation.sales_stage]
                         : "New Inquiry"}
                     </span>
-
-                    {conversation.suggested_sales_stage ? (
-                      <span
-                        className={[
-                          "rounded-full border px-2 py-1 text-[10px] font-bold",
-                          active
-                            ? "border-white/30 bg-white/15 text-white"
-                            : "border-amber-200 bg-amber-50 text-amber-800",
-                        ].join(" ")}
-                      >
-                        Mona suggests:{" "}
-                        {SALES_STAGE_LABELS[conversation.suggested_sales_stage]}
-                      </span>
-                    ) : null}
 
                     <span
                       className={[
@@ -1388,23 +1358,30 @@ export default function AdminWhatsappInboxPage() {
                         : "Mark Handled"}
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => updateConversation("resume_ai")}
-                      disabled={Boolean(actionLoading)}
-                      className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                    >
-                      {actionLoading === "resume_ai" ? "Saving..." : "Resume AI"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => updateConversation("pause_ai")}
-                      disabled={Boolean(actionLoading)}
-                      className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                    >
-                      {actionLoading === "pause_ai" ? "Saving..." : "Pause AI"}
-                    </button>
+                    {selectedConversation.ai_enabled &&
+                    !selectedConversation.handover_to_admin ? (
+                      <button
+                        type="button"
+                        onClick={() => updateConversation("pause_ai")}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                      >
+                        {actionLoading === "pause_ai"
+                          ? "Saving..."
+                          : "Pause AI"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => updateConversation("resume_ai")}
+                        disabled={Boolean(actionLoading)}
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {actionLoading === "resume_ai"
+                          ? "Saving..."
+                          : "Resume AI"}
+                      </button>
+                    )}
 
                     {selectedNumberBlocked ? (
                       <button
@@ -1447,74 +1424,6 @@ export default function AdminWhatsappInboxPage() {
                     )}
                   </div>
                 </div>
-
-                {selectedConversation.suggested_sales_stage ? (
-                  <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-bold text-amber-950">
-                            Mona Stage Suggestion
-                          </p>
-                          <Badge tone="amber">
-                            {SALES_STAGE_LABELS[
-                              selectedConversation.suggested_sales_stage
-                            ]}
-                          </Badge>
-                          {selectedConversation.suggested_sales_stage_confidence !==
-                          null ? (
-                            <Badge tone="purple">
-                              {
-                                selectedConversation.suggested_sales_stage_confidence
-                              }
-                              % confidence
-                            </Badge>
-                          ) : null}
-                        </div>
-
-                        <p className="mt-3 text-sm leading-6 text-amber-900">
-                          {selectedConversation.suggested_sales_stage_reason ||
-                            "Mona detected that this conversation may belong in another stage."}
-                        </p>
-
-                        <p className="mt-2 text-xs text-amber-700">
-                          Suggested:{" "}
-                          {formatDate(
-                            selectedConversation.suggested_sales_stage_at
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateConversation("approve_stage_suggestion")
-                          }
-                          disabled={Boolean(actionLoading)}
-                          className="rounded-2xl bg-[#1C1C1E] px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                        >
-                          {actionLoading === "approve_stage_suggestion"
-                            ? "Approving..."
-                            : "Approve"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateConversation("ignore_stage_suggestion")
-                          }
-                          disabled={Boolean(actionLoading)}
-                          className="rounded-2xl border border-amber-300 bg-white px-4 py-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                        >
-                          {actionLoading === "ignore_stage_suggestion"
-                            ? "Ignoring..."
-                            : "Ignore"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
 
                 <div className="mt-5 rounded-3xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

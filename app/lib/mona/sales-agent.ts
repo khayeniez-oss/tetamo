@@ -1,4 +1,6 @@
+
 import OpenAI from "openai";
+import type { MonaBrainDecision } from "./brain";
 
 export type AgentSalesGuidance = {
   customerType: "agent";
@@ -34,14 +36,20 @@ export type AgentSalesGuidance = {
   needsTetamoFacts: boolean;
   factsNeeded: string[];
 
+  semanticConflict: {
+    detected: boolean;
+    reason: string | null;
+    suggestedMeaning: string | null;
+  };
+
   handoverRecommended: boolean;
 };
 
 type GenerateAgentSalesGuidanceParams = {
+  brain: MonaBrainDecision;
   customerMessage: string;
   conversationContext: string | null;
   salesStage?: string | null;
-  brainRecommendedNextStep?: string | null;
 };
 
 type AgentPackageId = "silver" | "gold" | "agent_pro";
@@ -158,12 +166,24 @@ const SPOTLIGHT_FACTS = [
   "Homepage Spotlight does not guarantee views, enquiries, leads, sales, rentals or closing.",
 ];
 
+const AGENT_PAYMENT_FACTS = [
+  "For Agent membership payment in Indonesia, the agent needs to use the Tetamo Partner app.",
+  "The agent should download or open the Tetamo Partner app, log in, and choose the Agent membership they want.",
+  "Agent membership payment in Indonesia is completed via QRIS inside the Tetamo Partner app.",
+  "The QRIS payment can be paid using a banking app or e-wallet that supports QRIS.",
+  "After a successful QRIS payment, the Agent membership is activated.",
+  "Do not tell the customer to transfer directly to a Tetamo bank account.",
+  "Do not promise to send Tetamo bank-account details.",
+  "Do not describe bank transfer as the standard Agent membership payment method in Indonesia.",
+];
+
 const AGENT_REGISTRATION_STEPS = [
-  "Open www.tetamo.com or the Tetamo Partner app.",
-  "Register or log in as an Agent.",
-  "Choose the Agent membership that fits the agent's needs.",
-  "Complete the applicable payment.",
-  "After the membership is active, enter the Agent Dashboard or Tetamo Partner app and start creating listings.",
+  "Register or log in as an Agent through Tetamo.",
+  "Download or open the Tetamo Partner app.",
+  "Log in to the Tetamo Partner app and choose the Agent membership that fits the agent's needs.",
+  "Complete the membership payment via QRIS inside the Tetamo Partner app using a banking app or e-wallet that supports QRIS.",
+  "After successful payment, the Agent membership is activated.",
+  "The agent can then enter the Agent Dashboard or Tetamo Partner app and start creating listings.",
 ];
 
 const AGENT_LISTING_STEPS = [
@@ -214,6 +234,58 @@ Do NOT infer that somebody is an Agent merely because:
 Role identification belongs to Mona Brain.
 
 Do not override Brain's role classification.
+
+BRAIN AUTHORITY
+
+Brain has already read full Memory and resolved the customer's semantic meaning
+before this Sales AI runs.
+
+Treat the following Brain fields as authoritative semantic context:
+
+- customerType;
+- latestMeaning;
+- directQuestion;
+- conversationSituation;
+- knownContext;
+- clarification state;
+- languageStyle;
+- confidence;
+- recommendedNextStep.
+
+The raw customer message is still supplied so you can understand:
+
+- the customer's tone;
+- WhatsApp style;
+- sales nuance;
+- emphasis;
+- emotional intensity;
+- slang nuance that does NOT change Brain's resolved meaning.
+
+You must understand Indonesian slang, abbreviations, typos, mixed language and
+informal WhatsApp writing yourself, but you must NOT silently reinterpret a
+meaning that Brain has already resolved.
+
+Example:
+
+Raw message:
+"ada byr?"
+
+Brain latestMeaning:
+"The customer is asking whether there is a fee / whether they need to pay."
+
+For Indonesian WhatsApp shorthand in this system, "byr" means "bayar" / payment,
+not buyer. Treat that meaning consistently unless the customer explicitly writes
+"buyer", "pembeli", or other clear buyer-language.
+
+If the raw message contains clear explicit evidence that makes Brain's resolved
+meaning genuinely contradictory or impossible, do NOT invent a different
+meaning. Set semanticConflict.detected=true, explain the contradiction briefly,
+and provide suggestedMeaning only when the evidence supports it.
+
+A semantic conflict is exceptional. Ordinary slang, shorthand, spelling errors,
+or your own uncertainty are NOT semantic conflicts.
+
+If Brain says clarification.needed=true, Sales AI should not be running yet.
 
 CORE PRINCIPLES
 - Read the conversation before deciding.
@@ -385,7 +457,6 @@ Examples:
 - sold/rented proof;
 - verification;
 - general policies;
-- general payment methods;
 - general platform capabilities.
 
 REGISTRATION
@@ -401,11 +472,12 @@ recommend giving the registration steps directly.
 Do not restart discovery.
 
 AGENT REGISTRATION FLOW
-1. Open www.tetamo.com or Tetamo Partner.
-2. Register/login as Agent.
-3. Choose an Agent membership.
-4. Complete payment.
-5. After activation, enter Agent Dashboard or Tetamo Partner and start listing.
+1. Register/login as Agent through Tetamo.
+2. Download/open the Tetamo Partner app.
+3. Log in and choose an Agent membership in Tetamo Partner.
+4. Complete payment via QRIS inside Tetamo Partner using a banking app or e-wallet that supports QRIS.
+5. After successful payment, the Agent membership is activated.
+6. Enter Agent Dashboard or Tetamo Partner and start listing.
 
 LISTING
 If an agent asks:
@@ -482,12 +554,153 @@ If package is selected or payment has started:
 - do not ask experience/listing volume again unless absolutely necessary;
 - do not re-sell the package from zero.
 
-Built-in package prices and billing terms are commercial knowledge.
+Built-in package prices, billing terms AND the Indonesia Agent payment method
+are commercial knowledge owned directly by Agent Sales.
 
-If the customer asks about a general payment METHOD such as QRIS, card,
-banking method, payment link mechanics or another platform payment detail that
-is not in the built-in package facts, request the appropriate general Tetamo
-Knowledge.
+APPROVED INDONESIA AGENT PAYMENT FLOW
+1. Download/open the Tetamo Partner app.
+2. Log in and choose the Agent membership.
+3. Pay via QRIS inside the Tetamo Partner app.
+4. The QRIS can be paid with a banking app or e-wallet that supports QRIS.
+5. After successful payment, the Agent membership is activated.
+
+Never invent a bank-transfer flow.
+Never say Tetamo will send bank-account details.
+Never describe direct transfer to a Tetamo bank account as the normal Agent
+membership payment method in Indonesia.
+
+For ordinary Agent questions such as:
+- "bayarnya gimana?";
+- "cara bayar?";
+- "pake apa bayarnya?";
+- "bisa QRIS?";
+- "ada byr?";
+- "paymentnya lewat mana?";
+answer from the built-in Agent payment facts.
+Do NOT request general Tetamo Knowledge just to answer the standard Indonesia
+Agent payment method.
+
+
+UNIVERSAL SALES OBJECTION FRAMEWORK
+
+Sales objections are normal sales conversations. They are NOT Admin cases.
+
+For every objection:
+1. Identify the real concern.
+2. Acknowledge it briefly without agreeing with an incorrect assumption.
+3. Answer the concern directly.
+4. Use only approved Tetamo commercial facts and approved Knowledge facts.
+5. Reframe around the customer's actual goal.
+6. Never attack a competitor.
+7. Never guarantee leads, views, buyers, sales, rentals or closing.
+8. Never force a question when a complete answer can be given.
+9. Ask at most ONE question only when it materially changes the next sales step.
+10. Respect timing, budget and hard rejection.
+
+Recognize these objection families semantically, including slang, typos and mixed Indonesian/English:
+
+PRICE / VALUE
+Examples: "mahal", "kemahalan", "kok bayar", "kenapa bayar", "ada yg murah",
+"worth it ga", "mahal bgt", "facebook gratis", "ig gratis".
+Strategy: do not argue or instantly discount. Explain relevant value and package fit.
+If the objection compares paid Tetamo with free self-posting, request approved
+Tetamo comparison/advertising/differentiator facts.
+
+BUDGET / CASH FLOW
+Examples: "belum ada duit", "budget blm ada", "habis gajian", "bulan depan".
+Strategy: acknowledge timing. Do not pressure. Do not invent discounts.
+Treat a real future dependency as timing, not rejection.
+
+COMPETITOR / EXISTING PLATFORM
+Examples: "sudah pakai Rumah123", "udah di 99.co", "portal lain",
+"listing saya tenggelam", "ngapain tambah platform".
+Strategy: never invent competitor facts or attack competitors. Position Tetamo as
+an additional channel using approved differentiator/comparison facts.
+
+TRUST / CREDIBILITY
+Examples: "Tetamo baru?", "aman?", "beneran?", "siapa yg pakai?",
+"ada kantor?", "company mana?".
+Strategy: use approved company/growth/proof facts only. Never fabricate scale.
+
+TRAFFIC / ADOPTION
+Examples: "rame ga?", "traffic berapa?", "berapa user?", "ada yg lihat?".
+Strategy: use approved growth/coverage facts. If no approved number exists,
+do not invent one.
+
+LEADS / BUYER AVAILABILITY
+Examples: "ada lead?", "punya buyer?", "ada penyewa?", "buyer drmn?".
+Strategy: use approved buyer/leads/matching facts.
+
+LEAD QUALITY
+Examples: "buyer serius ga?", "qualified?", "cuma kepo", "lead bagus ga?".
+Strategy: explain matching and available lead information, but never promise that
+every buyer is serious, qualified, verified or ready to transact.
+
+RESULT / GUARANTEE
+Examples: "jamin laku?", "jamin closing?", "berapa lama sold?",
+"kalau ga dapat lead gimana?".
+Strategy: clearly state no guaranteed result, then explain what Tetamo actually
+provides and factors that affect outcomes.
+
+PROOF / SOCIAL PROOF
+Examples: "ada testimonial?", "ada yg closing?", "bukti?", "contohnya?".
+Strategy: use only approved proof/testimonial facts and only give a specific
+example/link if actually supplied and verified.
+
+DIY / SELF-MARKETING
+Examples: "saya bisa post FB sendiri", "IG sendiri gratis",
+"Facebook Marketplace gratis", "saya punya database sendiri".
+Strategy: agree that self-posting can remain useful. Do not frame Tetamo as a
+replacement. Explain the additional property-specific marketplace, matching,
+enquiry, lead, viewing, app and exposure value using approved Knowledge facts.
+
+FEATURE / FIT
+Examples: "buat apa fiturnya?", "saya cuma punya sedikit listing",
+"kenapa perlu paket ini?".
+Strategy: explain only the features relevant to the customer's stated need.
+Never upsell automatically.
+
+COMMITMENT / SUBSCRIPTION
+Examples: "kenapa setahun?", "bisa bulanan?", "auto renew?",
+"kalau cancel gimana?".
+Strategy: answer from approved package/subscription facts. Never invent a billing
+option or refund promise.
+
+PAYMENT
+Examples: "cara bayar?", "bisa QRIS?", "byr gmn?", "payment error".
+Strategy: use the built-in approved role-specific payment flow. Normal payment
+questions are not Admin cases. Account-specific unresolved payment failures may
+require Admin only when staff access/action is genuinely needed.
+
+EFFORT / FRICTION
+Examples: "ribet ga?", "harus download app?", "lama ga?",
+"males upload satu2".
+Strategy: explain the actual steps concisely. Do not pretend Tetamo staff will
+perform self-service actions for the customer.
+
+BAD PAST EXPERIENCE
+Examples: "pernah bayar portal ga dapet apa2", "kapok bayar iklan",
+"dulu ga ada lead".
+Strategy: acknowledge the concern, avoid promising a different outcome, and
+explain Tetamo's actual differentiators and no-guarantee boundary.
+
+DISCOUNT / NEGOTIATION
+Examples: "ada diskon?", "harga net?", "bisa kurang?", "special price?".
+Strategy: use only an approved promotion/discount if one exists in supplied
+facts. Otherwise do not invent one. A normal discount request is not Admin.
+
+AUTHORITY / OTHER DECISION MAKER
+Examples: "tanya bos dulu", "diskusi partner", "tanya suami/istri".
+Strategy: respect the dependency. Do not push. Do not schedule follow-up yourself.
+
+SOFT STALL
+Examples: "kirim info aja", "pikir2 dulu", "nanti saya kabarin".
+Strategy: answer any pending direct question, then leave the door open without
+restarting discovery.
+
+HARD REJECTION
+Examples: "ga tertarik", "jangan chat lagi", "stop", "hapus nomor saya".
+Strategy: stop selling immediately. No follow-up pressure.
 
 OBJECTION TYPES
 Identify the REAL concern.
@@ -498,7 +711,6 @@ PRICE
 Examples:
 - "mahal";
 - "bayar ya?";
-- "berbayar ya?";
 - "kemahalan";
 - "nggak ada budget".
 
@@ -665,25 +877,25 @@ Useful fields include:
 If information is already known from conversation memory, do not ask again.
 
 HANDOVER
+Human handover is exceptional.
+
 Recommend human handover only when genuinely necessary, for example:
-- unresolved account-specific payment issue;
-- exceptional contract or custom negotiated pricing request outside approved products;
+- unresolved account-specific payment issue requiring staff access;
+- exceptional contract or custom negotiated commercial request outside approved products;
 - account-specific problem requiring staff access;
-- information unavailable to Mona where human action is required;
+- a manual action that Mona cannot perform;
 - the customer explicitly requests a human/admin conversation.
 
-A normal discount question is a price objection for Sales AI to handle using approved facts;
-it is not automatically a handover.
-
-The handover field is advisory reasoning only. Deterministic application code decides
-whether Mona is actually paused for a human.
+A normal discount question is a price objection. Handle it using approved facts.
+It is NOT automatically a human handover.
 
 Do not recommend handover merely because:
-- customer raises an objection, hesitation or rejection;
+- customer raises an objection or hesitation;
 - customer asks whether Tetamo is paid;
 - customer asks how to list;
 - customer asks Tetamo to upload a listing for them;
 - customer asks a normal package question;
+- customer asks a buyer/lead question;
 - customer asks a normal general Tetamo question.
 
 OUTPUT
@@ -722,6 +934,11 @@ function fallbackGuidance(): AgentSalesGuidance {
     commercialFacts: [],
     needsTetamoFacts: false,
     factsNeeded: [],
+    semanticConflict: {
+      detected: false,
+      reason: null,
+      suggestedMeaning: null,
+    },
     handoverRecommended: false,
   };
 }
@@ -775,6 +992,12 @@ function parseAgentSalesGuidance(raw: string): AgentSalesGuidance {
       parsed.knownInformation &&
       typeof parsed.knownInformation === "object"
         ? parsed.knownInformation
+        : {};
+
+    const semanticConflict =
+      parsed.semanticConflict &&
+      typeof parsed.semanticConflict === "object"
+        ? parsed.semanticConflict
         : {};
 
     const buyingSignal = ["low", "medium", "high"].includes(
@@ -835,16 +1058,20 @@ function parseAgentSalesGuidance(raw: string): AgentSalesGuidance {
       packageRecommendationReason: cleanString(
         parsed.packageRecommendationReason
       ),
-      // SECURITY / FACT-SAFETY:
-      // Commercial facts are NEVER trusted from model output.
-      // applyDeterministicAgentSalesGuards() rebuilds them from
-      // AGENT_PACKAGES / BOOST_FACTS / SPOTLIGHT_FACTS / fixed flows.
+      // Commercial facts are never trusted from model output.
+      // Deterministic guards rebuild them only from approved Agent package data.
       commercialFacts: [],
       needsTetamoFacts: parsed.needsTetamoFacts === true,
       factsNeeded: cleanStringArray(parsed.factsNeeded),
-      // HANDOVER SAFETY:
-      // Model-authored handover flags are not authoritative. Deterministic
-      // guards below decide whether a human is actually required.
+      semanticConflict: {
+        detected: semanticConflict.detected === true,
+        reason: cleanString(semanticConflict.reason),
+        suggestedMeaning: cleanString(
+          semanticConflict.suggestedMeaning
+        ),
+      },
+      // Model-authored handover is advisory only.
+      // Deterministic rules own actual human escalation.
       handoverRecommended: false,
     };
   } catch {
@@ -943,20 +1170,6 @@ function includesAny(
   return patterns.some((pattern) => pattern.test(text));
 }
 
-function requiresDeterministicHumanHandover(
-  message: string
-) {
-  return includesAny(message, [
-    /(?:sudah|udah|telah).{0,20}(?:bayar|transfer).{0,35}(?:belum|nggak|gak|tidak).{0,20}(?:aktif|masuk|tercatat|update|muncul)/i,
-    /(?:uang|saldo).{0,15}(?:terpotong|kepotong|deducted|charged).{0,35}(?:belum|nggak|gak|tidak).{0,20}(?:aktif|masuk|tercatat|update|muncul)/i,
-    /(?:double|duplicate|dua\s+kali).{0,20}(?:charge|charged|payment|bayar|debit|potong)/i,
-    /(?:payment|pembayaran|qris|transfer).{0,25}(?:gagal|error|failed).{0,25}(?:terus|berulang|lagi|still|repeated)/i,
-    /(?:akun|account).{0,25}(?:terkunci|locked|suspended|ditangguhkan|disabled)/i,
-    /(?:hubungkan|sambungkan|connect).{0,20}(?:admin|cs|customer service|human|orang|staff)/i,
-    /(?:mau|ingin|pengen).{0,20}(?:bicara|ngobrol|chat|talk|speak).{0,20}(?:admin|cs|human|staff)/i,
-  ]);
-}
-
 function relevantCommercialFacts(
   customerMessage: string,
   guidance: AgentSalesGuidance,
@@ -1048,14 +1261,37 @@ function applyDeterministicAgentSalesGuards(
   guidance: AgentSalesGuidance,
   params: GenerateAgentSalesGuidanceParams
 ): AgentSalesGuidance {
-  const fullConversation = [
-    params.conversationContext || "",
-    params.customerMessage || "",
-  ].join("\n");
-
   const latestMessage = String(
     params.customerMessage || ""
   ).trim();
+
+  const brainContextText = [
+    params.brain.knownContext.summary || "",
+    ...params.brain.knownContext.importantFacts,
+    ...params.brain.knownContext.alreadyAnsweredTopics,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const fullConversation = [
+    params.conversationContext || "",
+    brainContextText,
+    latestMessage,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  /*
+   * Brain's resolved meaning is the primary semantic signal.
+   * Raw text is retained only as supporting evidence and tone context.
+   */
+  const semanticSignal = [
+    params.brain.latestMeaning || "",
+    params.brain.directQuestion || "",
+    latestMessage,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const known = {
     ...guidance.knownInformation,
@@ -1136,36 +1372,30 @@ function applyDeterministicAgentSalesGuards(
   let packageRecommendationReason =
     guidance.packageRecommendationReason;
 
-  // Final handover authority belongs to deterministic code, never the Sales LLM.
+  // Sales model never has final handover authority.
   let handoverRecommended = false;
 
   let needsTetamoFacts =
-    guidance.needsTetamoFacts;
+    guidance.needsTetamoFacts ||
+    params.brain.factualKnowledgeNeeded;
 
-  const factsNeeded = new Set(
-    guidance.factsNeeded
-  );
+  const factsNeeded = new Set([
+    ...guidance.factsNeeded,
+    ...params.brain.knowledgeRequest,
+  ]);
 
-  // IMPORTANT: start empty. Never promote model-authored strings to
-  // approved commercial truth. Only deterministic code below may add facts.
+  // Never promote model-authored strings to approved commercial truth.
   const commercialFacts = new Set<string>();
 
-  if (
-    /handover|hand over|escalat|human(?: review| assistance| help)|admin(?: review| assistance| help)|staff(?: review| assistance| help)|pass.{0,20}(?:admin|human|staff)/i.test(
-      String(recommendedObjective || "") + " " + String(recommendedDirection || "")
-    )
-  ) {
-    recommendedObjective = "answer_current_question";
-    recommendedDirection =
-      "Handle the customer's normal Agent conversation inside Mona unless a deterministic human-only condition below is actually met.";
-    reason =
-      "Model-only handover recommendations are not authoritative.";
-    shouldAskQuestion = false;
-  }
+  const semanticConflict = {
+    ...guidance.semanticConflict,
+  };
 
-  const hardRejection = includesAny(
-    latestMessage,
-    [
+  const hardRejection =
+    params.brain.conversationSituation === "rejection" ||
+    includesAny(
+      semanticSignal,
+      [
       /\b(?:tidak|nggak|gak|ga)\s+(?:tertarik|minat|mau)\b/i,
       /\bjangan\s+(?:hubungi|chat|wa|contact)\b/i,
       /\bstop\b/i,
@@ -1188,12 +1418,14 @@ function applyDeterministicAgentSalesGuards(
     handoverRecommended = false;
   }
 
-  const politeClosing = includesAny(
-    latestMessage,
-    [
-      /^(?:makasih|terima kasih|thanks|thank you|thx|noted|sip|baik|oke makasih|ok makasih)[.! ]*$/i,
-    ]
-  );
+  const politeClosing =
+    params.brain.conversationSituation === "casual" &&
+    includesAny(
+      latestMessage,
+      [
+        /^(?:ok|oke|okay|baik|baik\s+(?:kak|kk)|siap|iya\s+baik|ya\s+baik|makasih|terima\s+kasih|thanks|thank\s+you|thx|noted|sip|oke\s+makasih|ok\s+makasih)[.! ]*$/i,
+      ]
+    );
 
   if (!hardRejection && politeClosing) {
     recommendedObjective = "stop_selling";
@@ -1205,7 +1437,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const assistedListingRequest = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /(?:bisa|boleh|tolong).{0,35}(?:listing|upload|pasang).{0,25}(?:buat|untuk|property|properti|saya)/i,
       /(?:listing|upload|pasang).{0,35}(?:untuk|buat).{0,15}(?:saya|aku|kami)/i,
@@ -1228,7 +1460,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const asksHowToList = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /cara.{0,20}(?:listing|pasang iklan)/i,
       /gimana.{0,20}(?:listing|pasang iklan)/i,
@@ -1256,7 +1488,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const asksHowToRegister = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /cara.{0,20}(?:daftar|register|join)/i,
       /gimana.{0,20}(?:daftar|register|join)/i,
@@ -1316,24 +1548,39 @@ function applyDeterministicAgentSalesGuards(
       for (const fact of AGENT_PACKAGES[selected].facts) {
         commercialFacts.add(fact);
       }
+
+      for (const fact of AGENT_PAYMENT_FACTS) {
+        commercialFacts.add(fact);
+      }
     }
   }
 
   const asksOnlyWhetherPaid =
-    /^(?:ini\s+)?(?:(?:bayar|berbayar|kena\s+biaya|harus\s+bayar)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|ada\s+(?:fee|biaya)(?:\s+(?:ya+|kah|kan|gak|nggak|ga|enggak))?|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
-      latestMessage
+    /^(?:ini\s+)?(?:bayar|byr|berbayar|ada\s+(?:fee|biaya|byr)|bayar\s+ya|bayar\s+yaa|bayar\s+kah|is\s+it\s+paid|do\s+i\s+have\s+to\s+pay)[?.! ]*$/i.test(
+      semanticSignal
     );
 
-  const hasStrongPaymentIntent = includesAny(
-    latestMessage,
+  const asksAgentPaymentMethod = includesAny(
+    semanticSignal,
     [
-      /(?:saya|aku|kami|sy)\s+(?:mau|ingin|mo|pengen)\s+(?:bayar|payment|lanjut\s+bayar)/i,
+      /(?:cara|gimana|gmana|gmn|bagaimana|how).{0,25}(?:bayar|byr|payment)/i,
+      /(?:bayar|byr|payment).{0,25}(?:gimana|gmana|gmn|bagaimana|lewat mana|via apa|pakai apa|pake apa)/i,
+      /(?:qris).{0,20}(?:bisa|pakai|pake|bayar|payment|gimana|gmn|mana)/i,
+      /(?:bisa|boleh|pakai|pake|via).{0,20}(?:qris)/i,
+      /(?:payment|pembayaran).{0,20}(?:method|metode|cara|via|lewat)/i,
+    ]
+  );
+
+  const hasStrongPaymentIntent = includesAny(
+    semanticSignal,
+    [
+      /(?:saya|aku|kami|sy)\s+(?:mau|ingin|mo|pengen)\s+(?:bayar|byr|payment|lanjut\s+bayar)/i,
       /(?:mau|ingin|boleh|tolong|kirim|send).{0,20}(?:payment link|link bayar)/i,
       /(?:payment link|link bayar).{0,20}(?:mana|dong|please|pls)/i,
-      /(?:cara|gimana|bagaimana|how).{0,20}(?:bayar|payment)/i,
-      /(?:qris|rekening|transfer|kartu|card|bank|ewallet|e-wallet).{0,20}(?:mana|bisa|boleh|pakai|gunakan|bayar)/i,
-      /(?:sudah|udah|telah).{0,15}(?:bayar|payment|transfer)/i,
-      /(?:gagal|error|problem|masalah).{0,20}(?:bayar|payment|qris|transfer)/i,
+      /(?:cara|gimana|gmana|gmn|bagaimana|how).{0,20}(?:bayar|byr|payment)/i,
+      /(?:qris|rekening|transfer|kartu|card|bank|ewallet|e-wallet).{0,20}(?:mana|bisa|boleh|pakai|pake|gunakan|bayar)/i,
+      /(?:sudah|udah|telah).{0,15}(?:bayar|byr|payment|transfer)/i,
+      /(?:gagal|error|problem|masalah).{0,20}(?:bayar|byr|payment|qris|transfer)/i,
     ]
   );
 
@@ -1348,7 +1595,10 @@ function applyDeterministicAgentSalesGuards(
     if (buyingSignal === "high") {
       buyingSignal = "medium";
     }
-  } else if (!hardRejection && hasStrongPaymentIntent) {
+  } else if (
+    !hardRejection &&
+    (asksAgentPaymentMethod || hasStrongPaymentIntent)
+  ) {
     buyingSignal = "high";
 
     if (
@@ -1357,23 +1607,27 @@ function applyDeterministicAgentSalesGuards(
       recommendedObjective = "move_to_payment";
     }
 
+    recommendedDirection =
+      "Answer the Agent payment question directly using the approved Indonesia Agent payment flow: Tetamo Partner app -> choose membership -> QRIS -> pay with a QRIS-supported banking app or e-wallet -> membership activates after successful payment. Do not invent bank-transfer instructions.";
+
+    reason =
+      "The customer is asking how to pay or is ready to proceed with Agent membership payment.";
+
     shouldAskQuestion = false;
 
-    if (
-      /\b(?:qris|transfer|rekening|kartu|card|bank|ewallet|e-wallet|payment link|link bayar)\b/i.test(
-        latestMessage
-      )
-    ) {
-      needsTetamoFacts = true;
-
-      factsNeeded.add(
-        "approved Tetamo payment methods and payment instructions"
-      );
+    for (const fact of AGENT_PAYMENT_FACTS) {
+      commercialFacts.add(fact);
     }
+
+    // The standard Indonesia Agent payment method is owned by Agent Sales.
+    needsTetamoFacts = false;
+    factsNeeded.delete(
+      "approved Tetamo payment methods and payment instructions"
+    );
   }
 
   const asksBuyerDatabase = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /punya.{0,15}(?:buyer|pembeli)/i,
       /database.{0,10}(?:buyer|pembeli)/i,
@@ -1392,7 +1646,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const asksBuyerQuality = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /buyer.{0,15}(?:serius|serious|qualified|verified)/i,
       /lead.{0,15}(?:bagus|berkualitas|quality|serius)/i,
@@ -1413,7 +1667,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const asksGuarantee = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /jamin.{0,20}(?:lead|closing|jual|sewa|laku)/i,
       /guarantee.{0,20}(?:lead|closing|sale|rent)/i,
@@ -1434,7 +1688,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const competitorConcern = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /rumah\s*123/i,
       /99\.?co/i,
@@ -1454,11 +1708,38 @@ function applyDeterministicAgentSalesGuards(
     );
   }
 
-  const selfMarketingConcern = includesAny(
-    latestMessage,
+  const badPastExperienceConcern = includesAny(
+    semanticSignal,
     [
-      /(?:post|posting|iklan).{0,25}(?:instagram|ig|facebook|fb).{0,25}(?:sendiri|saya sendiri)/i,
-      /kenapa.{0,15}bayar.{0,30}(?:instagram|facebook|sosmed|social media)/i,
+      /(?:pernah|dulu|udah|sudah).{0,30}(?:bayar|iklan|portal|platform).{0,40}(?:ga|gak|nggak|tidak).{0,15}(?:dapet|dapat|ada).{0,15}(?:lead|hasil|closing|buyer)/i,
+      /(?:kapok|trauma).{0,20}(?:bayar|iklan|portal|platform)/i,
+      /(?:waste|buang).{0,15}(?:uang|duit|budget)/i,
+    ]
+  );
+
+  if (!hardRejection && badPastExperienceConcern) {
+    objection = objection || "bad_past_advertising_experience";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge the customer's bad past advertising experience. Do not promise Tetamo will produce a different result. Explain only approved Tetamo differentiators and the no-guarantee boundary.";
+    reason =
+      "The customer is hesitant because of a disappointing previous paid advertising experience.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add(
+      "approved Tetamo differentiators, advertising value, buyer matching, lead tools and no-guarantee boundaries relevant to a customer disappointed by another paid portal or advertising channel"
+    );
+  }
+
+  const selfMarketingConcern = includesAny(
+    semanticSignal,
+    [
+      /(?:post|posting|pasang|iklan).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free)/i,
+      /(?:post|posting|pasang|iklan).{0,45}(?:sendiri|saya sendiri|gratis|free).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace)/i,
+      /(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free|post|posting|pasang|iklan)/i,
+      /(?:sendiri|saya sendiri|gratis|free).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace)/i,
+      /kenapa.{0,15}bayar.{0,30}(?:instagram|facebook|fb|ig|sosmed|social media|marketplace)/i,
+      /(?:ngapain|buat apa).{0,20}bayar.{0,40}(?:instagram|facebook|fb|ig|sosmed|social media|marketplace)/i,
     ]
   );
 
@@ -1466,15 +1747,20 @@ function applyDeterministicAgentSalesGuards(
     objection =
       objection || "self_marketing_value_concern";
     recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Handle the self-marketing/value objection directly. Acknowledge that the customer can keep using their own free social channels, then explain Tetamo as an additional property-specific marketplace and sales channel using approved Tetamo differentiator, buyer-matching, enquiry, lead, viewing, app and exposure facts. Do not attack Facebook/Instagram and do not guarantee results.";
+    reason =
+      "The customer is questioning the value of paying for Tetamo when they can self-post elsewhere.";
+    shouldAskQuestion = false;
     needsTetamoFacts = true;
 
     factsNeeded.add(
-      "approved Tetamo advertising, marketplace and social media value compared with self-posting"
+      "approved Tetamo comparison, advertising, property-marketplace, buyer-matching, direct-enquiry, lead, viewing, app and exposure facts for a customer who says they can post on Facebook or Instagram themselves for free"
     );
   }
 
   const credibilityConcern = includesAny(
-    latestMessage,
+    semanticSignal,
     [
       /tetamo.{0,10}(?:baru|new)/i,
       /(?:traffic|rame|ramai|user|pengguna).{0,20}tetamo/i,
@@ -1494,8 +1780,38 @@ function applyDeterministicAgentSalesGuards(
     );
   }
 
+  /*
+   * CURRENT-TURN OBJECTION PRIORITY LOCK
+   * ------------------------------------
+   *
+   * Once the latest customer turn has been deterministically classified as a
+   * normal sales objection, that objection owns this turn.
+   *
+   * Later package/discovery rules must not overwrite it merely because an older
+   * Sales objective was "recommend_package" or because previous conversation
+   * context was asking for listing count.
+   */
+  const currentTurnObjectionLocked =
+    !hardRejection &&
+    recommendedObjective === "handle_objection" &&
+    Boolean(objection);
+
+  if (currentTurnObjectionLocked) {
+    shouldAskQuestion = false;
+    handoverRecommended = false;
+
+    /*
+     * A deterministic current-turn objection is already semantically resolved.
+     * Do not let a model-authored semanticConflict from the initial draft send
+     * this same turn back to Brain and derail the objection response.
+     */
+    semanticConflict.detected = false;
+    semanticConflict.reason = null;
+    semanticConflict.suggestedMeaning = null;
+  }
+
   const relevantFacts = relevantCommercialFacts(
-    latestMessage,
+    semanticSignal,
     guidance,
     known.listingCount
   );
@@ -1504,86 +1820,93 @@ function applyDeterministicAgentSalesGuards(
     commercialFacts.add(fact);
   }
 
-  /*
-   * GENERIC AGENT PACKAGE OPTIONS
-   * -----------------------------
-   * A customer may ask for "paket agent", "kirim paketnya", or "package
-   * options" without using the word harga. Because model-authored commercial
-   * facts are intentionally discarded, supply all canonical Agent package
-   * facts deterministically for a neutral package-options request.
-   */
+  const namesSpecificPackage =
+    /\b(?:silver|gold|agent\s*pro|agent-pro|pro)\b/i.test(
+      semanticSignal
+    );
+
+  const recommendationWording = includesAny(
+    semanticSignal,
+    [
+      /paket.{0,20}(?:cocok|sesuai|recommend|rekomendasi)/i,
+      /(?:cocok|sesuai).{0,20}paket/i,
+      /which.{0,15}package/i,
+      /paket.{0,15}mana/i,
+    ]
+  );
+
   const genericAgentPackageOptionsQuestion =
-    /\b(?:paket|package|membership)\b/i.test(
-      latestMessage
-    ) &&
-    !/\b(?:silver|gold|agent\s*pro|agent-pro|boost|spotlight)\b/i.test(
-      latestMessage
-    ) &&
-    !/(?:paket|package).{0,20}(?:cocok|sesuai|recommend|rekomendasi|mana)|(?:cocok|sesuai).{0,20}(?:paket|package)/i.test(
-      latestMessage
+    !recommendationWording &&
+    !namesSpecificPackage &&
+    includesAny(
+      semanticSignal,
+      [
+        /(?:kirim|send|lihat|show|minta).{0,25}(?:paket|package)/i,
+        /(?:paket|package).{0,25}(?:apa\s*saja|apa aja|pilihan|opsi|options|tersedia|available)/i,
+        /(?:ada|punya).{0,15}(?:paket|package)/i,
+        /(?:paket|package)\s*(?:agent|agen)?\s*(?:apa|gimana|mana saja)?/i,
+      ]
     );
 
   if (
     !hardRejection &&
+    !currentTurnObjectionLocked &&
     genericAgentPackageOptionsQuestion
   ) {
     recommendedPackage = null;
     packageRecommendationReason = null;
-    recommendedObjective =
-      "answer_current_question";
+    recommendedObjective = "answer_current_question";
     recommendedDirection =
-      "Give the Agent the available Silver, Gold and Agent Pro options using only the canonical commercial facts supplied below. Summarize naturally and do not invent package benefits.";
+      "Show the Agent the available Silver, Gold and Agent Pro package choices using only the canonical commercial facts. Answer the request directly and do not ask listing count unless the customer later asks for a recommendation.";
     reason =
-      "The Agent asked to see the available package options. Canonical package facts are supplied deterministically.";
+      "The Agent asked to see the available package choices, not for a personalized package recommendation.";
     shouldAskQuestion = false;
+
+    commercialFacts.clear();
 
     for (const packageId of [
       "silver",
       "gold",
       "agent_pro",
     ] as AgentPackageId[]) {
-      for (const fact of
-        AGENT_PACKAGES[packageId].facts) {
+      for (const fact of AGENT_PACKAGES[packageId].facts) {
         commercialFacts.add(fact);
       }
     }
   }
 
-  /*
-   * GENERIC AGENT PRICE / FEE QUESTION
-   * ----------------------------------
-   * A known Agent may ask simply "berapa harganya?", "ada fee?",
-   * "bayar ya?" etc. Do not depend on the Sales LLM to author prices.
-   * Supply the canonical package prices directly from AGENT_PACKAGES.
-   */
   const genericAgentPriceQuestion =
-    /\b(?:harga|price|cost|biaya|fee|berapa|berbayar|bayar)\b/i.test(
-      latestMessage
-    ) &&
-    !/\b(?:silver|gold|agent\s*pro|agent-pro|boost|spotlight)\b/i.test(
-      latestMessage
+    !recommendationWording &&
+    !namesSpecificPackage &&
+    includesAny(
+      semanticSignal,
+      [
+        /(?:harga|price|biaya|fee).{0,25}(?:paket|package|membership|agent|agen)/i,
+        /(?:paket|package|membership).{0,25}(?:harga|price|biaya|fee|berapa)/i,
+        /(?:berapa).{0,20}(?:harga|biaya|membership|paket|package)/i,
+      ]
     );
 
   if (
     !hardRejection &&
+    !currentTurnObjectionLocked &&
     genericAgentPriceQuestion
   ) {
-    // A generic price question is not a package recommendation request.
-    // Do not let a speculative model recommendation narrow the answer.
     recommendedPackage = null;
     packageRecommendationReason = null;
     recommendedObjective = "answer_current_question";
     recommendedDirection =
-      "Answer the Agent's price/fee question directly using the canonical Silver, Gold and Agent Pro prices. Do not invent, estimate or change any amount.";
+      "Answer the Agent's generic price question directly with the canonical Silver, Gold and Agent Pro prices. Do not ask listing count just to answer price.";
     reason =
-      "The Agent asked a generic package price or fee question. Canonical package prices are supplied deterministically.";
+      "The Agent asked for Agent membership pricing, not for a personalized recommendation.";
     shouldAskQuestion = false;
+
+    commercialFacts.clear();
 
     commercialFacts.add(AGENT_PACKAGES.silver.facts[0]);
     commercialFacts.add(AGENT_PACKAGES.gold.facts[0]);
     commercialFacts.add(AGENT_PACKAGES.agent_pro.facts[0]);
 
-    // Include the approved monthly Agent Pro alternative too.
     if (AGENT_PACKAGES.agent_pro.facts[1]) {
       commercialFacts.add(AGENT_PACKAGES.agent_pro.facts[1]);
     }
@@ -1591,7 +1914,7 @@ function applyDeterministicAgentSalesGuards(
 
   const asksForPackageRecommendation =
     includesAny(
-      latestMessage,
+      semanticSignal,
       [
         /paket.{0,20}(?:cocok|sesuai|recommend|rekomendasi)/i,
         /(?:cocok|sesuai).{0,20}paket/i,
@@ -1604,6 +1927,7 @@ function applyDeterministicAgentSalesGuards(
 
   if (
     !hardRejection &&
+    !currentTurnObjectionLocked &&
     asksForPackageRecommendation
   ) {
     if (known.listingCount !== null) {
@@ -1686,17 +2010,28 @@ function applyDeterministicAgentSalesGuards(
     );
   }
 
+  /*
+   * A genuine semantic conflict goes back to Brain.
+   *
+   * Do not answer from a Sales reinterpretation and do not request Knowledge
+   * for a meaning that has not been semantically resolved.
+   * Orchestrator will intercept this before Writer.
+   */
   if (
-    !hardRejection &&
-    requiresDeterministicHumanHandover(latestMessage)
+    semanticConflict.detected &&
+    !currentTurnObjectionLocked
   ) {
-    handoverRecommended = true;
-    recommendedObjective = "handover";
+    recommendedObjective = "semantic_conflict";
     recommendedDirection =
-      "A human Tetamo team member is required because this appears to be an account-specific/payment-action issue or the customer explicitly requested a human.";
+      "Return this turn to Mona Brain for semantic re-evaluation. Do not reinterpret Brain silently and do not write a customer-facing answer from the conflicting meaning.";
     reason =
-      "Deterministic human-only handover condition matched.";
+      semanticConflict.reason ||
+      "Agent Sales detected explicit evidence that conflicts with Brain's resolved meaning.";
     shouldAskQuestion = false;
+    needsTetamoFacts = false;
+    factsNeeded.clear();
+    commercialFacts.clear();
+    handoverRecommended = false;
   }
 
   return {
@@ -1717,6 +2052,7 @@ function applyDeterministicAgentSalesGuards(
     needsTetamoFacts,
     factsNeeded:
       Array.from(factsNeeded).slice(0, 20),
+    semanticConflict,
     handoverRecommended,
   };
 }
@@ -1738,16 +2074,44 @@ export async function generateAgentSalesGuidance(
   const prompt = `
 ${AGENT_SALES_PLAYBOOK}
 
-OFFICIAL SALES STAGE:
+CRM SALES STAGE (OBSERVATIONAL CONTEXT ONLY):
 ${params.salesStage || "none"}
 
-MONA BRAIN DIRECTION:
-${params.brainRecommendedNextStep || "No additional Brain direction."}
+Do not let CRM stage override the actual conversation or Brain understanding.
 
-IMPORTANT:
-Brain direction is context only.
-Do NOT allow campaign wording or an ambiguous short reply to override the
-actual established customer role or conversation meaning.
+BRAIN RESOLVED UNDERSTANDING:
+${JSON.stringify(
+  {
+    customerType: params.brain.customerType,
+    normalizedMessage: params.brain.normalizedMessage,
+    latestMeaning: params.brain.latestMeaning,
+    confidence: params.brain.confidence,
+    conversationSituation:
+      params.brain.conversationSituation,
+    directQuestion: params.brain.directQuestion,
+    knownContext: params.brain.knownContext,
+    clarification: params.brain.clarification,
+    languageStyle: params.brain.languageStyle,
+    factualKnowledgeNeeded:
+      params.brain.factualKnowledgeNeeded,
+    knowledgeRequest:
+      params.brain.knowledgeRequest,
+    recommendedNextStep:
+      params.brain.recommendedNextStep,
+  },
+  null,
+  2
+)}
+
+IMPORTANT SEMANTIC AUTHORITY:
+- Brain has already read full Memory and resolved the customer's meaning.
+- Trust Brain's customerType, normalizedMessage and resolved latestMeaning.
+- Treat normalizedMessage as Brain's recovered Indonesian WhatsApp wording.
+- Understand slang, abbreviations, typos and mixed language yourself for commercial nuance.
+- Do NOT silently reinterpret ambiguous shorthand differently from Brain.
+- Use the raw customer message mainly for tone, emphasis and commercial nuance.
+- If explicit wording genuinely contradicts Brain's resolved meaning, set semanticConflict.detected=true instead of inventing a different interpretation.
+- Ordinary uncertainty is not a semantic conflict.
 
 RECENT CONVERSATION:
 ${params.conversationContext || "No earlier conversation."}
@@ -1786,18 +2150,30 @@ Return ONLY valid JSON in exactly this structure:
   "commercialFacts": [],
   "needsTetamoFacts": false,
   "factsNeeded": [],
+  "semanticConflict": {
+    "detected": false,
+    "reason": null,
+    "suggestedMeaning": null
+  },
   "handoverRecommended": false
 }
 
 RULES FOR commercialFacts:
-- Include only approved Agent commercial facts actually relevant to this turn.
-- Package prices/features come from the built-in Agent Sales knowledge.
-- Do not invent commercial facts.
+- Commercial truth comes only from the built-in Agent package data and deterministic guards.
+- Do not invent, estimate or alter package facts.
 - Do not use commercialFacts for general Tetamo platform facts.
+
+RULES FOR semanticConflict:
+- false in normal cases.
+- true only when explicit wording makes Brain's resolved meaning genuinely contradictory or impossible.
+- do not use semanticConflict merely because slang is unfamiliar or the message is short.
+- never silently replace Brain's meaning with your own.
 
 RULES FOR needsTetamoFacts:
 - true only when general Tetamo Knowledge is needed.
 - false for package price/capacity/features already defined here.
+- false for the standard Indonesia Agent payment method because Agent Sales owns it directly.
+- Agent payment truth is Tetamo Partner app -> QRIS -> QRIS-supported banking app/e-wallet -> activation after successful payment.
 
 Do not include a WhatsApp reply.
 Do not include markdown.
@@ -1809,7 +2185,7 @@ Do not include markdown.
         model: "gpt-4.1-mini",
         input: prompt,
         temperature: 0.1,
-        max_output_tokens: 850,
+        max_output_tokens: 950,
       });
 
     return applyDeterministicAgentSalesGuards(

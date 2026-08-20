@@ -618,10 +618,21 @@ async function saveAdminOutbound(params: {
           now,
 
         /*
-         * A real Admin reply stops any
-         * pending Mona silence follow-up.
+         * A real Admin reply owns the conversation and clears the entire
+         * automated Mona silence cycle. Resume AI must not inherit an old
+         * 1-hour / 12-hour timer.
          */
+        mona_followup_count:
+          0,
+        mona_followup_waiting_since:
+          null,
+        mona_first_followup_sent_at:
+          null,
         mona_next_followup_due_at:
+          null,
+        mona_dependency_controlled:
+          false,
+        mona_dependency_reason:
           null,
         mona_followup_claimed_at:
           null,
@@ -1393,21 +1404,60 @@ async function handleMonaFollowUpSend(params: {
   });
 
   /*
-   * Only after Meta confirms the message
-   * was sent do we advance the timing:
+   * Only after Meta confirms the message was sent do we advance timing:
    *
    * #1 -> next due +12 hours
    * #2 -> stop
+   *
+   * IMPORTANT:
+   * Once Meta has accepted the message, this exact follow-up must never be
+   * retried merely because database timing persistence fails afterward.
+   * A duplicate WhatsApp follow-up is worse than losing the next scheduled
+   * follow-up. Therefore a persistence failure stops the current cycle
+   * defensively instead of leaving an already-sent follow-up claim retryable.
    */
-  await markMonaFollowUpSuccessfullySent({
-    supabase:
-      supabaseAdmin,
-    conversationId,
-    followUpNumber,
-  });
+  try {
+    await markMonaFollowUpSuccessfullySent({
+      supabase:
+        supabaseAdmin,
+      conversationId,
+      followUpNumber,
+    });
+  } catch (error) {
+    console.error(
+      "Mona follow-up was sent by Meta but timing state could not be advanced:",
+      {
+        conversationId,
+        followUpNumber,
+        error,
+      }
+    );
+
+    await stopMonaFollowUpCycle({
+      conversationId,
+      claimToken,
+      reason:
+        "Meta sent the follow-up, but timing persistence failed. Cycle stopped to prevent duplicate delivery.",
+    });
+
+    return Response.json({
+      success: true,
+      mode: "mona_followup",
+      action: "sent",
+      followUpNumber,
+      provider: "meta",
+      messageId:
+        delivery.sendResult.messageId,
+      status:
+        delivery.sendResult.status || null,
+      timingPersistenceWarning:
+        true,
+    });
+  }
 
   await releaseMonaClaim({
     conversationId,
+    claimToken,
   });
 
   return Response.json({

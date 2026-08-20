@@ -762,141 +762,46 @@ function getSalesFactsNeeded(
     : [];
 }
 
-/**
- * Sales guidance is allowed to help ROUTE Knowledge, but it is never treated
- * as factual truth here. Only facts from TETAMO_KNOWLEDGE become approved.
- *
- * This matters for short contextual WhatsApp replies such as:
- * - "Ada caranya?"
- * - "Terus gimana?"
- * - "Abis itu?"
- *
- * Brain/Sales may understand from Memory that the customer is asking how to
- * register or list even when the latest message does not repeat those words.
- */
-function getSalesRoutingContext(
-  salesGuidance: MonaSalesGuidance
-): string[] {
-  const guidance = salesGuidance.guidance;
-
-  if (!guidance) {
-    return [];
-  }
-
-  return [
-    guidance.customerIntent,
-    guidance.salesState,
-    guidance.recommendedObjective,
-    guidance.recommendedDirection,
-    guidance.reason,
-    ...(Array.isArray(guidance.factsNeeded)
-      ? guidance.factsNeeded
-      : []),
-  ]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-}
-
 function buildRetrievalQuery(
   brain: MonaBrainDecision,
   salesGuidance: MonaSalesGuidance
 ) {
-  const parts = [
+  const explicitFactRequests = [
+    ...brain.knowledgeRequest,
+    ...getSalesFactsNeeded(salesGuidance),
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  /*
+   * Knowledge does not reinterpret the customer.
+   *
+   * Brain already recovered Indonesian WhatsApp shorthand and resolved
+   * the customer's meaning. Use Brain's normalized wording and semantic
+   * interpretation only as retrieval signals.
+   *
+   * Explicit Knowledge requests from Brain / Sales are included first so
+   * they remain the strongest description of what factual information is
+   * actually required.
+   */
+  const semanticContext = [
+    brain.normalizedMessage,
+    brain.latestMeaning,
+    brain.directQuestion || "",
     brain.customerType !== "unknown"
       ? `Customer type: ${brain.customerType}`
       : "",
-    brain.latestMeaning,
-    brain.directQuestion || "",
-    brain.recommendedNextStep || "",
-    brain.knownContext.summary || "",
-    ...brain.knowledgeRequest,
-    ...getSalesFactsNeeded(salesGuidance),
-    ...getSalesRoutingContext(salesGuidance),
     ...brain.knownContext.importantFacts,
   ]
     .map((item) => String(item || "").trim())
     .filter(Boolean);
 
-  return Array.from(new Set(parts)).join("\n");
-}
-
-/**
- * Deterministic semantic routing for high-value process questions.
- *
- * The LLM may understand the intent, but it never supplies the facts.
- * This function only selects WHICH approved hardcoded Knowledge section is
- * relevant. The actual customer-facing facts still come exclusively from
- * TETAMO_KNOWLEDGE.
- */
-function getPriorityKnowledgeSectionIds(
-  brain: MonaBrainDecision,
-  salesGuidance: MonaSalesGuidance
-): string[] {
-  const guidance = salesGuidance.guidance;
-
-  const routingText = normalize(
-    [
-      brain.latestMeaning,
-      brain.directQuestion || "",
-      brain.recommendedNextStep || "",
-      brain.knownContext.summary || "",
-      ...brain.knowledgeRequest,
-      ...brain.knownContext.importantFacts,
-      ...getSalesRoutingContext(salesGuidance),
-    ]
-      .filter(Boolean)
-      .join("\n")
-  );
-
-  const objective = normalize(
-    guidance?.recommendedObjective || ""
-  );
-
-  const registrationIntent =
-    /(?:move_to_registration|registration|register|sign up|signup|daftar|pendaftaran|cara join|join tetamo|join sebagai|become an agent|start as an agent|mulai sebagai agen|mulai sebagai agent)/i.test(
-      `${objective} ${routingText}`
-    );
-
-  const listingIntent =
-    /(?:explain_listing_steps|explain_listing_process|explain_self_service_listing|move_to_listing|listing process|listing steps|how to list|create listing|start listing|publish listing|upload property|pasang iklan|pasang listing|cara listing|buat listing|membuat listing)/i.test(
-      `${objective} ${routingText}`
-    );
-
-  const ids: string[] = [];
-
-  if (
-    brain.customerType === "agent" ||
-    brain.customerType === "agency"
-  ) {
-    // Prefer the chapter that matches the Sales objective most specifically.
-    if (
-      listingIntent ||
-      /(?:explain_listing_steps|explain_self_service_listing)/i.test(
-        objective
-      )
-    ) {
-      ids.push("how-agent-listings-work");
-    }
-
-    if (
-      registrationIntent ||
-      /move_to_registration/i.test(objective)
-    ) {
-      ids.push(
-        "agent-registration-requirements-capabilities"
-      );
-    }
-  }
-
-  if (brain.customerType === "owner") {
-    // Owner registration is the first step of the approved Owner listing flow,
-    // so this single chapter safely covers both registration and listing.
-    if (listingIntent || registrationIntent) {
-      ids.push("how-owner-listings-work");
-    }
-  }
-
-  return Array.from(new Set(ids));
+  return Array.from(
+    new Set([
+      ...explicitFactRequests,
+      ...semanticContext,
+    ])
+  ).join("\n");
 }
 
 function scoreSection(
@@ -971,35 +876,9 @@ function scoreSection(
 }
 
 function chooseMatches(
-  retrievalQuery: string,
-  prioritySectionIds: string[] = []
+  retrievalQuery: string
 ): MonaKnowledgeMatch[] {
-  const priorityIdSet = new Set(prioritySectionIds);
-
-  const priorityMatches = prioritySectionIds
-    .map((sectionId, index) => {
-      const section = TETAMO_KNOWLEDGE.find(
-        (candidate) => candidate.id === sectionId
-      );
-
-      return section
-        ? {
-            section,
-            // Priority routes are deterministic intent matches, not lexical
-            // scores. Keep them ahead of fuzzy matches.
-            score: 1000 - index,
-          }
-        : null;
-    })
-    .filter(
-      (match): match is MonaKnowledgeMatch =>
-        Boolean(match)
-    );
-
   const ranked = TETAMO_KNOWLEDGE
-    .filter(
-      (section) => !priorityIdSet.has(section.id)
-    )
     .map((section) => ({
       section,
       score: scoreSection(retrievalQuery, section),
@@ -1008,7 +887,7 @@ function chooseMatches(
     .sort((a, b) => b.score - a.score);
 
   if (!ranked.length) {
-    return priorityMatches.slice(0, 4);
+    return [];
   }
 
   const bestScore = ranked[0].score;
@@ -1018,11 +897,8 @@ function chooseMatches(
     Math.floor(bestScore * 0.45)
   );
 
-  const fuzzyMatches = ranked.filter(
-    (match) => match.score >= minimumRelevantScore
-  );
-
-  return [...priorityMatches, ...fuzzyMatches]
+  return ranked
+    .filter((match) => match.score >= minimumRelevantScore)
     .slice(0, 4);
 }
 
@@ -1054,6 +930,24 @@ function formatApprovedFacts(
   ].join("\n");
 }
 
+/**
+ * Tetamo Knowledge Retriever
+ *
+ * RESPONSIBILITY:
+ * - retrieve approved general Tetamo facts only;
+ * - use Brain / Sales requests as retrieval instructions;
+ * - return factual material to downstream reasoning / Writer.
+ *
+ * NON-RESPONSIBILITIES:
+ * - do not reinterpret customer language;
+ * - do not identify customer role;
+ * - do not choose Agent or Owner packages;
+ * - do not create sales strategy;
+ * - do not decide human handover.
+ *
+ * Missing knowledge is returned as status="not_found". It is not, by itself,
+ * a reason to pause Mona or send the conversation to Admin.
+ */
 export async function retrieveMonaKnowledge(
   params: RetrieveMonaKnowledgeParams
 ): Promise<MonaKnowledgeResult> {
@@ -1061,17 +955,10 @@ export async function retrieveMonaKnowledge(
     params.salesGuidance
   );
 
-  const prioritySectionIds =
-    getPriorityKnowledgeSectionIds(
-      params.brain,
-      params.salesGuidance
-    );
-
   const needed =
     params.brain.factualKnowledgeNeeded ||
     params.brain.knowledgeRequest.length > 0 ||
-    salesFactsNeeded.length > 0 ||
-    prioritySectionIds.length > 0;
+    salesFactsNeeded.length > 0;
 
   const retrievalQuery = buildRetrievalQuery(
     params.brain,
@@ -1088,10 +975,7 @@ export async function retrieveMonaKnowledge(
     };
   }
 
-  const matches = chooseMatches(
-    retrievalQuery,
-    prioritySectionIds
-  );
+  const matches = chooseMatches(retrievalQuery);
 
   if (!matches.length) {
     return {

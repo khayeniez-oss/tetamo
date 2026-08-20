@@ -84,15 +84,13 @@ function hasExplicitPaymentIntent(
 /*
  * Protect advanced commercial stages from accidental regression.
  *
- * Examples:
- * - payment_started should not fall back to agent_package just because
- *   the customer asks another information question.
- * - closed_won should not be automatically reopened by ordinary chat.
- * - closed_lost should only change when a future explicit journey
- *   genuinely restarts and Brain/Orchestrator decides to reopen it.
+ * Stage is observational CRM state only.
  *
- * payment_failed is allowed to move forward again when the customer
- * explicitly retries payment or confirms payment success.
+ * It must not pull the conversation backwards merely because a later
+ * customer message is informational.
+ *
+ * Memory + Brain represent what has actually happened in the conversation
+ * and therefore outrank a stale CRM stage.
  */
 function shouldProtectCurrentStage(
   currentStage: MonaSalesStage | null,
@@ -102,6 +100,10 @@ function shouldProtectCurrentStage(
     return false;
   }
 
+  /*
+   * Completed journeys stay completed unless another system explicitly
+   * reopens the journey.
+   */
   if (currentStage === "closed_won") {
     return nextStage !== "closed_won";
   }
@@ -110,8 +112,36 @@ function shouldProtectCurrentStage(
     return nextStage !== "closed_lost";
   }
 
+  /*
+   * Once payment has started, ordinary information/package conversation
+   * must not push CRM backwards.
+   */
   if (
     currentStage === "payment_started" &&
+    [
+      "new_inquiry",
+      "lead",
+      "agent_package",
+      "owner_package",
+      "developer_agency",
+      "follow_up",
+    ].includes(nextStage)
+  ) {
+    return true;
+  }
+
+  /*
+   * A failed payment also remains an advanced transaction state.
+   *
+   * It may move forward again when:
+   * - customer retries payment -> payment_started;
+   * - payment succeeds -> closed_won;
+   * - customer explicitly rejects -> closed_lost.
+   *
+   * It should not fall back to an ordinary package stage.
+   */
+  if (
+    currentStage === "payment_failed" &&
     [
       "new_inquiry",
       "lead",
@@ -160,16 +190,29 @@ function makeSuggestion(
 }
 
 /*
+ * ==================================================
+ * MONA CRM STAGE OBSERVER
+ * ==================================================
+ *
  * Stage tracks CRM journey state only.
  *
- * It does NOT:
+ * Stage does NOT:
+ * - understand Indonesian language;
+ * - reinterpret customer meaning;
  * - decide customer role;
  * - override Brain;
- * - route Sales AI;
+ * - override Memory;
+ * - route Agent / Owner Sales AI;
  * - decide what Mona says;
- * - schedule a follow-up.
+ * - decide human handover;
+ * - decide clarification;
+ * - schedule follow-ups;
+ * - create commercial strategy.
  *
- * Brain customerType is authoritative.
+ * Brain is the semantic authority.
+ * Memory is the historical authority.
+ *
+ * Stage merely observes their result and suggests a CRM label.
  */
 export function evaluateMonaSalesStage(
   params: EvaluateMonaSalesStageParams
@@ -177,6 +220,9 @@ export function evaluateMonaSalesStage(
   const currentStage =
     normalizeStage(params.currentStage);
 
+  /*
+   * Do not make CRM-stage decisions while Brain is still uncertain.
+   */
   if (
     !params.brain.understood ||
     params.brain.confidence < 0.55
@@ -184,17 +230,53 @@ export function evaluateMonaSalesStage(
     return null;
   }
 
+  /*
+   * Clarification belongs to Brain -> Writer.
+   *
+   * Do not mutate commercial CRM state while the actual meaning or role
+   * is still being clarified.
+   */
+  if (
+    params.brain.clarification.needed
+  ) {
+    return null;
+  }
+
+  /*
+   * Human handover is an operational state, not a commercial sales stage.
+   *
+   * Do not make another commercial-stage decision while Brain has already
+   * determined that human action is required.
+   */
+  if (
+    params.brain.handoverRecommended
+  ) {
+    return null;
+  }
+
+  /*
+   * Brain has already recovered shorthand / Indonesian WhatsApp wording.
+   *
+   * Stage may use all of these as evidence, but must never independently
+   * reinterpret them.
+   */
   const text = normalizeText(
     [
       params.latestCustomerMessage,
+      params.brain.normalizedMessage,
       params.brain.latestMeaning,
       params.brain.directQuestion || "",
     ].join(" ")
   );
 
   /*
-   * Explicit transaction evidence has highest stage priority.
+   * ==================================================
+   * TRANSACTION EVIDENCE
+   * ==================================================
+   *
+   * Explicit payment evidence has the highest CRM-stage priority.
    */
+
   if (
     hasExplicitPaymentFailure(text)
   ) {
@@ -218,8 +300,11 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Hard rejection closes the current sales journey.
+   * ==================================================
+   * REJECTION
+   * ==================================================
    */
+
   if (
     params.brain.conversationSituation ===
     "rejection"
@@ -233,9 +318,15 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Timing/dependency means follow-up may be appropriate later.
-   * Stage records that state; Timing/Orchestrator decides when.
+   * ==================================================
+   * TIMING / HESITATION
+   * ==================================================
+   *
+   * Stage records that the journey is waiting.
+   *
+   * Orchestrator / Timing decides whether and when any follow-up occurs.
    */
+
   if (
     params.brain.conversationSituation ===
     "hesitation"
@@ -249,9 +340,15 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Payment stage requires actual payment intent, not merely asking
-   * whether Tetamo has a fee.
+   * ==================================================
+   * PAYMENT INTENT
+   * ==================================================
+   *
+   * Asking whether Tetamo charges a fee is NOT enough.
+   *
+   * We require actual payment/proceed intent.
    */
+
   if (
     params.brain.conversationSituation ===
       "payment" ||
@@ -265,6 +362,9 @@ export function evaluateMonaSalesStage(
     );
   }
 
+  /*
+   * Package selected / customer clearly moving toward purchase.
+   */
   if (
     params.brain.conversationSituation ===
     "closing"
@@ -278,8 +378,13 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Support does not automatically change the commercial stage.
+   * ==================================================
+   * SUPPORT
+   * ==================================================
+   *
+   * Support does not automatically alter the commercial journey.
    */
+
   if (
     params.brain.conversationSituation ===
     "support"
@@ -297,8 +402,11 @@ export function evaluateMonaSalesStage(
   );
 
   /*
-   * Agent and Agency share the Agent commercial journey.
+   * ==================================================
+   * AGENT / AGENCY
+   * ==================================================
    */
+
   if (
     isActiveSalesSituation &&
     (
@@ -320,9 +428,11 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Owner includes owner representatives/family relationships already
-   * interpreted by Brain as Owner.
+   * ==================================================
+   * OWNER
+   * ==================================================
    */
+
   if (
     isActiveSalesSituation &&
     params.brain.customerType ===
@@ -337,9 +447,15 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Developer remains a CRM stage for dashboard compatibility,
-   * but Developer does NOT enter Agent or Owner Sales AI.
+   * ==================================================
+   * DEVELOPER
+   * ==================================================
+   *
+   * developer_agency remains only for dashboard / CRM compatibility.
+   *
+   * Developer does NOT enter Agent or Owner Sales AI.
    */
+
   if (
     isActiveSalesSituation &&
     params.brain.customerType ===
@@ -354,8 +470,11 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Buyer/Renter is a property-demand lead, not an Agent/Owner package lead.
+   * ==================================================
+   * BUYER / RENTER
+   * ==================================================
    */
+
   if (
     params.brain.customerType ===
       "buyer_renter" &&
@@ -377,11 +496,16 @@ export function evaluateMonaSalesStage(
   }
 
   /*
-   * Unknown role must remain a new inquiry.
+   * ==================================================
+   * UNKNOWN
+   * ==================================================
    *
-   * Showing interest does NOT establish Agent, Owner, Buyer, Agency
-   * or Developer status.
+   * Unknown customer remains a new inquiry.
+   *
+   * Interest, campaign targeting, "iya", "mau", etc. do not establish
+   * Agent / Owner / Buyer / Developer role.
    */
+
   if (
     params.brain.customerType ===
     "unknown"
@@ -404,6 +528,14 @@ export function evaluateMonaSalesStage(
   return null;
 }
 
+/*
+ * Lightweight deterministic transaction observer.
+ *
+ * This can be used when a full Brain decision is unavailable but the system
+ * needs to recognise a very explicit payment success/failure event.
+ *
+ * It must NOT be expanded into a second Brain.
+ */
 export function evaluateExplicitTransactionStage(
   params: {
     latestCustomerMessage: string;

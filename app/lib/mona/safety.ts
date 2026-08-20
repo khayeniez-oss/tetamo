@@ -354,9 +354,6 @@ function detectExplicitHandover(
     "gagal login",
     "akun diblokir",
     "account locked",
-    "refund",
-    "pengembalian dana",
-    "uang kembali",
     "verification rejected",
     "verifikasi ditolak",
     "document rejected",
@@ -388,16 +385,10 @@ function detectExplicitHandover(
     "legal issue",
     "lawsuit",
     "court",
-    "notaris",
-    "ppat",
-    "tax issue",
-    "government registration",
     "compliance issue",
     "masalah hukum",
     "gugatan",
     "pengadilan",
-    "izin usaha",
-    "legalitas perusahaan",
   ];
 
   if (
@@ -414,33 +405,15 @@ function detectExplicitHandover(
     };
   }
 
-  const customProposalIssues = [
-    "custom package",
-    "special package",
-    "paket khusus",
-    "custom quotation",
-    "custom quote",
-    "proposal khusus",
-    "kerja sama khusus",
-    "enterprise",
-    "bulk listing",
-    "bulk upload",
-  ];
-
-  if (
-    includesAny(
-      text,
-      customProposalIssues
-    )
-  ) {
-    return {
-      action: "handover",
-      reason:
-        "Custom package, bulk arrangement, or special proposal inquiry requires human review.",
-      category:
-        "custom_proposal",
-    };
-  }
+  /*
+   * Commercial exceptions such as custom packages, enterprise enquiries,
+   * bulk listing requests, or unusual negotiated arrangements are NOT
+   * Safety decisions.
+   *
+   * They continue to Brain -> Sales. Sales can recommend human assistance
+   * only when the request genuinely falls outside approved products or
+   * requires staff action.
+   */
 
   return null;
 }
@@ -827,9 +800,9 @@ export function evaluateMonaSafety(
     isObviouslyUnreadable(text)
   ) {
     return {
-      action: "handover",
+      action: "continue",
       reason:
-        "Message is obviously unreadable and requires human review.",
+        "Message appears unreadable, but Brain must receive it so the one-clarification rule can be applied before any human handover.",
       category:
         "unreadable",
     };
@@ -889,3 +862,4 @@ export function evaluateMonaSafety(
     category: "none",
   };
 }
+
