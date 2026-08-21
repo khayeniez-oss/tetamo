@@ -10,6 +10,10 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const TETAMO_SOUND_FILE = "tetamo_notification.wav";
 const TETAMO_SOUND_CHANNEL_ID = "tetamo-alerts";
 const TETAMO_SILENT_CHANNEL_ID = "tetamo-silent";
+const TETAMO_PARTNER_SOUND_CHANNEL_ID =
+  "tetamo-partner-alerts";
+const TETAMO_PARTNER_SILENT_CHANNEL_ID =
+  "tetamo-partner-silent";
 
 const INQUIRY_NOTIFICATION_TYPES = new Set([
   "new_whatsapp_inquiry",
@@ -49,6 +53,12 @@ type PushTokenRow = {
   id: string;
   expo_push_token: string;
   platform: string | null;
+  source: string | null;
+};
+
+type LeadRoutingRow = {
+  receiver_user_id: string | null;
+  receiver_role: string | null;
 };
 
 function jsonResponse(
@@ -317,13 +327,77 @@ Deno.serve(async (req) => {
     });
   }
 
+  /*
+   * Decide which Tetamo app should receive this notification.
+   *
+   * Agent / owner lead recipients should use Tetamo Partner.
+   * Admin notifications and other recipients remain on Tetamo Mobile.
+   *
+   * While Partner is still being rolled out, an agent/owner without
+   * an active Partner token falls back to their existing Tetamo Mobile
+   * token so current push delivery is not interrupted.
+   */
+  let preferPartnerApp = false;
+
+  if (row.lead_id) {
+    const {
+      data: leadRoutingData,
+      error: leadRoutingError,
+    } = await supabaseAdmin
+      .from("leads")
+      .select(
+        "receiver_user_id, receiver_role",
+      )
+      .eq("id", row.lead_id)
+      .maybeSingle();
+
+    if (leadRoutingError) {
+      console.error(
+        "Push lead routing lookup error:",
+        leadRoutingError,
+      );
+
+      return jsonResponse(
+        {
+          ok: false,
+          error: "lead_routing_lookup_failed",
+        },
+        500,
+      );
+    }
+
+    const leadRouting =
+      leadRoutingData as LeadRoutingRow | null;
+
+    const receiverRole =
+      String(
+        leadRouting?.receiver_role || "",
+      )
+        .trim()
+        .toLowerCase();
+
+    const isActualLeadReceiver =
+      Boolean(
+        leadRouting?.receiver_user_id &&
+          leadRouting.receiver_user_id ===
+            row.user_id,
+      );
+
+    preferPartnerApp =
+      isActualLeadReceiver &&
+      (
+        receiverRole === "agent" ||
+        receiverRole === "owner"
+      );
+  }
+
   const {
     data: tokenRows,
     error: tokensError,
   } = await supabaseAdmin
     .from("push_tokens")
     .select(
-      "id, expo_push_token, platform",
+      "id, expo_push_token, platform, source",
     )
     .eq("user_id", row.user_id)
     .eq("status", "active");
@@ -343,7 +417,51 @@ Deno.serve(async (req) => {
     );
   }
 
-  const tokens = (tokenRows ?? []) as PushTokenRow[];
+  const allTokens =
+    (tokenRows ?? []) as PushTokenRow[];
+
+  const partnerTokens =
+    allTokens.filter(
+      (token) =>
+        String(
+          token.source || "",
+        )
+          .trim()
+          .toLowerCase() ===
+        "tetamo-partner",
+    );
+
+  const mobileTokens =
+    allTokens.filter(
+      (token) => {
+        const source =
+          String(
+            token.source || "",
+          )
+            .trim()
+            .toLowerCase();
+
+        return (
+          !source ||
+          source ===
+            "tetamo-mobile"
+        );
+      },
+    );
+
+  const usePartnerTokens =
+    preferPartnerApp &&
+    partnerTokens.length > 0;
+
+  const tokens =
+    usePartnerTokens
+      ? partnerTokens
+      : mobileTokens;
+
+  const deliveryApp =
+    usePartnerTokens
+      ? "tetamo-partner"
+      : "tetamo-mobile";
 
   if (tokens.length === 0) {
     return jsonResponse({
@@ -351,11 +469,22 @@ Deno.serve(async (req) => {
       skipped: true,
       reason: "no_active_push_tokens",
       notification_id: row.id,
+      delivery_app: deliveryApp,
     });
   }
 
   const soundEnabled =
     preferences.notification_sound === true;
+
+  const soundChannelId =
+    deliveryApp === "tetamo-partner"
+      ? TETAMO_PARTNER_SOUND_CHANNEL_ID
+      : TETAMO_SOUND_CHANNEL_ID;
+
+  const silentChannelId =
+    deliveryApp === "tetamo-partner"
+      ? TETAMO_PARTNER_SILENT_CHANNEL_ID
+      : TETAMO_SILENT_CHANNEL_ID;
 
   const title =
     row.title?.trim() ||
@@ -388,8 +517,8 @@ Deno.serve(async (req) => {
           : null,
 
         channelId: soundEnabled
-          ? TETAMO_SOUND_CHANNEL_ID
-          : TETAMO_SILENT_CHANNEL_ID,
+          ? soundChannelId
+          : silentChannelId,
 
         priority:
           row.priority === "high"
@@ -561,6 +690,7 @@ Deno.serve(async (req) => {
     notification_id: row.id,
     recipient_user_id: row.user_id,
     notification_type: row.type,
+    delivery_app: deliveryApp,
     sound_enabled: soundEnabled,
     expo: expoResults,
   });
