@@ -949,9 +949,9 @@ function resolveAgentListingLimit(
 
   const value = `${packageId} ${packageName}`;
 
-  if (value.includes("starter")) return 30;
-  if (value.includes("silver")) return 100;
-  if (value.includes("gold")) return 500;
+  if (value.includes("silver")) return 30;
+  if (value.includes("gold")) return 100;
+  if (value.includes("agent-pro")) return 500;
 
   return 0;
 }
