@@ -1,14 +1,22 @@
 import "server-only";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import {
   AppStoreServerAPIClient,
   Environment,
+  SignedDataVerifier,
+  type JWSTransactionDecodedPayload,
 } from "@apple/app-store-server-library";
 
 export const TETAMO_PARTNER_IOS_BUNDLE_ID =
   "com.tetamo.partner";
 
-type AppleIapEnvironment =
+export const TETAMO_PARTNER_APPLE_APP_ID =
+  6804323379;
+
+export type AppleIapEnvironment =
   | "sandbox"
   | "production";
 
@@ -18,6 +26,17 @@ const clients: Partial<
     AppStoreServerAPIClient
   >
 > = {};
+
+const verifiers: Partial<
+  Record<
+    AppleIapEnvironment,
+    SignedDataVerifier
+  >
+> = {};
+
+let cachedAppleRootCertificates:
+  | Buffer[]
+  | null = null;
 
 function getAppleIapCredentials() {
   const keyId =
@@ -67,6 +86,35 @@ function toAppleEnvironment(
     : Environment.SANDBOX;
 }
 
+function getAppleRootCertificates() {
+  if (
+    cachedAppleRootCertificates
+  ) {
+    return cachedAppleRootCertificates;
+  }
+
+  const certificateNames = [
+    "AppleIncRootCertificate.cer",
+    "AppleRootCA-G2.cer",
+    "AppleRootCA-G3.cer",
+  ];
+
+  cachedAppleRootCertificates =
+    certificateNames.map(
+      (certificateName) =>
+        readFileSync(
+          join(
+            process.cwd(),
+            "lib",
+            "apple-root-certificates",
+            certificateName
+          )
+        )
+    );
+
+  return cachedAppleRootCertificates;
+}
+
 export function getAppleIapServerClient(
   environment: AppleIapEnvironment
 ) {
@@ -98,4 +146,53 @@ export function getAppleIapServerClient(
     client;
 
   return client;
+}
+
+export function getAppleSignedDataVerifier(
+  environment: AppleIapEnvironment
+) {
+  const existing =
+    verifiers[environment];
+
+  if (existing) {
+    return existing;
+  }
+
+  const verifier =
+    new SignedDataVerifier(
+      getAppleRootCertificates(),
+      true,
+      toAppleEnvironment(
+        environment
+      ),
+      TETAMO_PARTNER_IOS_BUNDLE_ID,
+      environment === "production"
+        ? TETAMO_PARTNER_APPLE_APP_ID
+        : undefined
+    );
+
+  verifiers[environment] =
+    verifier;
+
+  return verifier;
+}
+
+export async function verifyAppleSignedTransaction(
+  signedTransaction: string,
+  environment: AppleIapEnvironment
+): Promise<JWSTransactionDecodedPayload> {
+  const transaction =
+    signedTransaction.trim();
+
+  if (!transaction) {
+    throw new Error(
+      "Apple signed transaction is required."
+    );
+  }
+
+  return getAppleSignedDataVerifier(
+    environment
+  ).verifyAndDecodeTransaction(
+    transaction
+  );
 }
