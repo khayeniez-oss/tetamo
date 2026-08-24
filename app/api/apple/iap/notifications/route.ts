@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  reconcileAppleAgentSubscriptionNotification,
+} from "../../../../../lib/apple-subscription-reconciliation";
+
+import {
   verifyAppleSignedNotification,
 } from "../../../../../lib/apple-iap-server";
 
@@ -35,97 +39,166 @@ function errorMessage(
 export async function POST(
   req: Request
 ) {
+  const body =
+    await req
+      .json()
+      .catch(() => null);
+
+  const signedPayload =
+    body &&
+    typeof body.signedPayload ===
+      "string"
+      ? body.signedPayload.trim()
+      : "";
+
+  if (!signedPayload) {
+    return json(
+      {
+        success: false,
+        message:
+          "signedPayload is required.",
+      },
+      400
+    );
+  }
+
+  let verified:
+    Awaited<
+      ReturnType<
+        typeof verifyAppleSignedNotification
+      >
+    >;
+
   try {
-    const body =
-      await req
-        .json()
-        .catch(() => null);
-
-    const signedPayload =
-      body &&
-      typeof body.signedPayload ===
-        "string"
-        ? body.signedPayload.trim()
-        : "";
-
-    if (!signedPayload) {
-      return json(
-        {
-          success: false,
-          message:
-            "signedPayload is required.",
-        },
-        400
-      );
-    }
-
-    const {
-      environment,
-      notification,
-    } =
+    verified =
       await verifyAppleSignedNotification(
         signedPayload
       );
+  } catch (error) {
+    console.error(
+      "[apple-iap-notifications] verification failed",
+      errorMessage(error)
+    );
 
-    const notificationType =
-      String(
-        notification
-          .notificationType || ""
-      );
+    return json(
+      {
+        success: false,
+        verified: false,
+        message:
+          "Apple notification verification failed.",
+      },
+      400
+    );
+  }
 
-    const subtype =
-      String(
-        notification.subtype || ""
-      );
+  const {
+    environment,
+    notification,
+  } = verified;
 
-    const notificationUUID =
-      String(
-        notification
-          .notificationUUID || ""
+  const notificationType =
+    String(
+      notification
+        .notificationType || ""
+    );
+
+  const subtype =
+    String(
+      notification.subtype || ""
+    );
+
+  const notificationUUID =
+    String(
+      notification
+        .notificationUUID || ""
+    );
+
+  console.info(
+    "[apple-iap-notifications] verified",
+    {
+      notificationUUID,
+      notificationType,
+      subtype,
+      environment,
+    }
+  );
+
+  if (
+    notificationType ===
+    "TEST"
+  ) {
+    return json({
+      success: true,
+      verified: true,
+      handled: true,
+      retry: false,
+      notificationType,
+      environment,
+    });
+  }
+
+  try {
+    const result =
+      await reconcileAppleAgentSubscriptionNotification(
+        {
+          environment,
+          notification,
+        }
       );
 
     console.info(
-      "Apple server notification verified:",
+      "[apple-iap-notifications] reconciliation",
       {
         notificationUUID,
         notificationType,
         subtype,
         environment,
+        handled:
+          result.handled,
+        retry:
+          result.retry,
+        reason:
+          result.reason,
       }
     );
 
-    if (
-      notificationType ===
-      "TEST"
-    ) {
-      return json({
-        success: true,
-        verified: true,
-        handled: true,
-        notificationType,
-        environment,
-      });
+    if (result.retry) {
+      return json(
+        {
+          success: false,
+          verified: true,
+          handled: false,
+          retry: true,
+          notificationType,
+          environment,
+          reason:
+            result.reason,
+        },
+        503
+      );
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * Real lifecycle mutation is
-     * intentionally NOT enabled yet.
-     *
-     * Returning a non-2xx response
-     * prevents us from silently
-     * acknowledging a subscription
-     * event before reconciliation is
-     * implemented and tested.
-     */
-    console.warn(
-      "Apple lifecycle notification deferred:",
+    return json({
+      success: true,
+      verified: true,
+      handled:
+        result.handled,
+      retry: false,
+      notificationType,
+      environment,
+      reason:
+        result.reason,
+    });
+  } catch (error) {
+    console.error(
+      "[apple-iap-notifications] reconciliation failed",
       {
         notificationUUID,
         notificationType,
         subtype,
         environment,
+        error:
+          errorMessage(error),
       }
     );
 
@@ -135,25 +208,12 @@ export async function POST(
         verified: true,
         handled: false,
         retry: true,
+        notificationType,
+        environment,
+        message:
+          "Apple subscription reconciliation failed.",
       },
       503
-    );
-  } catch (error) {
-    console.error(
-      "Apple server notification error:",
-      error
-    );
-
-    return json(
-      {
-        success: false,
-        verified: false,
-        message:
-          "Apple notification verification failed.",
-        error:
-          errorMessage(error),
-      },
-      400
     );
   }
 }
