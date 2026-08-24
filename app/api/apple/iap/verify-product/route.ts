@@ -343,7 +343,7 @@ export async function POST(
         ""
     ).trim();
 
-  const propertyId =
+  const requestedPropertyId =
     String(
       body.propertyId ||
         ""
@@ -425,16 +425,12 @@ export async function POST(
         .trim()
         .toLowerCase();
 
-    if (
-      !appAccountToken ||
-      appAccountToken !==
-        user.id.toLowerCase()
-    ) {
+    if (!appAccountToken) {
       return json(
         {
           success: false,
           message:
-            "Apple purchase is not linked to the authenticated Tetamo account.",
+            "Apple purchase is missing its Tetamo account token.",
         },
         403
       );
@@ -486,6 +482,242 @@ export async function POST(
         409
       );
     }
+
+    let resolvedPropertyId =
+      requestedPropertyId;
+
+    let serverIntent:
+      | {
+          id: string;
+          user_id: string;
+          property_id: string;
+          product_id: string;
+          apple_product_id: string;
+          status: string;
+          apple_transaction_id:
+            | string
+            | null;
+          apple_environment:
+            | string
+            | null;
+          consumed_at:
+            | string
+            | null;
+        }
+      | null =
+      null;
+
+    const legacyAccountToken =
+      appAccountToken ===
+      user.id.toLowerCase();
+
+    if (!legacyAccountToken) {
+      const {
+        data: intentRow,
+        error: intentLookupError,
+      } =
+        await admin
+          .from(
+            "apple_iap_purchase_intents"
+          )
+          .select(
+            "id,user_id,property_id,product_id,apple_product_id,status,apple_transaction_id,apple_environment,consumed_at"
+          )
+          .eq(
+            "id",
+            appAccountToken
+          )
+          .maybeSingle();
+
+      if (intentLookupError) {
+        throw intentLookupError;
+      }
+
+      if (!intentRow) {
+        return json(
+          {
+            success: false,
+            message:
+              "Apple purchase intent was not found.",
+          },
+          403
+        );
+      }
+
+      if (
+        String(
+          intentRow.user_id ||
+            ""
+        ).toLowerCase() !==
+        user.id.toLowerCase()
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Apple purchase intent belongs to another Tetamo account.",
+          },
+          403
+        );
+      }
+
+      if (
+        intentRow.status ===
+        "cancelled"
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Apple purchase intent was cancelled.",
+          },
+          409
+        );
+      }
+
+      if (
+        intentRow.status ===
+        "consumed"
+      ) {
+        if (
+          String(
+            intentRow
+              .apple_transaction_id ||
+              ""
+          ) !==
+          verifiedTransactionId
+        ) {
+          return json(
+            {
+              success: false,
+              message:
+                "Apple purchase intent has already been used by another transaction.",
+            },
+            409
+          );
+        }
+      } else if (
+        intentRow.status !==
+        "pending"
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Apple purchase intent is not available.",
+          },
+          409
+        );
+      }
+
+      if (
+        String(
+          intentRow
+            .apple_product_id ||
+            ""
+        ) !==
+          appleProductId ||
+        String(
+          intentRow.product_id ||
+            ""
+        ) !==
+          mapping.productId
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Apple transaction does not match its Tetamo purchase intent.",
+          },
+          409
+        );
+      }
+
+      resolvedPropertyId =
+        String(
+          intentRow.property_id ||
+            ""
+        ).trim();
+
+      if (!resolvedPropertyId) {
+        return json(
+          {
+            success: false,
+            message:
+              "Apple purchase intent is missing its property reference.",
+          },
+          409
+        );
+      }
+
+      if (
+        requestedPropertyId &&
+        requestedPropertyId !==
+          resolvedPropertyId
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Requested property does not match the Apple purchase intent.",
+          },
+          409
+        );
+      }
+
+      serverIntent =
+        intentRow;
+    }
+
+    const markServerIntentConsumed =
+      async () => {
+        if (!serverIntent) {
+          return;
+        }
+
+        const now =
+          new Date()
+            .toISOString();
+
+        const {
+          error:
+            intentUpdateError,
+        } =
+          await admin
+            .from(
+              "apple_iap_purchase_intents"
+            )
+            .update({
+              status:
+                "consumed",
+
+              apple_transaction_id:
+                verifiedTransactionId,
+
+              apple_environment:
+                environment,
+
+              consumed_at:
+                serverIntent
+                  .consumed_at ||
+                now,
+
+              updated_at:
+                now,
+            })
+            .eq(
+              "id",
+              serverIntent.id
+            )
+            .eq(
+              "user_id",
+              user.id
+            );
+
+        if (intentUpdateError) {
+          throw intentUpdateError;
+        }
+      };
 
     const paymentId =
       deterministicApplePaymentId(
@@ -566,6 +798,23 @@ export async function POST(
         );
       }
 
+      if (
+        serverIntent &&
+        existingActivationPropertyId !==
+          resolvedPropertyId
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Completed Apple payment property does not match its purchase intent.",
+          },
+          409
+        );
+      }
+
+      await markServerIntentConsumed();
+
       return json({
         success: true,
         verified: true,
@@ -586,7 +835,7 @@ export async function POST(
       });
     }
 
-    if (!propertyId) {
+    if (!resolvedPropertyId) {
       return json(
         {
           success: false,
@@ -608,7 +857,7 @@ export async function POST(
         )
         .eq(
           "id",
-          propertyId
+          resolvedPropertyId
         )
         .maybeSingle();
 
@@ -836,6 +1085,10 @@ export async function POST(
 
       apple_app_account_token:
         appAccountToken,
+
+      apple_purchase_intent_id:
+        serverIntent?.id ||
+        null,
 
       apple_purchase_date:
         paidAtIso,
@@ -1145,6 +1398,8 @@ export async function POST(
     ) {
       throw finalUpdateError;
     }
+
+    await markServerIntentConsumed();
 
     return json({
       success: true,
