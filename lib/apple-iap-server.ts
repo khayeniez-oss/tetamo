@@ -8,6 +8,7 @@ import {
   Environment,
   SignedDataVerifier,
   type JWSTransactionDecodedPayload,
+  type ResponseBodyV2DecodedPayload,
 } from "@apple/app-store-server-library";
 
 export const TETAMO_PARTNER_IOS_BUNDLE_ID =
@@ -194,5 +195,62 @@ export async function verifyAppleSignedTransaction(
     environment
   ).verifyAndDecodeTransaction(
     transaction
+  );
+}
+
+export async function verifyAppleSignedNotification(
+  signedPayload: string
+): Promise<{
+  environment: AppleIapEnvironment;
+  notification: ResponseBodyV2DecodedPayload;
+}> {
+  const payload =
+    signedPayload.trim();
+
+  if (!payload) {
+    throw new Error(
+      "Apple signed notification payload is required."
+    );
+  }
+
+  const environments:
+    AppleIapEnvironment[] = [
+      "production",
+      "sandbox",
+    ];
+
+  const failures: string[] = [];
+
+  for (
+    const environment
+    of environments
+  ) {
+    try {
+      const notification =
+        await getAppleSignedDataVerifier(
+          environment
+        ).verifyAndDecodeNotification(
+          payload
+        );
+
+      return {
+        environment,
+        notification,
+      };
+    } catch (error) {
+      failures.push(
+        `${environment}: ${
+          error instanceof Error
+            ? error.message
+            : String(error)
+        }`
+      );
+    }
+  }
+
+  throw new Error(
+    `Apple notification verification failed. ${failures.join(
+      " | "
+    )}`
   );
 }
