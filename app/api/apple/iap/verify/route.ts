@@ -37,14 +37,39 @@ const admin =
       )
     : null;
 
-const APPLE_PRODUCT_TO_PACKAGE = {
-  "tetamo.agent.silver.yearly": "silver",
-  "tetamo.agent.gold.yearly": "gold",
-  "tetamo.agent.pro.yearly": "agent-pro",
-} as const;
-
 type TetamoAgentPackageId =
-  (typeof APPLE_PRODUCT_TO_PACKAGE)[keyof typeof APPLE_PRODUCT_TO_PACKAGE];
+  | "silver"
+  | "gold"
+  | "agent-pro";
+
+type TetamoBillingCycle =
+  | "monthly"
+  | "yearly";
+
+const APPLE_PRODUCT_TO_PACKAGE = {
+  "tetamo.agent.silver.yearly": {
+    packageId: "silver",
+    billingCycle: "yearly",
+  },
+  "tetamo.agent.gold.yearly": {
+    packageId: "gold",
+    billingCycle: "yearly",
+  },
+  "tetamo.agent.pro.yearly": {
+    packageId: "agent-pro",
+    billingCycle: "yearly",
+  },
+  "tetamo.agent.pro.monthly": {
+    packageId: "agent-pro",
+    billingCycle: "monthly",
+  },
+} as const satisfies Record<
+  string,
+  {
+    packageId: TetamoAgentPackageId;
+    billingCycle: TetamoBillingCycle;
+  }
+>;
 
 function json(
   body: Record<string, unknown>,
@@ -368,12 +393,12 @@ export async function POST(
         tx.productId || ""
       ).trim();
 
-    const packageId =
+    const appleProductConfig =
       APPLE_PRODUCT_TO_PACKAGE[
         appleProductId as keyof typeof APPLE_PRODUCT_TO_PACKAGE
       ];
 
-    if (!packageId) {
+    if (!appleProductConfig) {
       return json(
         {
           success: false,
@@ -383,6 +408,13 @@ export async function POST(
         400
       );
     }
+
+    const packageId =
+      appleProductConfig.packageId;
+
+    const billingCycle:
+      TetamoBillingCycle =
+      appleProductConfig.billingCycle;
 
     if (
       expectedPackageId &&
@@ -509,30 +541,6 @@ export async function POST(
           ""
       ).toUpperCase();
 
-    const billingCycle:
-      | "monthly"
-      | "yearly" =
-      billingPlanType ===
-      "MONTHLY"
-        ? "monthly"
-        : "yearly";
-
-    if (
-      billingCycle ===
-        "monthly" &&
-      packageId !==
-        "agent-pro"
-    ) {
-      return json(
-        {
-          success: false,
-          message:
-            "Monthly commitment billing is only available for Agent Pro.",
-        },
-        400
-      );
-    }
-
     if (
       expectedBillingCycle &&
       expectedBillingCycle !==
@@ -542,7 +550,7 @@ export async function POST(
         {
           success: false,
           message:
-            "Apple billing plan does not match the selected billing option.",
+            "Apple product does not match the selected billing option.",
         },
         409
       );
@@ -552,34 +560,6 @@ export async function POST(
       asObject(
         tx.commitmentInfo
       );
-
-    if (
-      billingCycle ===
-      "monthly"
-    ) {
-      const totalBillingPeriods =
-        Number(
-          commitmentInfo
-            .totalBillingPeriods
-        );
-
-      if (
-        Number.isFinite(
-          totalBillingPeriods
-        ) &&
-        totalBillingPeriods !==
-          12
-      ) {
-        return json(
-          {
-            success: false,
-            message:
-              "Apple commitment plan is not a 12-month commitment.",
-          },
-          400
-        );
-      }
-    }
 
     const amountTotal =
       billingCycle ===
@@ -706,8 +686,7 @@ export async function POST(
       apple_app_account_token:
         appAccountToken,
       apple_billing_plan_type:
-        billingPlanType ||
-        "BILLED_UPFRONT",
+        billingPlanType || null,
       apple_purchase_date:
         paidAtIso,
       apple_expires_at:
@@ -919,8 +898,7 @@ export async function POST(
       expiresAt:
         activationResult.expiresAt,
       billingPlanType:
-        billingPlanType ||
-        "BILLED_UPFRONT",
+        billingPlanType || null,
       commitmentInfo:
         Object.keys(
           commitmentInfo

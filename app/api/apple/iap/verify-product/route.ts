@@ -368,17 +368,6 @@ export async function POST(
     );
   }
 
-  if (!propertyId) {
-    return json(
-      {
-        success: false,
-        message:
-          "propertyId is required for this Apple purchase.",
-      },
-      400
-    );
-  }
-
   try {
     const {
       environment,
@@ -498,50 +487,6 @@ export async function POST(
       );
     }
 
-    const {
-      data: property,
-      error: propertyError,
-    } =
-      await admin
-        .from("properties")
-        .select(
-          "id, user_id, kode, title, source, status, verification_status, listing_expires_at, featured_expires_at, boost_expires_at, spotlight_expires_at"
-        )
-        .eq(
-          "id",
-          propertyId
-        )
-        .maybeSingle();
-
-    if (propertyError) {
-      throw propertyError;
-    }
-
-    if (!property) {
-      return json(
-        {
-          success: false,
-          message:
-            "Property for this Apple purchase was not found.",
-        },
-        404
-      );
-    }
-
-    if (
-      property.user_id !==
-      user.id
-    ) {
-      return json(
-        {
-          success: false,
-          message:
-            "You are not allowed to purchase this product for that property.",
-        },
-        403
-      );
-    }
-
     const paymentId =
       deterministicApplePaymentId(
         transactionId
@@ -597,11 +542,30 @@ export async function POST(
         existingMetadata.activation
       );
 
+    const existingActivationPropertyId =
+      String(
+        existingActivation.propertyId ||
+          ""
+      ).trim();
+
     if (
       existingPayment &&
       existingActivation.done ===
         true
     ) {
+      if (
+        !existingActivationPropertyId
+      ) {
+        return json(
+          {
+            success: false,
+            message:
+              "Completed Apple payment is missing its original property reference.",
+          },
+          409
+        );
+      }
+
       return json({
         success: true,
         verified: true,
@@ -616,10 +580,65 @@ export async function POST(
         productId:
           mapping.productId,
         propertyId:
-          property.id,
+          existingActivationPropertyId,
         activation:
           existingActivation,
       });
+    }
+
+    if (!propertyId) {
+      return json(
+        {
+          success: false,
+          message:
+            "propertyId is required for a new Apple purchase.",
+        },
+        400
+      );
+    }
+
+    const {
+      data: property,
+      error: propertyError,
+    } =
+      await admin
+        .from("properties")
+        .select(
+          "id, user_id, kode, title, source, status, verification_status, listing_expires_at, featured_expires_at, boost_expires_at, spotlight_expires_at"
+        )
+        .eq(
+          "id",
+          propertyId
+        )
+        .maybeSingle();
+
+    if (propertyError) {
+      throw propertyError;
+    }
+
+    if (!property) {
+      return json(
+        {
+          success: false,
+          message:
+            "Property for this Apple purchase was not found.",
+        },
+        404
+      );
+    }
+
+    if (
+      property.user_id !==
+      user.id
+    ) {
+      return json(
+        {
+          success: false,
+          message:
+            "You are not allowed to purchase this product for that property.",
+        },
+        403
+      );
     }
 
     const purchaseDateMs =
