@@ -561,20 +561,14 @@ export async function POST(
         );
       }
 
-      if (
-        intentRow.status ===
-        "cancelled"
-      ) {
-        return json(
-          {
-            success: false,
-            message:
-              "Apple purchase intent was cancelled.",
-          },
-          409
-        );
-      }
-
+      // A cryptographically verified Apple transaction
+      // is authoritative even if Tetamo previously marked
+      // this intent cancelled because StoreKit reported a
+      // cancellation/error locally.
+      //
+      // A genuinely unused cancelled intent cannot reach
+      // this branch unless Apple returns a real signed
+      // transaction carrying this exact intent UUID.
       if (
         intentRow.status ===
         "consumed"
@@ -598,7 +592,9 @@ export async function POST(
         }
       } else if (
         intentRow.status !==
-        "pending"
+          "pending" &&
+        intentRow.status !==
+          "cancelled"
       ) {
         return json(
           {
