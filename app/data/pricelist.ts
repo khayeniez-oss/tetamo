@@ -45,7 +45,7 @@ export const OWNER_PACKAGES: OwnerPackage[] = [
     audience: "owner",
     productType: "listing",
 
-    priceIdr: 50000,
+    priceIdr: 49000,
     durationDays: 365,
     maxListings: 1,
     renewable: true,
@@ -107,7 +107,7 @@ export const OWNER_PACKAGES: OwnerPackage[] = [
     audience: "owner",
     productType: "listing",
 
-    priceIdr: 150000,
+    priceIdr: 149000,
     durationDays: 365,
     maxListings: 1,
     renewable: true,
@@ -171,7 +171,7 @@ export const OWNER_PACKAGES: OwnerPackage[] = [
     audience: "owner",
     productType: "listing",
 
-    priceIdr: 550000,
+    priceIdr: 599000,
     durationDays: 365,
     maxListings: 1,
     renewable: true,
@@ -594,7 +594,7 @@ export const ADD_ON_PRODUCTS: AddOnProduct[] = [
     audience: "all",
     productType: "addon",
 
-    priceIdr: 300000,
+    priceIdr: 299000,
     durationDays: 14,
     renewable: true,
     autoRenewDefault: true,
@@ -636,7 +636,7 @@ export const ADD_ON_PRODUCTS: AddOnProduct[] = [
     audience: "all",
     productType: "addon",
 
-    priceIdr: 200000,
+    priceIdr: 199000,
     durationDays: 7,
     renewable: true,
     autoRenewDefault: true,
