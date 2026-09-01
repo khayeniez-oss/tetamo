@@ -167,30 +167,30 @@ const SPOTLIGHT_FACTS = [
 ];
 
 const AGENT_PAYMENT_FACTS = [
-  "For Agent membership payment in Indonesia, the agent needs to use the Tetamo Partner app.",
-  "The agent should download or open the Tetamo Partner app, log in, and choose the Agent membership they want.",
-  "Agent membership payment in Indonesia is completed via QRIS inside the Tetamo Partner app.",
-  "The QRIS payment can be paid using a banking app or e-wallet that supports QRIS.",
-  "After a successful QRIS payment, the Agent membership is activated.",
-  "Do not tell the customer to transfer directly to a Tetamo bank account.",
-  "Do not promise to send Tetamo bank-account details.",
-  "Do not describe bank transfer as the standard Agent membership payment method in Indonesia.",
+  "For Agent membership payment, the agent should use the Tetamo Partner app.",
+  "The agent should download or open Tetamo Partner, log in, and choose the Agent membership or product they want.",
+  "The agent completes payment by following the payment flow shown inside Tetamo Partner.",
+  "The customer should complete payment only through the payment options presented by the payment system in the app.",
+  "After successful payment is confirmed, the Agent membership or purchased product is activated.",
+  "If the customer asks about transfer, rekening, or how to pay, do not explain banking infrastructure or offer a manual transfer route. Direct them to Tetamo Partner and tell them to follow the payment flow shown there.",
+  "Do not provide or promise Tetamo bank-account details.",
+  "Do not instruct the customer to make a manual or direct transfer to Tetamo.",
 ];
 
 const AGENT_REGISTRATION_STEPS = [
-  "Register or log in as an Agent through Tetamo.",
-  "Download or open the Tetamo Partner app.",
-  "Log in to the Tetamo Partner app and choose the Agent membership that fits the agent's needs.",
-  "Complete the membership payment via QRIS inside the Tetamo Partner app using a banking app or e-wallet that supports QRIS.",
+  "Download or open Tetamo Partner on iOS or Android.",
+  "Register or log in as an Agent in Tetamo Partner.",
+  "Choose the Agent membership that fits the agent's needs.",
+  "Complete the membership payment by following the payment flow shown inside Tetamo Partner.",
   "After successful payment, the Agent membership is activated.",
-  "The agent can then enter the Agent Dashboard or Tetamo Partner app and start creating listings.",
+  "The agent can then create, edit and manage property listings through Tetamo Partner and supported Tetamo Agent workflows.",
 ];
 
 const AGENT_LISTING_STEPS = [
-  "Register or log in as an Agent through the Tetamo website or Tetamo Partner app.",
-  "Choose and activate an Agent membership.",
-  "Open the Agent Dashboard or Tetamo Partner app.",
-  "Start Create Listing.",
+  "Download or open Tetamo Partner on iOS or Android.",
+  "Register or log in as an Agent in Tetamo Partner.",
+  "Choose and activate an Agent membership if it is not already active.",
+  "Open Create Listing in Tetamo Partner.",
   "Enter the property details, location, price, transaction type, facilities and other required information.",
   "Upload property photos and supported videos.",
   "Use Generate AI to create the listing title and description when desired.",
@@ -246,6 +246,8 @@ Treat the following Brain fields as authoritative semantic context:
 - latestMeaning;
 - directQuestion;
 - conversationSituation;
+- intent;
+- intentSubject;
 - knownContext;
 - clarification state;
 - languageStyle;
@@ -286,6 +288,27 @@ A semantic conflict is exceptional. Ordinary slang, shorthand, spelling errors,
 or your own uncertainty are NOT semantic conflicts.
 
 If Brain says clarification.needed=true, Sales AI should not be running yet.
+
+PRECISE INTENT CONTRACT
+
+Brain owns the semantic intent of the latest turn.
+Do not invent a second competing customer intent when Brain.intent is specific.
+
+Important distinctions:
+- platform_features = explain Tetamo/Tetamo Partner Agent capabilities and business value, NOT membership prices;
+- package_features = explain the applicable named/current package features only;
+- package_price = pricing only;
+- package_recommendation = package fit only;
+- competitor_comparison = answer the comparison without automatically treating it as resistance;
+- existing_solution_objection = the agent already has/uses something similar and is questioning Tetamo's additional value;
+- proof_testimonial = answer approved proof/testimonial facts, NOT generic traffic disclaimers;
+- traffic_growth = answer growth/adoption facts;
+- feature_example / feature_details / feature_availability = stay on the specific feature identified by Brain.intentSubject;
+- how_to_list = Tetamo Partner is the primary listing route on iOS/Android;
+- acknowledgement = do not reopen selling.
+
+A named competitor alone does not make a turn an objection.
+A testimonial/proof question alone does not make a turn an objection.
 
 CORE PRINCIPLES
 - Read the conversation before deciding.
@@ -472,12 +495,12 @@ recommend giving the registration steps directly.
 Do not restart discovery.
 
 AGENT REGISTRATION FLOW
-1. Register/login as Agent through Tetamo.
-2. Download/open the Tetamo Partner app.
-3. Log in and choose an Agent membership in Tetamo Partner.
-4. Complete payment via QRIS inside Tetamo Partner using a banking app or e-wallet that supports QRIS.
+1. Download/open Tetamo Partner on iOS or Android.
+2. Register/login as Agent in Tetamo Partner.
+3. Choose an Agent membership.
+4. Complete payment by following the payment flow shown inside Tetamo Partner.
 5. After successful payment, the Agent membership is activated.
-6. Enter Agent Dashboard or Tetamo Partner and start listing.
+6. Create, edit and manage listings through Tetamo Partner and supported Tetamo Agent workflows.
 
 LISTING
 If an agent asks:
@@ -490,10 +513,10 @@ If an agent asks:
 recommend a STEP-BY-STEP answer.
 
 AGENT LISTING FLOW
-1. Register/login as Agent through Tetamo website or Tetamo Partner.
-2. Choose and activate Agent membership.
-3. Open Agent Dashboard or Tetamo Partner.
-4. Start Create Listing.
+1. Download/open Tetamo Partner on iOS or Android.
+2. Register/login as Agent in Tetamo Partner.
+3. Choose and activate Agent membership if it is not already active.
+4. Open Create Listing in Tetamo Partner.
 5. Fill property details, location, price, transaction type, facilities and
    required information.
 6. Upload photos and supported videos.
@@ -518,7 +541,7 @@ or equivalent:
 Tetamo does NOT create or upload the listing on behalf of the agent.
 
 Recommend politely explaining that the agent needs to create the listing
-through Tetamo Partner or Agent Dashboard, then provide the listing steps.
+through Tetamo Partner, then provide the listing steps.
 
 Do NOT hand over merely because the customer asks Tetamo to list it for them.
 
@@ -560,8 +583,8 @@ are commercial knowledge owned directly by Agent Sales.
 APPROVED INDONESIA AGENT PAYMENT FLOW
 1. Download/open the Tetamo Partner app.
 2. Log in and choose the Agent membership.
-3. Pay via QRIS inside the Tetamo Partner app.
-4. The QRIS can be paid with a banking app or e-wallet that supports QRIS.
+3. Continue to payment inside the Tetamo Partner app.
+4. Follow the payment options shown by the payment system and complete payment there.
 5. After successful payment, the Agent membership is activated.
 
 Never invent a bank-transfer flow.
@@ -1608,7 +1631,7 @@ function applyDeterministicAgentSalesGuards(
     }
 
     recommendedDirection =
-      "Answer the Agent payment question directly using the approved Indonesia Agent payment flow: Tetamo Partner app -> choose membership -> QRIS -> pay with a QRIS-supported banking app or e-wallet -> membership activates after successful payment. Do not invent bank-transfer instructions.";
+      "Answer the Agent payment question directly and simply: direct the customer to download or open Tetamo Partner -> choose the membership or product -> follow the payment flow shown in the app -> complete payment there. If they ask about transfer, rekening, or payment method, do not explain banking infrastructure and do not offer manual transfer; redirect them to the Tetamo Partner payment flow.";
 
     reason =
       "The customer is asking how to pay or is ready to proceed with Agent membership payment.";
@@ -1690,10 +1713,8 @@ function applyDeterministicAgentSalesGuards(
   const competitorConcern = includesAny(
     semanticSignal,
     [
-      /rumah\s*123/i,
-      /99\.?co/i,
-      /portal lain/i,
-      /platform lain/i,
+      /(?:sudah|udah|telah|pernah|pakai|gunakan|punya).{0,40}(?:rumah\s*123|99\.?co|portal lain|platform lain)/i,
+      /(?:rumah\s*123|99\.?co|portal lain|platform lain).{0,40}(?:sudah|udah|pakai|punya|ngapain|buat apa|tidak perlu|nggak perlu|gak perlu)/i,
     ]
   );
 
@@ -1759,13 +1780,50 @@ function applyDeterministicAgentSalesGuards(
     );
   }
 
+  const proofQuestion = includesAny(
+    semanticSignal,
+    [
+      /(?:proof|bukti|testimoni|testimonial)/i,
+      /ada.{0,20}(?:closing|sold|rented|terjual|tersewa)/i,
+      /(?:sudah|pernah).{0,20}(?:closing|sold|rented|terjual|tersewa)/i,
+    ]
+  );
+
+  if (!hardRejection && proofQuestion) {
+    objection = null;
+    recommendedObjective = "answer_proof_question";
+    recommendedDirection =
+      "Answer the proof/testimonial question directly with approved proof facts. Do not substitute traffic/user disclaimers or a package pitch.";
+    reason = "The customer directly asked for proof/testimonials/results evidence.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add("approved Tetamo proof, testimonials and sold/rented result facts only");
+  }
+
+  const existingSolutionConcern = includesAny(
+    semanticSignal,
+    [
+      /(?:sudah|udah|telah).{0,25}(?:ada|punya|pakai|gunakan).{0,35}(?:seperti itu|kayak gitu|mirip|sama|yang seperti|fitur seperti)/i,
+      /(?:fitur|tools?|sistem|solution|solusi).{0,30}(?:sudah|udah).{0,20}(?:ada|punya|pakai)/i,
+    ]
+  );
+
+  if (!hardRejection && existingSolutionConcern) {
+    objection = "existing_solution_or_duplicate_value";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Do not treat this as acceptance. Explain the incremental Tetamo value alongside the solution the agent already has, focusing on current property-specific marketplace/discovery and Agent workflow tools.";
+    reason = "The agent says they already have or use something similar and is questioning additional value.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add("approved current Tetamo Agent differentiators and Agent business tools for an existing-solution objection");
+  }
+
   const credibilityConcern = includesAny(
     semanticSignal,
     [
       /tetamo.{0,10}(?:baru|new)/i,
       /(?:traffic|rame|ramai|user|pengguna).{0,20}tetamo/i,
-      /(?:proof|bukti|testimoni|testimonial)/i,
-      /ada.{0,20}(?:closing|sold|rented|terjual|tersewa)/i,
     ]
   );
 
@@ -2011,6 +2069,229 @@ function applyDeterministicAgentSalesGuards(
   }
 
   /*
+   * BRAIN INTENT PRIORITY LOCK
+   * --------------------------
+   * Brain is the semantic authority. Legacy regex guards remain as defense-in-depth,
+   * but a precise Brain intent owns the latest turn and may repair an overly broad
+   * package/objection classification made by older Sales logic.
+   */
+  const brainIntent = params.brain.intent;
+  const brainIntentSubject = params.brain.intentSubject;
+
+  if (brainIntent === "platform_features") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "explain_platform_features";
+    recommendedDirection =
+      "Explain Tetamo Partner as an Agent business toolkit, not as a package catalogue. Focus on current live Agent capabilities such as creating/editing/managing listings, Direct WhatsApp enquiries, Jadwal Viewing, Leads, and Proposal & Portfolio. Do not expand into the coming-soon roadmap unless the customer specifically asks about future or upcoming features. Do not repeat package prices unless the customer asks for pricing.";
+    reason = "Brain resolved a general Agent platform-feature question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add(
+      "current live Tetamo Partner Agent product features and Agent business tools only; do not return package pricing or unsolicited coming-soon roadmap"
+    );
+  } else if (
+    brainIntent === "feature_details" ||
+    brainIntent === "feature_example" ||
+    brainIntent === "feature_availability" ||
+    brainIntent === "how_to_use"
+  ) {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective =
+      brainIntent === "feature_example"
+        ? "explain_feature_example"
+        : brainIntent === "feature_availability"
+          ? "explain_feature_availability"
+          : "explain_feature_details";
+    recommendedDirection =
+      `Answer only the requested feature topic${brainIntentSubject ? `: ${brainIntentSubject}` : ""}. Use current Product Truth and preserve live vs coming-soon status. If the customer asks to see a demo/screenshot, do not promise media or demo access unless an approved capability is explicitly supplied.`;
+    reason = "Brain resolved a specific feature question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add(
+      `approved current product truth for ${brainIntentSubject || "the feature referenced in conversation"}, including status, capability and boundaries`
+    );
+  } else if (brainIntent === "competitor_comparison") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "explain_comparison";
+    recommendedDirection =
+      "Answer the comparison directly. Explain Tetamo's own current value and Agent tools without attacking the other platform. Do not turn a neutral comparison into a guarantee disclaimer or package pitch.";
+    reason = "Brain resolved a neutral platform comparison rather than a resistance objection.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add(
+      "approved Tetamo differentiators and current Agent business-tool value for a neutral platform comparison"
+    );
+  } else if (brainIntent === "proof_testimonial") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_proof_question";
+    recommendedDirection =
+      "Answer the proof/testimonial question directly with approved proof facts. Do not lead with traffic limitations, no-guarantee language, or a package pitch. Do not invent a specific testimonial, property or link that was not supplied.";
+    reason = "Brain resolved a proof/testimonial request.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add(
+      "approved Tetamo proof, testimonials and sold/rented result facts only; exclude unrelated traffic disclaimers"
+    );
+  } else if (brainIntent === "traffic_growth") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_growth_question";
+    recommendedDirection =
+      "Answer the growth/adoption question positively using approved current growth facts. Do not open with missing traffic numbers unless the customer explicitly requested an exact number that is unavailable.";
+    reason = "Brain resolved a growth/adoption question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo growth, coverage and market-presence facts relevant to the exact question");
+  } else if (brainIntent === "buyer_availability") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_buyer_availability";
+    recommendedDirection =
+      "Explain Tetamo's approved buyer/renter database, matching, recommendation and lead flow. Lead with what Tetamo provides; do not add buyer-quality or guarantee disclaimers unless the customer actually asks about quality or guarantees.";
+    reason = "Brain resolved a buyer/lead availability question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo buyer/renter database, matching, property recommendation and lead workflow facts");
+  } else if (brainIntent === "existing_solution_objection") {
+    objection = "existing_solution_or_duplicate_value";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge that the agent already has a similar solution. Do not interpret this as acceptance. Explain what Tetamo can add alongside the existing solution, focusing on property-specific marketplace/discovery plus practical Agent workflow tools such as Direct WhatsApp, Jadwal Viewing, Leads and Proposal & Portfolio. Do not repeat the package recommendation unless the customer asks for it.";
+    reason = "The agent is questioning incremental value because they already have something similar.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved current Tetamo Agent differentiators and Agent business tools for an existing-solution/duplicate-value objection");
+  } else if (brainIntent === "bad_past_experience") {
+    objection = "bad_past_advertising_experience";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge the bad past portal/advertising experience briefly, then explain the most relevant Tetamo value and current differentiators. Do not lead with a no-guarantee disclaimer and do not promise a better result.";
+    reason = "Brain resolved a bad-past-experience objection.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved value-first Tetamo differentiators for a bad previous portal/advertising experience");
+  } else if (brainIntent === "self_marketing_objection") {
+    objection = "self_marketing_value_concern";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge that the agent can keep using free/self-managed channels, then explain Tetamo's additional property-specific discovery and Agent workflow value. Do not frame Tetamo as a replacement and do not lead with a guarantee disclaimer.";
+    reason = "Brain resolved a self-marketing/additional-value objection.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo comparison and current Agent-tool value for a self-marketing objection");
+  } else if (brainIntent === "price_objection") {
+    objection = "price_value_concern";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Address the price/value concern with the most relevant Tetamo value for this agent. Do not automatically discount, upsell, or turn the answer into a no-guarantee disclaimer.";
+    reason = "Brain resolved a price/value objection.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add("approved Tetamo Agent value facts relevant to a price/value objection");
+  } else if (brainIntent === "buyer_quality") {
+    objection = "buyer_quality_concern";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Explain the matching/lead information Tetamo provides, then state the buyer-quality boundary because the customer specifically asked about buyer seriousness/qualification.";
+    reason = "Brain resolved a buyer-quality concern.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo buyer quality, matching and lead-expectation boundaries");
+  } else if (brainIntent === "guarantee_question") {
+    objection = "performance_guarantee_concern";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Clearly answer the explicit guarantee/result question with the approved no-guarantee boundary, then explain the relevant Tetamo value. This is the case where the limitation should be prominent.";
+    reason = "Brain resolved an explicit guarantee/result question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo guarantee/result boundaries plus the relevant value provided");
+  } else if (brainIntent === "how_to_list") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "explain_listing_steps";
+    recommendedDirection =
+      "Direct the Agent to download/open Tetamo Partner on iOS or Android and give the self-service listing steps. Tetamo Partner is the primary listing route. Do not add unrelated package details.";
+    reason = "Brain resolved a direct how-to-list question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    for (const step of AGENT_LISTING_STEPS) commercialFacts.add(step);
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("current Tetamo Partner availability on iOS/Android and Agent listing-route facts");
+  } else if (brainIntent === "registration") {
+    objection = null;
+    recommendedObjective = "move_to_registration";
+    recommendedDirection =
+      "Direct the Agent to download/open Tetamo Partner on iOS or Android and give the Agent registration steps without restarting qualification.";
+    reason = "Brain resolved a registration/join question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    for (const step of AGENT_REGISTRATION_STEPS) commercialFacts.add(step);
+    needsTetamoFacts = true;
+    factsNeeded.add("current Tetamo Partner availability on iOS/Android");
+  } else if (brainIntent === "acknowledgement") {
+    recommendedObjective = "stop_selling";
+    recommendedDirection =
+      "Do not reopen the sales conversation. If Brain says a reply is needed, keep it to one natural acknowledgement; otherwise remain silent.";
+    reason = "Brain resolved a natural acknowledgement/closing.";
+    shouldAskQuestion = false;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    commercialFacts.clear();
+  }
+
+  const allowLegacyPackageFacts =
+    brainIntent === "unknown" ||
+    brainIntent === "package_features" ||
+    brainIntent === "package_price" ||
+    brainIntent === "package_recommendation" ||
+    brainIntent === "payment";
+
+  if (!allowLegacyPackageFacts && brainIntent !== "how_to_list" && brainIntent !== "registration") {
+    commercialFacts.clear();
+  }
+
+  /*
    * A genuine semantic conflict goes back to Brain.
    *
    * Do not answer from a Sales reinterpretation and do not request Knowledge
@@ -2037,6 +2318,7 @@ function applyDeterministicAgentSalesGuards(
   return {
     ...guidance,
     knownInformation: known,
+    customerIntent: params.brain.intent,
     buyingSignal,
     objection,
     recommendedObjective,
@@ -2088,6 +2370,8 @@ ${JSON.stringify(
     confidence: params.brain.confidence,
     conversationSituation:
       params.brain.conversationSituation,
+    intent: params.brain.intent,
+    intentSubject: params.brain.intentSubject,
     directQuestion: params.brain.directQuestion,
     knownContext: params.brain.knownContext,
     clarification: params.brain.clarification,
@@ -2135,7 +2419,7 @@ Return ONLY valid JSON in exactly this structure:
     "packageSelected": null,
     "paymentStatus": null
   },
-  "customerIntent": "short description",
+  "customerIntent": "mirror Brain.intent",
   "salesState": "short description",
   "buyingSignal": "low|medium|high",
   "objection": null,
@@ -2169,11 +2453,15 @@ RULES FOR semanticConflict:
 - do not use semanticConflict merely because slang is unfamiliar or the message is short.
 - never silently replace Brain's meaning with your own.
 
+RULES FOR customerIntent:
+- mirror Brain.intent when Brain.intent is specific;
+- do not create a competing semantic classification.
+
 RULES FOR needsTetamoFacts:
 - true only when general Tetamo Knowledge is needed.
 - false for package price/capacity/features already defined here.
 - false for the standard Indonesia Agent payment method because Agent Sales owns it directly.
-- Agent payment truth is Tetamo Partner app -> QRIS -> QRIS-supported banking app/e-wallet -> activation after successful payment.
+- Agent payment truth is Tetamo Partner app -> choose membership/product -> follow the payment flow shown in the app -> complete payment there -> activation after successful payment. Do not offer manual/direct transfer or bank-account details.
 
 Do not include a WhatsApp reply.
 Do not include markdown.

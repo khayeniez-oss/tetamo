@@ -291,7 +291,10 @@ function looksLikeNormalCommercialObjection(
     /(?:gratis|free).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace|post|posting|iklan)/i.test(
       text
     ) ||
-    /\b(?:rumah\s*123|99\.?co|propertyguru|lamudi|facebook\s+marketplace|portal\s+lain|platform\s+lain)\b/i.test(
+    /(?:sudah|udah|telah|pernah|pakai|gunakan|punya|ada).{0,45}(?:rumah\s*123|99\.?co|propertyguru|lamudi|facebook\s+marketplace|portal\s+lain|platform\s+lain)/i.test(
+      text
+    ) ||
+    /(?:rumah\s*123|99\.?co|propertyguru|lamudi|facebook\s+marketplace|portal\s+lain|platform\s+lain).{0,45}(?:sudah|udah|pakai|punya|ngapain|buat\s+apa|tidak\s+perlu|nggak\s+perlu|gak\s+perlu)/i.test(
       text
     ) ||
     /(?:lead|buyer|pembeli|penyewa).{0,40}(?:serius|qualified|bagus|kepo|asal|beneran|benaran)/i.test(
@@ -303,7 +306,7 @@ function looksLikeNormalCommercialObjection(
     /(?:jamin|garansi|guarantee|pasti).{0,30}(?:lead|closing|laku|terjual|tersewa|buyer|pembeli|penyewa)/i.test(
       text
     ) ||
-    /\b(?:percaya|trust|yakin|bukti|proof|testimoni|testimonial)\b/i.test(
+    /(?:tidak|nggak|gak|ga).{0,20}(?:percaya|yakin|trust)|(?:susah|sulit).{0,20}(?:percaya|yakin)/i.test(
       text
     )
   );
@@ -329,12 +332,38 @@ function salesReasonRequiresRealHuman(
   );
 }
 
+function brainIntentProtectsNonObjection(
+  brain: MonaBrainDecision
+) {
+  return [
+    "platform_features",
+    "feature_details",
+    "feature_example",
+    "feature_availability",
+    "package_features",
+    "package_price",
+    "package_recommendation",
+    "competitor_comparison",
+    "proof_testimonial",
+    "traffic_growth",
+    "buyer_availability",
+    "how_to_list",
+    "how_to_use",
+    "registration",
+    "payment",
+    "acknowledgement",
+    "support",
+    "general_information",
+  ].includes(brain.intent);
+}
+
 function repairNormalObjectionBrainRouting(
   brain: MonaBrainDecision,
   memory: MonaConversationMemory,
   latestCustomerMessage: string
 ): MonaBrainDecision {
   if (
+    brainIntentProtectsNonObjection(brain) ||
     !looksLikeNormalCommercialObjection(
       latestCustomerMessage
     ) ||
@@ -402,6 +431,7 @@ function repairNormalObjectionSalesRouting(
 
   if (
     !guidance ||
+    brainIntentProtectsNonObjection(brain) ||
     !looksLikeNormalCommercialObjection(
       latestCustomerMessage
     ) ||

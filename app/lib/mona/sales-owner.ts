@@ -149,34 +149,35 @@ const SPOTLIGHT_FACTS = [
 ];
 
 const OWNER_PAYMENT_FACTS = [
-  "For Owner listing payment in Indonesia, payment is completed through Tetamo's Owner listing checkout.",
-  "The Owner completes the property listing, reviews the listing, and then proceeds to payment.",
-  "Owner listing payment in Indonesia is completed via QRIS.",
-  "The QRIS can be paid using a banking app or e-wallet that supports QRIS.",
-  "After successful payment, the Owner listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.",
-  "Do not tell the Owner to transfer directly to a Tetamo bank account.",
-  "Do not promise to send Tetamo bank-account details.",
-  "Do not describe direct bank transfer as the standard Owner listing payment method in Indonesia.",
+  "For Owner listing payment, the Owner should use the Tetamo Partner app.",
+  "The Owner should download or open Tetamo Partner, log in, choose the applicable Owner package or product, complete the property listing when required, and continue to payment.",
+  "The Owner completes payment by following the payment flow shown inside Tetamo Partner.",
+  "The customer should complete payment only through the payment options presented by the payment system in the app.",
+  "After successful payment is confirmed, the Owner listing or purchased product is activated and can follow the applicable verification flow.",
+  "If the customer asks about transfer, rekening, or how to pay, do not explain banking infrastructure or offer a manual transfer route. Direct them to Tetamo Partner and tell them to follow the payment flow shown there.",
+  "Do not provide or promise Tetamo bank-account details.",
+  "Do not instruct the customer to make a manual or direct transfer to Tetamo.",
 ];
 
 const OWNER_REGISTRATION_STEPS = [
-  "Open www.tetamo.com and register or log in as an Owner.",
-  "Choose the Owner listing package that fits the property owner's needs.",
-  "Create and complete the property listing.",
-  "Review the listing and proceed to checkout.",
-  "Complete payment via QRIS using a banking app or e-wallet that supports QRIS.",
+  "Download or open Tetamo Partner on iOS or Android.",
+  "Register or log in as an Owner in Tetamo Partner.",
+  "Choose the applicable Owner listing package and create the property listing.",
+  "Review the listing and continue to the payment flow in Tetamo Partner.",
+  "Complete payment by following the payment flow shown inside Tetamo Partner.",
   "After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.",
 ];
 
 const OWNER_LISTING_STEPS = [
-  "Register or log in as an Owner through the Tetamo website or Tetamo Partner app.",
+  "Download or open Tetamo Partner on iOS or Android.",
+  "Register or log in as an Owner in Tetamo Partner.",
   "Choose the applicable Owner listing package and start the listing.",
   "Enter the property details, location, price, transaction type, facilities and other required information.",
   "Upload property photos and supported videos.",
   "Use Generate AI to create the listing title and description when desired.",
   "Complete the required listing verification information.",
   "Review the property information.",
-  "Complete payment via QRIS through the Tetamo Owner checkout using a banking app or e-wallet that supports QRIS.",
+  "Complete payment through the payment flow shown inside Tetamo Partner.",
   "After payment is successfully confirmed, the listing becomes active.",
   "The listing automatically appears publicly with Pending Verification status while awaiting Tetamo verification.",
   "Tetamo reviews and verifies the listing.",
@@ -228,6 +229,8 @@ Treat the following Brain fields as authoritative semantic context:
 - latestMeaning;
 - directQuestion;
 - conversationSituation;
+- intent;
+- intentSubject;
 - knownContext;
 - clarification state;
 - languageStyle;
@@ -268,6 +271,26 @@ A semantic conflict is exceptional. Ordinary slang, shorthand, spelling errors,
 or your own uncertainty are NOT semantic conflicts.
 
 If Brain says clarification.needed=true, Sales AI should not be running yet.
+
+PRECISE INTENT CONTRACT
+
+Brain owns the semantic intent of the latest turn.
+Do not invent a second competing customer intent when Brain.intent is specific.
+
+Important distinctions:
+- platform_features = explain current Owner/Tetamo Partner capabilities, NOT Owner package prices;
+- package_features = explain the applicable package features only;
+- package_price = pricing only;
+- package_recommendation = package fit only;
+- competitor_comparison = answer the comparison without automatically treating it as resistance;
+- existing_solution_objection = the owner already uses something similar and questions additional value;
+- proof_testimonial = answer approved proof/testimonial facts, NOT generic traffic disclaimers;
+- feature_example / feature_details / feature_availability = stay on Brain.intentSubject;
+- how_to_list = Tetamo Partner is the primary listing route on iOS/Android;
+- acknowledgement = do not reopen selling.
+
+A named competitor alone does not make a turn an objection.
+A testimonial/proof question alone does not make a turn an objection.
 
 CORE PRINCIPLES
 
@@ -402,6 +425,11 @@ FEATURED
 
 Never automatically upsell.
 
+If the owner asks for a package recommendation without explicitly asking for
+higher marketplace priority, the strongest visibility, or included social-media
+posting, Basic is the standard recommendation. Do not inherit a model-selected
+Priority or Featured package without a matching customer need.
+
 If the owner asks for the cheapest package, Basic is the lowest-priced Owner
 listing option.
 
@@ -473,11 +501,11 @@ Do not restart discovery.
 
 OWNER REGISTRATION FLOW
 
-1. Open www.tetamo.com and register/login as Owner.
-2. Choose the Owner listing package.
-3. Create and complete the property listing.
-4. Review the listing and proceed to checkout.
-5. Pay via QRIS using a banking app or e-wallet that supports QRIS.
+1. Download/open Tetamo Partner on iOS or Android.
+2. Register/login as Owner in Tetamo Partner.
+3. Choose the applicable Owner listing package and create the property listing.
+4. Review the listing and proceed to the applicable Tetamo Owner checkout.
+5. Complete payment by following the payment flow shown in Tetamo Partner.
 6. After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.
 
 OWNER LISTING FLOW
@@ -491,20 +519,21 @@ If the owner asks:
 
 recommend a clear numbered step-by-step answer.
 
-1. Register/login as Owner through Tetamo website or Tetamo Partner.
-2. Choose the applicable Owner listing package and start listing.
-3. Enter property details, location, price, transaction type, facilities and
+1. Download/open Tetamo Partner on iOS or Android.
+2. Register/login as Owner in Tetamo Partner.
+3. Choose the applicable Owner listing package and start listing.
+4. Enter property details, location, price, transaction type, facilities and
    required information.
-4. Upload photos and supported videos.
-5. Use Generate AI to create title and description when desired.
-6. Complete required verification information.
-7. Review the listing.
-8. Complete payment via QRIS through the Tetamo Owner checkout using a banking app or e-wallet that supports QRIS.
-9. After successful payment confirmation, listing becomes active.
-10. Listing automatically appears publicly as Pending Verification.
-11. Tetamo reviews/verifies the listing.
-12. Successful verification changes status to Verified.
-13. Owner can manage/edit the listing and receive applicable leads,
+5. Upload photos and supported videos.
+6. Use Generate AI to create title and description when desired.
+7. Complete required verification information.
+8. Review the listing.
+9. Complete payment through the payment flow shown in Tetamo Partner.
+10. After successful payment confirmation, listing becomes active.
+11. Listing automatically appears publicly as Pending Verification.
+12. Tetamo reviews/verifies the listing.
+13. Successful verification changes status to Verified.
+14. Owner can manage/edit the listing and receive applicable leads,
     Direct WhatsApp enquiries and viewing requests.
 
 IMPORTANT:
@@ -606,8 +635,8 @@ built-in commercial knowledge owned directly by Owner Sales.
 APPROVED INDONESIA OWNER PAYMENT FLOW
 1. Complete the Owner property listing and review it.
 2. Proceed to Tetamo Owner checkout.
-3. Pay via QRIS.
-4. The QRIS can be paid with a banking app or e-wallet that supports QRIS.
+3. Continue to payment through Tetamo Partner.
+4. Follow the payment options shown by the payment system and complete payment there.
 5. After successful payment, the listing becomes active and can appear publicly
    as Pending Verification while Tetamo completes verification.
 
@@ -1690,7 +1719,7 @@ function applyDeterministicOwnerSalesGuards(
     }
 
     recommendedDirection =
-      "Answer the Owner payment question directly using the approved Indonesia Owner payment flow: complete/review listing -> Tetamo Owner checkout -> QRIS -> pay with a QRIS-supported banking app or e-wallet -> listing activates after successful payment and can appear as Pending Verification. Do not invent bank-transfer instructions.";
+      "Answer the Owner payment question directly and simply: direct the customer to download or open Tetamo Partner -> choose the applicable package or product -> complete/review the listing when required -> follow the payment flow shown in the app -> complete payment there. If they ask about transfer, rekening, or payment method, do not explain banking infrastructure and do not offer manual transfer; redirect them to the Tetamo Partner payment flow.";
 
     reason =
       "The Owner is asking how to pay or is ready to proceed with the listing payment.";
@@ -1796,7 +1825,6 @@ function applyDeterministicOwnerSalesGuards(
         /99\.?co/i,
         /portal lain/i,
         /platform lain/i,
-        /facebook marketplace/i,
       ]
     );
 
@@ -1859,7 +1887,7 @@ function applyDeterministicOwnerSalesGuards(
       [
         /(?:post|posting|pasang|iklan).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free)/i,
         /(?:post|posting|pasang|iklan).{0,45}(?:sendiri|saya sendiri|gratis|free).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace)/i,
-        /(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free|post|posting|pasang|iklan)/i,
+        /(?:instagram|ig|facebook|fb|sosmed|social media|marketplace).{0,45}(?:sendiri|saya sendiri|gratis|free)/i,
         /(?:sendiri|saya sendiri|gratis|free).{0,45}(?:instagram|ig|facebook|fb|sosmed|social media|marketplace)/i,
         /kenapa.{0,15}bayar.{0,30}(?:instagram|facebook|fb|ig|sosmed|social media|marketplace)/i,
         /(?:ngapain|buat apa).{0,20}bayar.{0,40}(?:instagram|facebook|fb|ig|sosmed|social media|marketplace)/i,
@@ -1891,14 +1919,53 @@ function applyDeterministicOwnerSalesGuards(
     );
   }
 
+  const proofQuestion =
+    includesAny(
+      semanticSignal,
+      [
+        /(?:proof|bukti|testimoni|testimonial)/i,
+        /ada.{0,20}(?:closing|sold|rented|terjual|tersewa)/i,
+        /(?:sudah|pernah).{0,20}(?:closing|sold|rented|terjual|tersewa)/i,
+      ]
+    );
+
+  if (!hardRejection && proofQuestion) {
+    objection = null;
+    recommendedObjective = "answer_proof_question";
+    recommendedDirection =
+      "Answer the proof/testimonial question directly with approved proof facts. Do not substitute traffic/user disclaimers or a package pitch.";
+    reason = "The owner directly asked for proof/testimonials/results evidence.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add("approved Tetamo proof, testimonials and sold/rented result facts only");
+  }
+
+  const existingSolutionConcern =
+    includesAny(
+      semanticSignal,
+      [
+        /(?:sudah|udah|telah).{0,25}(?:ada|punya|pakai|gunakan).{0,35}(?:seperti itu|kayak gitu|mirip|sama|yang seperti|fitur seperti)/i,
+        /(?:fitur|tools?|sistem|solution|solusi).{0,30}(?:sudah|udah).{0,20}(?:ada|punya|pakai)/i,
+      ]
+    );
+
+  if (!hardRejection && existingSolutionConcern) {
+    objection = "existing_solution_or_duplicate_value";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Do not treat this as acceptance. Explain the incremental Tetamo value alongside what the owner already uses.";
+    reason = "The owner says they already have or use something similar and is questioning additional value.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add("approved current Tetamo Owner differentiators for an existing-solution objection");
+  }
+
   const credibilityConcern =
     includesAny(
       semanticSignal,
       [
         /tetamo.{0,10}(?:baru|new)/i,
         /(?:traffic|rame|ramai|user|pengguna).{0,20}tetamo/i,
-        /(?:proof|bukti|testimoni|testimonial)/i,
-        /ada.{0,20}(?:closing|sold|rented|terjual|tersewa)/i,
       ]
     );
 
@@ -1918,6 +1985,47 @@ function applyDeterministicOwnerSalesGuards(
     factsNeeded.add(
       "approved Tetamo growth, coverage, traffic, testimonials and results facts"
     );
+  }
+
+  /*
+   * FALSE MODEL SELF-MARKETING OBJECTION GUARD
+   * -------------------------------------------
+   *
+   * A normal package question can mention social media because Featured
+   * includes Tetamo social-media posting. That alone is not a self-marketing
+   * objection.
+   *
+   * Keep a real deterministic self-marketing objection when the current text
+   * actually says things such as posting by oneself, free posting, or
+   * questioning why Tetamo should be paid.
+   */
+  const brainPackageQuestion =
+    params.brain.intent === "package_recommendation" ||
+    params.brain.intent === "package_features";
+
+  if (
+    brainPackageQuestion &&
+    !selfMarketingConcern &&
+    objection === "self_marketing_value_concern"
+  ) {
+    objection = null;
+
+    if (recommendedObjective === "handle_objection") {
+      recommendedObjective =
+        params.brain.intent === "package_recommendation"
+          ? "recommend_owner_option"
+          : "answer_current_question";
+    }
+
+    recommendedDirection =
+      params.brain.intent === "package_recommendation"
+        ? "Recommend the Owner package that matches the customer's explicitly stated need. Do not invent a self-marketing objection."
+        : "Answer the Owner package question directly using the applicable canonical package facts. Do not invent a self-marketing objection.";
+
+    reason =
+      "The current Owner turn is a package question, and there is no deterministic evidence of a self-marketing objection.";
+
+    shouldAskQuestion = false;
   }
 
   /*
@@ -2049,24 +2157,16 @@ function applyDeterministicOwnerSalesGuards(
       packageRecommendationReason =
         "Basic is the lowest-priced standard Owner listing package.";
 
-    } else if (
-      recommendedPackage
-    ) {
-      packageRecommendationReason =
-        packageRecommendationReason ||
-        `The selected ${OWNER_PACKAGES[recommendedPackage].name} should be explained based on the owner's stated visibility and marketing needs.`;
-
     } else {
-      recommendedObjective =
-        "recommend_owner_option";
+      /*
+       * Do not inherit a model-authored package recommendation when the
+       * Owner has not explicitly asked for stronger visibility or promotion.
+       * Basic is the conservative standard fit and prevents silent upselling.
+       */
+      recommendedPackage = "basic";
 
-      recommendedDirection =
-        "Ask at most one natural question about the level of visibility the owner wants: standard listing, higher marketplace priority, or the strongest Owner visibility with social-media posting.";
-
-      reason =
-        "All Owner packages support one listing, so visibility and promotional needs are more useful than listing count for package recommendation.";
-
-      shouldAskQuestion = true;
+      packageRecommendationReason =
+        "Basic is the appropriate standard Owner recommendation when the customer has not explicitly asked for higher marketplace priority, the strongest visibility, or included social-media posting.";
     }
 
     if (recommendedPackage) {
@@ -2241,6 +2341,220 @@ function applyDeterministicOwnerSalesGuards(
   }
 
   /*
+   * BRAIN INTENT PRIORITY LOCK
+   * --------------------------
+   * Brain is the semantic authority. Older Sales regex remains fallback protection,
+   * but a precise Brain intent owns the latest turn.
+   */
+  const brainIntent = params.brain.intent;
+  const brainIntentSubject = params.brain.intentSubject;
+
+  if (brainIntent === "platform_features") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "explain_platform_features";
+    recommendedDirection =
+      "Explain the current Owner/Tetamo Partner capabilities that help an owner list and manage a property. Do not answer a general feature question with Basic/Priority/Featured pricing. Mention only relevant live features and keep coming-soon Agent-only tools out of the Owner answer.";
+    reason = "Brain resolved a general Owner platform-feature question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("current live Tetamo Partner Owner product features and Owner property workflow; do not return package pricing");
+  } else if (
+    brainIntent === "feature_details" ||
+    brainIntent === "feature_example" ||
+    brainIntent === "feature_availability" ||
+    brainIntent === "how_to_use"
+  ) {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective =
+      brainIntent === "feature_example"
+        ? "explain_feature_example"
+        : brainIntent === "feature_availability"
+          ? "explain_feature_availability"
+          : "explain_feature_details";
+    recommendedDirection =
+      `Answer only the requested feature topic${brainIntentSubject ? `: ${brainIntentSubject}` : ""}. Use Product Truth and preserve live vs coming-soon status. Do not promise a screenshot/demo/media capability unless explicitly approved.`;
+    reason = "Brain resolved a specific feature question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add(`approved current product truth for ${brainIntentSubject || "the feature referenced in conversation"}, including status and boundaries`);
+  } else if (brainIntent === "competitor_comparison") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "explain_comparison";
+    recommendedDirection =
+      "Answer the comparison directly using Tetamo's own Owner value, marketplace, matching, Direct WhatsApp, viewing, verification and listing-management capabilities. Do not attack the other platform, force a package pitch, or add a no-guarantee disclaimer unless asked.";
+    reason = "Brain resolved a neutral comparison question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo differentiators and current Owner workflow value for a neutral platform comparison");
+  } else if (brainIntent === "proof_testimonial") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_proof_question";
+    recommendedDirection =
+      "Answer the proof/testimonial question directly with approved proof facts. Do not lead with traffic limitations, no-guarantee language, or a package pitch. Do not invent a specific testimonial, property or link.";
+    reason = "Brain resolved a proof/testimonial request.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo proof, testimonials and sold/rented result facts only; exclude unrelated traffic disclaimers");
+  } else if (brainIntent === "traffic_growth") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_growth_question";
+    recommendedDirection =
+      "Answer the growth/adoption question using approved current growth facts. Do not lead with unavailable traffic numbers unless the owner explicitly asks for an exact number.";
+    reason = "Brain resolved a growth/adoption question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo growth, coverage and market-presence facts relevant to the exact question");
+  } else if (brainIntent === "buyer_availability") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "answer_buyer_availability";
+    recommendedDirection =
+      "Explain the approved buyer/renter database, matching, recommendation and lead flow. Lead with what Tetamo provides; do not add quality/guarantee limitations unless that is the actual question.";
+    reason = "Brain resolved a buyer/renter availability question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo buyer/renter database, matching, recommendation and lead workflow facts");
+  } else if (brainIntent === "existing_solution_objection") {
+    objection = "existing_solution_or_duplicate_value";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge that the owner already uses something similar. Do not interpret this as acceptance. Explain what Tetamo adds as an additional property-specific channel and workflow without repeating package pricing unless asked.";
+    reason = "The owner is questioning incremental value because they already have something similar.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved current Tetamo Owner differentiators for an existing-solution/duplicate-value objection");
+  } else if (brainIntent === "bad_past_experience") {
+    objection = "bad_past_advertising_experience";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge the previous bad portal/advertising experience briefly, then explain the most relevant Tetamo value. Do not lead with a no-guarantee disclaimer and do not promise a better outcome.";
+    reason = "Brain resolved a bad-past-experience objection.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved value-first Tetamo Owner differentiators for a bad previous portal/advertising experience");
+  } else if (brainIntent === "self_marketing_objection") {
+    objection = "self_marketing_value_concern";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Acknowledge that free/self-managed channels can remain useful, then explain Tetamo as an additional property-specific discovery, matching, direct-enquiry, viewing and verification channel. Do not lead with a guarantee disclaimer.";
+    reason = "Brain resolved a self-marketing/additional-value objection.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo comparison and Owner value facts for a self-marketing objection");
+  } else if (brainIntent === "price_objection") {
+    objection = "price_value_concern";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Address the price/value concern using relevant Owner value. Do not automatically discount, upsell, or make the answer mainly about guarantees.";
+    reason = "Brain resolved a price/value objection.";
+    shouldAskQuestion = false;
+    needsTetamoFacts = true;
+    factsNeeded.add("approved Tetamo Owner value facts relevant to a price/value objection");
+  } else if (brainIntent === "buyer_quality") {
+    objection = "buyer_quality_concern";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Explain matching/lead information first, then state the buyer-quality boundary because the owner specifically asked about seriousness/qualification.";
+    reason = "Brain resolved a buyer-quality concern.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo buyer quality, matching and lead-expectation boundaries");
+  } else if (brainIntent === "guarantee_question") {
+    objection = "performance_guarantee_concern";
+    recommendedObjective = "handle_objection";
+    recommendedDirection =
+      "Clearly answer the explicit guarantee/result question with the approved no-guarantee boundary, then explain the relevant Tetamo value.";
+    reason = "Brain resolved an explicit guarantee/result question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("approved Tetamo guarantee/result boundaries plus the relevant value provided");
+  } else if (brainIntent === "how_to_list") {
+    objection = null;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    recommendedObjective = "explain_listing_process";
+    recommendedDirection =
+      "Direct the Owner to download/open Tetamo Partner on iOS or Android and give the self-service listing steps. Tetamo Partner is the primary listing route. Do not add unrelated package details.";
+    reason = "Brain resolved a direct how-to-list question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    for (const step of OWNER_LISTING_STEPS) commercialFacts.add(step);
+    needsTetamoFacts = true;
+    factsNeeded.clear();
+    factsNeeded.add("current Tetamo Partner availability on iOS/Android and Owner listing-route facts");
+  } else if (brainIntent === "registration") {
+    objection = null;
+    recommendedObjective = "move_to_registration";
+    recommendedDirection =
+      "Direct the Owner to download/open Tetamo Partner on iOS or Android and give the Owner registration steps without restarting qualification.";
+    reason = "Brain resolved a registration/start question.";
+    shouldAskQuestion = false;
+    commercialFacts.clear();
+    for (const step of OWNER_REGISTRATION_STEPS) commercialFacts.add(step);
+    needsTetamoFacts = true;
+    factsNeeded.add("current Tetamo Partner availability on iOS/Android");
+  } else if (brainIntent === "acknowledgement") {
+    recommendedObjective = "stop_selling";
+    recommendedDirection =
+      "Do not reopen the sales conversation. If Brain says a reply is needed, keep it to one natural acknowledgement; otherwise remain silent.";
+    reason = "Brain resolved a natural acknowledgement/closing.";
+    shouldAskQuestion = false;
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    commercialFacts.clear();
+  }
+
+  const allowLegacyPackageFacts =
+    brainIntent === "unknown" ||
+    brainIntent === "package_features" ||
+    brainIntent === "package_price" ||
+    brainIntent === "package_recommendation" ||
+    brainIntent === "payment";
+
+  if (!allowLegacyPackageFacts && brainIntent !== "how_to_list" && brainIntent !== "registration") {
+    commercialFacts.clear();
+  }
+
+  /*
    * A genuine semantic conflict goes back to Brain.
    *
    * Do not answer from a Sales reinterpretation and do not request Knowledge
@@ -2268,6 +2582,7 @@ function applyDeterministicOwnerSalesGuards(
   return {
     ...guidance,
     knownInformation: known,
+    customerIntent: params.brain.intent,
     buyingSignal,
     objection,
     recommendedObjective,
@@ -2324,6 +2639,8 @@ ${JSON.stringify(
     confidence: params.brain.confidence,
     conversationSituation:
       params.brain.conversationSituation,
+    intent: params.brain.intent,
+    intentSubject: params.brain.intentSubject,
     directQuestion: params.brain.directQuestion,
     knownContext: params.brain.knownContext,
     clarification: params.brain.clarification,
@@ -2372,7 +2689,7 @@ Return ONLY valid JSON in exactly this structure:
     "paymentStatus": null,
     "hesitationReason": null
   },
-  "customerIntent": "short description",
+  "customerIntent": "mirror Brain.intent",
   "salesState": "short description",
   "buyingSignal": "low|medium|high",
   "objection": null,
@@ -2405,6 +2722,10 @@ RULES FOR semanticConflict:
 - true only when explicit wording makes Brain's resolved meaning genuinely contradictory or impossible.
 - do not use semanticConflict merely because slang is unfamiliar or the message is short.
 - never silently replace Brain's meaning with your own.
+
+RULES FOR customerIntent:
+- mirror Brain.intent when Brain.intent is specific;
+- do not create a competing semantic classification.
 
 RULES FOR needsTetamoFacts:
 - true only when general Tetamo Knowledge is required.

@@ -2,6 +2,12 @@ import {
   TETAMO_KNOWLEDGE,
   type TetamoKnowledgeSection,
 } from "../../data/tetamo-knowledge";
+import {
+  MONA_CAPABILITIES,
+  TETAMO_PRODUCT_FEATURES,
+  type TetamoProductAudience,
+  type TetamoProductFeature,
+} from "../../data/tetamo-product";
 import type { MonaBrainDecision } from "./brain";
 import type { MonaSalesGuidance } from "./sales-router";
 
@@ -39,6 +45,246 @@ function normalize(value: unknown) {
     .replace(/[^\p{L}\p{N}\s:/?.=&_-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function audienceForBrain(
+  brain: MonaBrainDecision
+): TetamoProductAudience | null {
+  if (
+    brain.customerType === "agent" ||
+    brain.customerType === "agency"
+  ) {
+    return "agent";
+  }
+
+  if (brain.customerType === "owner") {
+    return "owner";
+  }
+
+  if (brain.customerType === "buyer_renter") {
+    return "buyer_renter";
+  }
+
+  if (brain.customerType === "developer") {
+    return "developer";
+  }
+
+  return null;
+}
+
+function featureAppliesToAudience(
+  feature: TetamoProductFeature,
+  audience: TetamoProductAudience | null
+) {
+  if (feature.audience.includes("all")) return true;
+  if (!audience) return true;
+  return feature.audience.includes(audience);
+}
+
+function featureStatusLabel(
+  feature: TetamoProductFeature
+) {
+  switch (feature.status) {
+    case "live":
+      return "LIVE NOW";
+    case "coming_soon":
+      return "COMING SOON";
+    case "planned":
+      return "PLANNED / NOT LIVE";
+    case "retired":
+      return "RETIRED / NOT AVAILABLE";
+    case "internal_only":
+      return "INTERNAL ONLY / DO NOT ADVERTISE";
+    case "not_offered":
+      return "NOT OFFERED";
+    default:
+      return String(feature.status);
+  }
+}
+
+function productFeatureFacts(
+  feature: TetamoProductFeature
+) {
+  return [
+    `${feature.name} status: ${featureStatusLabel(feature)}.`,
+    feature.summary,
+    `Customer value: ${feature.customerValue}`,
+    ...feature.facts,
+  ];
+}
+
+function findProductFeaturesBySubject(
+  subject: string | null,
+  audience: TetamoProductAudience | null
+) {
+  const normalizedSubject = normalize(subject || "");
+
+  if (!normalizedSubject) return [];
+
+  return TETAMO_PRODUCT_FEATURES
+    .filter((feature) =>
+      featureAppliesToAudience(feature, audience)
+    )
+    .map((feature) => {
+      const names = [
+        feature.name,
+        feature.id.replace(/_/g, " "),
+        ...feature.aliases,
+      ].map(normalize);
+
+      const score = names.reduce(
+        (best, name) => {
+          if (!name) return best;
+          if (normalizedSubject === name) return Math.max(best, 100);
+          if (
+            normalizedSubject.includes(name) ||
+            name.includes(normalizedSubject)
+          ) {
+            return Math.max(best, 80);
+          }
+
+          const subjectTokens = tokenise(normalizedSubject);
+          const nameTokens = tokenise(name);
+          const overlap = subjectTokens.filter((token) =>
+            nameTokens.includes(token)
+          ).length;
+
+          return Math.max(best, overlap * 10);
+        },
+        0
+      );
+
+      return { feature, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((item) => item.feature);
+}
+
+function buildProductTruthSections(
+  brain: MonaBrainDecision
+): TetamoKnowledgeSection[] {
+  const audience = audienceForBrain(brain);
+  const intent = brain.intent;
+  const sections: TetamoKnowledgeSection[] = [];
+
+  const featureIntents = new Set([
+    "platform_features",
+    "feature_details",
+    "feature_example",
+    "feature_availability",
+    "how_to_use",
+    "competitor_comparison",
+    "existing_solution_objection",
+  ]);
+
+  if (!featureIntents.has(intent)) {
+    if (intent === "how_to_list" || intent === "registration") {
+      const relevant = TETAMO_PRODUCT_FEATURES.filter(
+        (feature) =>
+          ["tetamo_partner", "listing_management"].includes(feature.id) &&
+          featureAppliesToAudience(feature, audience)
+      );
+
+      if (relevant.length) {
+        sections.push({
+          id: "product-truth-listing-route",
+          title: "Current Tetamo Partner Listing Route",
+          description:
+            "Current product truth for how agents and owners should start listing.",
+          facts: relevant.flatMap(productFeatureFacts),
+        });
+      }
+    }
+
+    return sections;
+  }
+
+  if (
+    intent === "feature_details" ||
+    intent === "feature_example" ||
+    intent === "feature_availability" ||
+    intent === "how_to_use"
+  ) {
+    const specific = findProductFeaturesBySubject(
+      brain.intentSubject,
+      audience
+    );
+
+    for (const feature of specific) {
+      sections.push({
+        id: `product-feature-${feature.id}`,
+        title: `${feature.name} — Product Truth`,
+        description:
+          "Structured Tetamo product truth for one specifically referenced feature.",
+        facts: productFeatureFacts(feature),
+      });
+    }
+
+    if (intent === "feature_example") {
+      sections.push({
+        id: "mona-feature-demo-capability",
+        title: "Mona Feature Explanation and Demo Capability",
+        description:
+          "Approved boundary for what Mona may promise when a customer asks to see a feature example or demo.",
+        facts: [
+          `Mona can explain Tetamo features in chat: ${MONA_CAPABILITIES.explain_features ? "yes" : "no"}.`,
+          `Mona can send screenshots directly in the current approved capability set: ${MONA_CAPABILITIES.send_screenshot ? "yes" : "no"}.`,
+          `Mona can send a feature demo directly in the current approved capability set: ${MONA_CAPABILITIES.send_demo ? "yes" : "no"}.`,
+          `Mona can create demo access: ${MONA_CAPABILITIES.create_demo_access ? "yes" : "no"}.`,
+          `Mona can arrange a demo with support: ${MONA_CAPABILITIES.arrange_demo ? "yes" : "no"}.`,
+          "If the requested media/demo capability is false, Mona must not promise to send screenshots, demos, demo access, or support-arranged demo access. Mona may explain the feature in text using approved facts.",
+        ],
+      });
+    }
+
+    if (specific.length) return sections;
+  }
+
+  const relevantFeatures = TETAMO_PRODUCT_FEATURES
+    .filter((feature) =>
+      featureAppliesToAudience(feature, audience)
+    )
+    .filter((feature) =>
+      feature.status === "live" ||
+      feature.status === "coming_soon"
+    )
+    .sort((a, b) => b.priority - a.priority);
+
+  if (relevantFeatures.length) {
+    const live = relevantFeatures.filter(
+      (feature) => feature.status === "live"
+    );
+    const comingSoon = relevantFeatures.filter(
+      (feature) => feature.status === "coming_soon"
+    );
+
+    const audienceLabel = audience || "relevant customer";
+
+    sections.push({
+      id: `product-truth-${audienceLabel}-features`,
+      title: `Current Tetamo Product Features for ${audienceLabel}`,
+      description:
+        "Structured current product truth. Live and coming-soon features are explicitly separated so Mona can evolve with Tetamo without treating roadmap items as live.",
+      facts: [
+        "LIVE NOW:",
+        ...live.flatMap((feature) =>
+          productFeatureFacts(feature)
+        ),
+        ...(comingSoon.length
+          ? [
+              "COMING SOON — MUST NOT BE DESCRIBED AS LIVE:",
+              ...comingSoon.flatMap((feature) =>
+                productFeatureFacts(feature)
+              ),
+            ]
+          : []),
+      ],
+    });
+  }
+
+  return sections;
 }
 
 const SEARCH_ALIASES: Record<string, string[]> = {
@@ -785,6 +1031,10 @@ function buildRetrievalQuery(
    * actually required.
    */
   const semanticContext = [
+    `Intent: ${brain.intent}`,
+    brain.intentSubject
+      ? `Intent subject: ${brain.intentSubject}`
+      : "",
     brain.normalizedMessage,
     brain.latestMeaning,
     brain.directQuestion || "",
@@ -975,7 +1225,42 @@ export async function retrieveMonaKnowledge(
     };
   }
 
-  const matches = chooseMatches(retrievalQuery);
+  const productTruthSections =
+    buildProductTruthSections(params.brain);
+
+  const productMatches: MonaKnowledgeMatch[] =
+    productTruthSections.map((section, index) => ({
+      section,
+      score: 1000 - index,
+    }));
+
+  /*
+   * For a specifically referenced product feature, the structured Product Truth
+   * section is authoritative for that feature's current status and capability.
+   * Do not append broad legacy chapters here: a roadmap chapter can contain
+   * several other feature statuses (for example, Proposal LIVE + Inventory/LOI
+   * COMING SOON + Notary NOT OFFERED), which can contaminate Writer status
+   * decisions for the one feature the customer actually asked about.
+   */
+  const hasSpecificProductTruth = productTruthSections.some((section) =>
+    section.id.startsWith("product-feature-")
+  );
+
+  const legacyMatches = hasSpecificProductTruth
+    ? []
+    : chooseMatches(retrievalQuery);
+
+  const seen = new Set<string>();
+  const matches = [
+    ...productMatches,
+    ...legacyMatches,
+  ]
+    .filter((match) => {
+      if (seen.has(match.section.id)) return false;
+      seen.add(match.section.id);
+      return true;
+    })
+    .slice(0, 6);
 
   if (!matches.length) {
     return {

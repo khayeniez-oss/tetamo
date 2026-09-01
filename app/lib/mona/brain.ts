@@ -23,6 +23,34 @@ export type MonaConversationSituation =
   | "casual"
   | "unknown";
 
+export type MonaBrainIntent =
+  | "platform_features"
+  | "feature_details"
+  | "feature_example"
+  | "feature_availability"
+  | "package_features"
+  | "package_price"
+  | "package_recommendation"
+  | "competitor_comparison"
+  | "existing_solution_objection"
+  | "bad_past_experience"
+  | "self_marketing_objection"
+  | "price_objection"
+  | "proof_testimonial"
+  | "traffic_growth"
+  | "buyer_availability"
+  | "buyer_quality"
+  | "guarantee_question"
+  | "how_to_list"
+  | "how_to_use"
+  | "registration"
+  | "payment"
+  | "acknowledgement"
+  | "support"
+  | "general_information"
+  | "unknown";
+
+
 export type MonaBrainClarificationKind =
   | "role"
   | "meaning"
@@ -51,6 +79,8 @@ export type MonaBrainDecision = {
   normalizedMessage: string;
   latestMeaning: string;
   conversationSituation: MonaConversationSituation;
+  intent: MonaBrainIntent;
+  intentSubject: string | null;
 
   timingDependency: {
     active: boolean;
@@ -865,6 +895,181 @@ ROLE-DEPENDENT COMMERCIAL QUESTION + UNKNOWN ROLE:
 - do not guess the applicable package/product.
 
 ==================================================
+PRECISE CURRENT-TURN INTENT
+==================================================
+
+conversationSituation describes HOW the conversation is behaving.
+intent describes WHAT the customer actually wants on the latest turn.
+
+Always resolve the latest turn into ONE primary intent.
+
+Allowed intents:
+
+platform_features
+- customer asks what Tetamo / Tetamo Partner can do in general;
+- "fitur Tetamo apa?";
+- "fitur untuk agent apa?";
+- "what features do you have?".
+
+feature_details
+- customer asks how one named/currently discussed feature works;
+- "Proposal Portfolio itu apa?";
+- "Jadwal Viewing gimana?".
+
+feature_example
+- customer asks for an example, appearance, illustration or "contohnya"
+  of a feature currently being discussed.
+
+feature_availability
+- customer asks whether a particular feature exists, is already available,
+  is live, or is coming soon.
+
+package_features
+- customer asks what a particular membership/package includes;
+- "Gold fiturnya apa?";
+- "Basic dapat apa?".
+
+package_price
+- customer asks package/membership/listing price or fee.
+
+package_recommendation
+- customer asks which package fits their needs.
+
+competitor_comparison
+- customer neutrally asks whether/how Tetamo compares with another platform;
+- mentioning Rumah123/99.co by itself is NOT automatically an objection.
+
+existing_solution_objection
+- customer says they already have/use something similar and questions why
+  Tetamo adds value;
+- "saya sudah ada yang seperti itu";
+- "fitur begitu saya sudah punya";
+- "sudah pakai portal/CRM yang sama".
+
+bad_past_experience
+- customer describes disappointing previous paid portal/advertising experience.
+
+self_marketing_objection
+- customer says they can market/post themselves for free or already has their
+  own Facebook/Instagram/database and questions Tetamo's added value.
+
+price_objection
+- customer expresses that price is expensive or questions value because of cost.
+
+proof_testimonial
+- customer asks for testimonials, proof, successful users, sold/rented examples,
+  or whether anyone has succeeded using Tetamo.
+- This is NOT automatically a traffic question and NOT automatically an objection.
+
+traffic_growth
+- customer asks whether Tetamo is new, busy, growing, traffic/user size or adoption.
+
+buyer_availability
+- customer asks whether Tetamo has buyers/renters/leads or matching.
+
+buyer_quality
+- customer asks whether buyers/leads are serious, qualified, verified or just curious.
+
+guarantee_question
+- customer explicitly asks for guaranteed leads, guaranteed sale/rent/closing,
+  guaranteed buyer quality, guaranteed result or guaranteed timing.
+
+how_to_list
+- customer asks how to create/upload/publish/list a property.
+
+how_to_use
+- customer asks operationally how to use a Tetamo feature/tool.
+
+registration
+- customer asks how to register/join/start.
+
+payment
+- customer asks how/where to pay or has active payment intent.
+
+acknowledgement
+- customer is only acknowledging/closing naturally: "baik", "ok", "makasih",
+  "sip", thumbs-up equivalent after the substantive exchange.
+
+support
+- customer needs ordinary platform/account/listing/payment support.
+
+general_information
+- general Tetamo information not better represented above.
+
+unknown
+- no reliable intent can be resolved.
+
+INTENT SUBJECT:
+
+intentSubject is the specific thing the customer is referring to when useful.
+
+Examples:
+
+"Gold fiturnya apa?"
+-> intent="package_features"
+-> intentSubject="Gold"
+
+"Proposal Portfolio itu apa?"
+-> intent="feature_details"
+-> intentSubject="Proposal & Portfolio"
+
+Mona: "Ada Proposal & Portfolio..."
+Customer: "Bisa lihat contohnya?"
+-> intent="feature_example"
+-> intentSubject="Proposal & Portfolio"
+
+"Inventory Ready sudah ada?"
+-> intent="feature_availability"
+-> intentSubject="Inventory Ready"
+
+CONTEXTUAL REFERENT RESOLUTION:
+
+Resolve short references against the immediately preceding REAL conversation before
+interpreting them independently.
+
+Examples include:
+
+- "contohnya"
+- "yang tadi"
+- "yang itu"
+- "fiturnya"
+- "bisa lihat?"
+- "gimana tampilannya?"
+- "boleh lihat"
+- "itu gimana?"
+
+If the preceding topic was a feature, these usually refer to that feature.
+Do not turn a feature example request into a package example or package recommendation.
+
+FEATURES VS PACKAGES:
+
+"Fitur Tetamo / Tetamo Partner" means platform_features.
+Do NOT silently convert it into package_features or pricing.
+
+"Fitur Gold/Silver/Agent Pro/Basic/Priority/Featured" means package_features.
+
+If Mona just gave a generic list of package prices and the customer then says only
+"fiturnya apa?" / "tolong jelaskan fiturnya" without naming a package, use the full
+conversation to decide the referent. Do NOT automatically dump all package features.
+If the customer is asking what Tetamo/Tetamo Partner actually does, prefer
+platform_features. Use package_features only when a specific package or package set
+is clearly the subject.
+
+PRICING is a separate intent.
+PACKAGE RECOMMENDATION is a separate intent.
+
+PROOF VS TRAFFIC:
+
+A testimonial/proof question should normally be proof_testimonial.
+Do not convert it into traffic_growth merely because proof can relate to credibility.
+
+COMPARISON VS OBJECTION:
+
+A neutral comparison is competitor_comparison.
+Only use existing_solution_objection when the customer actually expresses duplicate
+value / already-has-it resistance.
+
+==================================================
 CONVERSATION SITUATION
 ==================================================
 
@@ -1294,6 +1499,10 @@ cukup
 
 Do not invent another sales question.
 
+If Mona already gave a natural closing/acknowledgement and the customer sends another
+pure acknowledgement such as "baik", "ok", "makasih", "sip", or equivalent with no
+new question or buying signal, prefer intent="acknowledgement" and replyNeeded=false.
+
 replyNeeded may be false if silence is more natural.
 
 ==================================================
@@ -1428,6 +1637,8 @@ function fallbackBrainDecision(
       "No readable message.",
 
     conversationSituation: "unknown",
+    intent: "unknown",
+    intentSubject: null,
 
     timingDependency: {
       active: false,
@@ -1517,6 +1728,35 @@ function parseBrainDecision(
         "payment",
         "support",
         "casual",
+        "unknown",
+      ]);
+
+    const allowedIntents =
+      new Set<MonaBrainIntent>([
+        "platform_features",
+        "feature_details",
+        "feature_example",
+        "feature_availability",
+        "package_features",
+        "package_price",
+        "package_recommendation",
+        "competitor_comparison",
+        "existing_solution_objection",
+        "bad_past_experience",
+        "self_marketing_objection",
+        "price_objection",
+        "proof_testimonial",
+        "traffic_growth",
+        "buyer_availability",
+        "buyer_quality",
+        "guarantee_question",
+        "how_to_list",
+        "how_to_use",
+        "registration",
+        "payment",
+        "acknowledgement",
+        "support",
+        "general_information",
         "unknown",
       ]);
 
@@ -1650,6 +1890,16 @@ function parseBrainDecision(
           ? (parsed.conversationSituation as
               MonaConversationSituation)
           : fallback.conversationSituation,
+
+      intent:
+        allowedIntents.has(
+          parsed.intent as MonaBrainIntent
+        )
+          ? (parsed.intent as MonaBrainIntent)
+          : fallback.intent,
+
+      intentSubject:
+        cleanNullableString(parsed.intentSubject),
 
       timingDependency: {
         active:
@@ -1915,11 +2165,12 @@ function looksLikeNormalSalesObjection(
     /(?:post|posting|pasang|iklan).{0,50}(?:sendiri).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace)/i.test(text) ||
     /(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace).{0,50}(?:gratis|free|sendiri|post|posting|pasang|iklan)/i.test(text) ||
     /(?:gratis|free).{0,50}(?:facebook|fb|instagram|ig|sosmed|social\s+media|marketplace|post|posting|iklan)/i.test(text) ||
-    /\b(?:rumah123|99\.?co|propertyguru|lamudi|facebook\s+marketplace)\b/i.test(text) ||
+    /(?:sudah|udah|telah|pernah|pakai|gunakan|punya|ada).{0,45}(?:rumah123|99\.?co|propertyguru|lamudi|facebook\s+marketplace|portal\s+lain|platform\s+lain)/i.test(text) ||
+    /(?:rumah123|99\.?co|propertyguru|lamudi|facebook\s+marketplace|portal\s+lain|platform\s+lain).{0,45}(?:sudah|udah|pakai|punya|ngapain|buat\s+apa|tidak\s+perlu|nggak\s+perlu|gak\s+perlu)/i.test(text) ||
     /(?:lead|buyer|pembeli|penyewa).{0,40}(?:serius|qualified|bagus|kepo|asal|beneran|benaran)/i.test(text) ||
     /(?:serius|qualified|kepo|asal).{0,40}(?:lead|buyer|pembeli|penyewa)/i.test(text) ||
     /(?:jamin|garansi|guarantee|pasti).{0,30}(?:lead|closing|laku|terjual|tersewa|buyer|pembeli|penyewa)/i.test(text) ||
-    /\b(?:percaya|trust|yakin|bukti|proof|testimoni|testimonial)\b/i.test(text)
+    /(?:tidak|nggak|gak|ga).{0,20}(?:percaya|yakin|trust)|(?:susah|sulit).{0,20}(?:percaya|yakin)/i.test(text)
   );
 }
 
@@ -2136,6 +2387,300 @@ function modelHandoverLooksHumanOnly(
   );
 }
 
+
+function canonicalPackageSubject(message: string): string | null {
+  const text = String(message || "").toLowerCase();
+
+  if (/\bagent\s*pro\b|\bagent-pro\b/i.test(text)) return "Agent Pro";
+  if (/\bsilver\b/i.test(text)) return "Silver";
+  if (/\bgold\b/i.test(text)) return "Gold";
+  if (/\bbasic(?:\s+listing)?\b/i.test(text)) return "Basic";
+  if (/\bpriority(?:\s+listing)?\b/i.test(text)) return "Priority";
+  if (/\bfeatured(?:\s+listing)?\b/i.test(text)) return "Featured";
+
+  return null;
+}
+
+function repairPreciseBrainIntent(
+  decision: MonaBrainDecision,
+  latestCustomerMessage: string
+): MonaBrainDecision {
+  const latest = String(latestCustomerMessage || "").trim();
+  const lower = latest.toLowerCase();
+
+  if (!latest) return decision;
+
+  let intent = decision.intent;
+  let intentSubject = decision.intentSubject;
+  let latestMeaning = decision.latestMeaning;
+  let directQuestion = decision.directQuestion;
+
+  const applyPreciseMeaning = (
+    nextIntent: MonaBrainIntent,
+    nextSubject: string | null,
+    meaning: string,
+    question: string | null
+  ) => {
+    intent = nextIntent;
+    intentSubject = nextSubject;
+    latestMeaning = meaning;
+    directQuestion = question;
+  };
+
+  const packageSubject = canonicalPackageSubject(latest);
+  const asksFeatures = /\bfitur(?:nya)?\b|\bfeatures?\b/i.test(latest);
+
+  if (packageSubject && asksFeatures) {
+    applyPreciseMeaning(
+      "package_features",
+      packageSubject,
+      `Customer is asking for the features included in the ${packageSubject} package.`,
+      `What features are included in the ${packageSubject} package?`
+    );
+  }
+
+  const availabilityLanguage =
+    /\b(?:ada|sudah ada|udah ada|tersedia|available|live|coming soon|bisa|bsa|bs|support|buat|create|generate|punya)\b/i.test(
+      latest
+    );
+
+  if (/\bnotar(?:y|is|ise|ize|isation|ization)?\b/i.test(lower)) {
+    applyPreciseMeaning(
+      "feature_availability",
+      "Notary / Notarisation",
+      "Customer is asking whether Tetamo provides a notary or notarisation solution.",
+      "Does Tetamo provide a notary or notarisation solution?"
+    );
+  } else if (/\binventory\s+ready\b/i.test(lower)) {
+    applyPreciseMeaning(
+      "feature_availability",
+      "Inventory Ready",
+      "Customer is asking whether the Inventory Ready feature is currently available in Tetamo.",
+      "Is Inventory Ready currently available in Tetamo?"
+    );
+  } else if (/\b(?:loi|letter\s+of\s+intent)\b/i.test(lower)) {
+    applyPreciseMeaning(
+      availabilityLanguage ? "feature_availability" : "feature_details",
+      "LOI",
+      availabilityLanguage
+        ? "Customer is asking whether Tetamo provides an editable LOI (Letter of Intent) feature."
+        : "Customer is asking how Tetamo's LOI (Letter of Intent) feature works.",
+      availabilityLanguage
+        ? "Is an editable LOI feature available in Tetamo?"
+        : "How does Tetamo's LOI feature work?"
+    );
+  } else if (/\brental\s+agreement\b/i.test(lower)) {
+    applyPreciseMeaning(
+      availabilityLanguage ? "feature_availability" : "feature_details",
+      "Rental Agreement",
+      availabilityLanguage
+        ? "Customer is asking whether Tetamo provides an editable Rental Agreement feature."
+        : "Customer is asking how Tetamo's Rental Agreement feature works.",
+      availabilityLanguage
+        ? "Is an editable Rental Agreement feature available in Tetamo?"
+        : "How does Tetamo's Rental Agreement feature work?"
+    );
+  } else if (/\bsale\s+agreement\b/i.test(lower)) {
+    applyPreciseMeaning(
+      availabilityLanguage ? "feature_availability" : "feature_details",
+      "Sale Agreement",
+      availabilityLanguage
+        ? "Customer is asking whether Tetamo provides an editable Sale Agreement feature."
+        : "Customer is asking how Tetamo's Sale Agreement feature works.",
+      availabilityLanguage
+        ? "Is an editable Sale Agreement feature available in Tetamo?"
+        : "How does Tetamo's Sale Agreement feature work?"
+    );
+  } else if (/\bproposal\b|\bportfolio\b/i.test(lower)) {
+    if (/\b(?:contoh|example|lihat|tampilan|preview)\b/i.test(lower)) {
+      applyPreciseMeaning(
+        "feature_example",
+        "Proposal & Portfolio",
+        "Customer is asking for an example or preview of the Proposal & Portfolio feature.",
+        "What does the Proposal & Portfolio feature look like in practice?"
+      );
+    } else if (availabilityLanguage) {
+      applyPreciseMeaning(
+        "feature_availability",
+        "Proposal & Portfolio",
+        "Customer is asking whether Tetamo provides the Proposal & Portfolio feature for client presentations.",
+        "Is Proposal & Portfolio available in Tetamo?"
+      );
+    } else {
+      applyPreciseMeaning(
+        "feature_details",
+        "Proposal & Portfolio",
+        "Customer is asking how the Proposal & Portfolio feature works.",
+        "How does the Proposal & Portfolio feature work?"
+      );
+    }
+  }
+
+  if (
+    asksFeatures &&
+    !packageSubject &&
+    intent === "package_features" &&
+    !intentSubject
+  ) {
+    applyPreciseMeaning(
+      "platform_features",
+      null,
+      "Customer is asking what Tetamo/Tetamo Partner can do for them at platform level, not for package-by-package pricing or package differences.",
+      "What features and capabilities does Tetamo/Tetamo Partner provide?"
+    );
+  }
+
+  if (
+    asksFeatures &&
+    !packageSubject &&
+    !intentSubject &&
+    /\b(?:tetamo|tetamo\s+partner|platform|aplikasi|app)\b/i.test(lower)
+  ) {
+    applyPreciseMeaning(
+      "platform_features",
+      null,
+      "Customer is asking what Tetamo/Tetamo Partner can do for them at platform level.",
+      "What features and capabilities does Tetamo/Tetamo Partner provide?"
+    );
+  }
+
+  if (/\b(?:testimoni|testimonial|proof|bukti)\b/i.test(lower)) {
+    applyPreciseMeaning(
+      "proof_testimonial",
+      null,
+      "Customer is asking for approved Tetamo testimonials, proof, or success evidence.",
+      "What approved Tetamo testimonials or success evidence are available?"
+    );
+  }
+
+  if (
+    /\b(?:saya|aku|kami|sy)\b.{0,30}\b(?:sudah|udah|telah)\b.{0,30}\b(?:ada|punya|pakai|menggunakan)\b.{0,35}\b(?:seperti itu|yang sama|mirip|similar|portal|platform|crm|tool|fitur)\b/i.test(
+      lower
+    ) ||
+    /\b(?:sudah|udah)\s+(?:punya|ada|pakai)\s+(?:yang\s+)?(?:seperti\s+itu|sama|mirip)\b/i.test(
+      lower
+    )
+  ) {
+    applyPreciseMeaning(
+      "existing_solution_objection",
+      null,
+      "Customer says they already have or use a similar solution and wants to understand whether Tetamo adds distinct value.",
+      "What additional value would Tetamo provide if the customer already uses a similar solution?"
+    );
+  }
+
+  if (
+    intent === decision.intent &&
+    intentSubject === decision.intentSubject &&
+    latestMeaning === decision.latestMeaning &&
+    directQuestion === decision.directQuestion
+  ) {
+    return decision;
+  }
+
+  return {
+    ...decision,
+    intent,
+    intentSubject,
+    latestMeaning,
+    directQuestion,
+  };
+}
+
+function applyKnownRoleIntentRouting(
+  decision: MonaBrainDecision
+): MonaBrainDecision {
+  const role = decision.customerType;
+  const commercialRole =
+    role === "agent" || role === "agency" || role === "owner";
+
+  if (!commercialRole || !decision.replyNeeded) {
+    return decision;
+  }
+
+  const salesOwnedIntents = new Set<MonaBrainIntent>([
+    "platform_features",
+    "feature_details",
+    "feature_example",
+    "feature_availability",
+    "package_features",
+    "package_price",
+    "package_recommendation",
+    "competitor_comparison",
+    "existing_solution_objection",
+    "bad_past_experience",
+    "self_marketing_objection",
+    "price_objection",
+    "proof_testimonial",
+    "traffic_growth",
+    "buyer_availability",
+    "buyer_quality",
+    "guarantee_question",
+    "how_to_list",
+    "how_to_use",
+    "registration",
+    "payment",
+  ]);
+
+  const knowledgeBackedIntents = new Set<MonaBrainIntent>([
+    "platform_features",
+    "feature_details",
+    "feature_example",
+    "feature_availability",
+    "competitor_comparison",
+    "existing_solution_objection",
+    "bad_past_experience",
+    "self_marketing_objection",
+    "price_objection",
+    "proof_testimonial",
+    "traffic_growth",
+    "buyer_availability",
+    "buyer_quality",
+    "guarantee_question",
+    "how_to_list",
+    "how_to_use",
+    "registration",
+  ]);
+
+  let result = { ...decision };
+
+  if (salesOwnedIntents.has(result.intent)) {
+    result = {
+      ...result,
+      salesStrategyNeeded: true,
+      salesStrategist: role === "owner" ? "owner" : "agent",
+      recommendedNextStep:
+        `Route Brain intent ${result.intent}${result.intentSubject ? ` (${result.intentSubject})` : ""} to the ${role === "owner" ? "Owner" : "Agent"} Sales AI. Brain intent is authoritative for this turn.`,
+    };
+  }
+
+  if (knowledgeBackedIntents.has(result.intent)) {
+    result = {
+      ...result,
+      factualKnowledgeNeeded: true,
+      knowledgeRequest:
+        result.knowledgeRequest.length > 0
+          ? result.knowledgeRequest
+          : [
+              `approved Tetamo facts for current intent: ${result.intent}${result.intentSubject ? ` (${result.intentSubject})` : ""}`,
+            ],
+    };
+  } else if (
+    result.intent === "package_features" ||
+    result.intent === "package_price" ||
+    result.intent === "package_recommendation" ||
+    result.intent === "payment"
+  ) {
+    result = {
+      ...result,
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+    };
+  }
+
+  return result;
+}
+
 function enforceBrainRouting(
   decision: MonaBrainDecision,
   latestCustomerMessage: string,
@@ -2187,9 +2732,50 @@ function enforceBrainRouting(
     };
   }
 
+  result = repairPreciseBrainIntent(
+    result,
+    latestMessage
+  );
+
+  const explicitObjectionIntents =
+    new Set<MonaBrainIntent>([
+      "existing_solution_objection",
+      "bad_past_experience",
+      "self_marketing_objection",
+      "price_objection",
+      "buyer_quality",
+      "guarantee_question",
+    ]);
+
+  const explicitNonObjectionIntents =
+    new Set<MonaBrainIntent>([
+      "platform_features",
+      "feature_details",
+      "feature_example",
+      "feature_availability",
+      "package_features",
+      "package_price",
+      "package_recommendation",
+      "competitor_comparison",
+      "proof_testimonial",
+      "traffic_growth",
+      "buyer_availability",
+      "how_to_list",
+      "how_to_use",
+      "registration",
+      "payment",
+      "acknowledgement",
+      "support",
+      "general_information",
+    ]);
+
   const normalSalesObjection =
-    looksLikeNormalSalesObjection(
-      latestMessage
+    explicitObjectionIntents.has(result.intent) ||
+    (
+      !explicitNonObjectionIntents.has(result.intent) &&
+      looksLikeNormalSalesObjection(
+        latestMessage
+      )
     );
 
   /*
@@ -2604,6 +3190,8 @@ function enforceBrainRouting(
     handoverReason: null,
   };
 
+  result = applyKnownRoleIntentRouting(result);
+
   /*
    * STRATEGIST CONSISTENCY.
    */
@@ -2864,9 +3452,10 @@ Before returning JSON:
 3. Recover any established customer role and facts.
 4. Normalize Indonesian WhatsApp shorthand/compressed language into normalizedMessage.
 5. Interpret the latest message using raw text + normalizedMessage + Memory/context.
-6. Apply the strict role gate.
-7. If ONE-TIME SALES SEMANTIC REVIEW FEEDBACK is present, explicitly re-check the disputed meaning before deciding routing.
-8. Decide routing and Knowledge requirements.
+6. Resolve the precise current-turn intent and intentSubject, including short contextual references.
+7. Apply the strict role gate.
+8. If ONE-TIME SALES SEMANTIC REVIEW FEEDBACK is present, explicitly re-check the disputed meaning before deciding routing.
+9. Decide routing and Knowledge requirements.
 
 Return ONLY valid JSON in exactly this structure:
 
@@ -2894,6 +3483,10 @@ Return ONLY valid JSON in exactly this structure:
   "latestMeaning": "plain-language interpretation of the latest customer message in full conversation context",
 
   "conversationSituation": "information|interest|comparison|objection|hesitation|rejection|closing|payment|support|casual|unknown",
+
+  "intent": "platform_features|feature_details|feature_example|feature_availability|package_features|package_price|package_recommendation|competitor_comparison|existing_solution_objection|bad_past_experience|self_marketing_objection|price_objection|proof_testimonial|traffic_growth|buyer_availability|buyer_quality|guarantee_question|how_to_list|how_to_use|registration|payment|acknowledgement|support|general_information|unknown",
+
+  "intentSubject": null,
 
   "timingDependency": {
     "active": false,
@@ -2924,6 +3517,15 @@ Return ONLY valid JSON in exactly this structure:
 
 OUTPUT RULES:
 
+- intent must describe the customer's PRIMARY latest-turn need, not merely repeat conversationSituation.
+- intentSubject should name the specific package, feature, product, or referent when context supports one; otherwise null.
+- Resolve "contohnya", "yang tadi", "fiturnya", "yang itu", "bisa lihat?", and similar short references from the immediate real conversation before assigning intent.
+- A general feature question is platform_features, not package_features.
+- A named package feature question is package_features.
+- A testimonial/proof question is proof_testimonial and must not be collapsed into traffic_growth.
+- A neutral portal comparison is competitor_comparison and must not be turned into an objection solely because a competitor name appears.
+- "Saya sudah ada/punya/pakai yang seperti itu" is existing_solution_objection, not acceptance or buying readiness.
+- Only explicit guarantee/result questions use guarantee_question.
 - normalizedMessage must normalize the latest customer message only and must not invent information.
 - Common Indonesian WhatsApp shorthand such as byr=bayar, djual=dijual, dsewa=disewa, brp=berapa must be understood when context supports it.
 - Use broader linguistic/context reasoning for slang not listed in the examples.
