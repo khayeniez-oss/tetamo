@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Gem,
@@ -1931,10 +1932,16 @@ function MarketplacePromoSidebar() {
   const { lang } = useLanguage();
 
   const appStoreUrl =
-    "https://apps.apple.com/us/app/tetamo/id6753583699";
+    "https://apps.apple.com/us/app/tetamo/id6771229662";
 
   const playStoreUrl =
     "https://play.google.com/store/apps/details?id=com.tetamo.mobile";
+
+  const partnerAppStoreUrl =
+    "https://apps.apple.com/us/app/tetamo-partner/id6804323379";
+
+  const partnerPlayStoreUrl =
+    "https://play.google.com/store/apps/details?id=com.tetamo.partner";
 
   const affiliateMessage =
     lang === "id"
@@ -1983,84 +1990,128 @@ Thank you.`;
     <aside className="space-y-5">
 
       {/* =====================================
-          01 — LIST PROPERTY
+          01 — TETAMO PARTNER
       ===================================== */}
-      <div className="relative overflow-hidden rounded-[30px] border border-[#E5DDCE] bg-[#F7F3EA] p-7">
+      <div className="relative overflow-hidden rounded-[30px] border border-[#D1BB90]/70 bg-gradient-to-br from-white via-[#FBF8F2] to-[#F0E6D5] p-7 shadow-[0_24px_65px_rgba(66,48,16,0.13)]">
 
-        {/* WIDE GOLD GLOW */}
-        <div className="pointer-events-none absolute -right-28 -top-24 h-64 w-64 rounded-full bg-[#D8B46A]/20 blur-[85px]" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#D8B46A]/30 blur-[85px]" />
 
         <div className="pointer-events-none absolute -bottom-24 -left-24 h-52 w-52 rounded-full bg-[#B8860B]/10 blur-[90px]" />
 
         <div className="relative z-10">
 
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1C1C1E] text-[#D8B46A] shadow-sm">
-            <Crown size={19} />
-          </div>
+          <div className="flex items-center gap-4">
 
-          <p className="mt-6 text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#B8860B]">
-            {lang === "id"
-              ? "Pasang Properti"
-              : "List Your Property"}
-          </p>
+            <Image
+              src="/app-showcase/tetamo-partner-icon.png"
+              alt="Tetamo Partner app icon"
+              width={144}
+              height={144}
+              className="h-[72px] w-[72px] shrink-0 rounded-[20px] object-cover shadow-[0_13px_27px_rgba(40,31,22,0.22)]"
+            />
 
-          <h3 className="mt-2 text-[25px] font-extrabold leading-[1.08] tracking-[-0.04em] text-[#1C1C1E]">
-            {lang === "id"
-              ? "Jangkau lebih banyak pencari properti."
-              : "Reach more property seekers."}
-          </h3>
+            <div>
 
-          <p className="mt-4 text-sm leading-6 text-gray-600">
-            {lang === "id"
-              ? "Promosikan properti Anda di Tetamo sebagai pemilik atau agen dan terhubung langsung dengan calon pembeli maupun penyewa."
-              : "Promote your property on Tetamo as an owner or agent and connect directly with buyers and renters."}
-          </p>
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#B8860B]">
+                TETAMO PARTNER
+              </p>
 
-          <div className="mt-6 border-t border-[#DED5C6] pt-5">
+              <div className="mt-2 flex items-center gap-1.5">
 
-            <div className="space-y-3 text-xs font-semibold text-gray-600">
-
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-[#B8860B]" />
-                <span>
-                  {lang === "id"
-                    ? "Listing lebih profesional"
-                    : "Professional listings"}
+                <span className="rounded-full border border-[#B8860B]/20 bg-white/55 px-2.5 py-1 text-[9px] font-extrabold text-[#6E5830]">
+                  iOS
                 </span>
-              </div>
 
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-[#B8860B]" />
-                <span>Direct WhatsApp</span>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-[#B8860B]" />
-                <span>
-                  {lang === "id"
-                    ? "Jadwalkan viewing"
-                    : "Schedule viewings"}
+                <span className="rounded-full border border-[#B8860B]/20 bg-white/55 px-2.5 py-1 text-[9px] font-extrabold text-[#6E5830]">
+                  Android
                 </span>
+
               </div>
 
             </div>
 
           </div>
 
-          <Link
-            href="/pricelist"
-            className="group mt-7 flex min-h-[50px] w-full items-center justify-between rounded-[16px] bg-[#D8B46A] px-5 text-sm font-extrabold text-[#111111] transition hover:bg-[#C59F4F]"
-          >
-            <span>
-              {lang === "id"
-                ? "Pasang Properti"
-                : "List Property"}
-            </span>
+          <h3 className="mt-6 text-[25px] font-extrabold leading-[1.08] tracking-[-0.04em] text-[#1C1C1E]">
+            {lang === "id"
+              ? "Pasang properti lebih mudah."
+              : "List property more easily."}
+          </h3>
 
-            <span className="transition group-hover:translate-x-1">
-              →
-            </span>
-          </Link>
+          <p className="mt-4 text-sm leading-6 text-gray-600">
+            {lang === "id"
+              ? "Download Tetamo Partner untuk membuat, mengelola, dan memantau listing Anda langsung dari ponsel."
+              : "Download Tetamo Partner to create, manage, and monitor your listings directly from your phone."}
+          </p>
+
+          <div className="mt-6 space-y-3 border-t border-[#C7B28B]/55 pt-5 text-xs font-semibold text-gray-600">
+
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#B8860B]" />
+              <span>
+                {lang === "id"
+                  ? "Untuk pemilik, agen, dan developer"
+                  : "For owners, agents, and developers"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#B8860B]" />
+              <span>
+                {lang === "id"
+                  ? "Buat dan kelola listing"
+                  : "Create and manage listings"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#B8860B]" />
+              <span>
+                {lang === "id"
+                  ? "Kelola leads dan jadwal viewing"
+                  : "Manage leads and viewing schedules"}
+              </span>
+            </div>
+
+          </div>
+
+          <div className="mt-7 grid grid-cols-2 gap-2.5">
+
+            <a
+              href={partnerAppStoreUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Download Tetamo Partner on the App Store"
+              className="flex min-h-[52px] items-center justify-center rounded-[16px] bg-[#181818] px-3 text-center text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:bg-black"
+            >
+              <span>
+                <span className="block text-[8px] font-semibold text-white/65">
+                  Download on the
+                </span>
+                <span className="mt-0.5 block text-[11px] font-extrabold">
+                  App Store
+                </span>
+              </span>
+            </a>
+
+            <a
+              href={partnerPlayStoreUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Get Tetamo Partner on Google Play"
+              className="flex min-h-[52px] items-center justify-center rounded-[16px] border border-[#B8860B]/30 bg-[#D8B46A] px-3 text-center text-[#181818] shadow-[0_10px_24px_rgba(148,101,10,0.16)] transition hover:-translate-y-0.5 hover:bg-[#C59F4F]"
+            >
+              <span>
+                <span className="block text-[8px] font-semibold text-[#181818]/65">
+                  Get it on
+                </span>
+                <span className="mt-0.5 block text-[11px] font-extrabold">
+                  Google Play
+                </span>
+              </span>
+            </a>
+
+          </div>
 
         </div>
       </div>
@@ -2070,65 +2121,87 @@ Thank you.`;
       ===================================== */}
       <div className="relative overflow-hidden rounded-[30px] border border-[#D8B46A]/30 bg-[#101010] p-7 text-white">
 
-        {/* LARGE FLOATING GLOW */}
         <div className="pointer-events-none absolute -right-36 -top-20 h-80 w-80 rounded-full bg-[#D8B46A]/20 blur-[105px]" />
 
         <div className="pointer-events-none absolute -bottom-36 -left-28 h-72 w-72 rounded-full bg-[#B8860B]/10 blur-[110px]" />
 
         <div className="relative z-10">
 
-          <div className="flex items-start justify-between gap-5">
+          <div className="flex items-center gap-4">
+
+            <Image
+              src="/app-showcase/tetamo-app-icon.png"
+              alt="Tetamo marketplace app icon"
+              width={68}
+              height={68}
+              className="h-[68px] w-[68px] shrink-0 rounded-[19px] object-cover shadow-[0_14px_30px_rgba(0,0,0,0.44)]"
+            />
 
             <div className="min-w-0">
 
-              <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#D8B46A]">
-                TETAMO APP
+              <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#D8B46A]">
+                TETAMO MARKETPLACE
               </p>
 
-              <h3 className="mt-2 text-[25px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white">
-                {lang === "id"
-                  ? "Properti dalam genggaman Anda."
-                  : "Property in your hands."}
-              </h3>
+              <div className="mt-2 flex gap-1.5">
 
-            </div>
+                <span className="rounded-full border border-[#D8B46A]/25 bg-[#D8B46A]/10 px-2 py-1 text-[9px] font-extrabold text-[#E1C681]">
+                  iOS
+                </span>
 
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#D8B46A]/30 bg-[#D8B46A]/10 text-[#D8B46A]">
-              <Zap size={18} />
+                <span className="rounded-full border border-[#D8B46A]/25 bg-[#D8B46A]/10 px-2 py-1 text-[9px] font-extrabold text-[#E1C681]">
+                  Android
+                </span>
+
+              </div>
+
             </div>
 
           </div>
 
-          <p className="mt-4 text-sm leading-6 text-white/55">
+          <h3 className="mt-6 text-[26px] font-extrabold leading-[1.06] tracking-[-0.045em] text-white">
             {lang === "id"
-              ? "Cari properti, hubungi pemilik atau agen, jadwalkan viewing dan kelola listing langsung melalui aplikasi Tetamo."
-              : "Find properties, contact owners or agents, schedule viewings and manage listings through the Tetamo app."}
+              ? "Temukan properti di seluruh Indonesia."
+              : "Discover property across Indonesia."}
+          </h3>
+
+          <p className="mt-4 text-[13px] leading-6 text-white/65">
+            {lang === "id"
+              ? "Tetamo adalah marketplace properti untuk semua. Cari rumah, vila, apartemen, tanah, dan properti lainnya untuk dibeli atau disewa."
+              : "Tetamo is Indonesia's property marketplace for everyone. Find homes, villas, apartments, land, and other properties to buy or rent."}
           </p>
 
-          {/* APP VISUAL */}
-          <div className="relative mt-6 h-[185px] overflow-hidden rounded-[22px] border border-white/10 bg-[#080808]">
+          <div className="mt-5 space-y-3 rounded-[20px] border border-white/10 bg-white/[0.045] p-4 text-[11px] font-semibold text-white/80">
 
-            <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-[#D8B46A]/20 blur-[60px]" />
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#D8B46A]" />
 
-            <div className="absolute bottom-6 left-5 z-10 max-w-[135px]">
-
-              <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#D8B46A]">
-                iOS · Android
-              </p>
-
-              <p className="mt-2 text-xs font-bold leading-5 text-white/75">
+              <span>
                 {lang === "id"
-                  ? "Cari properti kapan saja, di mana saja."
-                  : "Find property anytime, anywhere."}
-              </p>
-
+                  ? "Cari properti untuk dijual atau disewa"
+                  : "Search property for sale or rent"}
+              </span>
             </div>
 
-            <img
-              src="/app-showcase/tetamo-home.png"
-              alt="Tetamo mobile app"
-              className="absolute -bottom-20 right-4 w-[135px] rotate-[4deg] rounded-[20px] border border-white/15 shadow-2xl"
-            />
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#D8B46A]" />
+
+              <span>
+                {lang === "id"
+                  ? "Hubungi pemilik atau agen langsung"
+                  : "Contact owners or agents directly"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#D8B46A]" />
+
+              <span>
+                {lang === "id"
+                  ? "Simpan properti dan jadwalkan viewing"
+                  : "Save properties and schedule viewings"}
+              </span>
+            </div>
 
           </div>
 
@@ -2138,18 +2211,36 @@ Thank you.`;
               href={appStoreUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex min-h-[46px] items-center justify-center rounded-[14px] bg-white px-3 text-center text-[11px] font-extrabold text-[#111111] transition hover:bg-[#D8B46A]"
+              aria-label="Download Tetamo on the App Store"
+              className="flex min-h-[52px] items-center justify-center rounded-[16px] bg-white px-3 text-center text-[#171717] transition hover:-translate-y-0.5 hover:bg-[#F4F0E8]"
             >
-              App Store
+              <span>
+                <span className="block text-[8px] font-semibold text-[#171717]/60">
+                  Download on the
+                </span>
+
+                <span className="mt-0.5 block text-[11px] font-extrabold">
+                  App Store
+                </span>
+              </span>
             </a>
 
             <a
               href={playStoreUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex min-h-[46px] items-center justify-center rounded-[14px] border border-white/15 bg-white/[0.06] px-3 text-center text-[11px] font-extrabold text-white transition hover:border-[#D8B46A] hover:text-[#D8B46A]"
+              aria-label="Get Tetamo on Google Play"
+              className="flex min-h-[52px] items-center justify-center rounded-[16px] border border-[#D8B46A]/75 bg-[#D8B46A] px-3 text-center text-[#171717] shadow-[0_10px_24px_rgba(184,134,11,0.20)] transition hover:-translate-y-0.5 hover:bg-[#C59F4F]"
             >
-              Google Play
+              <span>
+                <span className="block text-[8px] font-semibold text-[#171717]/65">
+                  Get it on
+                </span>
+
+                <span className="mt-0.5 block text-[11px] font-extrabold">
+                  Google Play
+                </span>
+              </span>
             </a>
 
           </div>

@@ -21,9 +21,7 @@ import {
   LayoutDashboard,
   Menu,
   X,
-  BriefcaseBusiness,
   Building2,
-  Shield,
   BadgeDollarSign,
   Bell,
   Home,
@@ -64,7 +62,7 @@ function getDashboardHref(role: string | null) {
   if (role === "owner") return "/pemilikdashboard";
   if (role === "agent") return "/agentdashboard";
   if (role === "admin") return "/admindashboard";
-  if (role === "developer") return "/";
+  if (role === "developer") return "/developer-license";
   return "/";
 }
 
@@ -406,7 +404,6 @@ export default function Navbar() {
 
     login: isID ? "Masuk" : "Login",
     developer: "Developer",
-    agentPro: isID ? "Agen Pro" : "Agent Pro",
     signUp: isID ? "Daftar" : "Sign Up",
     menu: "Menu",
     quickAccess: isID ? "Akses Cepat" : "Quick Access",
@@ -1148,7 +1145,7 @@ export default function Navbar() {
 
 
               {accountOpen ? (
-                <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-[270px] overflow-hidden rounded-[24px] border border-[#E6DED1] bg-white shadow-[0_24px_65px_rgba(0,0,0,0.15)]">
+                <div className="absolute right-0 top-[calc(100%+10px)] z-[70] w-[270px] overflow-hidden rounded-[24px] border border-white/70 bg-white/90 shadow-[0_28px_72px_rgba(0,0,0,0.22)] backdrop-blur-xl backdrop-saturate-150">
 
                   {sessionLoading ? (
                     <div className="px-4 py-4 text-sm text-gray-500">
@@ -1158,7 +1155,7 @@ export default function Navbar() {
                     <>
 
                       {/* USER */}
-                      <div className="border-b border-[#EEE8DE] bg-[#FBFAF7] px-4 py-4">
+                      <div className="border-b border-[#EEE8DE]/80 bg-[#FBFAF7]/70 px-4 py-4">
 
                         <div className="flex items-center gap-3">
 
@@ -1231,17 +1228,6 @@ export default function Navbar() {
                       </Link>
 
 
-                      <Link
-                        href="/signup?role=agent&next=/agentdashboard/paket"
-                        onClick={() =>
-                          setAccountOpen(false)
-                        }
-                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
-                      >
-                        <BriefcaseBusiness className="h-4 w-4 text-[#B8860B]" />
-
-                        {t.agentPro}
-                      </Link>
 
 
                       <Link
@@ -1257,17 +1243,6 @@ export default function Navbar() {
                       </Link>
 
 
-                      <Link
-                        href="/login?role=admin"
-                        onClick={() =>
-                          setAccountOpen(false)
-                        }
-                        className="flex items-center gap-3 px-4 py-3.5 text-sm font-semibold text-[#1C1C1E] transition hover:bg-[#F8F6F1]"
-                      >
-                        <Shield className="h-4 w-4 text-[#B8860B]" />
-
-                        Admin
-                      </Link>
 
 
                       <Link
@@ -1275,7 +1250,7 @@ export default function Navbar() {
                         onClick={() =>
                           setAccountOpen(false)
                         }
-                        className="flex items-center justify-center border-t border-[#EEE8DE] bg-[#FBFAF7] px-4 py-3.5 text-sm font-extrabold text-[#1C1C1E] transition hover:bg-[#F3EEE4]"
+                        className="flex items-center justify-center border-t border-[#EEE8DE]/80 bg-[#FBFAF7]/70 px-4 py-3.5 text-sm font-extrabold text-[#1C1C1E] transition hover:bg-[#F3EEE4]/80"
                       >
                         {t.signUp}
                       </Link>
@@ -1764,17 +1739,6 @@ export default function Navbar() {
                           </Link>
 
 
-                          <Link
-                            href="/signup?role=agent&next=/agentdashboard/paket"
-                            onClick={
-                              closeAllMenus
-                            }
-                            className="flex min-h-[46px] items-center justify-center gap-2 rounded-[15px] bg-[#F8F6F1] px-3 text-center text-xs font-bold text-[#1C1C1E]"
-                          >
-                            <BriefcaseBusiness className="h-4 w-4 text-[#B8860B]" />
-
-                            {t.agentPro}
-                          </Link>
 
 
                           <Link
@@ -1790,17 +1754,6 @@ export default function Navbar() {
                           </Link>
 
 
-                          <Link
-                            href="/login?role=admin"
-                            onClick={
-                              closeAllMenus
-                            }
-                            className="flex min-h-[46px] items-center justify-center gap-2 rounded-[15px] bg-[#F8F6F1] px-3 text-xs font-bold text-[#1C1C1E]"
-                          >
-                            <Shield className="h-4 w-4 text-[#B8860B]" />
-
-                            Admin
-                          </Link>
 
                         </div>
 

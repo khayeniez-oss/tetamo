@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Crown,
+  BriefcaseBusiness,
+  MapPin,
+  MessageCircle,
   Heart,
   Bookmark,
   Share2,
@@ -23,14 +26,22 @@ import { trackEvent } from "@/lib/trackEvent";
 const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM0 -RTLO", "TTM013"];
 
 const FEATURED_AGENT_NAMES = [
-  "Ricco Bong (RJOI)",
-  "i Ketut Nur Salleh",
-  "Elly (XCTP)",
+  "Aprianadh",
+  "Ir. Gunawan",
+  "Jake Wawan Putra",
 ];
 
-const TETAMO_APP_STORE_URL = "#";
+const TETAMO_APP_STORE_URL =
+  "https://apps.apple.com/us/app/tetamo/id6771229662";
+
 const TETAMO_PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.tetamo.mobile";
+
+const TETAMO_PARTNER_APP_STORE_URL =
+  "https://apps.apple.com/us/app/tetamo-partner/id6804323379";
+
+const TETAMO_PARTNER_PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.tetamo.partner";
 
 /* =========================
    TYPES
@@ -2607,7 +2618,7 @@ function FeaturedAgentsSection() {
 
         {/* AGENTS */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((item) => (
               <div
                 key={item}
@@ -2632,45 +2643,61 @@ function FeaturedAgentsSection() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
 
             {agents.map((agent) => {
+              const inquiryMessage =
+                lang === "id"
+                  ? "Halo " +
+                    agent.name +
+                    ", saya melihat profil Anda di Tetamo dan ingin bertanya tentang properti."
+                  : "Hello " +
+                    agent.name +
+                    ", I saw your profile on Tetamo and would like to ask about property.";
+
               const whatsappHref =
                 agent.whatsapp
-                  ? `https://wa.me/${agent.whatsapp}?text=${encodeURIComponent(
-                      lang === "id"
-                        ? `Halo ${agent.name}, saya melihat profil Anda di Tetamo dan ingin bertanya tentang properti.`
-                        : `Hello ${agent.name}, I saw your profile on Tetamo and would like to ask about property.`
-                    )}`
+                  ? "https://wa.me/" +
+                    agent.whatsapp +
+                    "?text=" +
+                    encodeURIComponent(
+                      inquiryMessage
+                    )
                   : "#";
+
+              const hasSocials = Boolean(
+                agent.socials?.instagram ||
+                agent.socials?.facebook ||
+                agent.socials?.tiktok ||
+                agent.socials?.linkedin
+              );
 
               return (
                 <article
                   key={agent.id}
-                  className="group overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white shadow-[0_14px_45px_rgba(0,0,0,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.13)]"
+                  className="group flex h-full flex-col overflow-hidden rounded-[30px] border border-[#E7DFD2] bg-white shadow-[0_16px_46px_rgba(28,28,30,0.08)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.13)]"
                 >
 
                   {/* PHOTO */}
-                  <div className="relative h-[320px] overflow-hidden bg-[#1C1C1E] sm:h-[350px]">
+                  <div className="relative h-[260px] overflow-hidden bg-[#1C1C1E] sm:h-[290px]">
+
                     <img
                       src={agent.photo}
                       alt={agent.name}
                       className="h-full w-full object-cover object-center transition duration-700 group-hover:scale-[1.035]"
                     />
 
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-black/10" />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
 
-                    {/* VERIFIED */}
-                    {agent.agentVerified && (
-                      <div className="absolute left-4 top-4 rounded-full border border-white/20 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
+                    {agent.agentVerified ? (
+                      <div className="absolute left-4 top-4 rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
                         ✓{" "}
                         {lang === "id"
                           ? "Agen Terverifikasi"
                           : "Verified Agent"}
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* FEATURED */}
                     <div className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[#D8B46A] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#111111]">
                       <Crown className="h-3 w-3" />
 
@@ -2679,49 +2706,80 @@ function FeaturedAgentsSection() {
                         : "Tetamo Selected"}
                     </div>
 
-                    {/* NAME ON IMAGE */}
-                    <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D8B46A]">
-                        {lang === "id"
-                          ? "Agen Properti"
-                          : "Property Agent"}
-                      </p>
-
-                      <h3 className="mt-1 text-[24px] font-extrabold leading-tight tracking-[-0.025em] text-white">
-                        {agent.name}
-                      </h3>
-
-                      <p className="mt-2 text-sm font-semibold text-white/70">
-                        {agent.agency}
-                      </p>
-                    </div>
                   </div>
 
                   {/* DETAILS */}
-                  <div className="p-5 sm:p-6">
+                  <div className="flex flex-1 flex-col p-5 sm:p-6">
 
-                    {/* LOCATION */}
-                    <div className="flex items-start gap-2">
-                      <span className="mt-[1px] text-sm">
-                        📍
-                      </span>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
+                      {lang === "id"
+                        ? "Agen Properti"
+                        : "Property Agent"}
+                    </p>
 
-                      <p className="text-sm font-medium leading-6 text-gray-600">
-                        {agent.location}
-                      </p>
+                    <h3 className="mt-1.5 text-[24px] font-extrabold leading-tight tracking-[-0.035em] text-[#1C1C1E]">
+                      {agent.name}
+                    </h3>
+
+                    {/* AGENCY AND LOCATION */}
+                    <div className="mt-5 space-y-3 rounded-[18px] bg-[#F8F6F1] p-4">
+
+                      <div className="grid grid-cols-[30px_minmax(0,1fr)] items-start gap-2.5">
+
+                        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] bg-[#EEE4CF] text-[#9A6F0A]">
+                          <BriefcaseBusiness className="h-3.5 w-3.5" />
+                        </span>
+
+                        <div className="min-w-0">
+
+                          <p className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-gray-400">
+                            {lang === "id"
+                              ? "Agensi"
+                              : "Agency"}
+                          </p>
+
+                          <p className="mt-1 break-words text-xs font-bold leading-5 text-[#33363B]">
+                            {agent.agency}
+                          </p>
+
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-[30px_minmax(0,1fr)] items-start gap-2.5">
+
+                        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] bg-[#EEE4CF] text-[#9A6F0A]">
+                          <MapPin className="h-3.5 w-3.5" />
+                        </span>
+
+                        <div className="min-w-0">
+
+                          <p className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-gray-400">
+                            {lang === "id"
+                              ? "Lokasi"
+                              : "Location"}
+                          </p>
+
+                          <p className="mt-1 break-words text-xs font-bold leading-5 text-[#33363B]">
+                            {agent.location}
+                          </p>
+
+                        </div>
+                      </div>
+
                     </div>
 
-                    {/* SOCIAL */}
-                    <div className="mt-5 flex items-center justify-between gap-4 border-t border-gray-100 pt-5">
+                    {/* SOCIAL LINKS */}
+                    <div className="mt-5 flex min-h-[54px] items-center justify-between gap-4 border-t border-gray-100 pt-4">
 
-                      <div>
-                        <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-gray-400">
-                          {lang === "id"
-                            ? "Ikuti Agen"
-                            : "Follow Agent"}
-                        </p>
+                      <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-gray-400">
+                        {lang === "id"
+                          ? "Ikuti Agen"
+                          : "Follow Agent"}
+                      </p>
 
-                        <div className="mt-2 flex flex-wrap gap-2">
+                      {hasSocials ? (
+                        <div className="flex flex-wrap justify-end gap-2">
+
                           <SocialBtn
                             href={agent.socials?.instagram}
                             label="Instagram"
@@ -2749,40 +2807,42 @@ function FeaturedAgentsSection() {
                           >
                             <IconLinkedIn />
                           </SocialBtn>
+
                         </div>
-                      </div>
-
-                      <div className="hidden text-right sm:block">
-                        <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-gray-400">
-                          TETAMO
+                      ) : (
+                        <p className="text-[10px] font-medium text-gray-400">
+                          {lang === "id"
+                            ? "Belum tersedia"
+                            : "Not available yet"}
                         </p>
+                      )}
 
-                        <p className="mt-1 text-xs font-bold text-[#B8860B]">
-                          VERIFIED
-                        </p>
-                      </div>
                     </div>
 
                     {/* WHATSAPP */}
                     <a
                       href={whatsappHref}
-                      onClick={(e) => {
+                      onClick={(event) => {
                         if (!agent.whatsapp) {
-                          e.preventDefault();
+                          event.preventDefault();
                         }
                       }}
                       target="_blank"
                       rel="noreferrer"
-                      className={`mt-5 flex min-h-[50px] w-full items-center justify-center rounded-2xl px-4 py-3 text-center text-sm font-extrabold transition ${
+                      className={[
+                        "mt-auto flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[15px] px-4 py-3 text-center text-sm font-extrabold transition",
                         agent.whatsapp
                           ? "bg-[#1C1C1E] text-white hover:bg-black"
-                          : "pointer-events-none bg-gray-200 text-gray-400"
-                      }`}
+                          : "pointer-events-none bg-gray-200 text-gray-400",
+                      ].join(" ")}
                     >
+                      <MessageCircle className="h-4 w-4" />
+
                       {lang === "id"
                         ? "Hubungi via WhatsApp →"
                         : "Contact via WhatsApp →"}
                     </a>
+
                   </div>
                 </article>
               );
@@ -3423,13 +3483,6 @@ function LocationDiscoverySection() {
 function DownloadTetamoAppSection() {
   const { lang } = useLanguage();
 
-  const appStoreUrl =
-    TETAMO_APP_STORE_URL === "#"
-      ? "https://apps.apple.com/us/app/tetamo/id6753583699"
-      : TETAMO_APP_STORE_URL;
-
-  const playStoreUrl = TETAMO_PLAY_STORE_URL;
-
   return (
     <section className="relative overflow-hidden bg-[#090909] px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8 lg:py-24">
 
@@ -3440,312 +3493,303 @@ function DownloadTetamoAppSection() {
 
       <div className="relative mx-auto max-w-7xl">
 
-        <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+        {/* SECTION INTRO */}
+        <div className="grid items-end gap-6 lg:grid-cols-[0.92fr_0.68fr] lg:gap-14">
 
-          {/* =====================================
-              LEFT — CONTENT
-          ===================================== */}
-          <div className="max-w-[590px]">
+          <div>
 
             <div className="flex items-center gap-3">
+
               <span className="h-px w-10 bg-[#D8B46A]" />
 
               <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#D8B46A] sm:text-xs">
                 {lang === "id"
                   ? "Aplikasi Tetamo"
-                  : "Tetamo Mobile App"}
+                  : "Tetamo Apps"}
               </span>
+
             </div>
 
-            <h2 className="mt-5 text-[36px] font-extrabold leading-[1.05] tracking-[-0.045em] text-white sm:text-[46px] lg:text-[54px]">
+            <h2 className="mt-5 text-[36px] font-extrabold leading-[1.02] tracking-[-0.05em] text-white sm:text-[46px] lg:text-[58px]">
               {lang === "id" ? (
                 <>
-                  Properti Indonesia,{" "}
+                  Dua aplikasi.{" "}
+
                   <span className="text-[#D8B46A]">
-                    dalam genggaman Anda.
+                    Satu ekosistem properti.
                   </span>
                 </>
               ) : (
                 <>
-                  Indonesia property,{" "}
+                  Two apps.{" "}
+
                   <span className="text-[#D8B46A]">
-                    in your hands.
+                    One property ecosystem.
                   </span>
                 </>
               )}
             </h2>
 
-            <p className="mt-6 max-w-xl text-sm leading-7 text-white/60 sm:text-base sm:leading-8">
-              {lang === "id"
-                ? "Cari, beli, jual dan sewa properti langsung dari aplikasi Tetamo. Hubungi pemilik atau agen melalui WhatsApp, jadwalkan viewing, dan kelola aktivitas properti Anda dengan lebih mudah."
-                : "Find, buy, sell and rent property directly from the Tetamo app. Contact owners or agents through WhatsApp, schedule viewings and manage your property activity more easily."}
-            </p>
-
-            {/* FEATURES */}
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-              <div className="border-l border-[#D8B46A]/50 pl-4">
-                <p className="text-sm font-extrabold text-white">
-                  {lang === "id"
-                    ? "Cari Properti"
-                    : "Find Property"}
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-white/40">
-                  {lang === "id"
-                    ? "Jelajahi listing di berbagai wilayah Indonesia."
-                    : "Explore listings across Indonesia."}
-                </p>
-              </div>
-
-              <div className="border-l border-[#D8B46A]/50 pl-4">
-                <p className="text-sm font-extrabold text-white">
-                  WhatsApp
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-white/40">
-                  {lang === "id"
-                    ? "Hubungi pemilik atau agen secara langsung."
-                    : "Contact owners or agents directly."}
-                </p>
-              </div>
-
-              <div className="border-l border-[#D8B46A]/50 pl-4">
-                <p className="text-sm font-extrabold text-white">
-                  {lang === "id"
-                    ? "Jadwal Viewing"
-                    : "Schedule Viewing"}
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-white/40">
-                  {lang === "id"
-                    ? "Ajukan jadwal viewing melalui Tetamo."
-                    : "Request viewing times through Tetamo."}
-                </p>
-              </div>
-
-              <div className="border-l border-[#D8B46A]/50 pl-4">
-                <p className="text-sm font-extrabold text-white">
-                  {lang === "id"
-                    ? "Pasang Properti"
-                    : "List Property"}
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-white/40">
-                  {lang === "id"
-                    ? "Promosikan dan kelola listing Anda."
-                    : "Promote and manage your listings."}
-                </p>
-              </div>
-
-            </div>
-
-            {/* STORE LABEL */}
-            <p className="mt-9 text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/35">
-              {lang === "id"
-                ? "Download aplikasi Tetamo"
-                : "Download the Tetamo app"}
-            </p>
-
-            {/* STORE BUTTONS */}
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-
-              {/* APP STORE */}
-              <a
-                href={appStoreUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex min-h-[62px] min-w-[185px] items-center justify-between gap-4 rounded-2xl bg-white px-5 py-3 text-[#111111] transition duration-200 hover:bg-[#D8B46A]"
-              >
-                <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] opacity-50">
-                    {lang === "id"
-                      ? "Download di"
-                      : "Download on the"}
-                  </p>
-
-                  <p className="mt-0.5 text-[15px] font-extrabold">
-                    App Store
-                  </p>
-                </div>
-
-                <span className="text-lg transition group-hover:translate-x-1">
-                  →
-                </span>
-              </a>
-
-              {/* GOOGLE PLAY */}
-              <a
-                href={playStoreUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex min-h-[62px] min-w-[185px] items-center justify-between gap-4 rounded-2xl bg-[#D8B46A] px-5 py-3 text-[#111111] transition duration-200 hover:bg-[#C49C4E]"
-              >
-                <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] opacity-50">
-                    {lang === "id"
-                      ? "Dapatkan di"
-                      : "Get it on"}
-                  </p>
-
-                  <p className="mt-0.5 text-[15px] font-extrabold">
-                    Google Play
-                  </p>
-                </div>
-
-                <span className="text-lg transition group-hover:translate-x-1">
-                  →
-                </span>
-              </a>
-
-            </div>
-
-            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-white/35">
-
-              <span>
-                ✓ iOS
-              </span>
-
-              <span>
-                ✓ Android
-              </span>
-
-              <span>
-                ✓ {lang === "id"
-                  ? "Bahasa Indonesia & English"
-                  : "Indonesian & English"}
-              </span>
-
-            </div>
-
           </div>
 
-          {/* =====================================
-              RIGHT — APP SHOWCASE
-          ===================================== */}
-          <div className="relative">
-
-            <div className="pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#D8B46A]/10 blur-[100px]" />
-
-            <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-white/[0.035] p-4 shadow-[0_35px_100px_rgba(0,0,0,0.45)] sm:p-6 lg:p-8">
-
-              {/* SHOWCASE HEADER */}
-              <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
-
-                <div>
-                  <p className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#D8B46A]">
-                    TETAMO APP
-                  </p>
-
-                  <p className="mt-1 text-sm font-bold text-white">
-                    {lang === "id"
-                      ? "Marketplace properti dalam satu aplikasi"
-                      : "Your property marketplace in one app"}
-                  </p>
-                </div>
-
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[#D8B46A]/25 bg-[#D8B46A]/[0.06] px-3 py-1.5">
-
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#D8B46A]" />
-
-                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#D8B46A]">
-                    iOS · Android
-                  </span>
-
-                </div>
-
-              </div>
-
-              {/* PHONE GRID — NO ABSOLUTE OVERLAP */}
-              <div className="grid grid-cols-2 items-end gap-3 sm:gap-5">
-
-                {/* HOME SCREEN */}
-                <div>
-                  <p className="mb-3 text-center text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">
-                    {lang === "id"
-                      ? "Jelajahi"
-                      : "Explore"}
-                  </p>
-
-                  <div className="overflow-hidden rounded-[28px] border border-white/15 bg-[#111111] p-1.5 shadow-[0_25px_60px_rgba(0,0,0,0.5)] sm:rounded-[34px] sm:p-2">
-
-                    <div className="overflow-hidden rounded-[23px] bg-black sm:rounded-[28px]">
-                      <img
-                        src="/app-showcase/tetamo-home.png"
-                        alt="Tetamo mobile app homepage"
-                        className="h-[390px] w-full object-cover object-top sm:h-[520px]"
-                      />
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* PROPERTY SCREEN */}
-                <div>
-                  <p className="mb-3 text-center text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">
-                    {lang === "id"
-                      ? "Properti"
-                      : "Property"}
-                  </p>
-
-                  <div className="overflow-hidden rounded-[28px] border border-[#D8B46A]/35 bg-[#111111] p-1.5 shadow-[0_30px_70px_rgba(0,0,0,0.6)] sm:rounded-[34px] sm:p-2">
-
-                    <div className="overflow-hidden rounded-[23px] bg-black sm:rounded-[28px]">
-                      <img
-                        src="/app-showcase/tetamo-property.png"
-                        alt="Tetamo mobile app property page"
-                        className="h-[410px] w-full object-cover object-top sm:h-[545px]"
-                      />
-                    </div>
-
-                  </div>
-                </div>
-
-              </div>
-
-              {/* NORMAL FLOW — NOTHING OVERLAPS PHONES */}
-              <div className="mt-7 border-t border-white/10 pt-5">
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
-                  <p className="text-xs font-medium text-white/40">
-                    {lang === "id"
-                      ? "Cari properti. Terhubung langsung. Jadwalkan viewing."
-                      : "Find property. Connect directly. Schedule a viewing."}
-                  </p>
-
-                  <p className="shrink-0 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#D8B46A]">
-                    Innovate · Empower · Transform
-                  </p>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
+          <p className="text-sm leading-7 text-white/60 sm:text-base sm:leading-8">
+            {lang === "id"
+              ? "Temukan properti di Tetamo. Pasang dan kelola listing Anda melalui Tetamo Partner—menghubungkan pencari properti dengan pemilik, agen, dan developer di seluruh Indonesia."
+              : "Discover property with Tetamo. List and manage your properties with Tetamo Partner—connecting property seekers with owners, agents, and developers across Indonesia."}
+          </p>
 
         </div>
 
-        {/* =====================================
-            FINAL BRAND STRIP
-        ===================================== */}
-        <div className="mt-16 border-t border-white/10 pt-7">
+        {/* TWO-APP GRID */}
+        <div className="mt-10 grid items-stretch gap-5 md:grid-cols-2">
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* =====================================
+              TETAMO MARKETPLACE
+          ===================================== */}
+          <article className="relative flex h-full flex-col overflow-hidden rounded-[32px] border border-[#D8B46A]/30 bg-[radial-gradient(circle_at_100%_0%,rgba(216,180,106,0.18),transparent_34%),linear-gradient(145deg,#1A1A1A,#101010_72%)] p-6 shadow-[0_30px_74px_rgba(0,0,0,0.34)] sm:p-8">
 
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-white/25">
-              TETAMO PROPERTY MARKETPLACE
-            </p>
+            <div className="flex items-center gap-4">
 
-            <p className="text-xs font-medium text-white/30">
+              <img
+                src="/app-showcase/tetamo-app-icon.png"
+                alt="Tetamo marketplace app icon"
+                className="h-[68px] w-[68px] shrink-0 rounded-[19px] object-cover shadow-[0_16px_35px_rgba(0,0,0,0.32)] sm:h-[78px] sm:w-[78px] sm:rounded-[22px]"
+              />
+
+              <div className="min-w-0">
+
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#D8B46A]">
+                  TETAMO
+                </p>
+
+                <span className="mt-2 inline-flex rounded-full border border-[#D8B46A]/25 bg-[#D8B46A]/10 px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-white/70">
+                  {lang === "id"
+                    ? "Untuk pencari properti"
+                    : "For property seekers"}
+                </span>
+
+              </div>
+
+            </div>
+
+            <h3 className="mt-7 text-[27px] font-extrabold leading-[1.08] tracking-[-0.045em] text-white sm:text-[34px]">
               {lang === "id"
-                ? "Cari · Beli · Jual · Sewa Properti"
-                : "Find · Buy · Sell · Rent Property"}
+                ? "Cari, beli, dan sewa properti di Indonesia."
+                : "Find, buy, and rent property in Indonesia."}
+            </h3>
+
+            <p className="mt-4 text-[13px] leading-6 text-white/60">
+              {lang === "id"
+                ? "Jelajahi rumah, vila, apartemen, tanah, dan properti lainnya. Hubungi pemilik atau agen dan jadwalkan viewing langsung."
+                : "Explore homes, villas, apartments, land, and other properties. Contact owners or agents and schedule viewings directly."}
             </p>
 
-          </div>
+            <div className="mt-6 grid gap-2 sm:grid-cols-3">
+
+              <div className="flex min-h-[58px] items-center justify-center rounded-[15px] border border-white/10 bg-white/[0.045] px-3 text-center text-[11px] font-bold text-white/80">
+                {lang === "id"
+                  ? "Cari properti"
+                  : "Find property"}
+              </div>
+
+              <div className="flex min-h-[58px] items-center justify-center rounded-[15px] border border-white/10 bg-white/[0.045] px-3 text-center text-[11px] font-bold text-white/80">
+                {lang === "id"
+                  ? "Simpan favorit"
+                  : "Save favourites"}
+              </div>
+
+              <div className="flex min-h-[58px] items-center justify-center rounded-[15px] border border-white/10 bg-white/[0.045] px-3 text-center text-[11px] font-bold text-white/80">
+                {lang === "id"
+                  ? "Jadwal viewing"
+                  : "Schedule viewing"}
+              </div>
+
+            </div>
+
+            <div className="mt-auto grid gap-2.5 pt-6 sm:grid-cols-2">
+
+              <a
+                href={TETAMO_APP_STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Download Tetamo on the App Store"
+                className="group flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] bg-white px-4 text-[#171717] transition hover:-translate-y-0.5 hover:bg-[#F4F0E8]"
+              >
+                <span>
+                  <span className="block text-[9px] font-semibold opacity-60">
+                    {lang === "id"
+                      ? "Download di"
+                      : "Download on the"}
+                  </span>
+
+                  <span className="mt-0.5 block text-[13px] font-extrabold">
+                    App Store
+                  </span>
+                </span>
+
+                <span className="transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+
+              <a
+                href={TETAMO_PLAY_STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Get Tetamo on Google Play"
+                className="group flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] border border-[#D8B46A]/75 bg-[#D8B46A] px-4 text-[#171717] transition hover:-translate-y-0.5 hover:bg-[#C59F4F]"
+              >
+                <span>
+                  <span className="block text-[9px] font-semibold opacity-60">
+                    {lang === "id"
+                      ? "Dapatkan di"
+                      : "Get it on"}
+                  </span>
+
+                  <span className="mt-0.5 block text-[13px] font-extrabold">
+                    Google Play
+                  </span>
+                </span>
+
+                <span className="transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+
+            </div>
+
+          </article>
+
+          {/* =====================================
+              TETAMO PARTNER
+          ===================================== */}
+          <article className="relative flex h-full flex-col overflow-hidden rounded-[32px] border border-[#E4D8C3] bg-[radial-gradient(circle_at_100%_0%,rgba(216,180,106,0.22),transparent_35%),linear-gradient(145deg,#FBF8F1,#F1EADF_75%)] p-6 text-[#1B1B1B] shadow-[0_30px_74px_rgba(0,0,0,0.23)] sm:p-8">
+
+            <div className="flex items-center gap-4">
+
+              <img
+                src="/app-showcase/tetamo-partner-icon.png"
+                alt="Tetamo Partner app icon"
+                className="h-[68px] w-[68px] shrink-0 rounded-[19px] object-cover shadow-[0_16px_35px_rgba(0,0,0,0.24)] sm:h-[78px] sm:w-[78px] sm:rounded-[22px]"
+              />
+
+              <div className="min-w-0">
+
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#9A6F0A]">
+                  TETAMO PARTNER
+                </p>
+
+                <span className="mt-2 inline-flex rounded-full border border-[#9A6F0A]/20 bg-[#D8B46A]/15 px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-[#72540E]">
+                  {lang === "id"
+                    ? "Pemilik · Agen · Developer"
+                    : "Owners · Agents · Developers"}
+                </span>
+
+              </div>
+
+            </div>
+
+            <h3 className="mt-7 text-[27px] font-extrabold leading-[1.08] tracking-[-0.045em] text-[#1B1B1B] sm:text-[34px]">
+              {lang === "id"
+                ? "Pasang dan kelola properti dari ponsel."
+                : "List and manage property from your phone."}
+            </h3>
+
+            <p className="mt-4 text-[13px] leading-6 text-[#5E584F]">
+              {lang === "id"
+                ? "Buat listing, kelola leads, pantau properti, dan atur jadwal viewing melalui aplikasi khusus partner Tetamo."
+                : "Create listings, manage leads, monitor properties, and arrange viewing schedules through Tetamo's dedicated partner app."}
+            </p>
+
+            <div className="mt-6 grid gap-2 sm:grid-cols-3">
+
+              <div className="flex min-h-[58px] items-center justify-center rounded-[15px] border border-[#9A6F0A]/15 bg-white/60 px-3 text-center text-[11px] font-bold text-[#514A40]">
+                {lang === "id"
+                  ? "Buat listing"
+                  : "Create listings"}
+              </div>
+
+              <div className="flex min-h-[58px] items-center justify-center rounded-[15px] border border-[#9A6F0A]/15 bg-white/60 px-3 text-center text-[11px] font-bold text-[#514A40]">
+                {lang === "id"
+                  ? "Kelola leads"
+                  : "Manage leads"}
+              </div>
+
+              <div className="flex min-h-[58px] items-center justify-center rounded-[15px] border border-[#9A6F0A]/15 bg-white/60 px-3 text-center text-[11px] font-bold text-[#514A40]">
+                {lang === "id"
+                  ? "Pantau aktivitas"
+                  : "Monitor activity"}
+              </div>
+
+            </div>
+
+            <div className="mt-auto grid gap-2.5 pt-6 sm:grid-cols-2">
+
+              <a
+                href={TETAMO_PARTNER_APP_STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Download Tetamo Partner on the App Store"
+                className="group flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] border border-[#E0D4C0] bg-white px-4 text-[#171717] transition hover:-translate-y-0.5 hover:bg-[#F8F5EF]"
+              >
+                <span>
+                  <span className="block text-[9px] font-semibold opacity-60">
+                    {lang === "id"
+                      ? "Download di"
+                      : "Download on the"}
+                  </span>
+
+                  <span className="mt-0.5 block text-[13px] font-extrabold">
+                    App Store
+                  </span>
+                </span>
+
+                <span className="transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+
+              <a
+                href={TETAMO_PARTNER_PLAY_STORE_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Get Tetamo Partner on Google Play"
+                className="group flex min-h-[58px] items-center justify-between gap-3 rounded-[16px] border border-[#B8860B] bg-[#D8B46A] px-4 text-[#171717] transition hover:-translate-y-0.5 hover:bg-[#C59F4F]"
+              >
+                <span>
+                  <span className="block text-[9px] font-semibold opacity-60">
+                    {lang === "id"
+                      ? "Dapatkan di"
+                      : "Get it on"}
+                  </span>
+
+                  <span className="mt-0.5 block text-[13px] font-extrabold">
+                    Google Play
+                  </span>
+                </span>
+
+                <span className="transition group-hover:translate-x-1">
+                  →
+                </span>
+              </a>
+
+            </div>
+
+          </article>
+
+        </div>
+
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-white/35">
+
+          <span>✓ iOS</span>
+
+          <span>✓ Android</span>
+
+          <span>
+            ✓ {lang === "id"
+              ? "Bahasa Indonesia & English"
+              : "Indonesian & English"}
+          </span>
 
         </div>
 
@@ -3753,6 +3797,7 @@ function DownloadTetamoAppSection() {
     </section>
   );
 }
+
 /* =========================
    PAGE
 ========================= */
@@ -4135,8 +4180,8 @@ return (
                 <div className="mt-6 border-t border-gray-200 pt-4">
                   <p className="text-xs leading-6 text-gray-500 sm:text-sm">
                     {lang === "id"
-                      ? "Hubungi Kami: +61 416 957 890 / +62 823 1355 6606 / +62 822 6477 8799 / inquiry@tetamo.com"
-                      : "Contact us: +61 416 957 890 / +62 823 1355 6606 / +62 822 6477 8799 / inquiry@tetamo.com"}
+                      ? "Hubungi Kami: +61 416 957 890 / +62 823 2212 2208 / +62 813 3947 717 / +62 822 6477 8799 / inquiry@tetamo.com"
+                      : "Contact us: +61 416 957 890 / +62 823 2212 2208 / +62 813 3947 717 / +62 822 6477 8799 / inquiry@tetamo.com"}
                   </p>
                 </div>
               </div>
