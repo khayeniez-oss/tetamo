@@ -279,6 +279,12 @@ export type AgentPackage = {
   hasFeaturedAgentPlacement: boolean;
   featuredAgentSlotsLimit?: number;
 
+  // Professional Agent Tools
+  hasAgentDocuments: boolean;
+  hasInventoryTools: boolean;
+  hasRentalAgreement: boolean;
+  hasProfessionalLetters: boolean;
+
   paymentTitle: string;
   paymentTitleEn: string;
   paymentDescription: string;
@@ -329,6 +335,11 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasCommissionTracking: true,
     hasBoostSpotlightAccess: true,
     hasFeaturedAgentPlacement: false,
+
+    hasAgentDocuments: false,
+    hasInventoryTools: false,
+    hasRentalAgreement: false,
+    hasProfessionalLetters: false,
 
     paymentTitle: "Silver Membership - Yearly",
     paymentTitleEn: "Silver Membership - Yearly",
@@ -408,6 +419,11 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasCommissionTracking: true,
     hasBoostSpotlightAccess: true,
     hasFeaturedAgentPlacement: false,
+
+    hasAgentDocuments: true,
+    hasInventoryTools: true,
+    hasRentalAgreement: true,
+    hasProfessionalLetters: true,
 
     paymentTitle: "Gold Membership - Yearly",
     paymentTitleEn: "Gold Membership - Yearly",
@@ -500,6 +516,11 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasBoostSpotlightAccess: true,
     hasFeaturedAgentPlacement: true,
     featuredAgentSlotsLimit: 7,
+
+    hasAgentDocuments: true,
+    hasInventoryTools: true,
+    hasRentalAgreement: true,
+    hasProfessionalLetters: true,
 
     paymentTitle: "Agent Pro Membership",
     paymentTitleEn: "Agent Pro Membership",
