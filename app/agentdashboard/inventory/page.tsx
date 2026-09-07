@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  ProfessionalAgentToolBanner,
+  ProfessionalAgentToolUpgradeModal,
+} from "../ProfessionalAgentToolsAccess";
+
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -23,6 +28,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
+import { useAgentProfile } from "../layout";
 
 type PropertyRow = {
   id: string;
@@ -139,6 +145,16 @@ function statusLabel(
 }
 
 export default function AgentInventoryPage() {
+  const {
+    hasProfessionalAgentToolsAccess,
+  } = useAgentProfile();
+
+  const [
+    showProfessionalUpgrade,
+    setShowProfessionalUpgrade,
+  ] = useState(false);
+
+
   const router =
     useRouter();
 
@@ -428,6 +444,17 @@ export default function AgentInventoryPage() {
   useEffect(() => {
     loadPageData();
   }, [loadPageData]);
+
+  function requestCreateInventory() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void createInventory();
+  }
 
   async function createInventory() {
     if (
@@ -887,6 +914,20 @@ export default function AgentInventoryPage() {
             </div>
           ) : null}
 
+          {!hasProfessionalAgentToolsAccess ? (
+            <ProfessionalAgentToolBanner
+              toolName="Inventory & Handover"
+            />
+          ) : null}
+
+          <ProfessionalAgentToolUpgradeModal
+            open={showProfessionalUpgrade}
+            toolName="Inventory & Handover"
+            onClose={() =>
+              setShowProfessionalUpgrade(false)
+            }
+          />
+
           <button
             type="button"
             disabled={
@@ -894,7 +935,7 @@ export default function AgentInventoryPage() {
               !selectedPropertyId
             }
             onClick={
-              createInventory
+              requestCreateInventory
             }
             className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#B58A3C] px-5 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#9E762F] disabled:cursor-not-allowed disabled:opacity-50"
           >

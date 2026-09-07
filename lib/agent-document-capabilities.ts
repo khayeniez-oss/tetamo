@@ -6,6 +6,8 @@ import {
 export type AgentDocumentCapabilities = {
   packageId: string;
 
+  hasProfessionalAgentTools: boolean;
+
   hasAgentDocuments: boolean;
 
   hasInventoryTools: boolean;
@@ -132,6 +134,11 @@ function capabilitiesFromPackage(
     packageId:
       resolvedPackageId,
 
+    hasProfessionalAgentTools:
+      packageConfig
+        ?.hasProfessionalAgentTools ===
+      true,
+
     hasAgentDocuments:
       packageConfig
         ?.hasAgentDocuments ===
@@ -167,6 +174,9 @@ export function resolveAgentDocumentCapabilities(
     return {
       packageId:
         "legacy-migrated",
+
+      hasProfessionalAgentTools:
+        true,
 
       hasAgentDocuments:
         true,

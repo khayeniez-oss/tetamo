@@ -12,6 +12,9 @@ import {
   type AgentProposalProperty,
 } from "@/lib/agent-proposal";
 import { getSiteUrl } from "@/lib/seo-server";
+import {
+  resolveAgentDocumentCapabilities,
+} from "@/lib/agent-document-capabilities";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -103,6 +106,8 @@ type GenerateProposalRequest = {
 
 type AgentMembershipRow = {
   id: string;
+  package_id: string | null;
+  package_name: string | null;
   status: string | null;
   expires_at: string | null;
 };
@@ -769,7 +774,7 @@ export async function loadAgentProposalData(
           "agent_memberships"
         )
         .select(
-          "id, status, expires_at"
+          "id, package_id, package_name, status, expires_at"
         )
         .eq(
           "user_id",
@@ -811,13 +816,24 @@ export async function loadAgentProposalData(
         isMembershipActive
       ) || null;
 
+    const professionalTools =
+      activeMembership
+        ? resolveAgentDocumentCapabilities(
+            activeMembership.package_id,
+            activeMembership.package_name
+          )
+        : null;
+
     if (
-      !activeMembership
+      !activeMembership ||
+      !professionalTools?.hasProfessionalAgentTools
     ) {
       return Response.json(
         {
           error:
-            "Active agent membership is required.",
+            "Proposal & Portfolio is available with Gold or Agent Pro membership.",
+          code:
+            "professional_agent_tools_required",
         },
         {
           status: 403,

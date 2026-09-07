@@ -280,6 +280,7 @@ export type AgentPackage = {
   featuredAgentSlotsLimit?: number;
 
   // Professional Agent Tools
+  hasProfessionalAgentTools: boolean;
   hasAgentDocuments: boolean;
   hasInventoryTools: boolean;
   hasRentalAgreement: boolean;
@@ -336,6 +337,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasBoostSpotlightAccess: true,
     hasFeaturedAgentPlacement: false,
 
+    hasProfessionalAgentTools: false,
     hasAgentDocuments: false,
     hasInventoryTools: false,
     hasRentalAgreement: false,
@@ -420,6 +422,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasBoostSpotlightAccess: true,
     hasFeaturedAgentPlacement: false,
 
+    hasProfessionalAgentTools: true,
     hasAgentDocuments: true,
     hasInventoryTools: true,
     hasRentalAgreement: true,
@@ -517,6 +520,7 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasFeaturedAgentPlacement: true,
     featuredAgentSlotsLimit: 7,
 
+    hasProfessionalAgentTools: true,
     hasAgentDocuments: true,
     hasInventoryTools: true,
     hasRentalAgreement: true,

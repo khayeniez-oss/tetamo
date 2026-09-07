@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  ProfessionalAgentToolBanner,
+  ProfessionalAgentToolUpgradeModal,
+} from "../ProfessionalAgentToolsAccess";
+
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -41,6 +46,7 @@ import {
 } from "@/lib/agent-letter-legal";
 
 import { supabase } from "@/lib/supabase";
+import { useAgentProfile } from "../layout";
 
 type PropertyRow = {
   id: string;
@@ -319,6 +325,16 @@ function documentTemplateLabel(
 }
 
 export default function LettersDocumentsPage() {
+  const {
+    hasProfessionalAgentToolsAccess,
+  } = useAgentProfile();
+
+  const [
+    showProfessionalUpgrade,
+    setShowProfessionalUpgrade,
+  ] = useState(false);
+
+
   const router =
     useRouter();
 
@@ -758,6 +774,17 @@ export default function LettersDocumentsPage() {
         null
       );
     }
+  }
+
+  function requestCreateDocument() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void createDocument();
   }
 
   async function createDocument() {
@@ -1409,14 +1436,28 @@ export default function LettersDocumentsPage() {
                 </p>
               </div>
 
+              {!hasProfessionalAgentToolsAccess ? (
+                <ProfessionalAgentToolBanner
+                  toolName="Letters & Documents"
+                />
+              ) : null}
+
+              <ProfessionalAgentToolUpgradeModal
+                open={showProfessionalUpgrade}
+                toolName="Letters & Documents"
+                onClose={() =>
+                  setShowProfessionalUpgrade(false)
+                }
+              />
+
               <button
                 type="button"
                 disabled={
                   creating
                 }
                 onClick={
-                  createDocument
-                }
+              requestCreateDocument
+            }
                 className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17171A] px-4 py-3.5 text-sm font-black text-white transition hover:bg-black disabled:opacity-50"
               >
                 {creating ? (

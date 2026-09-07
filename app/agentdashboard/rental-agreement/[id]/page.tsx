@@ -1,6 +1,12 @@
 "use client";
 
 import {
+  ProfessionalAgentToolBanner,
+  ProfessionalAgentToolUpgradeModal,
+} from "../../ProfessionalAgentToolsAccess";
+import { useAgentProfile } from "../../layout";
+
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -681,6 +687,15 @@ function rentalRateContext(
 }
 
 export default function RentalAgreementEditorPage() {
+  const {
+    hasProfessionalAgentToolsAccess,
+  } = useAgentProfile();
+
+  const [
+    showProfessionalUpgrade,
+    setShowProfessionalUpgrade,
+  ] = useState(false);
+
   const params =
     useParams<{
       id: string;
@@ -1006,6 +1021,17 @@ export default function RentalAgreementEditorPage() {
       [agreement]
     );
 
+  function requestSaveAgreement() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void saveAgreement();
+  }
+
   async function saveAgreement() {
     if (
       !agreement ||
@@ -1095,6 +1121,17 @@ export default function RentalAgreementEditorPage() {
         false
       );
     }
+  }
+
+  function requestGenerateRentalPdf() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void generatePdf();
   }
 
   async function generatePdf() {
@@ -1339,6 +1376,17 @@ export default function RentalAgreementEditorPage() {
     anchor.remove();
   }
 
+  function requestRentalPrint() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void openForPrint();
+  }
+
   function openForPrint() {
     if (!pdfUrl) {
       return;
@@ -1535,8 +1583,8 @@ export default function RentalAgreementEditorPage() {
                 saving
               }
               onClick={
-                generatePdf
-              }
+                      requestGenerateRentalPdf
+                    }
               className="inline-flex items-center gap-2 rounded-xl border border-[#CDB683] bg-white px-4 py-3 text-sm font-bold text-[#80652F] transition hover:bg-[#F8F3E9] disabled:opacity-50"
             >
               {generating ? (
@@ -1558,14 +1606,28 @@ export default function RentalAgreementEditorPage() {
                   )}
             </button>
 
+            {!hasProfessionalAgentToolsAccess ? (
+              <ProfessionalAgentToolBanner
+                toolName="Rental Agreement"
+              />
+            ) : null}
+
+            <ProfessionalAgentToolUpgradeModal
+              open={showProfessionalUpgrade}
+              toolName="Rental Agreement"
+              onClose={() =>
+                setShowProfessionalUpgrade(false)
+              }
+            />
+
             <button
               type="button"
               disabled={
                 saving
               }
               onClick={
-                saveAgreement
-              }
+                      requestSaveAgreement
+                    }
               className="inline-flex items-center gap-2 rounded-xl bg-[#17171A] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               {saving ? (
@@ -3305,7 +3367,7 @@ export default function RentalAgreementEditorPage() {
                   <button
                     type="button"
                     onClick={
-                      openForPrint
+                      requestRentalPrint
                     }
                     className="inline-flex items-center gap-1.5 rounded-xl bg-[#17171A] px-3 py-2 text-xs font-semibold text-white transition hover:bg-black"
                   >

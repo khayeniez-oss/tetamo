@@ -1,6 +1,12 @@
 "use client";
 
 import {
+  ProfessionalAgentToolBanner,
+  ProfessionalAgentToolUpgradeModal,
+} from "../../ProfessionalAgentToolsAccess";
+import { useAgentProfile } from "../../layout";
+
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -286,6 +292,15 @@ function PreviewBody({
 }
 
 export default function LetterDocumentEditorPage() {
+  const {
+    hasProfessionalAgentToolsAccess,
+  } = useAgentProfile();
+
+  const [
+    showProfessionalUpgrade,
+    setShowProfessionalUpgrade,
+  ] = useState(false);
+
   const router =
     useRouter();
 
@@ -703,6 +718,17 @@ export default function LetterDocumentEditorPage() {
     });
   }
 
+  function requestSaveLetter() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void saveDraft();
+  }
+
   async function saveDraft() {
     if (
       !letter ||
@@ -809,6 +835,17 @@ export default function LetterDocumentEditorPage() {
         false
       );
     }
+  }
+
+  function requestGenerateLetterPdf() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void generateLetterPdf();
   }
 
   async function generateLetterPdf() {
@@ -1214,14 +1251,28 @@ export default function LetterDocumentEditorPage() {
               )}
             </div>
 
+            {!hasProfessionalAgentToolsAccess ? (
+              <ProfessionalAgentToolBanner
+                toolName="Letters & Documents"
+              />
+            ) : null}
+
+            <ProfessionalAgentToolUpgradeModal
+              open={showProfessionalUpgrade}
+              toolName="Letters & Documents"
+              onClose={() =>
+                setShowProfessionalUpgrade(false)
+              }
+            />
+
             <button
               type="button"
               disabled={
                 saving
               }
               onClick={
-                saveDraft
-              }
+                      requestSaveLetter
+                    }
               className="inline-flex items-center gap-2 rounded-xl bg-[#17171A] px-4 py-3 text-sm font-black text-white transition hover:bg-black disabled:opacity-50"
             >
               {saving ? (
@@ -1248,8 +1299,8 @@ export default function LetterDocumentEditorPage() {
                 saving
               }
               onClick={
-                generateLetterPdf
-              }
+                      requestGenerateLetterPdf
+                    }
               className="inline-flex items-center gap-2 rounded-xl border border-[#CDB683] bg-white px-4 py-3 text-sm font-black text-[#80652F] transition hover:bg-[#F8F3E9] disabled:opacity-50"
             >
               {generating ? (

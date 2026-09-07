@@ -41,6 +41,7 @@ type AgentProfileContextType = {
   userId: string | null;
   loadingProfile: boolean;
   hasActiveMembership: boolean;
+  hasProfessionalAgentToolsAccess: boolean;
   membershipEndsAt: string | null;
   loadingMembership: boolean;
   isAgentAccount: boolean;
@@ -113,16 +114,17 @@ const ALLOWED_WITHOUT_MEMBERSHIP = [
 ];
 
 
-const AGENT_DOCUMENT_ROUTE_PREFIXES = [
+const PROFESSIONAL_AGENT_TOOL_ROUTE_PREFIXES = [
+  "/agentdashboard/proposal",
   "/agentdashboard/inventory",
   "/agentdashboard/rental-agreement",
   "/agentdashboard/letters-documents",
 ];
 
-function isAgentDocumentRoute(
+function isProfessionalAgentToolRoute(
   pathname: string
 ) {
-  return AGENT_DOCUMENT_ROUTE_PREFIXES.some(
+  return PROFESSIONAL_AGENT_TOOL_ROUTE_PREFIXES.some(
     (prefix) =>
       pathname === prefix ||
       pathname.startsWith(
@@ -225,6 +227,7 @@ export default function AgentDashboardLayout({
   const [loadingMembership, setLoadingMembership] = useState(true);
   const [hasActiveMembership, setHasActiveMembership] = useState(false);
   const [hasAgentDocumentAccess, setHasAgentDocumentAccess] = useState(false);
+  const [hasProfessionalAgentToolsAccess, setHasProfessionalAgentToolsAccess] = useState(false);
   const [membershipEndsAt, setMembershipEndsAt] = useState<string | null>(null);
   const [membershipPackageName, setMembershipPackageName] = useState("");
   const [membershipListingLimit, setMembershipListingLimit] = useState(0);
@@ -282,6 +285,7 @@ export default function AgentDashboardLayout({
           setHasActiveMembership(false);
 
           setHasAgentDocumentAccess(false);
+          setHasProfessionalAgentToolsAccess(false);
           setMembershipEndsAt(null);
           setMembershipPackageName("");
           setMembershipListingLimit(0);
@@ -335,6 +339,7 @@ export default function AgentDashboardLayout({
           setHasActiveMembership(false);
 
           setHasAgentDocumentAccess(false);
+          setHasProfessionalAgentToolsAccess(false);
           setMembershipEndsAt(null);
           setMembershipPackageName("");
           setMembershipListingLimit(0);
@@ -385,6 +390,13 @@ export default function AgentDashboardLayout({
           )
         );
 
+        setHasProfessionalAgentToolsAccess(
+          Boolean(
+            activeMembership &&
+            documentCapabilities?.hasProfessionalAgentTools
+          )
+        );
+
         setMembershipEndsAt(
           activeMembership?.expires_at ||
           null
@@ -410,6 +422,7 @@ export default function AgentDashboardLayout({
         setHasActiveMembership(false);
 
         setHasAgentDocumentAccess(false);
+          setHasProfessionalAgentToolsAccess(false);
         setMembershipEndsAt(null);
         setMembershipPackageName("");
         setMembershipListingLimit(0);
@@ -432,6 +445,7 @@ export default function AgentDashboardLayout({
         setHasActiveMembership(false);
 
         setHasAgentDocumentAccess(false);
+          setHasProfessionalAgentToolsAccess(false);
         setMembershipEndsAt(null);
         setMembershipPackageName("");
         setMembershipListingLimit(0);
@@ -495,6 +509,7 @@ export default function AgentDashboardLayout({
       userId: agent.userId,
       loadingProfile,
       hasActiveMembership,
+      hasProfessionalAgentToolsAccess,
       membershipEndsAt,
       loadingMembership,
       isAgentAccount,
@@ -505,6 +520,7 @@ export default function AgentDashboardLayout({
       agent,
       loadingProfile,
       hasActiveMembership,
+      hasProfessionalAgentToolsAccess,
       membershipEndsAt,
       loadingMembership,
       isAgentAccount,
@@ -530,7 +546,8 @@ export default function AgentDashboardLayout({
     if (
       isAgentAccount &&
       !hasActiveMembership &&
-      !isAllowedWithoutMembership(pathname)
+      !isAllowedWithoutMembership(pathname) &&
+      !isProfessionalAgentToolRoute(pathname)
     ) {
       router.replace(
         "/agentdashboard/paket"
@@ -539,27 +556,6 @@ export default function AgentDashboardLayout({
       return;
     }
 
-    /*
-     * Inventory, Rental Agreement and Letters &
-     * Documents are available only to memberships
-     * whose package includes Agent Documents.
-     *
-     * This includes Gold, Agent Pro and active
-     * migrated memberships. Silver is redirected
-     * to Paket.
-     */
-    if (
-      isAgentAccount &&
-      hasActiveMembership &&
-      !hasAgentDocumentAccess &&
-      isAgentDocumentRoute(
-        pathname
-      )
-    ) {
-      router.replace(
-        "/agentdashboard/paket"
-      );
-    }
   }, [
     pathname,
     router,
@@ -569,7 +565,6 @@ export default function AgentDashboardLayout({
     agent.userId,
     isAgentAccount,
     hasActiveMembership,
-    hasAgentDocumentAccess,
   ]);
 
   function renderMenuLink(
@@ -811,34 +806,21 @@ export default function AgentDashboardLayout({
                     )}
                     {renderMenuLink(
                       "/agentdashboard/proposal",
-                      "Proposal & Portfolio",
-                      { requiresMembership: true }
+                      "Proposal & Portfolio"
                     )}
 
                     {renderMenuLink(
                       "/agentdashboard/inventory",
-                      "Inventory & Handover",
-                      {
-                        requiresMembership: true,
-                        requiresAgentDocuments: true,
-                      }
+                      "Inventory & Handover"
                     )}
 
                     {renderMenuLink(
                       "/agentdashboard/rental-agreement",
-                      "Rental Agreement",
-                      {
-                        requiresMembership: true,
-                        requiresAgentDocuments: true,
-                      }
+                      "Rental Agreement"
                     )}
                     {renderMenuLink(
                       "/agentdashboard/letters-documents",
-                      "Letters & Documents",
-                      {
-                        requiresMembership: true,
-                        requiresAgentDocuments: true,
-                      }
+                      "Letters & Documents"
                     )}
                     {renderMenuLink("/agentdashboard/leads", "Leads", {
                       requiresMembership: true,

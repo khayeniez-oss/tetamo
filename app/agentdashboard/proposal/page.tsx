@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  ProfessionalAgentToolBanner,
+  ProfessionalAgentToolUpgradeModal,
+} from "../ProfessionalAgentToolsAccess";
+
+import {
   Building2,
   Check,
   ExternalLink,
@@ -487,11 +492,16 @@ function hasProposalPreviewValue(
 }
 
 export default function AgentProposalPage() {
+  const [
+    showProfessionalUpgrade,
+    setShowProfessionalUpgrade,
+  ] = useState(false);
+
   const {
     agent,
     userId,
     loadingProfile,
-    hasActiveMembership,
+    hasProfessionalAgentToolsAccess,
   } = useAgentProfile();
 
   const [
@@ -888,6 +898,28 @@ export default function AgentProposalPage() {
 
     clearGeneratedPdf();
     setErrorMessage("");
+  }
+
+  function requestFullPreview() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void loadFullPreview();
+  }
+
+  function requestGeneratePdf() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void generatePdf();
   }
 
   async function loadFullPreview() {
@@ -1333,12 +1365,6 @@ export default function AgentProposalPage() {
         </div>
       ) : null}
 
-      {!hasActiveMembership &&
-      !loadingProfile ? (
-        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-          Membership Agent aktif diperlukan untuk membuat Proposal & Portfolio.
-        </div>
-      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
         <div className="space-y-6">
@@ -1721,16 +1747,29 @@ export default function AgentProposalPage() {
             </label>
           </section>
 
+          {!hasProfessionalAgentToolsAccess ? (
+            <ProfessionalAgentToolBanner
+              toolName="Proposal & Portfolio"
+            />
+          ) : null}
+
+          <ProfessionalAgentToolUpgradeModal
+            open={showProfessionalUpgrade}
+            toolName="Proposal & Portfolio"
+            onClose={() =>
+              setShowProfessionalUpgrade(false)
+            }
+          />
+
           <button
             type="button"
             disabled={
               previewLoading ||
               selectedIds.length ===
-                0 ||
-              !hasActiveMembership
+                0
             }
             onClick={
-              loadFullPreview
+              requestFullPreview
             }
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#17171A] px-5 py-4 text-sm font-bold text-white shadow-lg transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-45"
           >
@@ -1932,8 +1971,8 @@ export default function AgentProposalPage() {
                   generating
                 }
                 onClick={
-                  generatePdf
-                }
+                    requestGeneratePdf
+                  }
                 className="inline-flex items-center gap-2 rounded-xl bg-[#B58A3C] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#9E762F] disabled:opacity-50"
               >
                 {generating ? (
@@ -2752,7 +2791,7 @@ export default function AgentProposalPage() {
                     generating
                   }
                   onClick={
-                    generatePdf
+                    requestGeneratePdf
                   }
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17171A] px-6 py-3 text-sm font-bold text-white disabled:opacity-50"
                 >

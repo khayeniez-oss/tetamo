@@ -1,6 +1,11 @@
 "use client";
 
 import {
+  ProfessionalAgentToolBanner,
+  ProfessionalAgentToolUpgradeModal,
+} from "../ProfessionalAgentToolsAccess";
+
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -26,6 +31,7 @@ import {
 import {
   supabase,
 } from "@/lib/supabase";
+import { useAgentProfile } from "../layout";
 
 const PROPERTY_PAGE_SIZE = 8;
 
@@ -188,6 +194,16 @@ function formatUpdatedAt(
 }
 
 export default function RentalAgreementPage() {
+  const {
+    hasProfessionalAgentToolsAccess,
+  } = useAgentProfile();
+
+  const [
+    showProfessionalUpgrade,
+    setShowProfessionalUpgrade,
+  ] = useState(false);
+
+
   const router =
     useRouter();
 
@@ -507,6 +523,17 @@ export default function RentalAgreementPage() {
   useEffect(() => {
     loadPageData();
   }, [loadPageData]);
+
+  function requestCreateRentalAgreement() {
+    if (
+      !hasProfessionalAgentToolsAccess
+    ) {
+      setShowProfessionalUpgrade(true);
+      return;
+    }
+
+    void createRentalAgreement();
+  }
 
   async function createRentalAgreement() {
     if (
@@ -1007,6 +1034,20 @@ export default function RentalAgreementPage() {
             </div>
           ) : null}
 
+          {!hasProfessionalAgentToolsAccess ? (
+            <ProfessionalAgentToolBanner
+              toolName="Rental Agreement"
+            />
+          ) : null}
+
+          <ProfessionalAgentToolUpgradeModal
+            open={showProfessionalUpgrade}
+            toolName="Rental Agreement"
+            onClose={() =>
+              setShowProfessionalUpgrade(false)
+            }
+          />
+
           <button
             type="button"
             disabled={
@@ -1014,7 +1055,7 @@ export default function RentalAgreementPage() {
               !selectedPropertyId
             }
             onClick={
-              createRentalAgreement
+              requestCreateRentalAgreement
             }
             className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#17171A] px-5 py-3.5 text-sm font-bold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
           >
