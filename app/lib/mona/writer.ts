@@ -311,8 +311,11 @@ platform_features:
 - explain Tetamo/Tetamo Partner capabilities and customer value;
 - for Agent, frame Tetamo Partner as tools that help the Agent's real-estate work;
 - normally choose the 3–5 strongest LIVE capabilities relevant to the customer's role instead of listing every available feature;
-- do NOT enumerate Inventory Ready, LOI, Rental Agreement, Sale Agreement, or other roadmap items unless the customer actually asked about future/coming-soon features;
-- if future tools are genuinely useful context but were not asked for, at most use one short generic sentence that more Agent Tools are being prepared; do not turn the reply into a roadmap catalogue;
+- Proposal & Portfolio, Inventory & Handover, Rental Agreement, Sale Agreement, and Letters & Documents are LIVE Professional Agent Tools;
+- LOI is LIVE inside Letters & Documents;
+- do not describe these live Professional Agent Tools as coming soon;
+- all Tetamo agents can explore the Professional Agent Tools; creating, saving, viewing full previews or generating professional outputs requires Gold or Agent Pro;
+- when the customer has identified themselves as an Agent, explain useful Agent value before asking approximate listing volume;
 - do NOT answer with membership prices or a package catalogue unless the customer asked for package information.
 
 package_features:
@@ -1330,13 +1333,27 @@ function deterministicIntentFallbackReply(
       }
     };
     add(/create.*edit.*manage property listings|create, edit.*manage/i, "buat, edit dan kelola listing", "create, edit and manage listings");
-    add(/direct whatsapp/i, "Direct WhatsApp enquiry", "Direct WhatsApp enquiries");
-    add(/jadwal viewing|viewing schedule/i, "Jadwal Viewing", "Viewing Schedule");
-    add(/leads dashboard/i, "Leads Dashboard", "Leads Dashboard");
-    if (!isOwner) {
-      add(/proposal.*portfolio/i, "Proposal & Portfolio untuk satu atau beberapa property dan print untuk client", "Proposal & Portfolio for one or multiple properties, prepared for client printing");
+
+    if (isOwner) {
+      add(/direct whatsapp/i, "Direct WhatsApp enquiry", "Direct WhatsApp enquiries");
+      add(/jadwal viewing|viewing schedule/i, "Jadwal Viewing", "Viewing Schedule");
+      add(/leads dashboard/i, "Leads Dashboard", "Leads Dashboard");
+      add(/generate ai/i, "Generate AI", "Generate AI");
+    } else {
+      add(
+        /direct whatsapp|jadwal viewing|viewing schedule|leads dashboard/i,
+        "Direct WhatsApp enquiry, Leads Dashboard dan Jadwal Viewing",
+        "Direct WhatsApp enquiries, Leads Dashboard and Viewing Schedule"
+      );
+
+      add(
+        /proposal.*portfolio|inventory.*handover|rental agreement|sale agreement|letters.*documents|\bLOI\b|letter of intent/i,
+        "Professional Agent Tools: Proposal & Portfolio, Inventory & Handover, Rental Agreement, Sale Agreement, serta Letters & Documents termasuk LOI",
+        "Professional Agent Tools: Proposal & Portfolio, Inventory & Handover, Rental Agreement, Sale Agreement, and Letters & Documents including LOI"
+      );
+
+      add(/generate ai/i, "Generate AI", "Generate AI");
     }
-    add(/generate ai/i, "Generate AI", "Generate AI");
     if (features.length) {
       return {
         action: "reply",
@@ -1426,36 +1443,11 @@ function deterministicIntentFallbackReply(
       };
     }
     if (comingSoon) {
-      const isInventoryReady = /Inventory Ready/i.test(subject || "");
-      const isLoi = /\bLOI\b|Letter of Intent/i.test(subject || "");
-      const isRentalAgreement = /Rental Agreement/i.test(subject || "");
-      const isSaleAgreement = /Sale Agreement/i.test(subject || "");
-
-      let reply = language === "en"
-        ? `${subject || "That feature"} is being prepared and is not live yet.`
-        : `${subject || "Fitur itu"} sedang disiapkan dan belum live saat ini, Kak.`;
-
-      if (isInventoryReady) {
-        reply = language === "en"
-          ? "Inventory Ready is being prepared and is not live yet. It is designed to help agents choose available property inventory more conveniently for client needs."
-          : "Inventory Ready sedang disiapkan dan belum live saat ini, Kak. Fitur ini dirancang untuk membantu agent memilih inventory properti yang tersedia dengan lebih praktis sesuai kebutuhan client.";
-      } else if (isLoi) {
-        reply = language === "en"
-          ? "Editable LOI is being prepared and is not live yet. It is planned as an editable working document/template for agent workflows."
-          : "Editable LOI sedang disiapkan dan belum live saat ini, Kak. Fitur ini direncanakan sebagai dokumen/template kerja yang bisa diedit untuk kebutuhan workflow agent.";
-      } else if (isRentalAgreement) {
-        reply = language === "en"
-          ? "Editable Rental Agreement is being prepared and is not live yet. It is planned as an editable working document/template for agent rental workflows."
-          : "Editable Rental Agreement sedang disiapkan dan belum live saat ini, Kak. Fitur ini direncanakan sebagai dokumen/template kerja yang bisa diedit untuk kebutuhan rental agent.";
-      } else if (isSaleAgreement) {
-        reply = language === "en"
-          ? "Editable Sale Agreement is being prepared and is not live yet. It is planned as an editable working document/template for agent sale workflows."
-          : "Editable Sale Agreement sedang disiapkan dan belum live saat ini, Kak. Fitur ini direncanakan sebagai dokumen/template kerja yang bisa diedit untuk kebutuhan transaksi jual agent.";
-      }
-
       return {
         action: "reply",
-        reply,
+        reply: language === "en"
+          ? `${subject || "That feature"} is being prepared and is not live yet.`
+          : `${subject || "Fitur itu"} sedang disiapkan dan belum live saat ini, Kak.`,
         source: "fallback",
       };
     }
@@ -2199,6 +2191,61 @@ export async function writeMonaReply(
 
   if (identityReply) {
     return identityReply;
+  }
+
+  const isNewAgentIntroduction =
+    (
+      params.brain.customerType === "agent" ||
+      params.brain.customerType === "agency"
+    ) &&
+    params.brain.intent === "unknown" &&
+    !params.brain.directQuestion &&
+    /\b(?:saya|aku|kami|i\s*am|i'm|im)\s+(?:agent|agen|agency)\b/i.test(
+      params.latestCustomerMessage
+    );
+
+  if (isNewAgentIntroduction) {
+    return {
+      action: "reply",
+      reply:
+        "Baik Kak. Untuk Agent, Tetamo bukan cuma tempat upload listing. Kakak bisa kelola listing, menerima enquiry langsung melalui WhatsApp, kelola Leads Dashboard dan Jadwal Viewing, pakai Generate AI, serta Professional Agent Tools seperti Proposal & Portfolio, Inventory & Handover, Rental Agreement, Sale Agreement, dan Letters & Documents termasuk LOI. Boleh tahu kira-kira Kakak saat ini mengelola berapa listing aktif? Biar saya bisa bantu rekomendasikan membership yang paling sesuai.",
+      source: "fallback",
+    };
+  }
+
+  /*
+   * DIRECT AGENT PACKAGE ANSWERS.
+   *
+   * Direct package price/capability questions should be answered directly.
+   * Do not turn them into discovery or qualification questions.
+   */
+  if (
+    params.brain.customerType === "agent" &&
+    params.brain.intent === "package_price" &&
+    params.brain.intentSubject === "Silver"
+  ) {
+    return {
+      action: "reply",
+      reply:
+        "Paket Silver untuk Agent harganya Rp499.000 per tahun Kak, dengan kapasitas hingga 30 listing aktif.",
+      source: "fallback",
+    };
+  }
+
+  if (
+    params.brain.customerType === "agent" &&
+    params.brain.intent === "package_features" &&
+    params.brain.intentSubject === "Silver" &&
+    /\b(?:generate|dokumen|document|professional|profesional|agreement|loi)\b/i.test(
+      params.latestCustomerMessage
+    )
+  ) {
+    return {
+      action: "reply",
+      reply:
+        "Untuk paket Silver, Kakak tetap bisa explore Professional Agent Tools, tetapi untuk membuat, menyimpan, melihat full preview, atau generate dokumen profesional diperlukan paket Gold atau Agent Pro ya Kak.",
+      source: "fallback",
+    };
   }
 
   if (

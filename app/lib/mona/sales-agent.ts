@@ -410,6 +410,31 @@ HOMEPAGE SPOTLIGHT
 - Auto renew enabled by default unless disabled.
 - No guarantee of views, enquiries, leads or closing.
 
+AGENT VALUE FIRST
+When the customer identifies themselves as an Agent, explain Tetamo's practical Agent value before asking qualification questions.
+
+Tell the Agent that Tetamo is not only for listing properties. Relevant LIVE Agent capabilities include:
+- create, edit and manage property listings;
+- Direct WhatsApp enquiries;
+- Leads Dashboard;
+- Jadwal Viewing;
+- Generate AI;
+- Proposal & Portfolio;
+- Inventory & Handover;
+- Rental Agreement;
+- Sale Agreement;
+- Letters & Documents, including LOI and other supported professional property correspondence.
+
+Frame Tetamo Partner as a working toolkit for the Agent's real-estate business.
+
+All Tetamo agents can explore the Professional Agent Tools.
+Creating, saving, viewing full previews or generating professional outputs requires Gold or Agent Pro.
+
+After explaining the value, you may ask approximately how many listings the Agent manages when that information is useful for recommending the right membership.
+
+Never lead a newly identified Agent conversation with only "berapa listing?".
+Value first, qualification second.
+
 PACKAGE RECOMMENDATION
 Use the agent's actual needs.
 
@@ -2037,7 +2062,7 @@ function applyDeterministicAgentSalesGuards(
         "recommend_package";
 
       recommendedDirection =
-        "Ask one natural question about approximately how many active listings the agent wants to manage, because listing capacity materially affects the package recommendation.";
+        "First explain the practical Tetamo Agent value using the approved live features. Then ask one natural question about approximately how many active listings the Agent manages, because listing capacity materially affects the membership recommendation. Never lead with the listing-count question before explaining value.";
 
       reason =
         "Listing volume is not yet known and is useful for choosing between Silver, Gold and Agent Pro.";
@@ -2084,14 +2109,14 @@ function applyDeterministicAgentSalesGuards(
     packageRecommendationReason = null;
     recommendedObjective = "explain_platform_features";
     recommendedDirection =
-      "Explain Tetamo Partner as an Agent business toolkit, not as a package catalogue. Focus on current live Agent capabilities such as creating/editing/managing listings, Direct WhatsApp enquiries, Jadwal Viewing, Leads, and Proposal & Portfolio. Do not expand into the coming-soon roadmap unless the customer specifically asks about future or upcoming features. Do not repeat package prices unless the customer asks for pricing.";
+      "Explain Tetamo Partner as an Agent business toolkit, not as a package catalogue. Focus on current live Agent capabilities: creating/editing/managing listings, Direct WhatsApp enquiries, Leads Dashboard, Jadwal Viewing, Generate AI, Proposal & Portfolio, Inventory & Handover, Rental Agreement, Sale Agreement, and Letters & Documents including LOI. Explain value before qualification. All Tetamo agents can explore Professional Agent Tools, while creating, saving, viewing full previews or generating professional outputs requires Gold or Agent Pro. Do not repeat package prices unless the customer asks for pricing.";
     reason = "Brain resolved a general Agent platform-feature question.";
     shouldAskQuestion = false;
     commercialFacts.clear();
     needsTetamoFacts = true;
     factsNeeded.clear();
     factsNeeded.add(
-      "current live Tetamo Partner Agent product features and Agent business tools only; do not return package pricing or unsolicited coming-soon roadmap"
+      "current live Tetamo Partner Agent product features and Professional Agent Tools, including their Gold/Agent Pro creation access; do not return package pricing"
     );
   } else if (
     brainIntent === "feature_details" ||

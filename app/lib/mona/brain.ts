@@ -2430,7 +2430,18 @@ function repairPreciseBrainIntent(
   const packageSubject = canonicalPackageSubject(latest);
   const asksFeatures = /\bfitur(?:nya)?\b|\bfeatures?\b/i.test(latest);
 
-  if (packageSubject && asksFeatures) {
+  const asksPackageToolCapability =
+    /\b(?:bisa|bsa|bs|can|include|included|termasuk)\b.{0,80}\b(?:generate|buat|create|dokumen|document|documents|professional|profesional|proposal|inventory|agreement|loi)\b/i.test(
+      latest
+    ) ||
+    /\b(?:generate|buat|create)\b.{0,80}\b(?:dokumen|document|documents|professional|profesional)\b/i.test(
+      latest
+    );
+
+  if (
+    packageSubject &&
+    (asksFeatures || asksPackageToolCapability)
+  ) {
     applyPreciseMeaning(
       "package_features",
       packageSubject,
@@ -2451,12 +2462,35 @@ function repairPreciseBrainIntent(
       "Customer is asking whether Tetamo provides a notary or notarisation solution.",
       "Does Tetamo provide a notary or notarisation solution?"
     );
-  } else if (/\binventory\s+ready\b/i.test(lower)) {
+  } else if (
+    /\binventory\s*(?:&|and)\s*handover\b|\binventory\s+ready\b|\binventory\s+checklist\b|\bhandover\s+report\b/i.test(
+      lower
+    )
+  ) {
     applyPreciseMeaning(
-      "feature_availability",
-      "Inventory Ready",
-      "Customer is asking whether the Inventory Ready feature is currently available in Tetamo.",
-      "Is Inventory Ready currently available in Tetamo?"
+      availabilityLanguage ? "feature_availability" : "feature_details",
+      "Inventory & Handover",
+      availabilityLanguage
+        ? "Customer is asking whether Tetamo provides the Inventory & Handover Agent Tool."
+        : "Customer is asking how Tetamo's Inventory & Handover Agent Tool works.",
+      availabilityLanguage
+        ? "Is Inventory & Handover available in Tetamo?"
+        : "How does Tetamo's Inventory & Handover feature work?"
+    );
+  } else if (
+    /\bletters?\s*(?:&|and)\s*documents?\b|\bagent\s+documents?\b/i.test(
+      lower
+    )
+  ) {
+    applyPreciseMeaning(
+      availabilityLanguage ? "feature_availability" : "feature_details",
+      "Letters & Documents",
+      availabilityLanguage
+        ? "Customer is asking whether Tetamo provides Letters & Documents for Agent workflows."
+        : "Customer is asking how Tetamo's Letters & Documents Agent Tool works.",
+      availabilityLanguage
+        ? "Is Letters & Documents available in Tetamo?"
+        : "How does Tetamo's Letters & Documents feature work?"
     );
   } else if (/\b(?:loi|letter\s+of\s+intent)\b/i.test(lower)) {
     applyPreciseMeaning(
@@ -2736,6 +2770,123 @@ function enforceBrainRouting(
     result,
     latestMessage
   );
+
+  /*
+   * ROLE RECOVERY FROM THE CURRENT MESSAGE.
+   *
+   * A customer does not need to literally say "saya agent" when the current
+   * question already clearly identifies the relevant commercial role.
+   *
+   * Examples:
+   * - "fitur apa aja untuk agent?" -> Agent
+   * - "berapa harga Silver?" -> Agent
+   * - "berapa harga Basic?" -> Owner
+   */
+  if (result.customerType === "unknown") {
+    const latestLower = latestMessage.toLowerCase();
+
+    const mentionsAgent =
+      /\b(?:agent|agen|agency)\b/i.test(latestLower);
+
+    const mentionsOwner =
+      /\b(?:owner|pemilik)\b/i.test(latestLower);
+
+    const packageSubject =
+      canonicalPackageSubject(latestMessage);
+
+    const agentPackage =
+      packageSubject === "Silver" ||
+      packageSubject === "Gold" ||
+      packageSubject === "Agent Pro";
+
+    const ownerPackage =
+      packageSubject === "Basic" ||
+      packageSubject === "Priority" ||
+      packageSubject === "Featured";
+
+    if (
+      agentPackage ||
+      (mentionsAgent && !mentionsOwner)
+    ) {
+      result = {
+        ...result,
+        customerType: "agent",
+      };
+    } else if (
+      ownerPackage ||
+      (mentionsOwner && !mentionsAgent)
+    ) {
+      result = {
+        ...result,
+        customerType: "owner",
+      };
+    }
+  }
+
+  /*
+   * ROLE-NEUTRAL DIRECT QUESTIONS.
+   *
+   * Do not force a role clarification when the customer's actual question
+   * can be answered safely from approved Tetamo truth without knowing whether
+   * they are Agent, Owner, Developer or Buyer/Renter.
+   *
+   * This is especially important for feature availability/details and the
+   * generic Tetamo Partner payment flow.
+   */
+  if (
+    result.customerType === "unknown" &&
+    (
+      Boolean(result.directQuestion) ||
+      result.intent === "payment"
+    )
+  ) {
+    const roleNeutralKnowledgeIntent =
+      result.intent === "feature_availability" ||
+      result.intent === "feature_details" ||
+      result.intent === "feature_example" ||
+      result.intent === "how_to_use";
+
+    const roleNeutralPayment =
+      result.intent === "payment";
+
+    if (
+      roleNeutralKnowledgeIntent ||
+      roleNeutralPayment
+    ) {
+      return {
+        ...result,
+        understood: true,
+        clarification: {
+          needed: false,
+          kind: "none",
+          alreadyAttempted:
+            priorClarification.attempted,
+          attemptCount:
+            priorClarification.attempted
+              ? 1
+              : 0,
+          goal: null,
+        },
+        replyNeeded: true,
+        salesStrategyNeeded: false,
+        salesStrategist: "none",
+        factualKnowledgeNeeded:
+          roleNeutralKnowledgeIntent,
+        knowledgeRequest:
+          roleNeutralKnowledgeIntent
+            ? [
+                `approved Tetamo facts for current intent: ${result.intent}${result.intentSubject ? ` (${result.intentSubject})` : ""}`,
+              ]
+            : [],
+        handoverRecommended: false,
+        handoverReason: null,
+        recommendedNextStep:
+          roleNeutralPayment
+            ? "Answer the generic Tetamo Partner payment question directly. Do not ask for role unless the customer later asks for role-specific billing help."
+            : "Answer the customer's current Tetamo feature question directly from approved Product Truth. Do not ask an unnecessary role clarification.",
+      };
+    }
+  }
 
   const explicitObjectionIntents =
     new Set<MonaBrainIntent>([

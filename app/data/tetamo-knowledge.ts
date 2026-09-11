@@ -453,19 +453,20 @@ export const TETAMO_KNOWLEDGE: TetamoKnowledgeSection[] = [
   },
 
   {
-    id: "tetamo-agent-tools-roadmap",
-    title: "Tetamo Agent Tools — Live and Coming Soon",
+    id: "tetamo-professional-agent-tools",
+    title: "Tetamo Professional Agent Tools — Live",
     description:
-      "Approved current status for Agent Tools that must be described accurately as live or coming soon.",
+      "Approved current status and access rules for Tetamo Professional Agent Tools.",
     facts: [
-      "LIVE: Proposal & Portfolio is available for agents to create a property proposal or portfolio using one property or multiple properties and prepare it for printing for a client.",
-      "COMING SOON: Inventory Ready is being prepared to help agents conveniently choose available property inventory.",
-      "COMING SOON: Editable LOI is being prepared as a working document/template for agent use.",
-      "COMING SOON: Editable Rental Agreement is being prepared as a working document/template for agent use.",
-      "COMING SOON: Editable Sale Agreement is being prepared as a working document/template for agent use.",
-      "Tetamo does not currently provide a notary or notarisation solution.",
-      "Mona must never present a coming-soon feature as already live.",
-      "Mona must not claim Tetamo provides legal advice, legal execution, notarisation, or a real-notary service for these future editable documents.",
+      "LIVE: Proposal & Portfolio is available for agents.",
+      "LIVE: Inventory & Handover is available for agents.",
+      "LIVE: Rental Agreement is available for agents.",
+      "LIVE: Sale Agreement is available for agents.",
+      "LIVE: Letters & Documents is available for agents and includes LOI and other supported professional property correspondence.",
+      "All Tetamo agents can explore the Professional Agent Tools.",
+      "Creating, saving, viewing full previews, or generating professional outputs requires Gold or Agent Pro.",
+      "Tetamo does not provide legal advice, legal execution, notarisation, or guarantee legal validity of documents created through these tools.",
+      "Tetamo does not currently provide a notary or notarisation service.",
     ],
   },
 
