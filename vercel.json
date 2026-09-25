@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/rupert",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

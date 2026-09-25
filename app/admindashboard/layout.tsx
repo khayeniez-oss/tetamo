@@ -279,7 +279,7 @@ export default function AdminDashboardLayout({
 },
           { href: "/admindashboard/settings", label: "Settings" },
           { href: "/admindashboard/logs", label: "Logs" },
-          { href: "/admindashboard/ai-insights", label: "AI Insights" },
+          { href: "/admindashboard/ai-insights", label: "AI Team" },
           {
             href: "/admindashboard/buyer-requests",
             label: "Buyer Requests",

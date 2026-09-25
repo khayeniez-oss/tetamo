@@ -1,9 +1,6 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
-
-import { buildRevenueAnalytics } from "@/lib/reporting/revenue";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -11,10 +8,24 @@ const supabaseUrl =
   "";
 
 const supabaseServiceRoleKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  "";
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-const supabaseAdmin = createClient(
+export type TetamoAdminIdentity = {
+  userId: string;
+  role: "admin";
+};
+
+export type TetamoAdminAuthResult =
+  | {
+      authorized: true;
+      admin: TetamoAdminIdentity;
+    }
+  | {
+      authorized: false;
+      response: Response;
+    };
+
+export const aiTeamSupabaseAdmin = createClient(
   supabaseUrl,
   supabaseServiceRoleKey,
   {
@@ -24,14 +35,6 @@ const supabaseAdmin = createClient(
     },
   }
 );
-
-function clean(value: unknown) {
-  return String(value ?? "").trim();
-}
-
-function lower(value: unknown) {
-  return clean(value).toLowerCase();
-}
 
 function getBearerToken(req: Request) {
   const authHeader =
@@ -48,11 +51,10 @@ function getBearerToken(req: Request) {
   return authHeader.slice(7).trim();
 }
 
-async function verifyAdmin(req: Request) {
-  if (
-    !supabaseUrl ||
-    !supabaseServiceRoleKey
-  ) {
+export async function requireTetamoAdmin(
+  req: Request
+): Promise<TetamoAdminAuthResult> {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
     return {
       authorized: false,
       response: Response.json(
@@ -66,8 +68,7 @@ async function verifyAdmin(req: Request) {
     };
   }
 
-  const token =
-    getBearerToken(req);
+  const token = getBearerToken(req);
 
   if (!token) {
     return {
@@ -86,15 +87,11 @@ async function verifyAdmin(req: Request) {
   const {
     data: { user },
     error: userError,
-  } =
-    await supabaseAdmin.auth.getUser(
-      token
-    );
+  } = await aiTeamSupabaseAdmin.auth.getUser(
+    token
+  );
 
-  if (
-    userError ||
-    !user
-  ) {
+  if (userError || !user) {
     return {
       authorized: false,
       response: Response.json(
@@ -111,7 +108,7 @@ async function verifyAdmin(req: Request) {
   const {
     data: profile,
     error: profileError,
-  } = await supabaseAdmin
+  } = await aiTeamSupabaseAdmin
     .from("profiles")
     .select("id, role")
     .eq("id", user.id)
@@ -119,7 +116,7 @@ async function verifyAdmin(req: Request) {
 
   if (profileError) {
     console.error(
-      "Revenue admin verification failed:",
+      "AI Team admin verification failed:",
       profileError
     );
 
@@ -136,8 +133,11 @@ async function verifyAdmin(req: Request) {
     };
   }
 
-  const role =
-    lower(profile?.role);
+  const role = String(
+    profile?.role || ""
+  )
+    .trim()
+    .toLowerCase();
 
   if (role !== "admin") {
     return {
@@ -155,43 +155,66 @@ async function verifyAdmin(req: Request) {
 
   return {
     authorized: true,
-    userId: user.id,
+    admin: {
+      userId: user.id,
+      role: "admin",
+    },
   };
 }
 
-export async function GET(
+/**
+ * Allows a protected internal worker to use the same
+ * Rupert routes as the human Admin UI.
+ *
+ * - Admin requests continue through requireTetamoAdmin().
+ * - Vercel/internal cron requests must present CRON_SECRET.
+ * - Cron work deliberately has no human user_id.
+ *
+ * Only routes that explicitly call this helper allow cron.
+ */
+export async function requireTetamoAdminOrCron(
   req: Request
 ) {
-  const auth =
-    await verifyAdmin(req);
+  const secret =
+    String(
+      process.env.CRON_SECRET ||
+        ""
+    ).trim();
 
-  if (!auth.authorized) {
-    return auth.response;
-  }
+  const authorization =
+    req.headers.get(
+      "authorization"
+    ) || "";
 
-  try {
-    const analytics =
-      await buildRevenueAnalytics();
+  const token =
+    authorization
+      .toLowerCase()
+      .startsWith("bearer ")
+      ? authorization
+          .slice(7)
+          .trim()
+      : "";
 
-    return Response.json({
-      ok: true,
-      ...analytics,
-    });
-  } catch (error) {
-    console.error(
-      "Failed to build revenue analytics:",
-      error
-    );
+  if (
+    secret &&
+    token &&
+    token === secret
+  ) {
+    return {
+      authorized:
+        true as const,
 
-    return Response.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to load revenue analytics.",
+      admin: {
+        userId:
+          null as string | null,
       },
-      { status: 500 }
-    );
+
+      authMode:
+        "cron" as const,
+    };
   }
+
+  return requireTetamoAdmin(
+    req
+  );
 }

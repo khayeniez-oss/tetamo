@@ -320,6 +320,7 @@ function getMessageDisplayText(message: MetaMessage) {
 
 async function saveSalesStageSuggestion(params: {
   conversationId: string;
+  previousStage?: SalesStage | null;
   suggestion: SalesStageSuggestion | null;
 }) {
   /*
@@ -362,6 +363,31 @@ async function saveSalesStageSuggestion(params: {
   if (error) {
     console.error("Failed to save Mona sales-stage suggestion:", error);
     return false;
+  }
+
+  const previousStage =
+    params.previousStage || null;
+
+  const { error: historyError } =
+    await supabaseAdmin
+      .from("whatsapp_sales_stage_history")
+      .insert({
+        conversation_id:
+          params.conversationId,
+        previous_stage:
+          previousStage,
+        new_stage:
+          params.suggestion.stage,
+        changed_by: null,
+        changed_at:
+          updatedAt,
+      });
+
+  if (historyError) {
+    console.error(
+      "Failed to save automatic Mona sales-stage history:",
+      historyError
+    );
   }
 
   return true;
@@ -1195,6 +1221,8 @@ export async function POST(request: Request) {
 
       await saveSalesStageSuggestion({
         conversationId: conversation.id,
+        previousStage:
+          conversation.sales_stage || null,
         suggestion: generation.suggestedSalesStage
           ? {
               stage: generation.suggestedSalesStage.stage,
