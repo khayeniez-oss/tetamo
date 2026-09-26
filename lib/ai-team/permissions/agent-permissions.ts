@@ -160,6 +160,7 @@ export const AGENT_PERMISSION_POLICIES: Record<
       "create_report",
       "create_insight",
       "create_handoff",
+      "propose_decision",
       "create_meeting_item",
       "request_approval",
       "read_sales_data",

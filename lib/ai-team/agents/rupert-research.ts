@@ -145,6 +145,33 @@ function requiresOfficialIndonesianSource(
   );
 }
 
+function requiresOfficialIndonesianFindingSource(
+  statement: string
+) {
+  return /\b(law|legal|regulation|regulatory|tax|taxes|taxation|bphtb|pph|ajb|ppjb|notary|notaris|ppat|escrow|land title|certificate|ownership transfer|transfer of ownership|deed of sale|hak milik|hak pakai|hgb|shm)\b/i.test(
+    statement
+  );
+}
+
+
+function hasUnresolvedCustomerIntentScope(
+  topic: string,
+  context?: string | null
+) {
+  const evidenceScope =
+    [
+      topic,
+      context ?? "",
+    ]
+      .join("\n")
+      .toLowerCase();
+
+  return evidenceScope.includes(
+    "customer_intent_scope=unresolved"
+  );
+}
+
+
 function safeParseJson(
   value: string
 ): unknown {
@@ -309,7 +336,7 @@ function normalizeStructuredResearch(
         >)
       : {};
 
-  const summary =
+  let summary =
     cleanString(row.summary);
 
   const rawFindings =
@@ -319,6 +346,9 @@ function normalizeStructuredResearch(
 
   const findings:
     RupertResearchFinding[] = [];
+
+  let excludedOfficialVerificationCount =
+    0;
 
   for (
     const item of rawFindings
@@ -406,6 +436,29 @@ function normalizeStructuredResearch(
       );
 
     /*
+     * Finding-level verification.
+     *
+     * A broad research topic can lead Rupert into Indonesian
+     * legal, tax, title, notary, escrow or transaction-process
+     * claims that were not obvious from the original topic.
+     *
+     * Those claims must not enter the structured factual
+     * findings unless that specific finding cites an official
+     * Indonesian source.
+     */
+    if (
+      requiresOfficialIndonesianFindingSource(
+        statement
+      ) &&
+      !hasOfficialSource
+    ) {
+      excludedOfficialVerificationCount +=
+        1;
+
+      continue;
+    }
+
+    /*
      * Rupert may not label a claim
      * high-confidence merely because
      * one ordinary website says it.
@@ -449,6 +502,40 @@ function normalizeStructuredResearch(
           .filter(Boolean)
       : [];
 
+  if (
+    excludedOfficialVerificationCount >
+    0
+  ) {
+    warnings.push(
+      `${excludedOfficialVerificationCount} Indonesian legal, tax, title, notary, escrow or transaction-process finding(s) were excluded because the cited evidence did not include an official Indonesian source.`
+    );
+  }
+
+  /*
+   * Summary containment.
+   *
+   * The model-generated summary has no claim-level source map.
+   * Therefore sensitive Indonesian legal, tax, title, notary,
+   * escrow or transaction-process claims must not survive in
+   * the summary merely because they were mentioned in the raw
+   * research memo.
+   */
+  if (
+    summary &&
+    requiresOfficialIndonesianFindingSource(
+      summary
+    )
+  ) {
+    summary =
+      findings.length > 0
+        ? `Rupert retained ${findings.length} externally sourced factual finding(s) after evidence filtering. Sensitive Indonesian legal, tax, title, notary, escrow or transaction-process claims were excluded from the summary unless they survived the structured evidence standard. Review the retained findings and warnings for details.`
+        : "Rupert did not retain factual findings that met the required evidence standard. Review the research warnings for unresolved or insufficiently verified points.";
+
+    warnings.push(
+      "The model-generated research summary was generalized because it contained sensitive Indonesian legal, tax, title, notary, escrow or transaction-process claims without claim-level official-source verification."
+    );
+  }
+
   return {
     summary,
     findings,
@@ -482,6 +569,12 @@ export async function researchWithRupert({
       "OPENAI_API_KEY is missing."
     );
   }
+
+  const unresolvedCustomerIntent =
+    hasUnresolvedCustomerIntentScope(
+      cleanTopic,
+      context
+    );
 
   /*
    * PHASE 1:
@@ -519,6 +612,25 @@ ${cleanTopic}
 
 ADDITIONAL TETAMO CONTEXT
 ${context?.trim() || "None supplied."}
+
+CUSTOMER-INTENT EVIDENCE BOUNDARY
+${
+  unresolvedCustomerIntent
+    ? `
+- The supplied internal evidence confirms a recurring
+  customer question but DOES NOT identify which specific
+  payment event the customers meant.
+- Public-web research cannot determine customer intent.
+- You may research externally verifiable payment processes,
+  terminology, documented policies and publicly documented
+  Tetamo information.
+- You MUST NOT conclude which payment event these customers
+  meant from public-web evidence.
+- You MUST explicitly preserve this unresolved distinction
+  in the research memo.
+`
+    : "No special unresolved customer-intent boundary."
+}
 
 RESEARCH STANDARD
 
@@ -653,6 +765,36 @@ the supplied VALID SOURCE LIST.
 If a claim cannot be tied to a supplied source URL,
 do not include it as a factual finding.
 
+INDONESIAN OFFICIAL-SOURCE RULE
+
+For any factual claim involving Indonesian law, regulation,
+tax, BPHTB, PPh, AJB, PPJB, land title, ownership transfer,
+certificate, notary, notaris, PPAT or escrow:
+
+- Include it as a factual finding only when that finding is
+  supported by an official Indonesian government or regulator
+  source from the supplied VALID SOURCE LIST.
+- A commercial property website, agency, blog, relocation
+  company or general guide is not sufficient verification.
+- If official verification is unavailable, omit that factual
+  finding and preserve the limitation in warnings.
+
+CUSTOMER-INTENT RULE
+${
+  unresolvedCustomerIntent
+    ? `
+The supplied internal evidence does not establish which
+payment event the customers meant.
+
+Do NOT turn public-web findings into a claim about customer
+intent.
+
+The warnings array MUST preserve that customer-intended
+payment event remains unresolved.
+`
+    : "No special unresolved customer-intent rule."
+}
+
 Confidence rules:
 - "high" only when evidence is particularly strong.
 - A single ordinary commercial/blog source is not enough
@@ -709,6 +851,72 @@ ${researchText}
       parsed,
       sources
     );
+
+  if (
+    unresolvedCustomerIntent
+  ) {
+    const combined =
+      [
+        structured.summary,
+
+        ...structured.findings.map(
+          (finding) =>
+            finding.statement
+        ),
+
+        ...structured.recommendations,
+      ]
+        .join(" ");
+
+    /*
+     * Do not reject language that merely acknowledges the
+     * unresolved question, such as:
+     *
+     * "We cannot determine what customers meant."
+     *
+     * Reject only statements that map the recurring inquiries
+     * to a specific payment event or transaction meaning.
+     */
+    const unsupportedIntentClaims = [
+      /customers?\s+(?:mean|meant|are referring to|were referring to|refer to|referred to)\s+(?:the\s+)?(?:settlement|settlement payment|payment release|release of funds|sale proceeds|seller proceeds|commission|agent commission|service fee|listing fee|deposit|booking deposit|owner payment|buyer payment)\b/i,
+
+      /(?:customer|customers|customer inquiries?|customer questions?)\s+(?:are|were|is|was)\s+(?:asking about|referring to|about)\s+(?:the\s+)?(?:settlement|settlement payment|payment release|release of funds|sale proceeds|seller proceeds|commission|agent commission|service fee|listing fee|deposit|booking deposit|owner payment|buyer payment)\b/i,
+
+      /(?:the|these)\s+(?:customer\s+)?(?:questions?|inquiries?)\s+(?:mean|meant|refer to|referred to|concern|concerned)\s+(?:the\s+)?(?:settlement|settlement payment|payment release|release of funds|sale proceeds|seller proceeds|commission|agent commission|service fee|listing fee|deposit|booking deposit|owner payment|buyer payment)\b/i,
+    ];
+
+    if (
+      unsupportedIntentClaims.some(
+        (pattern) =>
+          pattern.test(
+            combined
+          )
+      )
+    ) {
+      throw new Error(
+        "Rupert research attempted to map unresolved customer intent to a specific payment event using public-web evidence."
+      );
+    }
+
+    const unresolvedWarning =
+      "Customer-intended payment event remains unresolved from the supplied internal evidence; public-web research cannot determine which payment event the customers meant.";
+
+    const alreadyWarned =
+      structured.warnings.some(
+        (warning) =>
+          warning
+            .toLowerCase()
+            .includes(
+              "customer-intended payment event remains unresolved"
+            )
+      );
+
+    if (!alreadyWarned) {
+      structured.warnings.push(
+        unresolvedWarning
+      );
+    }
+  }
 
   return {
     topic: cleanTopic,

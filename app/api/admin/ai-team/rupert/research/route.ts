@@ -116,7 +116,7 @@ export async function POST(
     await aiTeamSupabaseAdmin
       .from("ai_agents")
       .select(
-        "id, agent_key, display_name, role_title"
+        "id, agent_key, display_name, role_title, status, enabled"
       )
       .eq(
         "agent_key",
@@ -151,6 +151,26 @@ export async function POST(
     );
   }
 
+  /*
+   * Operational off-switch.
+   *
+   * Autonomous research must not run when Rupert has
+   * been disabled or made inactive.
+   */
+  if (
+    rupert.status !== "active" ||
+    rupert.enabled !== true
+  ) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Rupert is inactive or disabled.",
+      },
+      { status: 409 }
+    );
+  }
+
   let task:
     | {
         id: string;
@@ -159,6 +179,15 @@ export async function POST(
         assigned_to_agent_id:
           | string
           | null;
+
+        source_type:
+          string | null;
+
+        source_id:
+          string | null;
+
+        metadata:
+          Record<string, unknown> | null;
       }
     | null = null;
 
@@ -178,7 +207,7 @@ export async function POST(
       await aiTeamSupabaseAdmin
         .from("ai_tasks")
         .select(
-          "id, title, status, assigned_to_agent_id"
+          "id, title, status, assigned_to_agent_id, source_type, source_id, metadata"
         )
         .eq(
           "id",
@@ -244,6 +273,38 @@ export async function POST(
       );
     }
 
+    /*
+     * Lola -> Rupert research tasks use a stricter execution
+     * state than Rupert's existing general research workflow.
+     *
+     * pending     -> first research attempt
+     * blocked     -> explicit retry after failed research
+     * in_progress -> do not run the same research again
+     *
+     * Other Rupert research task types keep their existing
+     * behaviour.
+     */
+    const isLolaHandoffResearchTask =
+      taskRow.source_type ===
+        "rupert_lola_handoff";
+
+    if (
+      isLolaHandoffResearchTask &&
+      taskRow.status !==
+        "pending" &&
+      taskRow.status !==
+        "blocked"
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            `Rupert Lola-handoff research cannot run for a ${taskRow.status} task.`,
+        },
+        { status: 409 }
+      );
+    }
+
     task = taskRow;
 
     /*
@@ -251,27 +312,115 @@ export async function POST(
      * Rupert's work, so do NOT mark
      * the task completed here.
      */
-    if (
+    const shouldStartTask =
       taskRow.status ===
-      "pending"
-    ) {
+        "pending" ||
+      (
+        isLolaHandoffResearchTask &&
+        taskRow.status ===
+          "blocked"
+      );
+
+    if (shouldStartTask) {
+      const startedAt =
+        new Date()
+          .toISOString();
+
+      const currentMetadata =
+        taskRow.metadata &&
+        typeof taskRow.metadata ===
+          "object" &&
+        !Array.isArray(
+          taskRow.metadata
+        )
+          ? taskRow.metadata
+          : {};
+
+      let nextMetadata =
+        taskRow.metadata;
+
+      if (
+        isLolaHandoffResearchTask
+      ) {
+        const rawAttemptCount =
+          currentMetadata
+            .attempt_count;
+
+        const attemptCount =
+          typeof rawAttemptCount ===
+            "number" &&
+          Number.isFinite(
+            rawAttemptCount
+          )
+            ? Math.max(
+                0,
+                Math.floor(
+                  rawAttemptCount
+                )
+              )
+            : 0;
+
+        nextMetadata = {
+          ...currentMetadata,
+
+          attempt_count:
+            attemptCount + 1,
+
+          last_research_attempt_at:
+            startedAt,
+
+          last_research_error:
+            null,
+
+          last_research_failed_at:
+            null,
+        };
+      }
+
+      const taskUpdate: {
+        status: string;
+        started_at: string;
+        metadata?:
+          Record<string, unknown> |
+          null;
+      } = {
+        status:
+          "in_progress",
+
+        started_at:
+          startedAt,
+      };
+
+      if (
+        isLolaHandoffResearchTask
+      ) {
+        taskUpdate.metadata =
+          nextMetadata;
+      }
+
       const {
+        data:
+          startedTask,
         error:
           startTaskError,
       } =
         await aiTeamSupabaseAdmin
           .from("ai_tasks")
-          .update({
-            status:
-              "in_progress",
-            started_at:
-              new Date()
-                .toISOString(),
-          })
+          .update(
+            taskUpdate
+          )
           .eq(
             "id",
             taskRow.id
-          );
+          )
+          .eq(
+            "status",
+            taskRow.status
+          )
+          .select(
+            "id"
+          )
+          .maybeSingle();
 
       if (
         startTaskError
@@ -290,6 +439,90 @@ export async function POST(
           { status: 500 }
         );
       }
+
+      /*
+       * Another worker changed the task between the initial
+       * read and our conditional update.
+       */
+      if (!startedTask) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "Rupert research task state changed before research could start.",
+          },
+          { status: 409 }
+        );
+      }
+
+      task = {
+        ...taskRow,
+
+        status:
+          "in_progress",
+
+        metadata:
+          nextMetadata,
+      };
+    }
+
+  }
+
+  let researchContext =
+    context;
+
+  if (
+    task?.source_type ===
+      "rupert_lola_handoff"
+  ) {
+    const metadata =
+      task.metadata &&
+      typeof task.metadata ===
+        "object" &&
+      !Array.isArray(
+        task.metadata
+      )
+        ? task.metadata
+        : {};
+
+    const intakeOutcome =
+      cleanOptionalString(
+        metadata
+          .intake_outcome
+      );
+
+    const sourceThemeKey =
+      cleanOptionalString(
+        metadata
+          .source_theme_key
+      );
+
+    if (
+      intakeOutcome ===
+        "needs_research" &&
+      sourceThemeKey ===
+        "payment_timing_after_sale"
+    ) {
+      const protectedScope =
+        [
+          "CUSTOMER_INTENT_SCOPE=UNRESOLVED",
+          "",
+          "Internal evidence confirms recurrence only.",
+          "It does not identify the payment event, payer, recipient, Tetamo's role, settlement direction, fee type or other payment direction.",
+          "Public-web research may verify external facts but cannot determine which payment event these customers meant.",
+          "Preserve that distinction explicitly.",
+        ]
+          .join("\n");
+
+      researchContext =
+        [
+          context,
+          protectedScope,
+        ]
+          .filter(
+            Boolean
+          )
+          .join("\n\n");
     }
   }
 
@@ -298,7 +531,8 @@ export async function POST(
       await researchWithRupert({
         topic,
         context:
-          context || null,
+          researchContext ||
+          null,
       });
 
     /*
@@ -366,7 +600,8 @@ export async function POST(
               result.topic,
 
             context:
-              context || null,
+              researchContext ||
+              null,
 
             researched_at:
               result.researchedAt,
@@ -382,6 +617,119 @@ export async function POST(
 
             warnings:
               result.warnings,
+
+            /*
+             * Explicit downstream eligibility.
+             *
+             * Research success and content readiness are separate.
+             *
+             * A Lola -> Rupert inquiry task must not become
+             * draft-eligible while the customer-intended subject
+             * is still unresolved, even when valid external
+             * findings were discovered.
+             */
+            content_eligible:
+              result.findings.length >
+                0 &&
+              !(
+                task?.source_type ===
+                  "rupert_lola_handoff" &&
+                String(
+                  task?.metadata &&
+                    typeof task.metadata ===
+                      "object" &&
+                    !Array.isArray(
+                      task.metadata
+                    )
+                    ? (
+                        task.metadata as Record<
+                          string,
+                          unknown
+                        >
+                      )
+                        .customer_intent_scope
+                    : null
+                ).toLowerCase() ===
+                  "unresolved"
+              ),
+
+            quality_review_state:
+              task?.source_type ===
+                "rupert_lola_handoff" &&
+              String(
+                task?.metadata &&
+                  typeof task.metadata ===
+                    "object" &&
+                  !Array.isArray(
+                    task.metadata
+                  )
+                  ? (
+                      task.metadata as Record<
+                        string,
+                        unknown
+                      >
+                    )
+                      .customer_intent_scope
+                  : null
+              ).toLowerCase() ===
+                "unresolved"
+                ? "needs_internal_clarification"
+                : result.findings.length >
+                    0
+                  ? "passed"
+                  : "insufficient_verified_findings",
+
+            content_block_reason:
+              task?.source_type ===
+                "rupert_lola_handoff" &&
+              String(
+                task?.metadata &&
+                  typeof task.metadata ===
+                    "object" &&
+                  !Array.isArray(
+                    task.metadata
+                  )
+                  ? (
+                      task.metadata as Record<
+                        string,
+                        unknown
+                      >
+                    )
+                      .customer_intent_scope
+                  : null
+              ).toLowerCase() ===
+                "unresolved"
+                ? "customer_intent_unresolved"
+                : null,
+
+            post_research_disposition:
+              task?.source_type ===
+                "rupert_lola_handoff" &&
+              String(
+                task?.metadata &&
+                  typeof task.metadata ===
+                    "object" &&
+                  !Array.isArray(
+                    task.metadata
+                  )
+                  ? (
+                      task.metadata as Record<
+                        string,
+                        unknown
+                      >
+                    )
+                      .customer_intent_scope
+                  : null
+              ).toLowerCase() ===
+                "unresolved"
+                ? "needs_internal_clarification"
+                : "content_may_proceed",
+
+            evidence_standard_version:
+              "rupert_research_v5",
+
+            quality_reviewed_at:
+              result.researchedAt,
           },
         })
         .select(
@@ -515,6 +863,76 @@ export async function POST(
       error
     );
 
+    const researchError =
+      error instanceof Error
+        ? error.message
+        : "Unknown research error";
+
+    /*
+     * Protected Lola -> Rupert research must fail closed.
+     *
+     * If research fails, cannot source the claim, or violates
+     * the customer-intent evidence boundary, return the task
+     * to a visible retryable BLOCKED state rather than leaving
+     * it stuck in_progress.
+     */
+    if (
+      task?.source_type ===
+        "rupert_lola_handoff"
+    ) {
+      const currentMetadata =
+        task.metadata &&
+        typeof task.metadata ===
+          "object" &&
+        !Array.isArray(
+          task.metadata
+        )
+          ? task.metadata
+          : {};
+
+      const failedAt =
+        new Date()
+          .toISOString();
+
+      const {
+        error:
+          blockTaskError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from("ai_tasks")
+          .update({
+            status:
+              "blocked",
+
+            metadata: {
+              ...currentMetadata,
+
+              last_research_error:
+                researchError,
+
+              last_research_failed_at:
+                failedAt,
+            },
+          })
+          .eq(
+            "id",
+            task.id
+          )
+          .eq(
+            "status",
+            "in_progress"
+          );
+
+      if (
+        blockTaskError
+      ) {
+        console.error(
+          "Rupert failed research task recovery failed:",
+          blockTaskError
+        );
+      }
+    }
+
     /*
      * Record the failure when
      * possible. No research report
@@ -560,10 +978,7 @@ export async function POST(
             topic,
 
             error:
-              error instanceof
-              Error
-                ? error.message
-                : "Unknown research error",
+              researchError,
           },
         });
 
@@ -581,9 +996,7 @@ export async function POST(
         ok: false,
 
         error:
-          error instanceof Error
-            ? error.message
-            : "Rupert's web research failed.",
+          researchError,
       },
       { status: 500 }
     );

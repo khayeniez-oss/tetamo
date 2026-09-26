@@ -611,6 +611,34 @@ export async function POST(
     );
   }
 
+  /*
+   * Historical research reports may be preserved for audit
+   * while being explicitly barred from content production.
+   *
+   * Never draft from a report that later failed a stronger
+   * evidence or quality review.
+   */
+  if (
+    sourceData
+      .content_eligible ===
+      false ||
+    sourceData
+      .superseded_for_content ===
+      true
+  ) {
+    return Response.json(
+      {
+        ok: false,
+
+        error:
+          "This research report is preserved for audit but is not eligible for content production.",
+      },
+      {
+        status: 409,
+      }
+    );
+  }
+
   const topic =
     cleanString(
       sourceData.topic
