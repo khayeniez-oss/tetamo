@@ -34,7 +34,7 @@ function getBearerToken(req: Request) {
 
 function verifyCronRequest(req: Request) {
   const cronSecret = cleanEnv(
-    process.env.CRON_SECRET
+    process.env.MONA_FOLLOWUP_SECRET
   );
 
   if (!cronSecret) {
@@ -43,7 +43,7 @@ function verifyCronRequest(req: Request) {
       response: Response.json(
         {
           error:
-            "CRON_SECRET is not configured.",
+            "MONA_FOLLOWUP_SECRET is not configured.",
         },
         {
           status: 500,
