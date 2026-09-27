@@ -39,6 +39,24 @@ type ActivityRow = {
     unknown;
 };
 
+type DecisionRow = {
+  proposed_by_agent_id:
+    string | null;
+  decision_maker_agent_id:
+    string | null;
+  [key: string]:
+    unknown;
+};
+
+type HandoffRow = {
+  from_agent_id:
+    string;
+  to_agent_id:
+    string;
+  [key: string]:
+    unknown;
+};
+
 function agentSummary(
   agent:
     | AgentRow
@@ -81,6 +99,8 @@ export async function GET(
     tasksResult,
     approvalsResult,
     activityResult,
+    decisionsResult,
+    handoffsResult,
   ] =
     await Promise.all([
       aiTeamSupabaseAdmin
@@ -191,6 +211,67 @@ export async function GET(
           }
         )
         .limit(300),
+
+      aiTeamSupabaseAdmin
+        .from(
+          "ai_decisions"
+        )
+        .select(
+          [
+            "id",
+            "title",
+            "description",
+            "proposed_by_agent_id",
+            "decision_maker_agent_id",
+            "decision_maker_user_id",
+            "status",
+            "rationale",
+            "related_task_id",
+            "related_entity_type",
+            "related_entity_id",
+            "decided_at",
+            "metadata",
+            "created_at",
+            "updated_at",
+          ].join(",")
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        )
+        .limit(200),
+
+      aiTeamSupabaseAdmin
+        .from(
+          "ai_handoffs"
+        )
+        .select(
+          [
+            "id",
+            "from_agent_id",
+            "to_agent_id",
+            "task_id",
+            "handoff_type",
+            "summary",
+            "context",
+            "status",
+            "accepted_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+          ].join(",")
+        )
+        .order(
+          "updated_at",
+          {
+            ascending:
+              false,
+          }
+        )
+        .limit(200),
     ]);
 
   if (
@@ -266,6 +347,46 @@ export async function GET(
         ok: false,
         error:
           "Unable to load AI Team activity.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+
+  if (
+    decisionsResult.error
+  ) {
+    console.error(
+      "AI workboard decision lookup failed:",
+      decisionsResult.error
+    );
+
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Unable to load AI Team decisions.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+
+  if (
+    handoffsResult.error
+  ) {
+    console.error(
+      "AI workboard handoff lookup failed:",
+      handoffsResult.error
+    );
+
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Unable to load AI Team handoffs.",
       },
       {
         status: 500,
@@ -373,6 +494,72 @@ export async function GET(
       })
     );
 
+  const decisionRows =
+    (
+      decisionsResult.data ??
+      []
+    ) as unknown as
+      DecisionRow[];
+
+  const decisions =
+    decisionRows.map(
+      (decision) => ({
+        ...decision,
+
+        proposed_by_agent:
+          decision
+            .proposed_by_agent_id
+            ? agentSummary(
+                agentById.get(
+                  decision
+                    .proposed_by_agent_id
+                )
+              )
+            : null,
+
+        decision_maker_agent:
+          decision
+            .decision_maker_agent_id
+            ? agentSummary(
+                agentById.get(
+                  decision
+                    .decision_maker_agent_id
+                )
+              )
+            : null,
+      })
+    );
+
+  const handoffRows =
+    (
+      handoffsResult.data ??
+      []
+    ) as unknown as
+      HandoffRow[];
+
+  const handoffs =
+    handoffRows.map(
+      (handoff) => ({
+        ...handoff,
+
+        from_agent:
+          agentSummary(
+            agentById.get(
+              handoff
+                .from_agent_id
+            )
+          ),
+
+        to_agent:
+          agentSummary(
+            agentById.get(
+              handoff
+                .to_agent_id
+            )
+          ),
+      })
+    );
+
   return Response.json({
     ok: true,
 
@@ -385,5 +572,9 @@ export async function GET(
     approvals,
 
     activity,
+
+    decisions,
+
+    handoffs,
   });
 }

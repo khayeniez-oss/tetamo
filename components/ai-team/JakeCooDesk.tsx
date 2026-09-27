@@ -70,6 +70,8 @@ type TaskRow = {
   requires_approval: boolean;
   due_at:
     string | null;
+  completed_at:
+    string | null;
   created_at: string;
   updated_at: string;
   requested_by_agent:
@@ -100,6 +102,45 @@ type ActivityRow = {
     AgentSummary | null;
 };
 
+type DecisionRow = {
+  id: string;
+  title: string;
+  description:
+    string | null;
+  status: string;
+  rationale:
+    string | null;
+  related_task_id:
+    string | null;
+  decided_at:
+    string | null;
+  created_at: string;
+  updated_at: string;
+  proposed_by_agent:
+    AgentSummary | null;
+  decision_maker_agent:
+    AgentSummary | null;
+};
+
+type HandoffRow = {
+  id: string;
+  task_id:
+    string | null;
+  handoff_type: string;
+  summary: string;
+  status: string;
+  accepted_at:
+    string | null;
+  completed_at:
+    string | null;
+  created_at: string;
+  updated_at: string;
+  from_agent:
+    AgentSummary | null;
+  to_agent:
+    AgentSummary | null;
+};
+
 type MeetingRow = {
   id: string;
   meeting_type: string;
@@ -121,6 +162,8 @@ type WorkboardResponse = {
   tasks?: TaskRow[];
   approvals?: ApprovalRow[];
   activity?: ActivityRow[];
+  decisions?: DecisionRow[];
+  handoffs?: HandoffRow[];
   error?: string;
 };
 
@@ -274,10 +317,16 @@ function statusClasses(
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
 
     case "in_progress":
+    case "accepted":
       return "border-blue-200 bg-blue-50 text-blue-700";
+
+    case "proposed":
+    case "deferred":
+      return "border-amber-200 bg-amber-50 text-amber-700";
 
     case "blocked":
     case "rejected":
+    case "declined":
       return "border-red-200 bg-red-50 text-red-700";
 
     case "pending":
@@ -421,6 +470,22 @@ export function JakeCooDesk({
   ] =
     useState<
       ActivityRow[]
+    >([]);
+
+  const [
+    decisions,
+    setDecisions,
+  ] =
+    useState<
+      DecisionRow[]
+    >([]);
+
+  const [
+    handoffs,
+    setHandoffs,
+  ] =
+    useState<
+      HandoffRow[]
     >([]);
 
   const [
@@ -631,6 +696,18 @@ export function JakeCooDesk({
               []
           );
 
+          setDecisions(
+            workboardPayload
+              .decisions ??
+              []
+          );
+
+          setHandoffs(
+            workboardPayload
+              .handoffs ??
+              []
+          );
+
           setMeetings(
             meetingsPayload
               .meetings ??
@@ -769,6 +846,53 @@ export function JakeCooDesk({
         ),
       [
         approvals,
+      ]
+    );
+
+  const openHandoffs =
+    useMemo(
+      () =>
+        handoffs.filter(
+          (handoff) =>
+            [
+              "pending",
+              "accepted",
+            ].includes(
+              handoff.status
+            )
+        ),
+      [
+        handoffs,
+      ]
+    );
+
+  const recentDecisions =
+    useMemo(
+      () =>
+        decisions.slice(
+          0,
+          8
+        ),
+      [
+        decisions,
+      ]
+    );
+
+  const recentOutcomes =
+    useMemo(
+      () =>
+        tasks
+          .filter(
+            (task) =>
+              task.status ===
+              "completed"
+          )
+          .slice(
+            0,
+            8
+          ),
+      [
+        tasks,
       ]
     );
 
@@ -1087,7 +1211,7 @@ export function JakeCooDesk({
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           label="Open Work"
           value={
@@ -1135,6 +1259,16 @@ export function JakeCooDesk({
           }
           icon={
             <Clock3 className="h-5 w-5" />
+          }
+        />
+
+        <MetricCard
+          label="Open Handoffs"
+          value={
+            openHandoffs.length
+          }
+          icon={
+            <Users className="h-5 w-5" />
           }
         />
       </div>
@@ -1445,6 +1579,220 @@ export function JakeCooDesk({
                 </div>
               );
             }
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+            Decision Register
+          </p>
+
+          <h3 className="mt-2 text-base font-semibold text-[#1C1C1E]">
+            Recent Decisions
+          </h3>
+
+          <div className="mt-4 space-y-3">
+            {recentDecisions.length === 0 ? (
+              <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-500">
+                No AI Team decisions recorded yet.
+              </div>
+            ) : (
+              recentDecisions.map(
+                (decision) => (
+                  <div
+                    key={decision.id}
+                    className="rounded-xl border border-gray-100 p-4"
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      <Badge
+                        className={
+                          statusClasses(
+                            decision.status
+                          )
+                        }
+                      >
+                        {humanize(
+                          decision.status
+                        )}
+                      </Badge>
+                    </div>
+
+                    <p className="mt-2 text-sm font-semibold text-gray-800">
+                      {decision.title}
+                    </p>
+
+                    {decision.rationale ? (
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {decision.rationale}
+                      </p>
+                    ) : null}
+
+                    <p className="mt-2 text-[11px] text-gray-400">
+                      {decision.decision_maker_agent
+                        ? `Decision maker: ${decision.decision_maker_agent.display_name}`
+                        : "Founder / human decision record"}
+                      {" • "}
+                      {formatDate(
+                        decision.decided_at ||
+                          decision.created_at
+                      )}
+                    </p>
+                  </div>
+                )
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+            Team Handoffs
+          </p>
+
+          <h3 className="mt-2 text-base font-semibold text-[#1C1C1E]">
+            Coordination Queue
+          </h3>
+
+          <div className="mt-4 space-y-3">
+            {handoffs.length === 0 ? (
+              <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-500">
+                No AI Team handoffs recorded yet.
+              </div>
+            ) : (
+              handoffs
+                .slice(
+                  0,
+                  8
+                )
+                .map(
+                  (handoff) => (
+                    <div
+                      key={handoff.id}
+                      className="rounded-xl border border-gray-100 p-4"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        <Badge
+                          className={
+                            statusClasses(
+                              handoff.status
+                            )
+                          }
+                        >
+                          {humanize(
+                            handoff.status
+                          )}
+                        </Badge>
+
+                        <Badge className="border-gray-200 bg-gray-50 text-gray-600">
+                          {humanize(
+                            handoff.handoff_type
+                          )}
+                        </Badge>
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold text-gray-800">
+                        {handoff.from_agent
+                          ?.display_name ||
+                          "AI Team"}
+                        {" → "}
+                        {handoff.to_agent
+                          ?.display_name ||
+                          "AI Team"}
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {handoff.summary}
+                      </p>
+
+                      <p className="mt-2 text-[11px] text-gray-400">
+                        Updated{" "}
+                        {formatDate(
+                          handoff.updated_at
+                        )}
+                      </p>
+                    </div>
+                  )
+                )
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+          Outcome Ledger
+        </p>
+
+        <h3 className="mt-2 text-base font-semibold text-[#1C1C1E]">
+          Recently Completed Work
+        </h3>
+
+        <p className="mt-1 text-xs leading-5 text-gray-500">
+          Completed tasks remain visible so Jake can track whether assigned work reached an actual result.
+        </p>
+
+        <div className="mt-4 space-y-3">
+          {recentOutcomes.length === 0 ? (
+            <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-500">
+              No completed AI Team work recorded yet.
+            </div>
+          ) : (
+            recentOutcomes.map(
+              (task) => (
+                <div
+                  key={task.id}
+                  className="rounded-xl border border-gray-100 p-4"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                          Completed
+                        </Badge>
+
+                        <Badge
+                          className={
+                            priorityClasses(
+                              task.priority
+                            )
+                          }
+                        >
+                          {humanize(
+                            task.priority
+                          )}
+                        </Badge>
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold text-gray-800">
+                        {task.title}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        Owner:{" "}
+                        {task.assigned_to_agent
+                          ?.display_name ||
+                          "Unassigned"}
+                      </p>
+
+                      <p className="mt-2 text-xs leading-5 text-gray-600">
+                        {task.result_summary ||
+                          task.expected_outcome ||
+                          "Completed without a recorded result summary."}
+                      </p>
+                    </div>
+
+                    <p className="shrink-0 text-xs text-gray-400">
+                      {formatDate(
+                        task.completed_at ||
+                          task.updated_at
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )
+            )
           )}
         </div>
       </div>
