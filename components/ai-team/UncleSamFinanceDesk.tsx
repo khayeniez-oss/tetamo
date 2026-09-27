@@ -195,6 +195,12 @@ export function UncleSamFinanceDesk() {
     useState(false);
 
   const [
+    reviewingFinance,
+    setReviewingFinance,
+  ] =
+    useState(false);
+
+  const [
     error,
     setError,
   ] =
@@ -822,6 +828,91 @@ export function UncleSamFinanceDesk() {
     }
   }
 
+  async function runFinanceReview() {
+    try {
+      setReviewingFinance(
+        true
+      );
+
+      setError("");
+      setNotice("");
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          "/api/admin/ai-team/uncle-sam/finance-review",
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () => null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !== true
+      ) {
+        throw new Error(
+          payload?.error ||
+            "Unable to run finance review."
+        );
+      }
+
+      const result =
+        payload.result;
+
+      const reportMessage =
+        result?.weeklyReport
+          ?.created
+          ? "Weekly financial report created."
+          : result?.weeklyReport
+                ?.reason ===
+              "already_exists"
+            ? "Weekly financial report already exists."
+            : "No weekly financial report created.";
+
+      setNotice(
+        [
+          `Finance review complete.`,
+          `Renewal tasks created: ${result?.renewalTasksCreated ?? 0}.`,
+          `Existing renewal tasks: ${result?.renewalTasksExisting ?? 0}.`,
+          `Upcoming renewals: ${result?.upcomingRenewals ?? 0}.`,
+          `Cost review flags: ${result?.costReviewFlags ?? 0}.`,
+          reportMessage,
+        ].join(
+          " "
+        )
+      );
+
+      await loadWorkspace();
+    } catch (reviewError) {
+      setError(
+        reviewError instanceof
+          Error
+          ? reviewError.message
+          : "Unable to run finance review."
+      );
+    } finally {
+      setReviewingFinance(
+        false
+      );
+    }
+  }
+
   const latestExpenses =
     useMemo(
       () =>
@@ -880,16 +971,37 @@ export function UncleSamFinanceDesk() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            void loadWorkspace()
-          }
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={
+              reviewingFinance
+            }
+            onClick={() =>
+              void runFinanceReview()
+            }
+            className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-3 py-2 text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {reviewingFinance ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CircleDollarSign className="h-4 w-4" />
+            )}
+
+            Run finance review
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              void loadWorkspace()
+            }
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error ? (
