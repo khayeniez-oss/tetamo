@@ -45,6 +45,8 @@ type AiApprovalRow = {
 type AiTaskRow = {
   id: string;
   status: string;
+  source_type:
+    string | null;
   assigned_to_agent_id:
     string | null;
   metadata:
@@ -179,7 +181,7 @@ async function reopenRejectedRupertBlogTask(
         "ai_tasks"
       )
       .select(
-        "id, status, assigned_to_agent_id, metadata"
+        "id, status, source_type, assigned_to_agent_id, metadata"
       )
       .eq(
         "id",
@@ -225,6 +227,11 @@ async function reopenRejectedRupertBlogTask(
       metadata.current_research_report_id
     );
 
+  const originalReportId =
+    cleanString(
+      metadata.research_report_id
+    );
+
   const qualityReviewState =
     cleanString(
       metadata.quality_review_state
@@ -235,23 +242,57 @@ async function reopenRejectedRupertBlogTask(
       metadata.post_research_disposition
     );
 
+  const taskSourceType =
+    cleanString(
+      task.source_type
+    );
+
   /*
-   * Reopen only when the SAME verified research package
-   * is still current and draft-eligible.
+   * Protected Lola -> Rupert inquiry tasks use the newer,
+   * stricter research-safety contract.
+   *
+   * Do not weaken this gate: the exact current verified
+   * report must still be draft-eligible.
    */
   if (
-    currentReportId !==
-      researchReportId ||
-    metadata.content_eligible !==
-      true ||
-    qualityReviewState !==
-      "passed" ||
-    disposition !==
-      "content_may_proceed"
+    taskSourceType ===
+      "rupert_lola_handoff"
   ) {
-    throw new Error(
-      "Rejected Rupert draft is no longer backed by the task's current verified draft-eligible research report."
-    );
+    if (
+      currentReportId !==
+        researchReportId ||
+      metadata.content_eligible !==
+        true ||
+      qualityReviewState !==
+        "passed" ||
+      disposition !==
+        "content_may_proceed"
+    ) {
+      throw new Error(
+        "Rejected Rupert draft is no longer backed by the task's current verified draft-eligible research report."
+      );
+    }
+  } else {
+    /*
+     * Standard Rupert content tasks predate the protected
+     * inquiry metadata contract.
+     *
+     * They may be reopened only when the rejected approval
+     * points to the exact research report linked to that task.
+     */
+    const linkedReportId =
+      currentReportId ||
+      originalReportId;
+
+    if (
+      !linkedReportId ||
+      linkedReportId !==
+        researchReportId
+    ) {
+      throw new Error(
+        "Rejected Rupert draft does not match the research report linked to its task."
+      );
+    }
   }
 
   /*
