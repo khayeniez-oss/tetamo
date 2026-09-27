@@ -3,6 +3,10 @@ import {
   requireTetamoAdmin,
 } from "@/lib/ai-team/core/admin-auth";
 
+import {
+  syncPendingExecutiveClarifications,
+} from "@/lib/ai-team/core/meeting-executive-items";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -223,7 +227,7 @@ export async function POST(req: Request) {
     ),
   ];
 
-  const { data: meeting, error } =
+  let { data: meeting, error } =
     await aiTeamSupabaseAdmin
       .from("ai_meetings")
       .insert({
@@ -258,7 +262,97 @@ export async function POST(req: Request) {
       )
       .single();
 
-  if (error) {
+  /*
+   * Database-enforced idempotency.
+   *
+   * If two Start Meeting requests race, the partial unique
+   * index permits only one in-progress meeting for this
+   * Founder/admin. Recover the meeting that won the race
+   * instead of returning a false server failure.
+   */
+  let alreadyActive =
+    false;
+
+  if (
+    error?.code ===
+      "23505"
+  ) {
+    const {
+      data:
+        existingMeeting,
+      error:
+        existingMeetingError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_meetings"
+        )
+        .select(
+          [
+            "id",
+            "meeting_type",
+            "title",
+            "status",
+            "scheduled_for",
+            "started_at",
+            "chaired_by_agent_id",
+            "created_by_user_id",
+            "attendees",
+            "created_at",
+          ].join(",")
+        )
+        .eq(
+          "created_by_user_id",
+          auth.admin.userId
+        )
+        .eq(
+          "status",
+          "in_progress"
+        )
+        .order(
+          "started_at",
+          {
+            ascending: false,
+          }
+        )
+        .limit(1)
+        .maybeSingle();
+
+    if (
+      existingMeetingError ||
+      !existingMeeting
+    ) {
+      console.error(
+        "AI Team active meeting race recovery failed:",
+        existingMeetingError
+      );
+
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Unable to recover the active AI Team meeting.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    meeting =
+      existingMeeting;
+
+    error =
+      null;
+
+    alreadyActive =
+      true;
+  }
+
+  if (
+    error ||
+    !meeting
+  ) {
     console.error(
       "AI Team meeting creation failed:",
       error
@@ -274,11 +368,61 @@ export async function POST(req: Request) {
     );
   }
 
+  const createdMeeting =
+    meeting as unknown as {
+      id: string;
+      meeting_type: MeetingType;
+      title: string;
+      status: "in_progress";
+      scheduled_for: string;
+      started_at: string;
+      chaired_by_agent_id: string;
+      created_by_user_id: string;
+      attendees: unknown;
+      created_at: string;
+    };
+
+  /*
+   * Surface pending Founder clarifications only after the
+   * Meeting Room session itself has been created successfully.
+   *
+   * Executive-item sync is intentionally non-fatal:
+   * a clarification queue problem must never destroy or hide
+   * an otherwise valid Meeting Room session.
+   */
+  let executiveClarificationSync =
+    null;
+
+  try {
+    executiveClarificationSync =
+      await syncPendingExecutiveClarifications({
+        meetingId:
+          createdMeeting.id,
+
+        actorUserId:
+          auth.admin.userId,
+      });
+  } catch (syncError) {
+    console.error(
+      "AI Team Founder clarification sync failed:",
+      syncError
+    );
+  }
+
   return Response.json(
     {
       ok: true,
-      meeting,
+      meeting:
+        createdMeeting,
+      executiveClarificationSync,
+
+      alreadyActive,
     },
-    { status: 201 }
+    {
+      status:
+        alreadyActive
+          ? 200
+          : 201,
+    }
   );
 }
