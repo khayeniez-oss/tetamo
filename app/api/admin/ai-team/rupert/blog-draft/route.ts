@@ -686,6 +686,9 @@ export async function POST(
   const bindingConstraints:
     string[] = [];
 
+  let linkedTaskMetadataForUpdate:
+    Record<string, unknown> = {};
+
   /*
    * Protected Lola -> Rupert inquiry content must prove that
    * this exact research report is the task's CURRENT eligible
@@ -788,6 +791,9 @@ export async function POST(
       asRecord(
         verifiedLinkedTask.metadata
       );
+
+    linkedTaskMetadataForUpdate =
+      linkedTaskMetadata;
 
     /*
      * Founder rejection feedback from a previous draft is a
@@ -1615,6 +1621,23 @@ export async function POST(
 
             result_summary:
               `Rupert prepared complete bilingual blog draft ${blog.id} with editorial images and publish settings; awaiting Founder approval.`,
+
+            metadata: {
+              ...linkedTaskMetadataForUpdate,
+
+              blog_id:
+                blog.id,
+
+              approval_id:
+                approval.id,
+
+              research_report_id:
+                report.id,
+
+              completed_production_at:
+                new Date()
+                  .toISOString(),
+            },
           })
           .eq(
             "id",
@@ -1771,6 +1794,11 @@ export async function POST(
         "Rupert final draft failed binding research safety validation:"
       );
 
+    const isFounderRedraftQualityFailure =
+      errorMessage.startsWith(
+        "Rupert final draft failed Founder redraft quality validation:"
+      );
+
     /*
      * A deterministic editorial-safety rejection is not a
      * transient infrastructure failure.
@@ -1898,10 +1926,16 @@ export async function POST(
 
         blocked:
           isBindingSafetyFailure,
+
+        retryable:
+          isFounderRedraftQualityFailure,
       },
       {
         status:
-          isBindingSafetyFailure
+          (
+            isBindingSafetyFailure ||
+            isFounderRedraftQualityFailure
+          )
             ? 422
             : 500,
       }

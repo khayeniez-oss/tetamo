@@ -483,6 +483,96 @@ function validateDraftAgainstResearchConstraints(
   }
 }
 
+function validateDraftAgainstFounderRedraftQuality(
+  research:
+    RupertBlogResearch,
+
+  draft: {
+    title: string;
+    titleId: string;
+    excerpt: string;
+    excerptId: string;
+    contentHtml: string;
+    contentIdHtml: string;
+  }
+) {
+  const constraintText =
+    (
+      research
+        .bindingConstraints ??
+      []
+    )
+      .map(cleanString)
+      .join("\n")
+      .toLowerCase();
+
+  const requiresSpacingCorrection =
+    constraintText.includes(
+      "spacing"
+    ) ||
+    constraintText.includes(
+      "proofread"
+    ) ||
+    constraintText.includes(
+      "fused word"
+    ) ||
+    constraintText.includes(
+      "missing space"
+    );
+
+  if (
+    !requiresSpacingCorrection
+  ) {
+    return;
+  }
+
+  const draftText =
+    normalizeSafetyText(
+      [
+        draft.title,
+        draft.titleId,
+        draft.excerpt,
+        draft.excerptId,
+        draft.contentHtml,
+        draft.contentIdHtml,
+      ].join("\n")
+    );
+
+  /*
+   * Deterministic protection against the exact class of
+   * fused-word defects already observed in Rupert output.
+   *
+   * The model prompt below also requires a complete
+   * bilingual proofreading pass for broader typo coverage.
+   */
+  const fusedWordPatterns = [
+    /\binindonesia\b/i,
+    /\binthe\b/i,
+    /\bandlarge\b/i,
+    /\byangterbatas\b/i,
+    /\bhalinimenegaskan\b/i,
+    /\binimenegaskan\b/i,
+    /\beasingcompared\b/i,
+    /\bfundsto\b/i,
+    /\bbankingindustry\b/i,
+    /\bdibandingkankenaikan\b/i,
+    /\bbahwafaktor\b/i,
+  ];
+
+  if (
+    fusedWordPatterns.some(
+      (pattern) =>
+        pattern.test(
+          draftText
+        )
+    )
+  ) {
+    throw new Error(
+      "Rupert final draft failed Founder redraft quality validation: unresolved fused-word or missing-space errors. No blog or approval should be created from this draft."
+    );
+  }
+}
+
 export async function draftBlogWithRupert(
   research:
     RupertBlogResearch,
@@ -612,6 +702,13 @@ EDITORIAL STANDARD
 - Bahasa Indonesia must be localized naturally, not
   translated mechanically.
 - Keep facts aligned between both versions.
+- Before returning the final JSON, perform a complete
+  bilingual proofreading pass.
+- Fix missing spaces, fused words, accidental word
+  concatenations, obvious typographical errors, and broken
+  English or Indonesian spacing.
+- If Founder redraft feedback identifies a proofreading or
+  spacing defect, correcting it is mandatory.
 - Prefer roughly 700-1100 useful words per language if
   evidence supports that length.
 - Write shorter content rather than padding weak evidence.
@@ -1026,6 +1123,18 @@ Return ONLY valid JSON using exactly this structure:
       contentIdHtml,
       coverImage,
       bodyImages,
+    }
+  );
+
+  validateDraftAgainstFounderRedraftQuality(
+    research,
+    {
+      title,
+      titleId,
+      excerpt,
+      excerptId,
+      contentHtml,
+      contentIdHtml,
     }
   );
 
