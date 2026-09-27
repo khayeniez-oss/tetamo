@@ -1028,7 +1028,8 @@ export function MeetingRoom({
             specialistKey === "mona" ||
             specialistKey === "lola" ||
             specialistKey === "randolph" ||
-            specialistKey === "rupert"
+            specialistKey === "rupert" ||
+            specialistKey === "uncle_sam"
           ) {
             const specialistThinkingStartedAt =
               Date.now();
@@ -1081,7 +1082,9 @@ export function MeetingRoom({
                       ? "Randolph"
                       : specialistKey === "rupert"
                         ? "Rupert"
-                        : "Specialist";
+                        : specialistKey === "uncle_sam"
+                          ? "Uncle Sam"
+                          : "Specialist";
 
               throw new Error(
                 specialistPayload.error ||
