@@ -170,6 +170,26 @@ export async function POST(
     );
   }
 
+  const latestFounderTurn =
+    [...meetingTurns]
+      .reverse()
+      .find(
+        (turn) =>
+          turn.speaker_type ===
+          "user"
+      ) ?? null;
+
+  if (!latestFounderTurn) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "No Founder turn is available for the specialist to answer.",
+      },
+      { status: 409 }
+    );
+  }
+
   const latestTurn =
     meetingTurns[
       meetingTurns.length - 1
@@ -235,7 +255,7 @@ export async function POST(
     const uncleSamResult =
       await generateUncleSamMeetingReply({
         question:
-          triggerTurn.content,
+          latestFounderTurn.content,
 
         recentTurns:
           meetingTurns

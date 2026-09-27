@@ -102,7 +102,7 @@ export async function POST(
   } = await aiTeamSupabaseAdmin
     .from("ai_meeting_turns")
     .select(
-      "id, turn_order, speaker_type, speaker_name_snapshot, speaker_role_snapshot, content"
+      "id, turn_order, speaker_type, spoken_by_agent_id, speaker_name_snapshot, speaker_role_snapshot, content"
     )
     .eq("meeting_id", meetingId)
     .order("turn_order", {
@@ -177,7 +177,7 @@ export async function POST(
   } = await aiTeamSupabaseAdmin
     .from("ai_agents")
     .select(
-      "id, agent_key, display_name, role_title"
+      "id, agent_key, display_name, role_title, status, enabled"
     );
 
   if (agentsError) {
@@ -196,20 +196,88 @@ export async function POST(
     );
   }
 
+  /*
+   * Only active + enabled AI staff may participate in
+   * live orchestration.
+   */
+  const activeAgentRows =
+    (rawAgents ?? []).filter(
+      (agent) =>
+        isAIAgentKey(
+          agent.agent_key
+        ) &&
+        agent.enabled ===
+          true &&
+        agent.status ===
+          "active"
+    );
+
+  /*
+   * For one Founder turn, each specialist may speak at most
+   * once. This is enforced here, not merely requested in the
+   * model prompt.
+   */
+  const latestFounderTurn =
+    [...turns]
+      .reverse()
+      .find(
+        (turn) =>
+          turn.speaker_type ===
+          "user"
+      ) ?? null;
+
+  const spokenAgentIdsSinceFounder =
+    new Set(
+      turns
+        .filter(
+          (turn) =>
+            Boolean(
+              latestFounderTurn
+            ) &&
+            turn.turn_order >
+              latestFounderTurn!.turn_order &&
+            turn.speaker_type ===
+              "agent" &&
+            Boolean(
+              turn.spoken_by_agent_id
+            )
+        )
+        .map(
+          (turn) =>
+            String(
+              turn.spoken_by_agent_id
+            )
+        )
+    );
+
+  const eligibleAgentRows =
+    activeAgentRows.filter(
+      (agent) =>
+        agent.agent_key ===
+          "jake" ||
+        !spokenAgentIdsSinceFounder.has(
+          String(
+            agent.id
+          )
+        )
+    );
+
   const agents: JakeMeetingAgent[] =
-    (rawAgents ?? [])
-      .filter((agent) =>
-        isAIAgentKey(agent.agent_key)
-      )
+    eligibleAgentRows
       .map((agent) => ({
-        agentKey: agent.agent_key,
-        displayName: agent.display_name,
-        roleTitle: agent.role_title,
+        agentKey:
+          agent.agent_key,
+        displayName:
+          agent.display_name,
+        roleTitle:
+          agent.role_title,
       }));
 
   const jakeRecord =
-    (rawAgents ?? []).find(
-      (agent) => agent.agent_key === "jake"
+    activeAgentRows.find(
+      (agent) =>
+        agent.agent_key ===
+        "jake"
     ) ?? null;
 
   if (!jakeRecord) {
@@ -217,7 +285,7 @@ export async function POST(
       {
         ok: false,
         error:
-          "Jake is not configured in the AI Team roster.",
+          "Jake must be active and enabled before he can orchestrate the Meeting Room.",
       },
       { status: 500 }
     );

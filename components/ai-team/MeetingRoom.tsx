@@ -869,12 +869,29 @@ export function MeetingRoom({
     };
 
   const previewJakeDecision = async (
-    triggerTurn?: MeetingTurn
-  ) => {
+    triggerTurn?: MeetingTurn,
+    orchestrationHop = 0
+  ): Promise<void> => {
     if (!currentMeeting) {
       setOrchestrationError(
         "Start a meeting first."
       );
+      return;
+    }
+
+    /*
+     * Jake may chain specialist turns, but the room must never
+     * become an uncontrolled agent-to-agent loop.
+     *
+     * Five specialist hops are enough to involve every
+     * specialist once for a single Founder turn.
+     */
+    if (orchestrationHop > 5) {
+      setOrchestrationError(
+        "Jake stopped this orchestration chain after the specialist safety limit."
+      );
+
+      resetRoom();
       return;
     }
 
@@ -1132,6 +1149,27 @@ export function MeetingRoom({
             );
 
             setSpeaker(targetAgentId);
+
+            /*
+             * The specialist has now spoken into the same shared
+             * meeting history. Return floor control to Jake so he
+             * can decide whether:
+             *
+             * - another relevant specialist is needed;
+             * - Jake should synthesize / coordinate;
+             * - or the room should stop speaking.
+             */
+            await new Promise((resolve) =>
+              window.setTimeout(
+                resolve,
+                900
+              )
+            );
+
+            await previewJakeDecision(
+              specialistPayload.savedTurn,
+              orchestrationHop + 1
+            );
           }
         }
       } else if (
