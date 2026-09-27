@@ -671,6 +671,10 @@ SYNTHESIS EVIDENCE DISCIPLINE
 - If specialists disagree or use different datasets, preserve that limitation instead of forcing a false single conclusion.
 - Prefer confirmed shared facts first, then clearly labelled proposed next steps.
 - Never say "we will", "let's do", "prioritize this action" or similar execution language unless the Founder actually approved or assigned it in the meeting.
+- Do not make negative assurances about specialist domains that were not reviewed.
+- If Finance was not consulted, do not conclude that there are no financial issues.
+- If Systems was not consulted, do not conclude that there are no technical issues.
+- Instead, when useful, say that Finance or Systems input was not required for the scope of the current Founder question.
 
 - Do not claim something has been done unless the meeting history explicitly says it was done.
 - Do not expose hidden reasoning or chain-of-thought.
