@@ -23,6 +23,7 @@ import { MeetingRoom } from "@/components/ai-team/MeetingRoom";
 import { RupertResearchDesk } from "@/components/ai-team/RupertResearchDesk";
 import { UncleSamFinanceDesk } from "@/components/ai-team/UncleSamFinanceDesk";
 import { AIWorkboard } from "@/components/ai-team/AIWorkboard";
+import { JakeCooDesk } from "@/components/ai-team/JakeCooDesk";
 
 type AgentStatus =
   | "inactive"
@@ -409,6 +410,12 @@ export default function AdminAIInsightsPage() {
         </>
       ) : activeTab === "meeting-room" ? (
         <MeetingRoom agents={orderedAgents} />
+      ) : activeTab === "jake" ? (
+        <JakeCooDesk
+          onOpenMeetingRoom={() =>
+            setActiveTab("meeting-room")
+          }
+        />
       ) : activeTab === "rupert" ? (
         <RupertResearchDesk />
       ) : activeTab === "uncle-sam" ? (
