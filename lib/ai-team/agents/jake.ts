@@ -53,6 +53,22 @@ export type JakeMeetingDecision =
       targetAgentKey: null;
     };
 
+export type JakeMeetingPlan = {
+  specialistOrder: Exclude<
+    AIAgentKey,
+    "jake"
+  >[];
+
+  needsJakeSynthesis: boolean;
+};
+
+type GenerateJakeMeetingPlanInput = {
+  meetingTitle: string;
+  founderQuestion: string;
+  recentTurns: JakeMeetingTurn[];
+  agents: JakeMeetingAgent[];
+};
+
 type GenerateJakeMeetingDecisionInput = {
   meetingTitle: string;
   recentTurns: JakeMeetingTurn[];
@@ -168,6 +184,258 @@ function extractJsonObject(
   }
 
   return null;
+}
+
+function parseJakeMeetingPlan(
+  value: Record<string, unknown>,
+  agents: JakeMeetingAgent[]
+): JakeMeetingPlan | null {
+  const allowedSpecialists =
+    new Set(
+      agents
+        .filter(
+          (agent) =>
+            agent.agentKey !==
+            "jake"
+        )
+        .map(
+          (agent) =>
+            agent.agentKey
+        )
+    );
+
+  const rawOrder =
+    Array.isArray(
+      value.specialistOrder
+    )
+      ? value.specialistOrder
+      : [];
+
+  const specialistOrder: Exclude<
+    AIAgentKey,
+    "jake"
+  >[] = [];
+
+  for (const rawKey of rawOrder) {
+    if (
+      typeof rawKey !== "string" ||
+      rawKey === "jake" ||
+      !allowedSpecialists.has(
+        rawKey as AIAgentKey
+      ) ||
+      specialistOrder.includes(
+        rawKey as Exclude<
+          AIAgentKey,
+          "jake"
+        >
+      )
+    ) {
+      continue;
+    }
+
+    specialistOrder.push(
+      rawKey as Exclude<
+        AIAgentKey,
+        "jake"
+      >
+    );
+  }
+
+  return {
+    specialistOrder:
+      specialistOrder.slice(
+        0,
+        5
+      ),
+
+    needsJakeSynthesis:
+      value.needsJakeSynthesis ===
+      true,
+  };
+}
+
+export async function generateJakeMeetingPlan({
+  meetingTitle,
+  founderQuestion,
+  recentTurns,
+  agents,
+}: GenerateJakeMeetingPlanInput): Promise<JakeMeetingPlan> {
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      specialistOrder: [],
+      needsJakeSynthesis: true,
+    };
+  }
+
+  const transcript =
+    buildMeetingTranscript(
+      recentTurns.slice(-20)
+    );
+
+  const roster =
+    buildAgentRoster(
+      agents.filter(
+        (agent) =>
+          agent.agentKey !==
+          "jake"
+      )
+    );
+
+  const prompt = `
+You are Jake, Tetamo's AI COO.
+
+Your job in this function is ONLY to create the specialist speaking plan for ONE Founder turn.
+
+Do not answer the Founder.
+Do not write reasoning.
+Do not execute actions.
+
+MEETING
+${meetingTitle}
+
+FOUNDER'S CURRENT QUESTION
+${founderQuestion}
+
+ACTIVE SPECIALISTS
+${roster || "(No active specialists.)"}
+
+RECENT CONTEXT BEFORE / INCLUDING THE FOUNDER TURN
+${transcript}
+
+SPECIALIST RESPONSIBILITIES
+
+Mona:
+Sales, customer enquiries, sales pipeline, package intent, follow-up status, verified sales and revenue context.
+
+Lola:
+Growth strategy, growth experiments, conversion opportunities, commercial hypotheses, campaign strategy.
+
+Rupert:
+Content, SEO, educational material, messaging and content support for commercial goals.
+
+Uncle Sam:
+Finance, costs, subscriptions, budgets, assets and administrative controls.
+
+Randolph:
+Systems, production health, bugs, integrations, automation reliability, technical incidents and infrastructure.
+
+ROUTING RULES
+
+Choose the SMALLEST specialist set needed to answer the Founder properly.
+
+Normal executive questions should usually need 1 to 3 specialists, not everyone.
+
+Do not create a round-robin because the Founder says:
+"team",
+"everyone",
+"guys",
+or asks a broad executive question.
+
+Only include all specialists when the Founder explicitly asks for input from every specialist or the question genuinely requires all five domains.
+
+For a question about:
+sales performance + growth focus + supporting content
+
+the normal relevant specialists are:
+Mona, Lola, Rupert.
+
+Do NOT include Uncle Sam merely because revenue, money, payment or sales figures are mentioned.
+
+Include Uncle Sam only when finance/admin analysis is actually needed:
+costs,
+budget,
+subscriptions,
+assets,
+financial controls,
+expense implications,
+or an explicit finance question.
+
+Do NOT include Randolph merely because CRM, payment systems, databases, automation or integrations are mentioned.
+
+Include Randolph only when:
+- the Founder asks a technical/system question;
+- there is a concrete technical failure or reliability issue already established;
+- or a technical investigation is explicitly requested.
+
+Do not invent a technical problem just because business performance is weak.
+
+Do not add a specialist merely because another specialist might mention their domain later.
+
+The plan is fixed for this Founder turn. Later specialist answers must not expand the queue automatically.
+
+ORDER
+
+Put specialists in the most useful conversational sequence.
+
+Examples:
+- sales -> growth -> content
+  ["mona","lola","rupert"]
+
+- technical outage affecting customer replies
+  ["randolph","mona"]
+
+- subscription cost review
+  ["uncle_sam"]
+
+- SEO/content question
+  ["rupert"]
+
+JAKE SYNTHESIS
+
+Set needsJakeSynthesis to true when:
+- multiple specialists are involved;
+- their answers need prioritisation or coordination;
+- or an executive summary would clearly help.
+
+Set it false when:
+- one direct specialist answer is sufficient;
+- or no additional Jake summary is useful.
+
+Return ONLY valid JSON:
+
+{
+  "specialistOrder": [
+    "mona",
+    "lola",
+    "rupert"
+  ],
+  "needsJakeSynthesis": true
+}
+
+The array may be empty.
+
+Never include a specialist who is absent from ACTIVE SPECIALISTS.
+`.trim();
+
+  const response =
+    await openai.responses.create({
+      model: JAKE_MODEL,
+      input: prompt,
+      temperature: 0.1,
+      max_output_tokens: 250,
+    });
+
+  const parsed =
+    extractJsonObject(
+      response.output_text
+    );
+
+  if (!parsed) {
+    return {
+      specialistOrder: [],
+      needsJakeSynthesis: true,
+    };
+  }
+
+  return (
+    parseJakeMeetingPlan(
+      parsed,
+      agents
+    ) ?? {
+      specialistOrder: [],
+      needsJakeSynthesis: true,
+    }
+  );
 }
 
 function parseJakeDecision(
@@ -394,6 +662,16 @@ IMPORTANT BEHAVIOR
 - Do not create a forced round-robin. Call only specialists whose expertise is actually relevant.
 - Never make specialists answer merely so that everyone gets a turn.
 - Do not fabricate facts, results, decisions, actions or data.
+
+SYNTHESIS EVIDENCE DISCIPLINE
+- When summarising specialists, preserve the difference between fact, hypothesis and proposal.
+- Do not upgrade a specialist's hypothesis into an established cause.
+- Do not upgrade a specialist's recommendation into an approved action.
+- Do not call a speculative technical concern "crucial", "a problem" or "a failure" unless evidence in the meeting actually establishes it.
+- If specialists disagree or use different datasets, preserve that limitation instead of forcing a false single conclusion.
+- Prefer confirmed shared facts first, then clearly labelled proposed next steps.
+- Never say "we will", "let's do", "prioritize this action" or similar execution language unless the Founder actually approved or assigned it in the meeting.
+
 - Do not claim something has been done unless the meeting history explicitly says it was done.
 - Do not expose hidden reasoning or chain-of-thought.
 - Do not describe your internal analysis.

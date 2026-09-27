@@ -5,8 +5,10 @@ import {
 
 import {
   generateJakeMeetingDecision,
+  generateJakeMeetingPlan,
   type JakeMeetingTurn,
   type JakeMeetingAgent,
+  type JakeMeetingPlan,
 } from "@/lib/ai-team/agents/jake";
 
 import {
@@ -102,7 +104,7 @@ export async function POST(
   } = await aiTeamSupabaseAdmin
     .from("ai_meeting_turns")
     .select(
-      "id, turn_order, speaker_type, spoken_by_agent_id, speaker_name_snapshot, speaker_role_snapshot, content"
+      "id, turn_order, speaker_type, spoken_by_agent_id, speaker_name_snapshot, speaker_role_snapshot, content, metadata"
     )
     .eq("meeting_id", meetingId)
     .order("turn_order", {
@@ -213,9 +215,11 @@ export async function POST(
     );
 
   /*
-   * For one Founder turn, each specialist may speak at most
-   * once. This is enforced here, not merely requested in the
-   * model prompt.
+   * Identify the current Founder turn.
+   *
+   * Jake creates exactly one specialist routing plan for this
+   * Founder turn. The plan is persisted in turn metadata so
+   * later specialist answers cannot expand the meeting scope.
    */
   const latestFounderTurn =
     [...turns]
@@ -226,7 +230,45 @@ export async function POST(
           "user"
       ) ?? null;
 
-  const spokenAgentIdsSinceFounder =
+  const activeAgentByKey =
+    new Map(
+      activeAgentRows.map(
+        (agent) => [
+          agent.agent_key,
+          agent,
+        ]
+      )
+    );
+
+  const jakeRecord =
+    activeAgentByKey.get(
+      "jake"
+    ) ?? null;
+
+  if (!jakeRecord) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Jake must be active and enabled before he can orchestrate the Meeting Room.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const activeAgents: JakeMeetingAgent[] =
+    activeAgentRows.map(
+      (agent) => ({
+        agentKey:
+          agent.agent_key,
+        displayName:
+          agent.display_name,
+        roleTitle:
+          agent.role_title,
+      })
+    );
+
+  const spokenAgentKeysSinceFounder =
     new Set(
       turns
         .filter(
@@ -243,53 +285,33 @@ export async function POST(
             )
         )
         .map(
-          (turn) =>
-            String(
-              turn.spoken_by_agent_id
-            )
+          (turn) => {
+            const matchingAgent =
+              activeAgentRows.find(
+                (agent) =>
+                  String(
+                    agent.id
+                  ) ===
+                  String(
+                    turn.spoken_by_agent_id
+                  )
+              );
+
+            return (
+              matchingAgent
+                ?.agent_key ??
+              null
+            );
+          }
+        )
+        .filter(
+          (
+            key
+          ): key is
+            JakeMeetingAgent["agentKey"] =>
+            Boolean(key)
         )
     );
-
-  const eligibleAgentRows =
-    activeAgentRows.filter(
-      (agent) =>
-        agent.agent_key ===
-          "jake" ||
-        !spokenAgentIdsSinceFounder.has(
-          String(
-            agent.id
-          )
-        )
-    );
-
-  const agents: JakeMeetingAgent[] =
-    eligibleAgentRows
-      .map((agent) => ({
-        agentKey:
-          agent.agent_key,
-        displayName:
-          agent.display_name,
-        roleTitle:
-          agent.role_title,
-      }));
-
-  const jakeRecord =
-    activeAgentRows.find(
-      (agent) =>
-        agent.agent_key ===
-        "jake"
-    ) ?? null;
-
-  if (!jakeRecord) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          "Jake must be active and enabled before he can orchestrate the Meeting Room.",
-      },
-      { status: 500 }
-    );
-  }
 
   const recentTurns: JakeMeetingTurn[] =
     turns.slice(-30).map((turn) => ({
@@ -303,11 +325,287 @@ export async function POST(
     }));
 
   try {
+    let meetingPlan:
+      JakeMeetingPlan | null =
+        null;
+
+    if (latestFounderTurn) {
+      const founderMetadata =
+        latestFounderTurn.metadata &&
+        typeof latestFounderTurn.metadata ===
+          "object" &&
+        !Array.isArray(
+          latestFounderTurn.metadata
+        )
+          ? latestFounderTurn.metadata as
+              Record<
+                string,
+                unknown
+              >
+          : {};
+
+      const rawPersistedPlan =
+        founderMetadata
+          .jake_orchestration_plan;
+
+      if (
+        rawPersistedPlan &&
+        typeof rawPersistedPlan ===
+          "object" &&
+        !Array.isArray(
+          rawPersistedPlan
+        )
+      ) {
+        const planRecord =
+          rawPersistedPlan as
+            Record<
+              string,
+              unknown
+            >;
+
+        const rawOrder =
+          Array.isArray(
+            planRecord
+              .specialist_order
+          )
+            ? planRecord
+                .specialist_order
+            : [];
+
+        const specialistOrder =
+          rawOrder
+            .filter(
+              (
+                key
+              ): key is
+                Exclude<
+                  JakeMeetingAgent["agentKey"],
+                  "jake"
+                > =>
+                typeof key ===
+                  "string" &&
+                key !== "jake" &&
+                activeAgentByKey.has(
+                  key
+                )
+            )
+            .filter(
+              (
+                key,
+                index,
+                values
+              ) =>
+                values.indexOf(
+                  key
+                ) ===
+                index
+            )
+            .slice(
+              0,
+              5
+            );
+
+        meetingPlan = {
+          specialistOrder,
+
+          needsJakeSynthesis:
+            planRecord
+              .needs_jake_synthesis ===
+            true,
+        };
+      }
+
+      if (!meetingPlan) {
+        const planningTurns =
+          turns
+            .filter(
+              (turn) =>
+                turn.turn_order <=
+                latestFounderTurn.turn_order
+            )
+            .slice(-20)
+            .map(
+              (turn) => ({
+                turnOrder:
+                  turn.turn_order,
+                speakerName:
+                  turn.speaker_name_snapshot,
+                speakerRole:
+                  turn.speaker_role_snapshot,
+                speakerType:
+                  turn.speaker_type,
+                content:
+                  turn.content,
+              })
+            );
+
+        meetingPlan =
+          await generateJakeMeetingPlan({
+            meetingTitle:
+              meeting.title,
+
+            founderQuestion:
+              latestFounderTurn.content,
+
+            recentTurns:
+              planningTurns,
+
+            agents:
+              activeAgents,
+          });
+
+        const persistedPlan = {
+          version: 1,
+
+          specialist_order:
+            meetingPlan
+              .specialistOrder,
+
+          needs_jake_synthesis:
+            meetingPlan
+              .needsJakeSynthesis,
+
+          generated_at:
+            new Date()
+              .toISOString(),
+        };
+
+        const {
+          error:
+            planPersistError,
+        } =
+          await aiTeamSupabaseAdmin
+            .from(
+              "ai_meeting_turns"
+            )
+            .update({
+              metadata: {
+                ...founderMetadata,
+
+                jake_orchestration_plan:
+                  persistedPlan,
+              },
+            })
+            .eq(
+              "id",
+              latestFounderTurn.id
+            );
+
+        if (planPersistError) {
+          throw planPersistError;
+        }
+      }
+    }
+
+    const nextSpecialistKey =
+      meetingPlan
+        ?.specialistOrder
+        .find(
+          (agentKey) =>
+            !spokenAgentKeysSinceFounder.has(
+              agentKey
+            ) &&
+            activeAgentByKey.has(
+              agentKey
+            )
+        ) ?? null;
+
+    if (nextSpecialistKey) {
+      return Response.json({
+        ok: true,
+        meetingId,
+        triggerTurnId:
+          triggerTurnId || null,
+
+        decision: {
+          action:
+            "handoff",
+          reply:
+            null,
+          acknowledgeRoom:
+            false,
+          targetAgentKey:
+            nextSpecialistKey,
+        },
+
+        savedTurn:
+          null,
+
+        orchestration: {
+          mode:
+            "fixed_founder_turn_plan",
+          specialistOrder:
+            meetingPlan
+              ?.specialistOrder ??
+            [],
+          nextSpecialistKey,
+        },
+      });
+    }
+
+    /*
+     * Once the fixed specialist queue is complete, no new
+     * specialist may enter this Founder turn.
+     *
+     * Jake may only synthesize or stop.
+     */
+    if (
+      meetingPlan &&
+      meetingPlan
+        .specialistOrder
+        .length > 0 &&
+      !meetingPlan
+        .needsJakeSynthesis
+    ) {
+      return Response.json({
+        ok: true,
+        meetingId,
+        triggerTurnId:
+          triggerTurnId || null,
+
+        decision: {
+          action:
+            "no_response",
+          reply:
+            null,
+          acknowledgeRoom:
+            false,
+          targetAgentKey:
+            null,
+        },
+
+        savedTurn:
+          null,
+
+        orchestration: {
+          mode:
+            "fixed_founder_turn_plan",
+          specialistOrder:
+            meetingPlan
+              .specialistOrder,
+          completed:
+            true,
+        },
+      });
+    }
+
     const decision =
       await generateJakeMeetingDecision({
-        meetingTitle: meeting.title,
+        meetingTitle:
+          meeting.title,
+
         recentTurns,
-        agents,
+
+        /*
+         * Queue is finished. Jake is the only person eligible
+         * now, so synthesis cannot wander into another domain.
+         */
+        agents:
+          activeAgents.filter(
+            (agent) =>
+              agent.agentKey ===
+              "jake"
+          ),
       });
 
     let savedTurn = null;
