@@ -24,6 +24,7 @@ import { RupertResearchDesk } from "@/components/ai-team/RupertResearchDesk";
 import { UncleSamFinanceDesk } from "@/components/ai-team/UncleSamFinanceDesk";
 import { AIWorkboard } from "@/components/ai-team/AIWorkboard";
 import { JakeCooDesk } from "@/components/ai-team/JakeCooDesk";
+import { RandolphWatchdogDesk } from "@/components/ai-team/RandolphWatchdogDesk";
 
 type AgentStatus =
   | "inactive"
@@ -524,6 +525,8 @@ export default function AdminAIInsightsPage() {
         />
       ) : activeTab === "rupert" ? (
         <RupertResearchDesk />
+      ) : activeTab === "randolph" ? (
+        <RandolphWatchdogDesk />
       ) : activeTab === "uncle-sam" ? (
         <UncleSamFinanceDesk />
       ) : activeTab === "tasks" ? (
