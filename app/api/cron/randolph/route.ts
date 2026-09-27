@@ -1,8 +1,4 @@
 import {
-  requireTetamoAdminOrCron,
-} from "@/lib/ai-team/core/admin-auth";
-
-import {
   runRandolphSystemWatchdog,
 } from "@/lib/ai-team/agents/randolph-system-watchdog";
 
@@ -15,15 +11,83 @@ export const dynamic =
 export const maxDuration =
   180;
 
+function verifyRandolphWatchdogSecret(
+  req: Request
+) {
+  const secret =
+    String(
+      process.env
+        .RANDOLPH_WATCHDOG_SECRET ||
+        ""
+    ).trim();
+
+  if (!secret) {
+    return {
+      ok: false as const,
+
+      response:
+        Response.json(
+          {
+            ok: false,
+            error:
+              "RANDOLPH_WATCHDOG_SECRET is not configured.",
+          },
+          {
+            status: 500,
+          }
+        ),
+    };
+  }
+
+  const authorization =
+    req.headers.get(
+      "authorization"
+    ) || "";
+
+  const token =
+    authorization
+      .toLowerCase()
+      .startsWith("bearer ")
+      ? authorization
+          .slice(7)
+          .trim()
+      : "";
+
+  if (
+    !token ||
+    token !== secret
+  ) {
+    return {
+      ok: false as const,
+
+      response:
+        Response.json(
+          {
+            ok: false,
+            error:
+              "Unauthorized Randolph watchdog request.",
+          },
+          {
+            status: 401,
+          }
+        ),
+    };
+  }
+
+  return {
+    ok: true as const,
+  };
+}
+
 export async function GET(
   req: Request
 ) {
   const auth =
-    await requireTetamoAdminOrCron(
+    verifyRandolphWatchdogSecret(
       req
     );
 
-  if (!auth.authorized) {
+  if (!auth.ok) {
     return auth.response;
   }
 
@@ -57,8 +121,7 @@ export async function GET(
         ok: false,
 
         error:
-          error instanceof
-            Error
+          error instanceof Error
             ? error.message
             : "Randolph system watchdog cron failed.",
       },
