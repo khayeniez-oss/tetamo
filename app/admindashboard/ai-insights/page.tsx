@@ -22,6 +22,7 @@ import {
 import { MeetingRoom } from "@/components/ai-team/MeetingRoom";
 import { RupertResearchDesk } from "@/components/ai-team/RupertResearchDesk";
 import { UncleSamFinanceDesk } from "@/components/ai-team/UncleSamFinanceDesk";
+import { AIWorkboard } from "@/components/ai-team/AIWorkboard";
 
 type AgentStatus =
   | "inactive"
@@ -412,6 +413,12 @@ export default function AdminAIInsightsPage() {
         <RupertResearchDesk />
       ) : activeTab === "uncle-sam" ? (
         <UncleSamFinanceDesk />
+      ) : activeTab === "tasks" ? (
+        <AIWorkboard tab="tasks" />
+      ) : activeTab === "approvals" ? (
+        <AIWorkboard tab="approvals" />
+      ) : activeTab === "activity" ? (
+        <AIWorkboard tab="activity" />
       ) : (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
