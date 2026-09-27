@@ -26,6 +26,7 @@ import { AIWorkboard } from "@/components/ai-team/AIWorkboard";
 import { JakeCooDesk } from "@/components/ai-team/JakeCooDesk";
 import { RandolphWatchdogDesk } from "@/components/ai-team/RandolphWatchdogDesk";
 import { LolaGrowthDesk } from "@/components/ai-team/LolaGrowthDesk";
+import { MonaSalesDesk } from "@/components/ai-team/MonaSalesDesk";
 
 type AgentStatus =
   | "inactive"
@@ -524,6 +525,8 @@ export default function AdminAIInsightsPage() {
             setActiveTab("meeting-room")
           }
         />
+      ) : activeTab === "mona" ? (
+        <MonaSalesDesk />
       ) : activeTab === "rupert" ? (
         <RupertResearchDesk />
       ) : activeTab === "randolph" ? (
