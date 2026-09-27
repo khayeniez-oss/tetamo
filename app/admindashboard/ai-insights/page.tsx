@@ -136,6 +136,9 @@ export default function AdminAIInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [agentActionKey, setAgentActionKey] =
+    useState<AIAgent["agent_key"] | null>(null);
+  const [agentNotice, setAgentNotice] = useState("");
   const [activeTab, setActiveTab] =
     useState<AITeamTab>("overview");
 
@@ -210,6 +213,80 @@ export default function AdminAIInsightsPage() {
     void loadAgents();
   }, [loadAgents]);
 
+  async function updateAgentState(
+    agentKey: AIAgent["agent_key"],
+    status: AgentStatus,
+    enabled: boolean
+  ) {
+    try {
+      setAgentActionKey(agentKey);
+      setAgentNotice("");
+      setError("");
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!session?.access_token) {
+        throw new Error(
+          "Admin session not found. Please log in again."
+        );
+      }
+
+      const response = await fetch(
+        "/api/admin/ai-team/agents",
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agentKey,
+            status,
+            enabled,
+          }),
+        }
+      );
+
+      const payload = await response
+        .json()
+        .catch(() => null);
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !== true
+      ) {
+        throw new Error(
+          payload?.error ||
+            "Unable to update AI agent status."
+        );
+      }
+
+      setAgentNotice(
+        `${payload.agent.display_name} is now ${
+          enabled ? "active" : "disabled"
+        }.`
+      );
+
+      await loadAgents(true);
+    } catch (agentError) {
+      setError(
+        agentError instanceof Error
+          ? agentError.message
+          : "Unable to update AI agent status."
+      );
+    } finally {
+      setAgentActionKey(null);
+    }
+  }
+
   const orderedAgents = useMemo(() => {
     return [...agents].sort(
       (a, b) =>
@@ -279,6 +356,12 @@ export default function AdminAIInsightsPage() {
 
       {activeTab === "overview" ? (
         <>
+          {agentNotice ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {agentNotice}
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
               <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400">
@@ -397,10 +480,33 @@ export default function AdminAIInsightsPage() {
                       {agent.mission}
                     </p>
 
-                    <div className="mt-4 border-t border-gray-100 pt-3">
+                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
                       <p className="text-[10px] uppercase tracking-[0.12em] text-gray-400">
                         Version {agent.version}
                       </p>
+
+                      <button
+                        type="button"
+                        disabled={agentActionKey === agent.agent_key}
+                        onClick={() =>
+                          void updateAgentState(
+                            agent.agent_key,
+                            agent.enabled ? "inactive" : "active",
+                            !agent.enabled
+                          )
+                        }
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          agent.enabled
+                            ? "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                            : "bg-[#1C1C1E] text-white hover:bg-black"
+                        }`}
+                      >
+                        {agentActionKey === agent.agent_key
+                          ? "Updating..."
+                          : agent.enabled
+                            ? "Disable"
+                            : "Activate"}
+                      </button>
                     </div>
                   </div>
                 ))}
