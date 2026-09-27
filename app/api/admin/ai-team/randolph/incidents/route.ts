@@ -655,3 +655,414 @@ export async function POST(
     );
   }
 }
+
+export async function PATCH(
+  req: Request
+) {
+  const auth =
+    await requireTetamoAdmin(
+      req
+    );
+
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  try {
+    requireAgentPermission(
+      "randolph",
+      "diagnose_system_issue"
+    );
+
+    let body: {
+      incidentId?: unknown;
+      status?: unknown;
+      confidence?: unknown;
+      probableCause?: unknown;
+      recommendedAction?: unknown;
+      resolutionSummary?: unknown;
+    };
+
+    try {
+      body =
+        await req.json();
+    } catch {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Invalid request body.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const incidentId =
+      cleanString(
+        body.incidentId
+      );
+
+    const status =
+      cleanString(
+        body.status
+      );
+
+    if (!incidentId) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Incident ID is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      !status ||
+      !isOneOf(
+        status,
+        STATUSES
+      )
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "A valid incident status is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const {
+      data: existingIncidentRaw,
+      error: existingError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_incidents"
+        )
+        .select(
+          "id, title, severity, status, confidence, acknowledged_at, resolved_at"
+        )
+        .eq(
+          "id",
+          incidentId
+        )
+        .maybeSingle();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    if (!existingIncidentRaw) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Incident not found.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const existingIncident =
+      existingIncidentRaw as unknown as {
+        id: string;
+        title: string;
+        severity: string;
+        status: string;
+        confidence: string;
+        acknowledged_at:
+          string | null;
+        resolved_at:
+          string | null;
+      };
+
+    let confidence =
+      existingIncident.confidence;
+
+    if (
+      body.confidence !==
+      undefined
+    ) {
+      const requestedConfidence =
+        cleanString(
+          body.confidence
+        );
+
+      if (
+        !requestedConfidence ||
+        !isOneOf(
+          requestedConfidence,
+          CONFIDENCE
+        )
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "Invalid incident confidence.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      confidence =
+        requestedConfidence;
+    }
+
+    const probableCause =
+      body.probableCause ===
+      undefined
+        ? undefined
+        : cleanString(
+            body.probableCause
+          );
+
+    const recommendedAction =
+      body.recommendedAction ===
+      undefined
+        ? undefined
+        : cleanString(
+            body.recommendedAction
+          );
+
+    const resolutionSummary =
+      cleanString(
+        body.resolutionSummary
+      );
+
+    const isResolved =
+      status ===
+        "resolved" ||
+      status ===
+        "closed";
+
+    if (
+      isResolved &&
+      !resolutionSummary
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "A resolution summary is required before resolving an incident.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const now =
+      new Date()
+        .toISOString();
+
+    const updatePayload:
+      Record<
+        string,
+        unknown
+      > = {
+        status,
+        confidence,
+
+        acknowledged_at:
+          existingIncident
+            .acknowledged_at ??
+          (
+            status !==
+            "open"
+              ? now
+              : null
+          ),
+      };
+
+    if (
+      probableCause !==
+      undefined
+    ) {
+      updatePayload.probable_cause =
+        probableCause ||
+        null;
+    }
+
+    if (
+      recommendedAction !==
+      undefined
+    ) {
+      updatePayload.recommended_action =
+        recommendedAction ||
+        null;
+    }
+
+    if (isResolved) {
+      updatePayload.resolved_at =
+        now;
+
+      updatePayload.resolution_summary =
+        resolutionSummary;
+    } else if (
+      existingIncident
+        .resolved_at
+    ) {
+      updatePayload.resolved_at =
+        null;
+
+      updatePayload.resolution_summary =
+        null;
+    }
+
+    const {
+      data: updatedIncidentRaw,
+      error: updateError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_incidents"
+        )
+        .update(
+          updatePayload
+        )
+        .eq(
+          "id",
+          incidentId
+        )
+        .select(
+          "id, title, description, surface, platform, severity, status, confidence, impact_summary, probable_cause, evidence, recommended_action, related_task_id, related_approval_id, detected_at, acknowledged_at, resolved_at, resolution_summary, created_at, updated_at"
+        )
+        .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (!updatedIncidentRaw) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Incident state changed before it could be updated.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    const updatedIncident =
+      updatedIncidentRaw as unknown as {
+        id: string;
+        [key: string]: unknown;
+      };
+
+    const randolph =
+      await getRandolph();
+
+    const action =
+      isResolved
+        ? "incident_resolved"
+        : status ===
+            "investigating"
+          ? "incident_investigation_started"
+          : "incident_status_updated";
+
+    const {
+      error: activityError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_activity"
+        )
+        .insert({
+          agent_id:
+            randolph.id,
+
+          actor_user_id:
+            auth.admin.userId,
+
+          event_type:
+            "system_incident",
+
+          action,
+
+          entity_type:
+            "ai_incident",
+
+          entity_id:
+            incidentId,
+
+          severity:
+            existingIncident
+              .severity,
+
+          details: {
+            title:
+              existingIncident
+                .title,
+
+            previous_status:
+              existingIncident
+                .status,
+
+            new_status:
+              status,
+
+            confidence,
+
+            resolution_summary:
+              isResolved
+                ? resolutionSummary
+                : null,
+
+            safety_note:
+              "Incident status updates do not represent or authorize production deployment, database modification, secret rotation or other restricted technical actions.",
+          },
+        });
+
+    if (
+      activityError
+    ) {
+      console.error(
+        "Randolph incident update audit log failed:",
+        activityError
+      );
+    }
+
+    return Response.json({
+      ok: true,
+      incident:
+        updatedIncident,
+    });
+  } catch (error) {
+    console.error(
+      "Randolph incident update failed:",
+      error
+    );
+
+    return Response.json(
+      {
+        ok: false,
+        error:
+          error instanceof
+            Error
+            ? error.message
+            : "Unable to update Randolph incident.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}

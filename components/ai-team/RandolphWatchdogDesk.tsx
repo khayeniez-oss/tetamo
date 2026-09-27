@@ -408,6 +408,14 @@ export function RandolphWatchdogDesk() {
     useState(false);
 
   const [
+    updatingIncidentId,
+    setUpdatingIncidentId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
     error,
     setError,
   ] =
@@ -697,6 +705,136 @@ export function RandolphWatchdogDesk() {
     } finally {
       setSaving(
         false
+      );
+    }
+  }
+
+  async function updateIncidentStatus(
+    incident: IncidentRow,
+    nextStatus: string
+  ) {
+    let resolutionSummary =
+      "";
+
+    if (
+      nextStatus ===
+        "resolved" ||
+      nextStatus ===
+        "closed"
+    ) {
+      const entered =
+        window.prompt(
+          "Resolution summary (required):"
+        );
+
+      if (
+        entered ===
+        null
+      ) {
+        return;
+      }
+
+      resolutionSummary =
+        entered.trim();
+
+      if (
+        !resolutionSummary
+      ) {
+        setError(
+          "A resolution summary is required before resolving an incident."
+        );
+
+        return;
+      }
+    }
+
+    try {
+      setUpdatingIncidentId(
+        incident.id
+      );
+
+      setError("");
+      setNotice("");
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          "/api/admin/ai-team/randolph/incidents",
+          {
+            method:
+              "PATCH",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                incidentId:
+                  incident.id,
+
+                status:
+                  nextStatus,
+
+                resolutionSummary,
+              }),
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () =>
+              null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !==
+          true
+      ) {
+        throw new Error(
+          cleanText(
+            payload
+              ?.error
+          ) ||
+            "Unable to update incident."
+        );
+      }
+
+      setNotice(
+        nextStatus ===
+          "investigating"
+          ? "Incident moved to Investigating. No production change has been executed."
+          : nextStatus ===
+                "resolved"
+            ? "Incident resolved and recorded in Randolph's audit trail."
+            : `Incident moved to ${humanize(nextStatus)}.`
+      );
+
+      await loadDesk(
+        true
+      );
+    } catch (
+      updateError
+    ) {
+      setError(
+        updateError instanceof
+          Error
+          ? updateError.message
+          : "Unable to update incident."
+      );
+    } finally {
+      setUpdatingIncidentId(
+        null
       );
     }
   }
@@ -1340,6 +1478,76 @@ export function RandolphWatchdogDesk() {
                         {
                           incident.recommended_action
                         }
+                      </div>
+                    ) : null}
+
+                    {incident
+                      .resolution_summary ? (
+                      <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
+                        <span className="font-semibold">
+                          Resolution:
+                        </span>{" "}
+                        {
+                          incident.resolution_summary
+                        }
+                      </div>
+                    ) : null}
+
+                    {![
+                      "resolved",
+                      "closed",
+                    ].includes(
+                      incident.status
+                    ) ? (
+                      <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                        {incident.status ===
+                        "open" ? (
+                          <button
+                            type="button"
+                            disabled={
+                              updatingIncidentId ===
+                              incident.id
+                            }
+                            onClick={() =>
+                              void updateIncidentStatus(
+                                incident,
+                                "investigating"
+                              )
+                            }
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {updatingIncidentId ===
+                            incident.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Bug className="h-3.5 w-3.5" />
+                            )}
+                            Start Investigation
+                          </button>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          disabled={
+                            updatingIncidentId ===
+                            incident.id
+                          }
+                          onClick={() =>
+                            void updateIncidentStatus(
+                              incident,
+                              "resolved"
+                            )
+                          }
+                          className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {updatingIncidentId ===
+                          incident.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          )}
+                          Mark Resolved
+                        </button>
                       </div>
                     ) : null}
                   </div>
