@@ -12,9 +12,12 @@ import {
   CreditCard,
   Laptop,
   Loader2,
+  Pencil,
   Plus,
   ReceiptText,
   RefreshCw,
+  Trash2,
+  X,
 } from "lucide-react";
 
 import {
@@ -36,6 +39,7 @@ type ExpenseRow = {
   expense_date: string;
   payment_status: string;
   expense_type: string;
+  receipt_reference: string | null;
 };
 
 type SubscriptionRow = {
@@ -46,7 +50,13 @@ type SubscriptionRow = {
   currency: string | null;
   billing_cycle: string | null;
   status: string;
+  started_at: string | null;
   next_renewal_date: string | null;
+  value_assessment: string | null;
+  purpose: string | null;
+  owner_name: string | null;
+  business_value: string | null;
+  notes: string | null;
 };
 
 type AssetRow = {
@@ -56,6 +66,11 @@ type AssetRow = {
   purchase_amount: number | null;
   currency: string | null;
   status: string;
+  vendor_name: string | null;
+  purchase_date: string | null;
+  assigned_to: string | null;
+  warranty_expires_at: string | null;
+  notes: string | null;
 };
 
 type FinanceResponse = {
@@ -197,6 +212,22 @@ export function UncleSamFinanceDesk() {
   ] =
     useState<RecordType>(
       "expense"
+    );
+
+  const [
+    editingRecordId,
+    setEditingRecordId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    deletingRecordId,
+    setDeletingRecordId,
+  ] =
+    useState<string | null>(
+      null
     );
 
   const [
@@ -401,12 +432,18 @@ export function UncleSamFinanceDesk() {
     next:
       RecordType
   ) => {
+    setEditingRecordId(
+      null
+    );
+
     setRecordType(
       next
     );
+
     resetForm(
       next
     );
+
     setError("");
     setNotice("");
   };
@@ -424,6 +461,280 @@ export function UncleSamFinanceDesk() {
     );
   };
 
+  function beginEditExpense(
+    row: ExpenseRow
+  ) {
+    setRecordType(
+      "expense"
+    );
+
+    setEditingRecordId(
+      row.id
+    );
+
+    setForm({
+      expense_type:
+        row.expense_type,
+      description:
+        row.description,
+      vendor_name:
+        row.vendor_name ??
+        "",
+      amount:
+        String(
+          row.amount
+        ),
+      currency:
+        row.currency,
+      expense_date:
+        row.expense_date,
+      payment_status:
+        row.payment_status,
+      receipt_reference:
+        row.receipt_reference ??
+        "",
+    });
+
+    setError("");
+    setNotice("");
+
+    window.scrollTo({
+      top: 0,
+      behavior:
+        "smooth",
+    });
+  }
+
+  function beginEditSubscription(
+    row: SubscriptionRow
+  ) {
+    setRecordType(
+      "subscription"
+    );
+
+    setEditingRecordId(
+      row.id
+    );
+
+    setForm({
+      vendor_name:
+        row.vendor_name,
+      service_name:
+        row.service_name,
+      purpose:
+        row.purpose ??
+        "",
+      amount:
+        row.amount === null
+          ? ""
+          : String(
+              row.amount
+            ),
+      currency:
+        row.currency ??
+        "",
+      billing_cycle:
+        row.billing_cycle ??
+        "monthly",
+      status:
+        row.status,
+      started_at:
+        row.started_at ??
+        "",
+      next_renewal_date:
+        row.next_renewal_date ??
+        "",
+      value_assessment:
+        row.value_assessment ??
+        "review",
+      owner_name:
+        row.owner_name ??
+        "",
+      business_value:
+        row.business_value ??
+        "",
+      notes:
+        row.notes ??
+        "",
+    });
+
+    setError("");
+    setNotice("");
+
+    window.scrollTo({
+      top: 0,
+      behavior:
+        "smooth",
+    });
+  }
+
+  function beginEditAsset(
+    row: AssetRow
+  ) {
+    setRecordType(
+      "asset"
+    );
+
+    setEditingRecordId(
+      row.id
+    );
+
+    setForm({
+      asset_type:
+        row.asset_type,
+      asset_name:
+        row.asset_name,
+      vendor_name:
+        row.vendor_name ??
+        "",
+      purchase_amount:
+        row.purchase_amount ===
+        null
+          ? ""
+          : String(
+              row.purchase_amount
+            ),
+      currency:
+        row.currency ??
+        "",
+      purchase_date:
+        row.purchase_date ??
+        "",
+      status:
+        row.status,
+      assigned_to:
+        row.assigned_to ??
+        "",
+      warranty_expires_at:
+        row.warranty_expires_at ??
+        "",
+      notes:
+        row.notes ??
+        "",
+    });
+
+    setError("");
+    setNotice("");
+
+    window.scrollTo({
+      top: 0,
+      behavior:
+        "smooth",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingRecordId(
+      null
+    );
+
+    resetForm(
+      recordType
+    );
+
+    setError("");
+    setNotice("");
+  }
+
+  async function removeRecord(
+    type: RecordType,
+    id: string,
+    label: string
+  ) {
+    const confirmed =
+      window.confirm(
+        `Remove "${label}" from Uncle Sam's ${type} register? This removes the finance record but keeps an audit entry of what was removed.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingRecordId(
+        id
+      );
+
+      setError("");
+      setNotice("");
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          `/api/admin/ai-team/uncle-sam/records/${id}`,
+          {
+            method:
+              "DELETE",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                recordType:
+                  type,
+              }),
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () => null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !== true
+      ) {
+        throw new Error(
+          payload?.error ||
+            "Unable to remove record."
+        );
+      }
+
+      if (
+        editingRecordId === id
+      ) {
+        setEditingRecordId(
+          null
+        );
+
+        resetForm(
+          type
+        );
+      }
+
+      setNotice(
+        `${type.charAt(0).toUpperCase()}${type.slice(
+          1
+        )} removed successfully.`
+      );
+
+      await loadWorkspace();
+    } catch (removeError) {
+      setError(
+        removeError instanceof
+          Error
+          ? removeError.message
+          : "Unable to remove record."
+      );
+    } finally {
+      setDeletingRecordId(
+        null
+      );
+    }
+  }
+
   async function saveRecord() {
     try {
       setSaving(true);
@@ -435,10 +746,14 @@ export function UncleSamFinanceDesk() {
 
       const response =
         await fetch(
-          "/api/admin/ai-team/uncle-sam/records",
+          editingRecordId
+            ? `/api/admin/ai-team/uncle-sam/records/${editingRecordId}`
+            : "/api/admin/ai-team/uncle-sam/records",
           {
             method:
-              "POST",
+              editingRecordId
+                ? "PATCH"
+                : "POST",
 
             headers: {
               Authorization:
@@ -477,9 +792,17 @@ export function UncleSamFinanceDesk() {
       }
 
       setNotice(
-        `${recordType.charAt(0).toUpperCase()}${recordType.slice(
-          1
-        )} recorded successfully.`
+        editingRecordId
+          ? `${recordType.charAt(0).toUpperCase()}${recordType.slice(
+              1
+            )} updated successfully.`
+          : `${recordType.charAt(0).toUpperCase()}${recordType.slice(
+              1
+            )} recorded successfully.`
+      );
+
+      setEditingRecordId(
+        null
       );
 
       resetForm(
@@ -1136,25 +1459,44 @@ export function UncleSamFinanceDesk() {
           ) : null}
         </div>
 
-        <button
-          type="button"
-          disabled={
-            saving
-          }
-          onClick={() =>
-            void saveRecord()
-          }
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
+        <div className="mt-5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={
+              saving
+            }
+            onClick={() =>
+              void saveRecord()
+            }
+            className="inline-flex items-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : editingRecordId ? (
+              <Pencil className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
 
-          Save{" "}
-          {recordType}
-        </button>
+            {editingRecordId
+              ? "Update"
+              : "Save"}{" "}
+            {recordType}
+          </button>
+
+          {editingRecordId ? (
+            <button
+              type="button"
+              onClick={
+                cancelEdit
+              }
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              <X className="h-4 w-4" />
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
@@ -1175,6 +1517,24 @@ export function UncleSamFinanceDesk() {
                 ).format(
                   row.amount
                 )}`,
+
+              onEdit:
+                () =>
+                  beginEditExpense(
+                    row
+                  ),
+
+              onRemove:
+                () =>
+                  void removeRecord(
+                    "expense",
+                    row.id,
+                    row.description
+                  ),
+
+              removing:
+                deletingRecordId ===
+                row.id,
             })
           )}
         />
@@ -1200,6 +1560,24 @@ export function UncleSamFinanceDesk() {
                       row.amount
                     )}`
                   : "Amount not recorded",
+
+              onEdit:
+                () =>
+                  beginEditSubscription(
+                    row
+                  ),
+
+              onRemove:
+                () =>
+                  void removeRecord(
+                    "subscription",
+                    row.id,
+                    row.service_name
+                  ),
+
+              removing:
+                deletingRecordId ===
+                row.id,
             })
           )}
         />
@@ -1225,6 +1603,24 @@ export function UncleSamFinanceDesk() {
                       row.purchase_amount
                     )}`
                   : "Value not recorded",
+
+              onEdit:
+                () =>
+                  beginEditAsset(
+                    row
+                  ),
+
+              onRemove:
+                () =>
+                  void removeRecord(
+                    "asset",
+                    row.id,
+                    row.asset_name
+                  ),
+
+              removing:
+                deletingRecordId ===
+                row.id,
             })
           )}
         />
@@ -1379,6 +1775,9 @@ function RegisterCard({
       title: string;
       subtitle: string;
       value: string;
+      onEdit: () => void;
+      onRemove: () => void;
+      removing: boolean;
     }>;
 }) {
   return (
@@ -1408,6 +1807,37 @@ function RegisterCard({
                 <p className="mt-2 text-xs font-semibold text-gray-700">
                   {row.value}
                 </p>
+
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-200 pt-3">
+                  <button
+                    type="button"
+                    onClick={
+                      row.onEdit
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={
+                      row.removing
+                    }
+                    onClick={
+                      row.onRemove
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {row.removing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                    Remove
+                  </button>
+                </div>
               </div>
             )
           )
