@@ -938,6 +938,13 @@ export default function AdminApprovalsPage() {
     };
   }, [items]);
 
+  const [
+    aiReviewNotes,
+    setAiReviewNotes,
+  ] = useState<
+    Record<string, string>
+  >({});
+
   async function updateStatus(item: ApprovalItem, status: ApprovalStatus) {
     setActionId(item.id);
     setNotice("");
@@ -948,6 +955,23 @@ export default function AdminApprovalsPage() {
         item.type ===
           "AI_CONTENT"
       ) {
+        const founderReviewNote =
+          cleanText(
+            aiReviewNotes[
+              item.id
+            ]
+          );
+
+        if (
+          status ===
+            "REJECTED" &&
+          !founderReviewNote
+        ) {
+          throw new Error(
+            "Add a Founder review note explaining what Rupert must revise before rejecting this content."
+          );
+        }
+
         const accessToken =
           await getAdminAccessToken();
 
@@ -981,8 +1005,9 @@ export default function AdminApprovalsPage() {
                   reviewNotes:
                     decision ===
                       "rejected"
-                      ? "Rejected by Founder/admin from Approvals Center."
-                      : "Approved by Founder/admin from Approvals Center.",
+                      ? founderReviewNote
+                      : founderReviewNote ||
+                        "Approved by Founder/admin from Approvals Center.",
                 }),
             }
           );
@@ -1016,6 +1041,20 @@ export default function AdminApprovalsPage() {
                 approval.id !==
                 item.id
             )
+        );
+
+        setAiReviewNotes(
+          (current) => {
+            const next = {
+              ...current,
+            };
+
+            delete next[
+              item.id
+            ];
+
+            return next;
+          }
         );
 
         setNotice(
@@ -1244,6 +1283,57 @@ export default function AdminApprovalsPage() {
                     </div>
                   </div>
 
+                  {item.type ===
+                  "AI_CONTENT" ? (
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-3">
+                      <label
+                        htmlFor={`ai-review-note-${item.recordId}`}
+                        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700"
+                      >
+                        Founder review note
+                      </label>
+
+                      <textarea
+                        id={`ai-review-note-${item.recordId}`}
+                        value={
+                          aiReviewNotes[
+                            item.id
+                          ] ?? ""
+                        }
+                        onChange={(
+                          event
+                        ) => {
+                          const value =
+                            event.target
+                              .value;
+
+                          setAiReviewNotes(
+                            (
+                              current
+                            ) => ({
+                              ...current,
+
+                              [item.id]:
+                                value,
+                            })
+                          );
+                        }}
+                        disabled={
+                          actionId ===
+                          item.id
+                        }
+                        rows={3}
+                        maxLength={3000}
+                        placeholder="Explain exactly what Rupert should revise. Required when rejecting."
+                        className="mt-2 w-full resize-y rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-[#1C1C1E] outline-none transition placeholder:text-gray-400 focus:border-sky-500 disabled:cursor-not-allowed disabled:bg-gray-50 sm:text-sm"
+                      />
+
+                      <p className="mt-1.5 text-[10px] leading-4 text-gray-500 sm:text-[11px]">
+                        Required for Reject. Optional for Approve. Rejection feedback is passed to the linked Rupert task for revision.
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => updateStatus(item, "APPROVED")}
@@ -1259,7 +1349,19 @@ export default function AdminApprovalsPage() {
 
                     <button
                       onClick={() => updateStatus(item, "REJECTED")}
-                      disabled={actionId === item.id}
+                      disabled={
+                        actionId ===
+                          item.id ||
+                        (
+                          item.type ===
+                            "AI_CONTENT" &&
+                          !cleanText(
+                            aiReviewNotes[
+                              item.id
+                            ]
+                          )
+                        )
+                      }
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50 sm:text-sm"
                       type="button"
                     >

@@ -431,6 +431,22 @@ export async function POST(
     );
   }
 
+  if (
+    reviewNotes.length >
+      3000
+  ) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Founder review note is too long.",
+      },
+      {
+        status: 400,
+      }
+    );
+  }
+
   const {
     data: existingApproval,
     error: existingError,
@@ -491,6 +507,36 @@ export async function POST(
       },
       {
         status: 404,
+      }
+    );
+  }
+
+  /*
+   * Founder revision feedback is mandatory for Rupert
+   * content rejection.
+   *
+   * An idempotent retry of an already-rejected approval
+   * may rely on the review note that was persisted with the
+   * original human decision.
+   */
+  if (
+    currentApproval.action_type ===
+      "publish_content" &&
+    decision ===
+      "rejected" &&
+    !reviewNotes &&
+    !cleanString(
+      currentApproval.review_notes
+    )
+  ) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "A Founder review note is required when rejecting AI content.",
+      },
+      {
+        status: 400,
       }
     );
   }
