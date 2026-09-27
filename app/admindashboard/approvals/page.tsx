@@ -10,7 +10,13 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-type ApprovalType = "LISTING" | "AGENT" | "OWNER" | "FEATURED" | "PAYMENT";
+type ApprovalType =
+  | "LISTING"
+  | "AGENT"
+  | "OWNER"
+  | "FEATURED"
+  | "PAYMENT"
+  | "AI_CONTENT";
 type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 type ApprovalFilter = "ALL" | ApprovalType;
 
@@ -81,6 +87,73 @@ function cleanText(value: any) {
 
 function cleanLower(value: any) {
   return cleanText(value).toLowerCase();
+}
+
+async function getAdminAccessToken() {
+  const {
+    data: {
+      session,
+    },
+    error,
+  } =
+    await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  const accessToken =
+    session?.access_token;
+
+  if (!accessToken) {
+    throw new Error(
+      "Admin session is required to access AI approvals."
+    );
+  }
+
+  return accessToken;
+}
+
+async function fetchPendingAiApprovals() {
+  const accessToken =
+    await getAdminAccessToken();
+
+  const response =
+    await fetch(
+      "/api/admin/ai-team/approvals",
+      {
+        method: "GET",
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
+      }
+    );
+
+  const payload =
+    await response
+      .json()
+      .catch(() => null);
+
+  if (
+    !response.ok ||
+    !payload ||
+    payload.ok !== true
+  ) {
+    throw new Error(
+      cleanText(
+        payload?.error
+      ) ||
+        "Failed to load AI approvals."
+    );
+  }
+
+  return Array.isArray(
+    payload.approvals
+  )
+    ? payload.approvals as DbRow[]
+    : [];
 }
 
 function getFirstValue(row: DbRow, keys: string[]) {
@@ -190,6 +263,8 @@ function typeUI(type: ApprovalType) {
   if (type === "OWNER") return "bg-purple-50 text-purple-700 border-purple-200";
   if (type === "FEATURED")
     return "bg-yellow-50 text-yellow-700 border-yellow-200";
+  if (type === "AI_CONTENT")
+    return "bg-sky-50 text-sky-700 border-sky-200";
   return "bg-gray-100 text-gray-700 border-gray-200";
 }
 
@@ -447,6 +522,147 @@ function buildPaymentApproval(row: DbRow, table: string): ApprovalItem | null {
   };
 }
 
+function buildAiApproval(
+  row: DbRow
+): ApprovalItem | null {
+  const recordId =
+    cleanText(
+      row.id
+    );
+
+  if (!recordId) {
+    return null;
+  }
+
+  const status =
+    normalizeApprovalStatus(
+      row.status
+    );
+
+  if (
+    status !== "PENDING"
+  ) {
+    return null;
+  }
+
+  const agent =
+    row.requested_by_agent &&
+    typeof row.requested_by_agent ===
+      "object" &&
+    !Array.isArray(
+      row.requested_by_agent
+    )
+      ? row.requested_by_agent
+      : {};
+
+  const requestedPayload =
+    row.requested_payload &&
+    typeof row.requested_payload ===
+      "object" &&
+    !Array.isArray(
+      row.requested_payload
+    )
+      ? row.requested_payload
+      : {};
+
+  const agentName =
+    cleanText(
+      agent.display_name
+    ) ||
+    cleanText(
+      agent.agent_key
+    ) ||
+    "AI Team";
+
+  const actionType =
+    cleanText(
+      row.action_type
+    )
+      .replace(
+        /_/g,
+        " "
+      );
+
+  const riskLevel =
+    cleanText(
+      row.risk_level
+    );
+
+  const executionStatus =
+    cleanText(
+      row.execution_status
+    );
+
+  const contentType =
+    cleanText(
+      requestedPayload
+        .content_type
+    );
+
+  const blogId =
+    cleanText(
+      requestedPayload
+        .blog_id
+    );
+
+  const createdAt =
+    getDateValue(
+      row
+    );
+
+  return {
+    id:
+      `ai_approvals:${recordId}:AI_CONTENT`,
+
+    recordId,
+    idColumn:
+      "id",
+    table:
+      "ai_approvals",
+
+    title:
+      cleanText(
+        row.action_summary
+      ) ||
+      "AI approval request",
+
+    subtitle:
+      [
+        `Requested by: ${agentName}`,
+        actionType
+          ? `Action: ${actionType}`
+          : "",
+        contentType
+          ? `Content: ${contentType}`
+          : "",
+        riskLevel
+          ? `Risk: ${riskLevel}`
+          : "",
+        executionStatus
+          ? `Execution: ${executionStatus}`
+          : "",
+        blogId
+          ? `Blog: ${blogId}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" • "),
+
+    type:
+      "AI_CONTENT",
+
+    date:
+      formatDate(
+        createdAt
+      ),
+
+    createdAt,
+    status,
+    raw:
+      row,
+  };
+}
+
 async function fetchRowsFromTable(table: string) {
   const ordered = await (supabase as any)
     .from(table)
@@ -571,11 +787,26 @@ export default function AdminApprovalsPage() {
     try {
       const skipped: string[] = [];
 
-      const [propertiesResult, profilesResult, ...paymentResults] =
+      const [
+        propertiesResult,
+        profilesResult,
+        aiApprovalRows,
+        ...paymentResults
+      ] =
         await Promise.all([
-          fetchRowsFromTable("properties"),
-          fetchRowsFromTable("profiles"),
-          ...PAYMENT_TABLES.map((table) => fetchRowsFromTable(table)),
+          fetchRowsFromTable(
+            "properties"
+          ),
+          fetchRowsFromTable(
+            "profiles"
+          ),
+          fetchPendingAiApprovals(),
+          ...PAYMENT_TABLES.map(
+            (table) =>
+              fetchRowsFromTable(
+                table
+              )
+          ),
         ]);
 
       if (propertiesResult.skipped) skipped.push("properties");
@@ -595,6 +826,21 @@ export default function AdminApprovalsPage() {
         const profile = buildProfileApproval(row);
 
         if (profile) nextItems.push(profile);
+      }
+
+      for (
+        const row of aiApprovalRows
+      ) {
+        const aiApproval =
+          buildAiApproval(
+            row
+          );
+
+        if (aiApproval) {
+          nextItems.push(
+            aiApproval
+          );
+        }
       }
 
       paymentResults.forEach((result, index) => {
@@ -688,6 +934,7 @@ export default function AdminApprovalsPage() {
       owner: items.filter((item) => item.type === "OWNER").length,
       featured: items.filter((item) => item.type === "FEATURED").length,
       payment: items.filter((item) => item.type === "PAYMENT").length,
+      aiContent: items.filter((item) => item.type === "AI_CONTENT").length,
     };
   }, [items]);
 
@@ -697,6 +944,87 @@ export default function AdminApprovalsPage() {
     setErrorMessage("");
 
     try {
+      if (
+        item.type ===
+          "AI_CONTENT"
+      ) {
+        const accessToken =
+          await getAdminAccessToken();
+
+        const decision =
+          status ===
+            "APPROVED"
+            ? "approved"
+            : "rejected";
+
+        const response =
+          await fetch(
+            `/api/admin/ai-team/approvals/${encodeURIComponent(
+              item.recordId
+            )}/decision`,
+            {
+              method:
+                "POST",
+
+              headers: {
+                Authorization:
+                  `Bearer ${accessToken}`,
+
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  decision,
+
+                  reviewNotes:
+                    decision ===
+                      "rejected"
+                      ? "Rejected by Founder/admin from Approvals Center."
+                      : "Approved by Founder/admin from Approvals Center.",
+                }),
+            }
+          );
+
+        const responsePayload =
+          await response
+            .json()
+            .catch(
+              () => null
+            );
+
+        if (
+          !response.ok ||
+          !responsePayload ||
+          responsePayload.ok !==
+            true
+        ) {
+          throw new Error(
+            cleanText(
+              responsePayload
+                ?.error
+            ) ||
+              "Failed to save AI approval decision."
+          );
+        }
+
+        setItems(
+          (prev) =>
+            prev.filter(
+              (approval) =>
+                approval.id !==
+                item.id
+            )
+        );
+
+        setNotice(
+          `AI content approval ${status.toLowerCase()} successfully.`
+        );
+
+        return;
+      }
+
       const payload = buildUpdatePayload(item, status);
 
       if (Object.keys(payload).length === 0) {
@@ -742,8 +1070,8 @@ export default function AdminApprovalsPage() {
             Approvals Center
           </h1>
           <p className="text-[11px] leading-5 text-gray-500 sm:text-xs md:text-sm">
-            Real approval queue from Supabase. Review pending listings, agents,
-            owners, featured requests, and payment verification.
+            Real approval queue from Supabase and the secured AI Team API. Review
+            pending listings, agents, owners, featured requests, payments, and AI content.
           </p>
         </div>
 
@@ -782,7 +1110,7 @@ export default function AdminApprovalsPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-7">
         {[
           { label: "All", value: "ALL" as ApprovalFilter, count: counts.all },
           {
@@ -809,6 +1137,11 @@ export default function AdminApprovalsPage() {
             label: "Payment",
             value: "PAYMENT" as ApprovalFilter,
             count: counts.payment,
+          },
+          {
+            label: "AI Content",
+            value: "AI_CONTENT" as ApprovalFilter,
+            count: counts.aiContent,
           },
         ].map((filter) => (
           <button

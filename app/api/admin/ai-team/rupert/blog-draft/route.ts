@@ -683,6 +683,201 @@ export async function POST(
       sourceData.task_id
     );
 
+  const bindingConstraints:
+    string[] = [];
+
+  /*
+   * Protected Lola -> Rupert inquiry content must prove that
+   * this exact research report is the task's CURRENT eligible
+   * report before any blog draft is generated.
+   *
+   * This does not change Rupert's existing general research
+   * workflow. It applies only when the linked task itself is a
+   * rupert_lola_handoff task.
+   */
+  if (
+    taskId &&
+    isUuid(taskId)
+  ) {
+    const {
+      data:
+        linkedTask,
+      error:
+        linkedTaskError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_tasks"
+        )
+        .select(
+          [
+            "id",
+            "status",
+            "source_type",
+            "assigned_to_agent_id",
+            "metadata",
+          ].join(",")
+        )
+        .eq(
+          "id",
+          taskId
+        )
+        .maybeSingle();
+
+    if (linkedTaskError) {
+      console.error(
+        "Rupert protected draft task verification failed:",
+        linkedTaskError
+      );
+
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Unable to verify Rupert's linked research task.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    if (!linkedTask) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "The research report's linked task no longer exists.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    const verifiedLinkedTask =
+      linkedTask as unknown as {
+        id: string;
+        status: string;
+        source_type: string | null;
+        assigned_to_agent_id:
+          string | null;
+        metadata:
+          Record<string, unknown> |
+          null;
+      };
+
+    if (
+      verifiedLinkedTask
+        .assigned_to_agent_id !==
+        rupert.id
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "This research report is not linked to a task assigned to Rupert.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    if (
+      verifiedLinkedTask.source_type ===
+        "rupert_lola_handoff"
+    ) {
+      const linkedTaskMetadata =
+        asRecord(
+          verifiedLinkedTask.metadata
+        );
+
+      const founderClarificationText =
+        cleanString(
+          linkedTaskMetadata
+            .founder_clarification_text
+        );
+
+      if (
+        founderClarificationText
+      ) {
+        bindingConstraints.push(
+          founderClarificationText
+        );
+      }
+
+      const protectedReportValid =
+        sourceData
+          .protected_inquiry_research ===
+          true &&
+        sourceData
+          .content_eligible ===
+          true &&
+        sourceData
+          .founder_clarification_verified ===
+          true &&
+        cleanString(
+          sourceData
+            .customer_intent_scope
+        ).toLowerCase() ===
+          "founder_clarified" &&
+        cleanString(
+          sourceData
+            .quality_review_state
+        ) ===
+          "passed" &&
+        cleanString(
+          sourceData
+            .post_research_disposition
+        ) ===
+          "content_may_proceed";
+
+      const protectedTaskValid =
+        verifiedLinkedTask.status ===
+          "in_progress" &&
+        cleanString(
+          linkedTaskMetadata
+            .customer_intent_scope
+        ).toLowerCase() ===
+          "founder_clarified" &&
+        linkedTaskMetadata
+          .content_eligible ===
+          true &&
+        cleanString(
+          linkedTaskMetadata
+            .current_research_report_id
+        ) ===
+          report.id &&
+        cleanString(
+          linkedTaskMetadata
+            .quality_review_state
+        ) ===
+          "passed" &&
+        cleanString(
+          linkedTaskMetadata
+            .post_research_disposition
+        ) ===
+          "content_may_proceed";
+
+      if (
+        !protectedReportValid ||
+        !protectedTaskValid
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "This protected inquiry research report is not the current verified draft-eligible report for its Rupert task.",
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+    }
+  }
+
   const {
     data:
       categoryRows,
@@ -765,6 +960,8 @@ export async function POST(
           warnings,
 
           sources,
+
+          bindingConstraints,
         },
         {
           categories:
@@ -1543,17 +1740,149 @@ export async function POST(
       }
     }
 
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Rupert could not prepare the complete blog package.";
+
+    const isBindingSafetyFailure =
+      errorMessage.startsWith(
+        "Rupert final draft failed binding research safety validation:"
+      );
+
+    /*
+     * A deterministic editorial-safety rejection is not a
+     * transient infrastructure failure.
+     *
+     * Fail closed and stop autonomous retries. Preserve the
+     * verified research report, but block this content task
+     * until the Founder/Jake gives a narrower direction or
+     * Rupert's drafting logic is improved.
+     */
+    if (
+      isBindingSafetyFailure &&
+      taskId &&
+      isUuid(taskId)
+    ) {
+      const {
+        data:
+          failedTaskData,
+        error:
+          failedTaskError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from(
+            "ai_tasks"
+          )
+          .select(
+            "id, status, metadata"
+          )
+          .eq(
+            "id",
+            taskId
+          )
+          .maybeSingle();
+
+      if (
+        failedTaskError
+      ) {
+        console.error(
+          "Rupert safety-block task lookup failed:",
+          failedTaskError
+        );
+      } else {
+        const failedTask =
+          failedTaskData as unknown as {
+            id: string;
+            status: string;
+            metadata:
+              Record<string, unknown> |
+              null;
+          } | null;
+
+        if (
+          failedTask &&
+          failedTask.status ===
+            "in_progress"
+        ) {
+          const blockedAt =
+            new Date()
+              .toISOString();
+
+          const currentMetadata =
+            asRecord(
+              failedTask.metadata
+            );
+
+          const {
+            error:
+              blockTaskError,
+          } =
+            await aiTeamSupabaseAdmin
+              .from(
+                "ai_tasks"
+              )
+              .update({
+                status:
+                  "blocked",
+
+                result_summary:
+                  "Rupert's generated content failed binding research safety validation. No blog or approval was created. The task is blocked pending narrower Founder/Jake direction or a corrected drafting approach.",
+
+                metadata: {
+                  ...currentMetadata,
+
+                  draft_safety_state:
+                    "blocked",
+
+                  draft_block_reason:
+                    "binding_research_safety_validation_failed",
+
+                  last_content_safety_failure_at:
+                    blockedAt,
+
+                  last_content_safety_error:
+                    errorMessage,
+
+                  last_content_safety_report_id:
+                    report.id,
+                },
+              })
+              .eq(
+                "id",
+                taskId
+              )
+              .eq(
+                "status",
+                "in_progress"
+              );
+
+          if (
+            blockTaskError
+          ) {
+            console.error(
+              "Rupert safety-block task update failed:",
+              blockTaskError
+            );
+          }
+        }
+      }
+    }
+
     return Response.json(
       {
         ok: false,
-
         error:
-          error instanceof Error
-            ? error.message
-            : "Rupert could not prepare the complete blog package.",
+          errorMessage,
+
+        blocked:
+          isBindingSafetyFailure,
       },
       {
-        status: 500,
+        status:
+          isBindingSafetyFailure
+            ? 422
+            : 500,
       }
     );
   }

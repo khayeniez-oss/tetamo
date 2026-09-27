@@ -471,6 +471,15 @@ export async function POST(
   let researchContext =
     context;
 
+  let protectedInquiryResearch =
+    false;
+
+  let protectedCustomerIntentScope =
+    "";
+
+  let protectedFounderClarificationValid =
+    false;
+
   if (
     task?.source_type ===
       "rupert_lola_handoff"
@@ -503,16 +512,94 @@ export async function POST(
       sourceThemeKey ===
         "payment_timing_after_sale"
     ) {
+      const customerIntentScope =
+        cleanOptionalString(
+          metadata
+            .customer_intent_scope
+        ).toLowerCase();
+
+      const founderClarificationText =
+        cleanOptionalString(
+          metadata
+            .founder_clarification_text
+        );
+
+      const founderClarificationTurnId =
+        cleanOptionalString(
+          metadata
+            .founder_clarification_turn_id
+        );
+
+      /*
+       * Founder clarification changes the INTERNAL research
+       * scope for this content task. It does not rewrite the
+       * original customer evidence.
+       *
+       * Fail closed: metadata claiming founder_clarified is not
+       * sufficient by itself. The exact Founder clarification
+       * text must also be present.
+       */
+      const hasValidFounderClarification =
+        customerIntentScope ===
+          "founder_clarified" &&
+        Boolean(
+          founderClarificationText
+        ) &&
+        Boolean(
+          founderClarificationTurnId
+        ) &&
+        Boolean(
+          cleanOptionalString(
+            metadata
+              .founder_clarification_item_id
+          )
+        ) &&
+        Boolean(
+          cleanOptionalString(
+            metadata
+              .founder_clarification_meeting_id
+          )
+        ) &&
+        cleanOptionalString(
+          metadata
+            .founder_clarification_source
+        ) ===
+          "meeting_room";
+
+      protectedInquiryResearch =
+        true;
+
+      protectedCustomerIntentScope =
+        customerIntentScope;
+
+      protectedFounderClarificationValid =
+        hasValidFounderClarification;
+
       const protectedScope =
-        [
-          "CUSTOMER_INTENT_SCOPE=UNRESOLVED",
-          "",
-          "Internal evidence confirms recurrence only.",
-          "It does not identify the payment event, payer, recipient, Tetamo's role, settlement direction, fee type or other payment direction.",
-          "Public-web research may verify external facts but cannot determine which payment event these customers meant.",
-          "Preserve that distinction explicitly.",
-        ]
-          .join("\n");
+        hasValidFounderClarification
+          ? [
+              "CUSTOMER_INTENT_SCOPE=FOUNDER_CLARIFIED",
+              "",
+              "The original customer evidence remained ambiguous and did not identify the specific payment event.",
+              "Founder Khaye has now supplied internal business clarification for this content task.",
+              "Treat the Founder clarification only as internal task context.",
+              "Do NOT claim or imply that customers themselves supplied this clarified meaning.",
+              "Do NOT rewrite the Founder clarification as customer evidence.",
+              "Public-web research may verify externally supportable facts relevant to this clarified scope.",
+              "",
+              `FOUNDER_CLARIFICATION_TURN_ID=${founderClarificationTurnId || "not_supplied"}`,
+              `FOUNDER_CLARIFICATION_TEXT=${JSON.stringify(founderClarificationText)}`,
+            ]
+              .join("\n")
+          : [
+              "CUSTOMER_INTENT_SCOPE=UNRESOLVED",
+              "",
+              "Internal evidence confirms recurrence only.",
+              "It does not identify the payment event, payer, recipient, Tetamo's role, settlement direction, fee type or other payment direction.",
+              "Public-web research may verify external facts but cannot determine which payment event these customers meant.",
+              "Preserve that distinction explicitly.",
+            ]
+              .join("\n");
 
       researchContext =
         [
@@ -534,6 +621,45 @@ export async function POST(
           researchContext ||
           null,
       });
+
+    const hasVerifiedFindings =
+      result.findings.length >
+        0;
+
+    const protectedScopeNeedsClarification =
+      protectedInquiryResearch &&
+      !protectedFounderClarificationValid;
+
+    const researchContentEligible =
+      hasVerifiedFindings &&
+      !protectedScopeNeedsClarification;
+
+    const researchQualityReviewState =
+      protectedScopeNeedsClarification
+        ? "needs_internal_clarification"
+        : hasVerifiedFindings
+          ? "passed"
+          : "insufficient_verified_findings";
+
+    const researchBlockReason =
+      protectedScopeNeedsClarification
+        ? protectedCustomerIntentScope ===
+            "unresolved"
+          ? "customer_intent_unresolved"
+          : "founder_clarification_invalid"
+        : hasVerifiedFindings
+          ? null
+          : "insufficient_verified_findings";
+
+    const researchPostResearchDisposition =
+      protectedScopeNeedsClarification
+        ? protectedCustomerIntentScope ===
+            "unresolved"
+          ? "needs_internal_clarification"
+          : "blocked_invalid_founder_clarification"
+        : hasVerifiedFindings
+          ? "content_may_proceed"
+          : "retry_research";
 
     /*
      * report_type MUST be "content"
@@ -618,6 +744,20 @@ export async function POST(
             warnings:
               result.warnings,
 
+            protected_inquiry_research:
+              protectedInquiryResearch,
+
+            customer_intent_scope:
+              protectedInquiryResearch
+                ? protectedCustomerIntentScope ||
+                  null
+                : null,
+
+            founder_clarification_verified:
+              protectedInquiryResearch
+                ? protectedFounderClarificationValid
+                : null,
+
             /*
              * Explicit downstream eligibility.
              *
@@ -629,101 +769,16 @@ export async function POST(
              * findings were discovered.
              */
             content_eligible:
-              result.findings.length >
-                0 &&
-              !(
-                task?.source_type ===
-                  "rupert_lola_handoff" &&
-                String(
-                  task?.metadata &&
-                    typeof task.metadata ===
-                      "object" &&
-                    !Array.isArray(
-                      task.metadata
-                    )
-                    ? (
-                        task.metadata as Record<
-                          string,
-                          unknown
-                        >
-                      )
-                        .customer_intent_scope
-                    : null
-                ).toLowerCase() ===
-                  "unresolved"
-              ),
+              researchContentEligible,
 
             quality_review_state:
-              task?.source_type ===
-                "rupert_lola_handoff" &&
-              String(
-                task?.metadata &&
-                  typeof task.metadata ===
-                    "object" &&
-                  !Array.isArray(
-                    task.metadata
-                  )
-                  ? (
-                      task.metadata as Record<
-                        string,
-                        unknown
-                      >
-                    )
-                      .customer_intent_scope
-                  : null
-              ).toLowerCase() ===
-                "unresolved"
-                ? "needs_internal_clarification"
-                : result.findings.length >
-                    0
-                  ? "passed"
-                  : "insufficient_verified_findings",
+              researchQualityReviewState,
 
             content_block_reason:
-              task?.source_type ===
-                "rupert_lola_handoff" &&
-              String(
-                task?.metadata &&
-                  typeof task.metadata ===
-                    "object" &&
-                  !Array.isArray(
-                    task.metadata
-                  )
-                  ? (
-                      task.metadata as Record<
-                        string,
-                        unknown
-                      >
-                    )
-                      .customer_intent_scope
-                  : null
-              ).toLowerCase() ===
-                "unresolved"
-                ? "customer_intent_unresolved"
-                : null,
+              researchBlockReason,
 
             post_research_disposition:
-              task?.source_type ===
-                "rupert_lola_handoff" &&
-              String(
-                task?.metadata &&
-                  typeof task.metadata ===
-                    "object" &&
-                  !Array.isArray(
-                    task.metadata
-                  )
-                  ? (
-                      task.metadata as Record<
-                        string,
-                        unknown
-                      >
-                    )
-                      .customer_intent_scope
-                  : null
-              ).toLowerCase() ===
-                "unresolved"
-                ? "needs_internal_clarification"
-                : "content_may_proceed",
+              researchPostResearchDisposition,
 
             evidence_standard_version:
               "rupert_research_v5",
@@ -747,6 +802,290 @@ export async function POST(
           "Research report was not saved."
         )
       );
+    }
+
+    /*
+     * Protected Lola -> Rupert inquiry research may complete
+     * successfully while the customer-intended subject remains
+     * unresolved.
+     *
+     * In that case research is finished, but content work is not
+     * allowed to continue. Finalize the task into the same visible
+     * blocked clarification state that downstream Meeting Room
+     * orchestration can safely detect.
+     */
+    const currentTaskMetadata =
+      task?.metadata &&
+      typeof task.metadata ===
+        "object" &&
+      !Array.isArray(
+        task.metadata
+      )
+        ? task.metadata
+        : {};
+
+    const needsInternalClarification =
+      protectedInquiryResearch &&
+      protectedCustomerIntentScope ===
+        "unresolved";
+
+    if (
+      needsInternalClarification &&
+      task
+    ) {
+      const clarificationMetadata = {
+        ...currentTaskMetadata,
+
+        research_report_id:
+          report.id,
+
+        current_research_report_id:
+          report.id,
+
+        content_eligible:
+          false,
+
+        content_block_reason:
+          "customer_intent_unresolved",
+
+        quality_review_state:
+          "needs_internal_clarification",
+
+        post_research_disposition:
+          "needs_internal_clarification",
+
+        evidence_standard_version:
+          "rupert_research_v5",
+
+        research_completed_at:
+          result.researchedAt,
+
+        last_research_error:
+          null,
+
+        last_research_failed_at:
+          null,
+      };
+
+      const clarificationResultSummary =
+        "Rupert completed public-web research under the protected evidence boundary. Customer-intended payment meaning remains unresolved, so content drafting is blocked pending Founder clarification.";
+
+      const {
+        data:
+          finalizedTask,
+        error:
+          finalizeTaskError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from("ai_tasks")
+          .update({
+            status:
+              "blocked",
+
+            result_summary:
+              clarificationResultSummary,
+
+            metadata:
+              clarificationMetadata,
+          })
+          .eq(
+            "id",
+            task.id
+          )
+          .eq(
+            "status",
+            "in_progress"
+          )
+          .select(
+            "id, status"
+          )
+          .maybeSingle();
+
+      if (finalizeTaskError) {
+        throw new Error(
+          `Rupert clarification task finalization failed: ${finalizeTaskError.message}`
+        );
+      }
+
+      if (!finalizedTask) {
+        throw new Error(
+          "Rupert research task state changed before clarification finalization."
+        );
+      }
+
+      task = {
+        ...task,
+
+        status:
+          "blocked",
+
+        metadata:
+          clarificationMetadata,
+      };
+
+      const {
+        error:
+          clarificationActivityError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from("ai_activity")
+          .insert({
+            agent_id:
+              rupert.id,
+
+            actor_user_id:
+              auth.admin.userId,
+
+            event_type:
+              "research",
+
+            action:
+              "research_requires_internal_clarification",
+
+            entity_type:
+              "ai_report",
+
+            entity_id:
+              report.id,
+
+            task_id:
+              task.id,
+
+            severity:
+              "info",
+
+            details: {
+              report_id:
+                report.id,
+
+              content_eligible:
+                false,
+
+              content_block_reason:
+                "customer_intent_unresolved",
+
+              quality_review_state:
+                "needs_internal_clarification",
+
+              post_research_disposition:
+                "needs_internal_clarification",
+
+              evidence_standard_version:
+                "rupert_research_v5",
+            },
+          });
+
+      if (clarificationActivityError) {
+        console.error(
+          "Rupert clarification activity log failed:",
+          clarificationActivityError
+        );
+      }
+    }
+
+    if (
+      protectedInquiryResearch &&
+      !needsInternalClarification &&
+      task
+    ) {
+      const protectedResearchMetadata = {
+        ...currentTaskMetadata,
+
+        research_report_id:
+          report.id,
+
+        current_research_report_id:
+          report.id,
+
+        content_eligible:
+          researchContentEligible,
+
+        content_block_reason:
+          researchBlockReason,
+
+        quality_review_state:
+          researchQualityReviewState,
+
+        post_research_disposition:
+          researchPostResearchDisposition,
+
+        evidence_standard_version:
+          "rupert_research_v5",
+
+        research_completed_at:
+          result.researchedAt,
+
+        last_research_error:
+          null,
+
+        last_research_failed_at:
+          null,
+      };
+
+      const protectedNextStatus =
+        researchContentEligible
+          ? "in_progress"
+          : "blocked";
+
+      const protectedResultSummary =
+        researchContentEligible
+          ? "Rupert completed Founder-scoped public-web research with verified findings. The current research report is eligible for content drafting and remains subject to Founder approval before publication."
+          : protectedFounderClarificationValid
+            ? "Rupert completed Founder-scoped public-web research, but sufficient verified findings were not available. Content drafting remains blocked."
+            : "Rupert research detected incomplete or invalid Founder clarification metadata. Content drafting remains blocked.";
+
+      const {
+        data:
+          protectedFinalizedTask,
+        error:
+          protectedFinalizeError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from("ai_tasks")
+          .update({
+            status:
+              protectedNextStatus,
+
+            result_summary:
+              protectedResultSummary,
+
+            metadata:
+              protectedResearchMetadata,
+          })
+          .eq(
+            "id",
+            task.id
+          )
+          .eq(
+            "status",
+            "in_progress"
+          )
+          .select(
+            "id, status"
+          )
+          .maybeSingle();
+
+      if (protectedFinalizeError) {
+        throw new Error(
+          `Rupert protected research finalization failed: ${protectedFinalizeError.message}`
+        );
+      }
+
+      if (!protectedFinalizedTask) {
+        throw new Error(
+          "Rupert protected research task state changed before finalization."
+        );
+      }
+
+      task = {
+        ...task,
+
+        status:
+          protectedNextStatus,
+
+        metadata:
+          protectedResearchMetadata,
+      };
     }
 
     const {

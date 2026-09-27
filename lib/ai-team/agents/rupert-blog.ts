@@ -29,6 +29,7 @@ export type RupertBlogResearch = {
   recommendations: unknown[];
   warnings: string[];
   sources: RupertBlogSource[];
+  bindingConstraints?: string[];
 };
 
 export type RupertBlogCategory = {
@@ -254,6 +255,234 @@ function countMarker(
     .length - 1;
 }
 
+function normalizeSafetyText(
+  value: string
+) {
+  return stripHtml(
+    value
+  )
+    .toLowerCase()
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+}
+
+function validateDraftAgainstResearchConstraints(
+  research:
+    RupertBlogResearch,
+
+  draft: {
+    title: string;
+    titleId: string;
+    excerpt: string;
+    excerptId: string;
+    contentHtml: string;
+    contentIdHtml: string;
+    coverImage:
+      RupertCoverImagePlan;
+    bodyImages:
+      RupertBodyImagePlan[];
+  }
+) {
+  const warningText =
+    research.warnings
+      .map(cleanString)
+      .join("\n")
+      .toLowerCase();
+
+  const constraintText =
+    (
+      research
+        .bindingConstraints ??
+      []
+    )
+      .map(cleanString)
+      .join("\n")
+      .toLowerCase();
+
+  const draftText =
+    normalizeSafetyText(
+      [
+        draft.title,
+        draft.titleId,
+        draft.excerpt,
+        draft.excerptId,
+        draft.contentHtml,
+        draft.contentIdHtml,
+        draft.coverImage.prompt,
+        draft.coverImage.alt,
+        draft.coverImage.altId,
+        ...draft.bodyImages.flatMap(
+          (image) => [
+            image.prompt,
+            image.alt,
+            image.altId,
+          ]
+        ),
+      ].join("\n")
+    );
+
+  const violations:
+    string[] = [];
+
+  const hasExcludedSensitiveTransactionClaims =
+    (
+      warningText.includes(
+        "transaction-process"
+      ) ||
+      warningText.includes(
+        "transaction process"
+      ) ||
+      warningText.includes(
+        "notary"
+      ) ||
+      warningText.includes(
+        "escrow"
+      )
+    ) &&
+    (
+      warningText.includes(
+        "excluded"
+      ) ||
+      warningText.includes(
+        "unverified"
+      ) ||
+      warningText.includes(
+        "generalized"
+      ) ||
+      warningText.includes(
+        "official-source verification"
+      ) ||
+      warningText.includes(
+        "official indonesian source"
+      )
+    );
+
+  const hasRestrictedTetamoPaymentRole =
+    constraintText.includes(
+      "tetamo"
+    ) &&
+    constraintText.includes(
+      "payment"
+    ) &&
+    (
+      constraintText.includes(
+        "does not handle"
+      ) ||
+      constraintText.includes(
+        "does not manage"
+      ) ||
+      constraintText.includes(
+        "does not determine"
+      ) ||
+      constraintText.includes(
+        "outside tetamo"
+      )
+    );
+
+  const checkPatterns = (
+    label: string,
+    patterns: RegExp[]
+  ) => {
+    for (
+      const pattern of patterns
+    ) {
+      if (
+        pattern.test(
+          draftText
+        )
+      ) {
+        violations.push(
+          label
+        );
+        return;
+      }
+    }
+  };
+
+  if (
+    hasExcludedSensitiveTransactionClaims
+  ) {
+    checkPatterns(
+      "reintroduced excluded transaction-process claims",
+      [
+        /\bpayment stages?\b/i,
+        /\bpayment schedules?\b/i,
+        /\bpayment processes? after\b/i,
+        /\bmultiple stages\b/i,
+        /\btypical payment\b/i,
+        /\bstages? of (?:the )?property (?:purchase|sale) payments?\b/i,
+        /\breservation fees?\b/i,
+        /\bdown payments?\b/i,
+        /\bfinal settlement(?: payments?)?\b/i,
+        /\binstallments?\b/i,
+        /\bescrow\b/i,
+        /\bnotar(?:y|ies)\b/i,
+        /\bppat\b/i,
+
+        /\btahapan pembayaran\b/i,
+        /\bjadwal pembayaran\b/i,
+        /\bproses pembayaran setelah\b/i,
+        /\bbeberapa tahapan\b/i,
+        /\bbiaya reservasi\b/i,
+        /\buang muka\b/i,
+        /\bpelunasan\b/i,
+        /\bcicilan\b/i,
+        /\bnotaris\b/i,
+      ]
+    );
+  }
+
+  if (
+    hasRestrictedTetamoPaymentRole
+  ) {
+    checkPatterns(
+      "implied Tetamo payment/transaction control",
+      [
+        /\btetamo\s+(?:manages?|schedules?|processes?|holds?|reviews?|determines?)\b/i,
+        /\btetamo\s+(?:must|should|needs? to)\s+(?:review|hold|manage|schedule|process|determine)\b/i,
+
+        /\btetamo\s+(?:mengelola|menjadwalkan|memproses|menyimpan|meninjau|menentukan)\b/i,
+        /\btetamo\s+(?:harus|perlu)\s+(?:meninjau|mengelola|menjadwalkan|memproses|menentukan)\b/i,
+      ]
+    );
+
+    checkPatterns(
+      "invented internal transaction-record requirement",
+      [
+        /\binternal communications?\b/i,
+        /\btransaction records?\b/i,
+        /\bagreements? related to (?:the )?(?:property )?sale\b/i,
+
+        /\bkomunikasi internal\b/i,
+        /\bcatatan transaksi\b/i,
+        /\bperjanjian terkait (?:penjualan|transaksi)\b/i,
+      ]
+    );
+  }
+
+  const uniqueViolations =
+    Array.from(
+      new Set(
+        violations
+      )
+    );
+
+  if (
+    uniqueViolations.length
+  ) {
+    throw new Error(
+      "Rupert final draft failed binding research safety validation: " +
+      uniqueViolations.join(
+        "; "
+      ) +
+      ". No blog or approval should be created from this draft."
+    );
+  }
+}
+
 export async function draftBlogWithRupert(
   research:
     RupertBlogResearch,
@@ -320,6 +549,21 @@ ${options.timeZone}
 AVAILABLE EXISTING BLOG CATEGORIES
 ${categoriesText}
 
+BINDING FOUNDER / INTERNAL CONSTRAINTS
+${
+  research.bindingConstraints?.length
+    ? research.bindingConstraints
+        .map(
+          (constraint) =>
+            `- ${constraint}`
+        )
+        .join("\n")
+    : "- None supplied."
+}
+
+These constraints override recommendations, model knowledge,
+and weaker statements elsewhere in the research package.
+
 FACTUAL DISCIPLINE
 
 - Every factual statement must remain supported by the
@@ -333,6 +577,29 @@ FACTUAL DISCIPLINE
 - Tetamo is not a regulator, law firm, tax adviser,
   immigration authority or government authority.
 - Do not imply legal certainty unsupported by the research.
+- Research warnings are BINDING editorial constraints.
+- If a warning says a claim, finding, topic, or category of
+  facts was excluded, unsupported, unverified, generalized,
+  or requires stronger evidence, DO NOT reintroduce that
+  material from your own knowledge.
+- Never reconstruct an excluded claim by calling it
+  "typical", "common", "standard", "usual", or similar.
+- If recommendations or findings conflict with a research
+  warning, follow the stricter warning and OMIT the claim.
+- Absence from retained findings does not give permission
+  to infer or recreate excluded facts.
+- Do not imply Tetamo controls, manages, schedules,
+  processes, holds, reviews, or determines property
+  payments, settlement funds, transaction records,
+  payment records, agreements, escrow records, or similar
+  transaction materials unless the retained research
+  explicitly establishes that exact Tetamo role and no
+  warning contradicts it.
+- Do not turn a customer's unresolved or ambiguous question
+  into a factual description of how Tetamo operates.
+- When evidence is too weak for a useful factual article,
+  write a narrower article or explanation rather than
+  filling gaps with general property-industry knowledge.
 
 EDITORIAL STANDARD
 
@@ -747,6 +1014,20 @@ Return ONLY valid JSON using exactly this structure:
       );
     }
   }
+
+  validateDraftAgainstResearchConstraints(
+    research,
+    {
+      title,
+      titleId,
+      excerpt,
+      excerptId,
+      contentHtml,
+      contentIdHtml,
+      coverImage,
+      bodyImages,
+    }
+  );
 
   return {
     title,
