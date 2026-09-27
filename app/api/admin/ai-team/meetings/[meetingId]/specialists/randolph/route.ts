@@ -7,6 +7,10 @@ import {
   generateRandolphMeetingReply,
 } from "@/lib/ai-team/agents/randolph-meeting";
 
+import {
+  startAssignedMeetingTasksForAgent,
+} from "@/lib/ai-team/core/task-lifecycle";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -427,6 +431,39 @@ export async function POST(
             "Unable to save Randolph's meeting reply.",
         },
         { status: 500 }
+      );
+    }
+
+    /*
+     * Taking the floor acknowledges the Founder-assigned
+     * Meeting Room work owned by this specialist.
+     *
+     * This may move only this agent's matching pending tasks
+     * to in_progress. It never marks the work completed.
+     */
+    try {
+      await startAssignedMeetingTasksForAgent({
+        meetingId,
+
+        founderTurnId:
+          latestFounderTurn.id,
+
+        specialistTurnId:
+          savedTurn.id,
+
+        actorAgentKey:
+          "randolph",
+      });
+    } catch (
+      taskLifecycleError
+    ) {
+      /*
+       * A lifecycle audit problem must not erase a valid
+       * specialist Meeting Room response.
+       */
+      console.error(
+        "randolph Meeting Room task lifecycle sync failed:",
+        taskLifecycleError
       );
     }
 

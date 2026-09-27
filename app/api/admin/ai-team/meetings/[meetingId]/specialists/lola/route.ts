@@ -7,6 +7,10 @@ import {
   generateLolaMeetingReply,
 } from "@/lib/ai-team/agents/lola-meeting";
 
+import {
+  startAssignedMeetingTasksForAgent,
+} from "@/lib/ai-team/core/task-lifecycle";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -392,6 +396,39 @@ export async function POST(
             "Lola generated a reply but her meeting turn could not be saved.",
         },
         { status: 500 }
+      );
+    }
+
+    /*
+     * Taking the floor acknowledges the Founder-assigned
+     * Meeting Room work owned by this specialist.
+     *
+     * This may move only this agent's matching pending tasks
+     * to in_progress. It never marks the work completed.
+     */
+    try {
+      await startAssignedMeetingTasksForAgent({
+        meetingId,
+
+        founderTurnId:
+          latestFounderTurn.id,
+
+        specialistTurnId:
+          savedTurn.id,
+
+        actorAgentKey:
+          "lola",
+      });
+    } catch (
+      taskLifecycleError
+    ) {
+      /*
+       * A lifecycle audit problem must not erase a valid
+       * specialist Meeting Room response.
+       */
+      console.error(
+        "lola Meeting Room task lifecycle sync failed:",
+        taskLifecycleError
       );
     }
 
