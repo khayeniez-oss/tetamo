@@ -796,23 +796,110 @@ export async function POST(
       linkedTaskMetadata;
 
     /*
-     * Founder rejection feedback from a previous draft is a
-     * binding redraft instruction for every Rupert task type.
+     * Every historical Founder rejection for this exact
+     * Rupert task remains binding on later redrafts.
      *
-     * This lets ordinary weekly blogs and protected inquiry
-     * content use the same correction mechanism.
+     * ai_approvals is the audit source of truth. This avoids
+     * losing an earlier substantive correction when a later
+     * rejection contains a narrower proofreading instruction.
      */
-    const founderRedraftFeedback =
+    const {
+      data:
+        rejectedApprovalRows,
+      error:
+        rejectedApprovalHistoryError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_approvals"
+        )
+        .select(
+          "id, review_notes, reviewed_at"
+        )
+        .eq(
+          "task_id",
+          taskId
+        )
+        .eq(
+          "requested_by_agent_id",
+          rupert.id
+        )
+        .eq(
+          "action_type",
+          "publish_content"
+        )
+        .eq(
+          "status",
+          "rejected"
+        )
+        .order(
+          "reviewed_at",
+          {
+            ascending:
+              true,
+          }
+        );
+
+    if (
+      rejectedApprovalHistoryError
+    ) {
+      console.error(
+        "Rupert Founder rejection history lookup failed:",
+        rejectedApprovalHistoryError
+      );
+
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Unable to verify Rupert's complete Founder redraft history.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    const founderFeedbackHistory =
+      (
+        rejectedApprovalRows ??
+        []
+      )
+        .map(
+          (row) =>
+            cleanString(
+              row.review_notes
+            )
+        )
+        .filter(Boolean);
+
+    /*
+     * Keep metadata as a fallback for older/reconciled tasks,
+     * while deduplicating anything already represented by
+     * the approval audit history.
+     */
+    const latestMetadataFeedback =
       cleanString(
         linkedTaskMetadata
           .last_content_rejection_reason
       );
 
-    if (
-      founderRedraftFeedback
+    const allFounderFeedback =
+      Array.from(
+        new Set(
+          [
+            ...founderFeedbackHistory,
+            latestMetadataFeedback,
+          ].filter(Boolean)
+        )
+      );
+
+    for (
+      const feedback of
+        allFounderFeedback
     ) {
       bindingConstraints.push(
-        `Founder redraft feedback: ${founderRedraftFeedback}`
+        `Founder redraft feedback (binding): ${feedback}`
       );
     }
 

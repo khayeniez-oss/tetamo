@@ -506,6 +506,21 @@ function validateDraftAgainstFounderRedraftQuality(
       .join("\n")
       .toLowerCase();
 
+  const draftText =
+    normalizeSafetyText(
+      [
+        draft.title,
+        draft.titleId,
+        draft.excerpt,
+        draft.excerptId,
+        draft.contentHtml,
+        draft.contentIdHtml,
+      ].join("\n")
+    );
+
+  const violations:
+    string[] = [];
+
   const requiresSpacingCorrection =
     constraintText.includes(
       "spacing"
@@ -520,55 +535,171 @@ function validateDraftAgainstFounderRedraftQuality(
       "missing space"
     );
 
-  if (
-    !requiresSpacingCorrection
-  ) {
-    return;
-  }
-
-  const draftText =
-    normalizeSafetyText(
-      [
-        draft.title,
-        draft.titleId,
-        draft.excerpt,
-        draft.excerptId,
-        draft.contentHtml,
-        draft.contentIdHtml,
-      ].join("\n")
-    );
-
   /*
    * Deterministic protection against the exact class of
    * fused-word defects already observed in Rupert output.
-   *
-   * The model prompt below also requires a complete
-   * bilingual proofreading pass for broader typo coverage.
    */
-  const fusedWordPatterns = [
-    /\binindonesia\b/i,
-    /\binthe\b/i,
-    /\bandlarge\b/i,
-    /\byangterbatas\b/i,
-    /\bhalinimenegaskan\b/i,
-    /\binimenegaskan\b/i,
-    /\beasingcompared\b/i,
-    /\bfundsto\b/i,
-    /\bbankingindustry\b/i,
-    /\bdibandingkankenaikan\b/i,
-    /\bbahwafaktor\b/i,
-  ];
+  if (
+    requiresSpacingCorrection
+  ) {
+    const fusedWordPatterns = [
+      /\binindonesia\b/i,
+      /\binthe\b/i,
+      /\bandlarge\b/i,
+      /\byangterbatas\b/i,
+      /\bhalinimenegaskan\b/i,
+      /\binimenegaskan\b/i,
+      /\beasingcompared\b/i,
+      /\bfundsto\b/i,
+      /\bbankingindustry\b/i,
+      /\bdibandingkankenaikan\b/i,
+      /\bbahwafaktor\b/i,
+    ];
+
+    if (
+      fusedWordPatterns.some(
+        (pattern) =>
+          pattern.test(
+            draftText
+          )
+      )
+    ) {
+      violations.push(
+        "unresolved fused-word or missing-space errors"
+      );
+    }
+  }
+
+  /*
+   * If Founder previously rejected stabilization/recovery
+   * framing and explicitly instructed Rupert to describe
+   * the remaining sales contraction precisely, do not allow
+   * later redrafts to reintroduce that interpretation.
+   */
+  const rejectsUnsupportedRecoveryFraming =
+    (
+      constraintText.includes(
+        "market stabilization"
+      ) ||
+      constraintText.includes(
+        "market stabilisation"
+      )
+    ) &&
+    (
+      constraintText.includes(
+        "sales contraction eased markedly"
+      ) ||
+      constraintText.includes(
+        "returned to growth"
+      )
+    );
 
   if (
-    fusedWordPatterns.some(
-      (pattern) =>
-        pattern.test(
-          draftText
-        )
-    )
+    rejectsUnsupportedRecoveryFraming
+  ) {
+    const recoveryPatterns = [
+      /\bmarket recovery\b/i,
+      /\brecovering market\b/i,
+      /\bmarket stabiliz(?:ation|ing|ed)\b/i,
+      /\bmarket stabilis(?:ation|ing|ed)\b/i,
+      /\bpemulihan pasar\b/i,
+      /\bpasar (?:mulai )?pulih\b/i,
+      /\bstabilisasi pasar\b/i,
+    ];
+
+    if (
+      recoveryPatterns.some(
+        (pattern) =>
+          pattern.test(
+            draftText
+          )
+      )
+    ) {
+      violations.push(
+        "reintroduced unsupported market recovery/stabilization framing"
+      );
+    }
+  }
+
+  const rejectsInvestmentRecommendation =
+    constraintText.includes(
+      "investment opportunities"
+    ) ||
+    constraintText.includes(
+      "investment recommendation"
+    );
+
+  if (
+    rejectsInvestmentRecommendation
+  ) {
+    const investmentPatterns = [
+      /\binvestment opportunit(?:y|ies)\b/i,
+      /\binvestment recommendation\b/i,
+      /\battractive investment\b/i,
+      /\bpeluang investasi\b/i,
+      /\brekomendasi investasi\b/i,
+    ];
+
+    if (
+      investmentPatterns.some(
+        (pattern) =>
+          pattern.test(
+            draftText
+          )
+      )
+    ) {
+      violations.push(
+        "reintroduced rejected investment framing"
+      );
+    }
+  }
+
+  const rejectsDeveloperStrategyInference =
+    constraintText.includes(
+      "cautious developer strategies"
+    );
+
+  if (
+    rejectsDeveloperStrategyInference
+  ) {
+    const developerStrategyPatterns = [
+      /\bcautious developer strateg(?:y|ies)\b/i,
+      /\bdeveloper caution\b/i,
+      /\bdevelopers? (?:are|remain) cautious\b/i,
+      /\bstrategi pengembang yang berhati-hati\b/i,
+      /\bpengembang (?:bersikap|tetap) berhati-hati\b/i,
+    ];
+
+    if (
+      developerStrategyPatterns.some(
+        (pattern) =>
+          pattern.test(
+            draftText
+          )
+      )
+    ) {
+      violations.push(
+        "reintroduced rejected developer-strategy inference"
+      );
+    }
+  }
+
+  const uniqueViolations =
+    Array.from(
+      new Set(
+        violations
+      )
+    );
+
+  if (
+    uniqueViolations.length
   ) {
     throw new Error(
-      "Rupert final draft failed Founder redraft quality validation: unresolved fused-word or missing-space errors. No blog or approval should be created from this draft."
+      "Rupert final draft failed Founder redraft quality validation: " +
+      uniqueViolations.join(
+        "; "
+      ) +
+      ". No blog or approval should be created from this draft."
     );
   }
 }
