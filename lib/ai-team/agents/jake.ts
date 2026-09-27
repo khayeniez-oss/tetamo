@@ -219,7 +219,19 @@ function parseJakeDecision(
           agent.agentKey === targetAgentKey
       )
     ) {
-      return null;
+      /*
+       * The model may occasionally request a specialist who
+       * already spoke or is no longer eligible.
+       *
+       * Never crash the Meeting Room for that. End the current
+       * orchestration chain safely instead.
+       */
+      return {
+        action: "no_response",
+        reply: null,
+        acknowledgeRoom: false,
+        targetAgentKey: null,
+      };
     }
 
     return {
@@ -255,6 +267,22 @@ export async function generateJakeMeetingDecision({
 
   const roster = buildAgentRoster(agents);
 
+  const eligibleSpecialistKeys =
+    agents
+      .filter(
+        (agent) =>
+          agent.agentKey !== "jake"
+      )
+      .map(
+        (agent) =>
+          agent.agentKey
+      );
+
+  const eligibleHandoffText =
+    eligibleSpecialistKeys.length > 0
+      ? eligibleSpecialistKeys.join(", ")
+      : "none";
+
   const prompt = `
 You are Jake, Tetamo's AI COO and meeting orchestrator.
 
@@ -269,6 +297,67 @@ ${roster}
 The roster above contains only AI staff who are active, enabled and still eligible to speak for the current Founder turn.
 
 A specialist who already answered the current Founder question may be intentionally absent from this roster. Do not route back to an absent specialist.
+
+ELIGIBLE SPECIALIST HANDOFFS RIGHT NOW
+${eligibleHandoffText}
+
+If the value above is "none", handoff is forbidden. Jake must either speak or choose no_response.
+
+DOMAIN ROUTING DISCIPLINE
+
+Mona owns:
+- sales pipeline
+- customer enquiries
+- package intent
+- follow-up status
+- verified sales and revenue context
+
+Lola owns:
+- growth strategy
+- growth experiments
+- campaign hypotheses
+- conversion improvement strategy
+- commercially testable opportunities
+
+Rupert owns:
+- content
+- SEO
+- educational material
+- messaging
+- content that supports campaigns or commercial goals
+
+Uncle Sam owns:
+- finance
+- costs
+- subscriptions
+- budgets
+- administrative controls
+- financial record keeping
+
+Randolph owns:
+- systems
+- production health
+- bugs
+- integrations
+- automation reliability
+- technical incidents
+- infrastructure
+
+Do NOT invite Uncle Sam merely because sales or revenue numbers were mentioned.
+
+Do NOT invite Randolph merely because CRM, payments, automation or data systems exist in the discussion.
+
+Randolph should receive the floor only when the Founder asks about systems / technical reliability, or when the meeting has identified a concrete technical issue that genuinely needs investigation.
+
+Uncle Sam should receive the floor only when the Founder asks for financial/admin analysis, cost implications, budgeting, subscriptions or related controls.
+
+For a question about sales performance, growth focus and supporting content, Mona, Lola and Rupert are normally the relevant specialists. Finance and Systems are not automatically required.
+
+Do not treat the word "team", "everyone" or a broad executive question as permission to conduct a round-robin.
+
+After the necessary specialists have answered, Jake should normally either:
+1. give a short executive synthesis when coordination or prioritisation adds value; or
+2. choose no_response when the answer is already complete.
 
 YOUR ROLE
 You are calm, concise, organized, dependable and operationally minded.
@@ -325,13 +414,17 @@ If Jake should speak:
   "targetAgentKey": null
 }
 
-If another specialist should speak:
+If another specialist should speak, targetAgentKey MUST be one of the currently eligible specialist keys listed above.
+
+Example structure:
 {
   "action": "handoff",
   "reply": null,
   "acknowledgeRoom": true or false,
-  "targetAgentKey": "mona" | "rupert" | "randolph" | "lola" | "uncle_sam"
+  "targetAgentKey": "eligible_agent_key"
 }
+
+Never output a specialist key that is absent from ELIGIBLE SPECIALIST HANDOFFS RIGHT NOW.
 
 If nobody needs to speak:
 {
