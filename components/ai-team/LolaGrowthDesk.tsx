@@ -13,8 +13,10 @@ import {
   Brain,
   CircleDollarSign,
   Eye,
+  FlaskConical,
   Lightbulb,
   Loader2,
+  Plus,
   MessageCircleMore,
   RefreshCw,
   Target,
@@ -52,6 +54,8 @@ type ThemeRow = {
   growth_score: number;
   confidence: string;
   status: string;
+  latest_insight_id:
+    string | null;
   last_seen_at: string | null;
 };
 
@@ -98,6 +102,90 @@ type ActivityRow = {
   severity: string;
   created_at: string;
 };
+
+type ExperimentRow = {
+  id: string;
+  title: string;
+  hypothesis: string;
+  proposed_action: string;
+  target_metric_key: string;
+  baseline_value:
+    number | null;
+  target_value:
+    number | null;
+  result_value:
+    number | null;
+  unit:
+    string | null;
+  status: string;
+  outcome:
+    string | null;
+  started_at:
+    string | null;
+  ends_at:
+    string | null;
+  completed_at:
+    string | null;
+  result_summary:
+    string | null;
+  metadata:
+    Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ExperimentApprovalRow = {
+  id: string;
+  status: string;
+  execution_status: string;
+  action_type: string;
+  action_summary: string;
+  risk_level: string;
+  requested_payload:
+    Record<string, unknown> | null;
+  reviewed_at:
+    string | null;
+  review_notes:
+    string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ExperimentsResponse = {
+  ok: boolean;
+  error?: string;
+  experiments?:
+    ExperimentRow[];
+  approvals?:
+    ExperimentApprovalRow[];
+};
+
+type ExperimentForm = {
+  title: string;
+  hypothesis: string;
+  proposedAction: string;
+  targetMetricKey: string;
+  baselineValue: string;
+  targetValue: string;
+  unit: string;
+  evaluationDays: string;
+  relatedInsightId: string;
+  expectedOutcome: string;
+};
+
+const EMPTY_EXPERIMENT_FORM:
+  ExperimentForm = {
+    title: "",
+    hypothesis: "",
+    proposedAction: "",
+    targetMetricKey: "",
+    baselineValue: "",
+    targetValue: "",
+    unit: "",
+    evaluationDays: "14",
+    relatedInsightId: "",
+    expectedOutcome: "",
+  };
 
 type GrowthResponse = {
   ok: boolean;
@@ -453,6 +541,34 @@ export function LolaGrowthDesk() {
   ] =
     useState("");
 
+  const [
+    experimentData,
+    setExperimentData,
+  ] =
+    useState<
+      ExperimentsResponse | null
+    >(null);
+
+  const [
+    proposingExperiment,
+    setProposingExperiment,
+  ] =
+    useState(false);
+
+  const [
+    experimentNotice,
+    setExperimentNotice,
+  ] =
+    useState("");
+
+  const [
+    experimentForm,
+    setExperimentForm,
+  ] =
+    useState<ExperimentForm>({
+      ...EMPTY_EXPERIMENT_FORM,
+    });
+
   const loadWorkspace =
     useCallback(
       async (
@@ -511,6 +627,44 @@ export function LolaGrowthDesk() {
           setData(
             payload
           );
+
+          const experimentsResponse =
+            await fetch(
+              "/api/admin/ai-team/lola/experiments",
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+                cache:
+                  "no-store",
+              }
+            );
+
+          const experimentsPayload =
+            (await experimentsResponse
+              .json()
+              .catch(
+                () =>
+                  null
+              )) as
+              ExperimentsResponse | null;
+
+          if (
+            !experimentsResponse.ok ||
+            !experimentsPayload ||
+            experimentsPayload.ok !==
+              true
+          ) {
+            throw new Error(
+              experimentsPayload?.error ||
+                "Unable to load Lola growth experiments."
+            );
+          }
+
+          setExperimentData(
+            experimentsPayload
+          );
         } catch (loadError) {
           setError(
             loadError instanceof
@@ -538,6 +692,168 @@ export function LolaGrowthDesk() {
       loadWorkspace,
     ]
   );
+
+  async function proposeExperiment() {
+    try {
+      setProposingExperiment(
+        true
+      );
+      setExperimentNotice(
+        ""
+      );
+      setError("");
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          "/api/admin/ai-team/lola/experiments",
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                title:
+                  experimentForm.title,
+
+                hypothesis:
+                  experimentForm.hypothesis,
+
+                proposedAction:
+                  experimentForm.proposedAction,
+
+                targetMetricKey:
+                  experimentForm.targetMetricKey,
+
+                baselineValue:
+                  experimentForm.baselineValue,
+
+                targetValue:
+                  experimentForm.targetValue,
+
+                unit:
+                  experimentForm.unit,
+
+                evaluationDays:
+                  Number(
+                    experimentForm.evaluationDays
+                  ),
+
+                relatedInsightId:
+                  experimentForm.relatedInsightId,
+
+                expectedOutcome:
+                  experimentForm.expectedOutcome,
+              }),
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () =>
+              null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !==
+          true
+      ) {
+        throw new Error(
+          payload?.error ||
+            "Unable to create Lola growth experiment proposal."
+        );
+      }
+
+      setExperimentNotice(
+        "Growth experiment proposed. Founder approval is required before any later execution step."
+      );
+
+      setExperimentForm({
+        ...EMPTY_EXPERIMENT_FORM,
+      });
+
+      await loadWorkspace(
+        true
+      );
+    } catch (proposalError) {
+      setError(
+        proposalError instanceof
+          Error
+          ? proposalError.message
+          : "Unable to create Lola growth experiment proposal."
+      );
+    } finally {
+      setProposingExperiment(
+        false
+      );
+    }
+  }
+
+  const experiments =
+    experimentData
+      ?.experiments ??
+    [];
+
+  const experimentApprovals =
+    experimentData
+      ?.approvals ??
+    [];
+
+  const approvalByExperiment =
+    useMemo(
+      () => {
+        const map =
+          new Map<
+            string,
+            ExperimentApprovalRow
+          >();
+
+        for (
+          const approval of
+          experimentApprovals
+        ) {
+          const experimentId =
+            typeof approval
+              .requested_payload
+              ?.experiment_id ===
+              "string"
+              ? approval
+                  .requested_payload
+                  .experiment_id
+              : "";
+
+          if (
+            experimentId &&
+            !map.has(
+              experimentId
+            )
+          ) {
+            map.set(
+              experimentId,
+              approval
+            );
+          }
+        }
+
+        return map;
+      },
+      [
+        experimentApprovals,
+      ]
+    );
 
   const business =
     data?.businessGrowth;
@@ -1141,6 +1457,532 @@ export function LolaGrowthDesk() {
                   )
                 )
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5 text-gray-400" />
+
+              <h3 className="font-semibold text-[#1C1C1E]">
+                Growth Experiments
+              </h3>
+            </div>
+
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">
+              Lola can structure a measurable growth hypothesis,
+              KPI and evaluation period. Creating a proposal only
+              sends it to Founder Approval. It does not spend,
+              publish, contact customers, change pricing or start
+              execution.
+            </p>
+          </div>
+
+          <span className="inline-flex shrink-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-[10px] font-semibold text-gray-500">
+            {experiments.length} experiments
+          </span>
+        </div>
+
+        {experimentNotice ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {experimentNotice}
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <h4 className="text-sm font-semibold text-[#1C1C1E]">
+              Propose Experiment
+            </h4>
+
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              Founder-triggered validation is allowed while Lola
+              is inactive. The proposal remains non-executable.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">
+                  Experiment title
+                </label>
+
+                <input
+                  value={
+                    experimentForm.title
+                  }
+                  onChange={(event) =>
+                    setExperimentForm(
+                      (current) => ({
+                        ...current,
+                        title:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  placeholder="Example: Improve package-intent follow-up"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">
+                  Hypothesis
+                </label>
+
+                <textarea
+                  value={
+                    experimentForm.hypothesis
+                  }
+                  onChange={(event) =>
+                    setExperimentForm(
+                      (current) => ({
+                        ...current,
+                        hypothesis:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  rows={3}
+                  placeholder="What does Lola think may happen, and why?"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">
+                  Proposed action
+                </label>
+
+                <textarea
+                  value={
+                    experimentForm.proposedAction
+                  }
+                  onChange={(event) =>
+                    setExperimentForm(
+                      (current) => ({
+                        ...current,
+                        proposedAction:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  rows={3}
+                  placeholder="Describe the controlled test only. This does not execute it."
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-medium text-gray-600">
+                    Primary KPI
+                  </label>
+
+                  <input
+                    value={
+                      experimentForm.targetMetricKey
+                    }
+                    onChange={(event) =>
+                      setExperimentForm(
+                        (current) => ({
+                          ...current,
+                          targetMetricKey:
+                            event.target.value,
+                        })
+                      )
+                    }
+                    placeholder="verified_sales"
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600">
+                    Unit
+                  </label>
+
+                  <input
+                    value={
+                      experimentForm.unit
+                    }
+                    onChange={(event) =>
+                      setExperimentForm(
+                        (current) => ({
+                          ...current,
+                          unit:
+                            event.target.value,
+                        })
+                      )
+                    }
+                    placeholder="sales, %, IDR..."
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600">
+                    Baseline
+                  </label>
+
+                  <input
+                    type="number"
+                    step="any"
+                    value={
+                      experimentForm.baselineValue
+                    }
+                    onChange={(event) =>
+                      setExperimentForm(
+                        (current) => ({
+                          ...current,
+                          baselineValue:
+                            event.target.value,
+                        })
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600">
+                    Target
+                  </label>
+
+                  <input
+                    type="number"
+                    step="any"
+                    value={
+                      experimentForm.targetValue
+                    }
+                    onChange={(event) =>
+                      setExperimentForm(
+                        (current) => ({
+                          ...current,
+                          targetValue:
+                            event.target.value,
+                        })
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600">
+                    Evaluation
+                  </label>
+
+                  <select
+                    value={
+                      experimentForm.evaluationDays
+                    }
+                    onChange={(event) =>
+                      setExperimentForm(
+                        (current) => ({
+                          ...current,
+                          evaluationDays:
+                            event.target.value,
+                        })
+                      )
+                    }
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                  >
+                    <option value="7">
+                      7 days
+                    </option>
+
+                    <option value="14">
+                      14 days
+                    </option>
+
+                    <option value="30">
+                      30 days
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">
+                  Related growth theme
+                </label>
+
+                <select
+                  value={
+                    experimentForm.relatedInsightId
+                  }
+                  onChange={(event) =>
+                    setExperimentForm(
+                      (current) => ({
+                        ...current,
+                        relatedInsightId:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                >
+                  <option value="">
+                    No linked insight
+                  </option>
+
+                  {activeThemes
+                    .filter(
+                      (theme) =>
+                        Boolean(
+                          theme.latest_insight_id
+                        )
+                    )
+                    .map(
+                      (theme) => (
+                        <option
+                          key={
+                            theme.id
+                          }
+                          value={
+                            theme.latest_insight_id ??
+                            ""
+                          }
+                        >
+                          {
+                            theme.title
+                          }
+                        </option>
+                      )
+                    )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">
+                  Expected outcome
+                </label>
+
+                <textarea
+                  value={
+                    experimentForm.expectedOutcome
+                  }
+                  onChange={(event) =>
+                    setExperimentForm(
+                      (current) => ({
+                        ...current,
+                        expectedOutcome:
+                          event.target.value,
+                      })
+                    )
+                  }
+                  rows={2}
+                  placeholder="What result would make the experiment worth continuing?"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void proposeExperiment()
+                }
+                disabled={
+                  proposingExperiment ||
+                  !experimentForm.title.trim() ||
+                  !experimentForm.hypothesis.trim() ||
+                  !experimentForm.proposedAction.trim() ||
+                  !experimentForm.targetMetricKey.trim()
+                }
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {proposingExperiment ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+
+                {proposingExperiment
+                  ? "Creating Proposal..."
+                  : "Propose for Founder Approval"}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold text-[#1C1C1E]">
+                  Experiment Register
+                </h4>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Approved means approved for a later controlled
+                  step. It does not mean running.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {experiments.length ===
+              0 ? (
+                <div className="rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
+                  <FlaskConical className="mx-auto h-6 w-6 text-gray-300" />
+
+                  <p className="mt-2 text-sm font-medium text-gray-600">
+                    No growth experiments yet
+                  </p>
+
+                  <p className="mt-1 text-xs text-gray-400">
+                    Lola has not proposed a controlled experiment.
+                  </p>
+                </div>
+              ) : (
+                experiments
+                  .slice(
+                    0,
+                    12
+                  )
+                  .map(
+                    (
+                      experiment
+                    ) => {
+                      const approval =
+                        approvalByExperiment.get(
+                          experiment.id
+                        );
+
+                      return (
+                        <div
+                          key={
+                            experiment.id
+                          }
+                          className="rounded-xl border border-gray-100 p-4"
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-[#1C1C1E]">
+                                {
+                                  experiment.title
+                                }
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-gray-500">
+                                {
+                                  experiment.hypothesis
+                                }
+                              </p>
+                            </div>
+
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${badgeClasses(
+                                  experiment.status
+                                )}`}
+                              >
+                                Experiment:{" "}
+                                {humanize(
+                                  experiment.status
+                                )}
+                              </span>
+
+                              {approval ? (
+                                <span
+                                  className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${badgeClasses(
+                                    approval.status
+                                  )}`}
+                                >
+                                  Approval:{" "}
+                                  {humanize(
+                                    approval.status
+                                  )}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+                              Proposed Action
+                            </p>
+
+                            <p className="mt-1 text-xs leading-5 text-gray-600">
+                              {
+                                experiment.proposed_action
+                              }
+                            </p>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.1em] text-gray-400">
+                                KPI
+                              </p>
+
+                              <p className="mt-1 text-xs font-medium text-gray-600">
+                                {humanize(
+                                  experiment.target_metric_key
+                                )}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.1em] text-gray-400">
+                                Baseline
+                              </p>
+
+                              <p className="mt-1 text-xs font-medium text-gray-600">
+                                {experiment.baseline_value ??
+                                  "—"}{" "}
+                                {experiment.unit ??
+                                  ""}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.1em] text-gray-400">
+                                Target
+                              </p>
+
+                              <p className="mt-1 text-xs font-medium text-gray-600">
+                                {experiment.target_value ??
+                                  "—"}{" "}
+                                {experiment.unit ??
+                                  ""}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.1em] text-gray-400">
+                                Evaluation End
+                              </p>
+
+                              <p className="mt-1 text-xs font-medium text-gray-600">
+                                {formatDate(
+                                  experiment.ends_at
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 border-t border-gray-100 pt-3 text-[10px] text-gray-400">
+                            Created{" "}
+                            {formatDate(
+                              experiment.created_at
+                            )}
+
+                            {approval?.reviewed_at
+                              ? ` · Reviewed ${formatDate(
+                                  approval.reviewed_at
+                                )}`
+                              : ""}
+                          </div>
+                        </div>
+                      );
+                    }
+                  )
+              )}
+            </div>
           </div>
         </div>
       </div>

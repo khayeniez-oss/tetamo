@@ -70,6 +70,211 @@ function isUuid(
   );
 }
 
+async function reconcileLolaGrowthExperiment(
+  approval: AiApprovalRow,
+  decision:
+    | "approved"
+    | "rejected",
+  reviewNotes: string
+) {
+  if (
+    approval.action_type !==
+      "growth_experiment"
+  ) {
+    return {
+      applicable: false,
+      updated: false,
+    };
+  }
+
+  const payload =
+    approval.requested_payload &&
+    typeof approval.requested_payload ===
+      "object" &&
+    !Array.isArray(
+      approval.requested_payload
+    )
+      ? approval.requested_payload
+      : {};
+
+  const experimentId =
+    cleanString(
+      payload.experiment_id
+    );
+
+  if (
+    !experimentId ||
+    !isUuid(
+      experimentId
+    )
+  ) {
+    throw new Error(
+      "Lola growth approval is missing a valid experiment ID."
+    );
+  }
+
+  const {
+    data:
+      experimentData,
+    error:
+      experimentError,
+  } =
+    await aiTeamSupabaseAdmin
+      .from(
+        "ai_experiments"
+      )
+      .select(
+        "id, created_by_agent_id, status, metadata"
+      )
+      .eq(
+        "id",
+        experimentId
+      )
+      .maybeSingle();
+
+  if (experimentError) {
+    throw experimentError;
+  }
+
+  const experiment =
+    experimentData as unknown as {
+      id: string;
+      created_by_agent_id:
+        string | null;
+      status: string;
+      metadata:
+        Record<string, unknown> | null;
+    } | null;
+
+  if (!experiment) {
+    throw new Error(
+      "Linked Lola growth experiment was not found."
+    );
+  }
+
+  if (
+    approval.requested_by_agent_id &&
+    experiment.created_by_agent_id !==
+      approval.requested_by_agent_id
+  ) {
+    throw new Error(
+      "Growth experiment no longer belongs to the requesting AI agent."
+    );
+  }
+
+  const nextStatus =
+    decision ===
+      "approved"
+      ? "approved"
+      : "cancelled";
+
+  if (
+    experiment.status ===
+      nextStatus
+  ) {
+    return {
+      applicable: true,
+      updated: false,
+      experimentId,
+      status:
+        nextStatus,
+    };
+  }
+
+  if (
+    experiment.status !==
+      "proposed"
+  ) {
+    throw new Error(
+      `Lola growth experiment cannot move from ${experiment.status} to ${nextStatus}.`
+    );
+  }
+
+  const metadata =
+    experiment.metadata &&
+    typeof experiment.metadata ===
+      "object" &&
+    !Array.isArray(
+      experiment.metadata
+    )
+      ? experiment.metadata
+      : {};
+
+  const reviewedAt =
+    new Date()
+      .toISOString();
+
+  const {
+    data:
+      updatedExperiment,
+    error:
+      updateError,
+  } =
+    await aiTeamSupabaseAdmin
+      .from(
+        "ai_experiments"
+      )
+      .update({
+        status:
+          nextStatus,
+
+        metadata: {
+          ...metadata,
+
+          founder_approval_id:
+            approval.id,
+
+          founder_decision:
+            decision,
+
+          founder_reviewed_at:
+            reviewedAt,
+
+          founder_review_notes:
+            reviewNotes ||
+            null,
+
+          /*
+           * Approval records permission to proceed to a
+           * later controlled execution step only.
+           * It never starts the experiment itself.
+           */
+          execution_authorized:
+            false,
+        },
+      })
+      .eq(
+        "id",
+        experimentId
+      )
+      .eq(
+        "status",
+        "proposed"
+      )
+      .select(
+        "id, status"
+      )
+      .maybeSingle();
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  if (!updatedExperiment) {
+    throw new Error(
+      "Lola growth experiment changed before approval reconciliation could be saved."
+    );
+  }
+
+  return {
+    applicable: true,
+    updated: true,
+    experimentId,
+    status:
+      nextStatus,
+  };
+}
+
 async function reopenRejectedRupertBlogTask(
   approval: AiApprovalRow,
   reviewNotes: string
@@ -664,6 +869,40 @@ export async function POST(
       }
     }
 
+    let growthExperiment = null;
+
+    try {
+      growthExperiment =
+        await reconcileLolaGrowthExperiment(
+          currentApproval,
+          decision,
+          currentApproval.review_notes ||
+            reviewNotes
+        );
+    } catch (error) {
+      console.error(
+        "Lola growth experiment approval reconciliation failed:",
+        error
+      );
+
+      return Response.json(
+        {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to reconcile Lola growth experiment approval.",
+          approval:
+            currentApproval,
+          decisionSaved:
+            true,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
     return Response.json({
       ok: true,
       approval:
@@ -671,6 +910,7 @@ export async function POST(
       alreadyReviewed:
         true,
       redraft,
+      growthExperiment,
     });
   }
 
@@ -896,6 +1136,39 @@ export async function POST(
     }
   }
 
+  let growthExperiment = null;
+
+  try {
+    growthExperiment =
+      await reconcileLolaGrowthExperiment(
+        savedApproval,
+        decision,
+        reviewNotes
+      );
+  } catch (error) {
+    console.error(
+      "Lola growth experiment approval reconciliation failed:",
+      error
+    );
+
+    return Response.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "AI approval was saved, but the Lola growth experiment could not be reconciled.",
+        approval:
+          savedApproval,
+        decisionSaved:
+          true,
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+
   return Response.json({
     ok: true,
     approval:
@@ -903,5 +1176,6 @@ export async function POST(
     alreadyReviewed:
       false,
     redraft,
+    growthExperiment,
   });
 }
