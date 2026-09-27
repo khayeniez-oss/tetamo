@@ -7,6 +7,10 @@ import {
   type RupertWeeklyTopic,
 } from "@/lib/ai-team/agents/rupert-weekly";
 
+import {
+  recordSystemHeartbeat,
+} from "@/lib/ai-team/agents/randolph-system-watchdog";
+
 export const runtime =
   "nodejs";
 
@@ -18,6 +22,26 @@ export const maxDuration =
 
 const WITA_OFFSET =
   8 * 60 * 60 * 1000;
+
+async function recordRupertCronHeartbeat() {
+  try {
+    await recordSystemHeartbeat({
+      checkKey:
+        "cron_rupert",
+
+      displayName:
+        "Rupert Daily Worker",
+
+      message:
+        "Rupert daily scheduler completed successfully.",
+    });
+  } catch (error) {
+    console.error(
+      "Unable to record Rupert cron heartbeat:",
+      error
+    );
+  }
+}
 
 function cleanString(
   value: unknown
@@ -2125,6 +2149,8 @@ async function run(
       rupert.status !==
         "active"
     ) {
+      await recordRupertCronHeartbeat();
+
       return Response.json({
         ok:
           true,
@@ -2203,6 +2229,8 @@ async function run(
             rupert.id,
         });
 
+      await recordRupertCronHeartbeat();
+
       return Response.json({
         ok:
           true,
@@ -2256,6 +2284,8 @@ async function run(
       mode ===
       "plan_only"
     ) {
+      await recordRupertCronHeartbeat();
+
       return Response.json({
         ok: true,
 
@@ -2344,6 +2374,8 @@ async function run(
               null,
           })
         : null;
+
+    await recordRupertCronHeartbeat();
 
     return Response.json({
       ok:

@@ -3,11 +3,7 @@ import {
 } from "@/lib/ai-team/core/admin-auth";
 
 import {
-  runUncleSamFinanceReview,
-} from "@/lib/ai-team/agents/uncle-sam-finance-review";
-
-import {
-  recordSystemHeartbeat,
+  runRandolphSystemWatchdog,
 } from "@/lib/ai-team/agents/randolph-system-watchdog";
 
 export const runtime =
@@ -32,46 +28,39 @@ export async function GET(
   }
 
   try {
+    const baseUrl =
+      new URL(
+        req.url
+      ).origin;
+
     const result =
-      await runUncleSamFinanceReview();
-
-    try {
-      await recordSystemHeartbeat({
-        checkKey:
-          "cron_uncle_sam",
-
-        displayName:
-          "Uncle Sam Daily Worker",
-
-        message:
-          "Uncle Sam daily finance worker completed successfully.",
+      await runRandolphSystemWatchdog({
+        baseUrl,
       });
-    } catch (heartbeatError) {
-      console.error(
-        "Unable to record Uncle Sam cron heartbeat:",
-        heartbeatError
-      );
-    }
 
     return Response.json({
       ok: true,
+
       scheduler:
-        "uncle_sam_finance_review",
+        "randolph_system_watchdog",
+
       result,
     });
   } catch (error) {
     console.error(
-      "Uncle Sam finance cron failed:",
+      "Randolph system watchdog cron failed:",
       error
     );
 
     return Response.json(
       {
         ok: false,
+
         error:
-          error instanceof Error
+          error instanceof
+            Error
             ? error.message
-            : "Uncle Sam finance cron failed.",
+            : "Randolph system watchdog cron failed.",
       },
       {
         status: 500,

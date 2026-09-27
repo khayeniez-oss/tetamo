@@ -113,6 +113,7 @@ export async function GET(
       incidentsResult,
       tasksResult,
       activityResult,
+      healthResult,
     ] =
       await Promise.all([
         aiTeamSupabaseAdmin
@@ -226,6 +227,40 @@ export async function GET(
           .limit(
             100
           ),
+
+        aiTeamSupabaseAdmin
+          .from(
+            "ai_system_health"
+          )
+          .select(
+            [
+              "check_key",
+              "display_name",
+              "category",
+              "check_type",
+              "status",
+              "severity_on_failure",
+              "message",
+              "latency_ms",
+              "consecutive_failures",
+              "last_checked_at",
+              "last_success_at",
+              "last_failure_at",
+              "failure_started_at",
+              "last_recovered_at",
+              "evidence",
+              "metadata",
+              "created_at",
+              "updated_at",
+            ].join(",")
+          )
+          .order(
+            "display_name",
+            {
+              ascending:
+                true,
+            }
+          ),
       ]);
 
     if (
@@ -246,6 +281,12 @@ export async function GET(
       throw activityResult.error;
     }
 
+    if (
+      healthResult.error
+    ) {
+      throw healthResult.error;
+    }
+
     return Response.json({
       ok: true,
 
@@ -261,6 +302,10 @@ export async function GET(
 
       activity:
         activityResult.data ??
+        [],
+
+      health:
+        healthResult.data ??
         [],
 
       generatedAt:

@@ -106,12 +106,50 @@ type RandolphRow = {
   enabled: boolean;
 };
 
+type SystemHealthRow = {
+  check_key: string;
+  display_name: string;
+  category: string;
+  check_type:
+    | "live"
+    | "configuration"
+    | "heartbeat";
+  status:
+    | "healthy"
+    | "degraded"
+    | "down"
+    | "unknown";
+  severity_on_failure: string;
+  message:
+    string | null;
+  latency_ms:
+    number | null;
+  consecutive_failures: number;
+  last_checked_at:
+    string | null;
+  last_success_at:
+    string | null;
+  last_failure_at:
+    string | null;
+  failure_started_at:
+    string | null;
+  last_recovered_at:
+    string | null;
+  evidence:
+    Record<string, unknown> | null;
+  metadata:
+    Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type DeskResponse = {
   ok: boolean;
   randolph?: RandolphRow;
   incidents?: IncidentRow[];
   tasks?: TaskRow[];
   activity?: ActivityRow[];
+  health?: SystemHealthRow[];
   error?: string;
 };
 
@@ -240,6 +278,43 @@ function statusClasses(
 
     case "blocked":
       return "border-red-200 bg-red-50 text-red-700";
+
+    default:
+      return "border-gray-200 bg-gray-50 text-gray-600";
+  }
+}
+
+function healthStatusClasses(
+  value: string
+) {
+  switch (
+    value
+  ) {
+    case "healthy":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+    case "degraded":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+
+    case "down":
+      return "border-red-200 bg-red-50 text-red-700";
+
+    default:
+      return "border-gray-200 bg-gray-50 text-gray-500";
+  }
+}
+
+function checkTypeClasses(
+  value: string
+) {
+  switch (
+    value
+  ) {
+    case "live":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+
+    case "heartbeat":
+      return "border-violet-200 bg-violet-50 text-violet-700";
 
     default:
       return "border-gray-200 bg-gray-50 text-gray-600";
@@ -376,6 +451,14 @@ export function RandolphWatchdogDesk() {
     >([]);
 
   const [
+    systemHealth,
+    setSystemHealth,
+  ] =
+    useState<
+      SystemHealthRow[]
+    >([]);
+
+  const [
     form,
     setForm,
   ] =
@@ -404,6 +487,12 @@ export function RandolphWatchdogDesk() {
   const [
     saving,
     setSaving,
+  ] =
+    useState(false);
+
+  const [
+    runningWatchdog,
+    setRunningWatchdog,
   ] =
     useState(false);
 
@@ -507,6 +596,11 @@ export function RandolphWatchdogDesk() {
             payload.activity ??
               []
           );
+
+          setSystemHealth(
+            payload.health ??
+              []
+          );
         } catch (
           loadError
         ) {
@@ -604,6 +698,93 @@ export function RandolphWatchdogDesk() {
         tasks,
       ]
     );
+
+  async function runHealthCheck() {
+    try {
+      setRunningWatchdog(
+        true
+      );
+
+      setError("");
+      setNotice("");
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          "/api/admin/ai-team/randolph/watchdog",
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () =>
+              null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !==
+          true
+      ) {
+        throw new Error(
+          cleanText(
+            payload
+              ?.error
+          ) ||
+            "Unable to run Randolph health checks."
+        );
+      }
+
+      const result =
+        payload.result;
+
+      setNotice(
+        `Health check complete: ${Number(
+          result?.healthy ||
+            0
+        )} healthy, ${Number(
+          result?.degraded ||
+            0
+        )} degraded, ${Number(
+          result?.down ||
+            0
+        )} down, ${Number(
+          result?.unknown ||
+            0
+        )} unknown.`
+      );
+
+      await loadDesk(
+        true
+      );
+    } catch (
+      runError
+    ) {
+      setError(
+        runError instanceof
+          Error
+          ? runError.message
+          : "Unable to run Randolph health checks."
+      );
+    } finally {
+      setRunningWatchdog(
+        false
+      );
+    }
+  }
 
   async function createIncident() {
     try {
@@ -888,9 +1069,9 @@ export function RandolphWatchdogDesk() {
             </div>
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-              Technical incident register, system investigations,
-              assigned watchdog work and evidence-based audit
-              history.
+              Automated production health checks, technical incident
+              investigations, assigned watchdog work and evidence-based
+              audit history.
             </p>
 
             {!randolph
@@ -929,6 +1110,25 @@ export function RandolphWatchdogDesk() {
 
             <button
               type="button"
+              disabled={
+                runningWatchdog
+              }
+              onClick={() =>
+                void runHealthCheck()
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {runningWatchdog ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldAlert className="h-4 w-4" />
+              )}
+
+              Run Health Check
+            </button>
+
+            <button
+              type="button"
               onClick={() =>
                 setShowForm(
                   (
@@ -957,6 +1157,178 @@ export function RandolphWatchdogDesk() {
           {notice}
         </div>
       ) : null}
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+              Production Watchdog
+            </p>
+
+            <h3 className="mt-2 text-base font-semibold text-[#1C1C1E]">
+              System Health
+            </h3>
+
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-500">
+              Live means Randolph contacted the dependency.
+              Configuration means local credentials or verification
+              material were validated without claiming a live provider
+              ping. Heartbeat means a scheduled Tetamo worker reported
+              successful execution.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+              {
+                systemHealth.filter(
+                  (item) =>
+                    item.status ===
+                    "healthy"
+                ).length
+              } Healthy
+            </Badge>
+
+            <Badge className="border-red-200 bg-red-50 text-red-700">
+              {
+                systemHealth.filter(
+                  (item) =>
+                    item.status ===
+                    "down"
+                ).length
+              } Down
+            </Badge>
+          </div>
+        </div>
+
+        {systemHealth.length ===
+        0 ? (
+          <div className="mt-4 rounded-xl bg-gray-50 px-4 py-5 text-sm text-gray-500">
+            No automated system-health result has been recorded yet.
+            Use Run Health Check for the controlled validation after
+            deployment.
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {systemHealth.map(
+              (
+                item
+              ) => (
+                <div
+                  key={
+                    item.check_key
+                  }
+                  className="rounded-xl border border-gray-100 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {
+                          item.display_name
+                        }
+                      </p>
+
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        {
+                          humanize(
+                            item.category
+                          )
+                        }
+                      </p>
+                    </div>
+
+                    <Badge
+                      className={
+                        healthStatusClasses(
+                          item.status
+                        )
+                      }
+                    >
+                      {
+                        humanize(
+                          item.status
+                        )
+                      }
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge
+                      className={
+                        checkTypeClasses(
+                          item.check_type
+                        )
+                      }
+                    >
+                      {
+                        humanize(
+                          item.check_type
+                        )
+                      }
+                    </Badge>
+
+                    {item
+                      .consecutive_failures >
+                    0 ? (
+                      <Badge className="border-amber-200 bg-amber-50 text-amber-700">
+                        {
+                          item
+                            .consecutive_failures
+                        } failure{
+                          item
+                            .consecutive_failures ===
+                          1
+                            ? ""
+                            : "s"
+                        }
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  <p className="mt-3 text-xs leading-5 text-gray-500">
+                    {
+                      item.message ||
+                      "No health-check message."
+                    }
+                  </p>
+
+                  <div className="mt-3 border-t border-gray-100 pt-3 text-[11px] leading-5 text-gray-400">
+                    <div>
+                      Checked:{" "}
+                      {
+                        formatDate(
+                          item.last_checked_at
+                        )
+                      }
+                    </div>
+
+                    {item.latency_ms !==
+                    null ? (
+                      <div>
+                        Latency:{" "}
+                        {
+                          item.latency_ms
+                        } ms
+                      </div>
+                    ) : null}
+
+                    {item.last_recovered_at ? (
+                      <div>
+                        Last recovery:{" "}
+                        {
+                          formatDate(
+                            item.last_recovered_at
+                          )
+                        }
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </div>
 
       {showForm ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
