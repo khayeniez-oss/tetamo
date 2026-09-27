@@ -115,6 +115,54 @@ type ActivityRow = {
   created_at: string;
 };
 
+type SalesReviewResponse = {
+  ok: boolean;
+  error?: string;
+
+  result?: {
+    generatedAt: string;
+
+    snapshot: {
+      totalConversations: number;
+      activeAi: number;
+      needsAdmin: number;
+      followupWaiting: number;
+      followupDue: number;
+      followupOverdueBeyond15m: number;
+      packageIntent: number;
+      openCommercialPipeline: number;
+      paymentStarted: number;
+      paymentFailed: number;
+      closedWon: number;
+      closedLost: number;
+      verifiedSalesThisMonth: number;
+    };
+
+    report: {
+      created: boolean;
+      reportId: string | null;
+      reportKey: string;
+    };
+
+    insight: {
+      created: boolean;
+      insightId: string | null;
+      insightKey: string;
+    };
+
+    tasks: {
+      created: number;
+      existing: number;
+    };
+
+    adminHandoff: {
+      created: boolean;
+      existing: boolean;
+      handoffId: string | null;
+    };
+  };
+};
+
 type MonaResponse = {
   ok: boolean;
   error?: string;
@@ -464,6 +512,18 @@ export function MonaSalesDesk() {
   ] =
     useState("");
 
+  const [
+    reviewing,
+    setReviewing,
+  ] =
+    useState(false);
+
+  const [
+    reviewNotice,
+    setReviewNotice,
+  ] =
+    useState("");
+
   const loadWorkspace =
     useCallback(
       async (
@@ -553,6 +613,85 @@ export function MonaSalesDesk() {
       loadWorkspace,
     ]
   );
+
+  const runSalesReview =
+    useCallback(
+      async () => {
+        try {
+          setReviewing(true);
+          setError("");
+          setReviewNotice("");
+
+          const token =
+            await getAccessToken();
+
+          const response =
+            await fetch(
+              "/api/admin/ai-team/mona/sales-review",
+              {
+                method: "POST",
+
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+
+                cache: "no-store",
+              }
+            );
+
+          const payload =
+            (await response
+              .json()
+              .catch(
+                () => null
+              )) as SalesReviewResponse | null;
+
+          if (
+            !response.ok ||
+            !payload ||
+            payload.ok !== true ||
+            !payload.result
+          ) {
+            throw new Error(
+              payload?.error ||
+                "Unable to run Mona Sales Review."
+            );
+          }
+
+          const result =
+            payload.result;
+
+          setReviewNotice(
+            [
+              "Sales Review completed.",
+              `Open pipeline: ${result.snapshot.openCommercialPipeline}.`,
+              `Needs Admin: ${result.snapshot.needsAdmin}.`,
+              `Overdue >15m: ${result.snapshot.followupOverdueBeyond15m}.`,
+              `Tasks created: ${result.tasks.created}.`,
+              result.adminHandoff.created
+                ? "Jake handoff created."
+                : result.adminHandoff.existing
+                  ? "Jake handoff already active."
+                  : "No Jake handoff required.",
+            ].join(" ")
+          );
+
+          await loadWorkspace(true);
+        } catch (reviewError) {
+          setError(
+            reviewError instanceof Error
+              ? reviewError.message
+              : "Unable to run Mona Sales Review."
+          );
+        } finally {
+          setReviewing(false);
+        }
+      },
+      [
+        loadWorkspace,
+      ]
+    );
 
   const sales =
     data?.salesOperations;
@@ -704,33 +843,64 @@ export function MonaSalesDesk() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            void loadWorkspace(
-              true
-            )
-          }
-          disabled={
-            refreshing
-          }
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void runSalesReview()
+            }
+            disabled={
+              reviewing ||
               refreshing
-                ? "animate-spin"
-                : ""
-            }`}
-          />
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1C1C1E] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {reviewing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bot className="h-4 w-4" />
+            )}
 
-          Refresh
-        </button>
+            {reviewing
+              ? "Reviewing..."
+              : "Run Sales Review"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              void loadWorkspace(
+                true
+              )
+            }
+            disabled={
+              refreshing ||
+              reviewing
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-[#1C1C1E] shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${
+                refreshing
+                  ? "animate-spin"
+                  : ""
+              }`}
+            />
+
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
+        </div>
+      ) : null}
+
+      {reviewNotice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
+          {reviewNotice}
         </div>
       ) : null}
 
