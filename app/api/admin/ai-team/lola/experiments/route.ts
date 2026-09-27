@@ -730,3 +730,951 @@ export async function POST(
     );
   }
 }
+
+export async function PATCH(
+  req: Request
+) {
+  const auth =
+    await requireTetamoAdmin(
+      req
+    );
+
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  try {
+    let body: {
+      experimentId?: unknown;
+      action?: unknown;
+      resultValue?: unknown;
+      outcome?: unknown;
+      resultSummary?: unknown;
+    };
+
+    try {
+      body =
+        await req.json();
+    } catch {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "JSON request body is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const experimentId =
+      cleanString(
+        body.experimentId
+      );
+
+    const action =
+      cleanString(
+        body.action
+      );
+
+    if (
+      !experimentId ||
+      !isUuid(
+        experimentId
+      )
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "A valid experiment ID is required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      ![
+        "start",
+        "pause",
+        "resume",
+        "complete",
+      ].includes(
+        action
+      )
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Invalid experiment lifecycle action.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const lola =
+      await loadLola();
+
+    const {
+      data:
+        existingRaw,
+      error:
+        existingError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_experiments"
+        )
+        .select(
+          [
+            "id",
+            "created_by_agent_id",
+            "title",
+            "status",
+            "target_metric_key",
+            "baseline_value",
+            "target_value",
+            "result_value",
+            "unit",
+            "outcome",
+            "started_at",
+            "ends_at",
+            "completed_at",
+            "result_summary",
+            "metadata",
+            "created_at",
+            "updated_at",
+          ].join(",")
+        )
+        .eq(
+          "id",
+          experimentId
+        )
+        .eq(
+          "created_by_agent_id",
+          lola.id
+        )
+        .maybeSingle();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    if (!existingRaw) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Lola growth experiment was not found.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const existing =
+      existingRaw as unknown as {
+        id: string;
+        created_by_agent_id:
+          string | null;
+        title: string;
+        status: string;
+        target_metric_key: string;
+        baseline_value:
+          number | null;
+        target_value:
+          number | null;
+        result_value:
+          number | null;
+        unit:
+          string | null;
+        outcome:
+          string | null;
+        started_at:
+          string | null;
+        ends_at:
+          string | null;
+        completed_at:
+          string | null;
+        result_summary:
+          string | null;
+        metadata:
+          Record<string, unknown> | null;
+        created_at: string;
+        updated_at: string;
+      };
+
+    const {
+      data:
+        approvalRows,
+      error:
+        approvalLookupError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_approvals"
+        )
+        .select(
+          [
+            "id",
+            "status",
+            "execution_status",
+            "requested_payload",
+            "reviewed_at",
+          ].join(",")
+        )
+        .eq(
+          "requested_by_agent_id",
+          lola.id
+        )
+        .eq(
+          "action_type",
+          "growth_experiment"
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        )
+        .limit(100);
+
+    if (
+      approvalLookupError
+    ) {
+      throw approvalLookupError;
+    }
+
+    const approval =
+      (
+        approvalRows ??
+        []
+      ).find(
+        (row) => {
+          const rawPayload =
+            (
+              row as {
+                requested_payload?:
+                  unknown;
+              }
+            ).requested_payload;
+
+          if (
+            !rawPayload ||
+            typeof rawPayload !==
+              "object" ||
+            Array.isArray(
+              rawPayload
+            )
+          ) {
+            return false;
+          }
+
+          return (
+            cleanString(
+              (
+                rawPayload as
+                  Record<
+                    string,
+                    unknown
+                  >
+              ).experiment_id
+            ) ===
+            experimentId
+          );
+        }
+      ) as
+        | {
+            id: string;
+            status: string;
+            execution_status:
+              string;
+            requested_payload:
+              Record<
+                string,
+                unknown
+              > | null;
+            reviewed_at:
+              string | null;
+          }
+        | undefined;
+
+    if (!approval) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Founder approval record for this experiment was not found.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    if (
+      approval.status !==
+      "approved"
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Founder approval is required before the experiment lifecycle can start.",
+        },
+        {
+          status: 403,
+        }
+      );
+    }
+
+    const allowedFrom:
+      Record<
+        string,
+        string[]
+      > = {
+        start: [
+          "approved",
+        ],
+
+        pause: [
+          "running",
+        ],
+
+        resume: [
+          "paused",
+        ],
+
+        complete: [
+          "running",
+          "paused",
+        ],
+      };
+
+    if (
+      !allowedFrom[
+        action
+      ].includes(
+        existing.status
+      )
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            `Experiment cannot ${action} from status "${existing.status}".`,
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    const metadata =
+      existing.metadata &&
+      typeof existing.metadata ===
+        "object" &&
+      !Array.isArray(
+        existing.metadata
+      )
+        ? {
+            ...existing.metadata,
+          }
+        : {};
+
+    const now =
+      new Date();
+
+    const nowIso =
+      now.toISOString();
+
+    const updatePayload:
+      Record<
+        string,
+        unknown
+      > = {};
+
+    let nextStatus =
+      existing.status;
+
+    let activityAction =
+      "growth_experiment_status_updated";
+
+    if (
+      action ===
+      "start"
+    ) {
+      const evaluationDays =
+        Number(
+          metadata.evaluation_days
+        );
+
+      if (
+        ![
+          7,
+          14,
+          30,
+        ].includes(
+          evaluationDays
+        )
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "Experiment is missing a valid evaluation period.",
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+
+      nextStatus =
+        "running";
+
+      updatePayload.status =
+        nextStatus;
+
+      updatePayload.started_at =
+        nowIso;
+
+      updatePayload.ends_at =
+        new Date(
+          now.getTime() +
+            evaluationDays *
+              24 *
+              60 *
+              60 *
+              1000
+        ).toISOString();
+
+      updatePayload.metadata =
+        {
+          ...metadata,
+
+          tracking_started_at:
+            nowIso,
+
+          tracking_started_by_user_id:
+            auth.admin.userId,
+
+          tracking_status:
+            "running",
+
+          /*
+           * Running means the measurement lifecycle is open.
+           * This route does NOT execute an external growth
+           * action.
+           */
+          external_action_authorized:
+            false,
+        };
+
+      activityAction =
+        "growth_experiment_tracking_started";
+    }
+
+    if (
+      action ===
+      "pause"
+    ) {
+      nextStatus =
+        "paused";
+
+      updatePayload.status =
+        nextStatus;
+
+      updatePayload.metadata =
+        {
+          ...metadata,
+
+          tracking_status:
+            "paused",
+
+          tracking_paused_at:
+            nowIso,
+
+          tracking_paused_by_user_id:
+            auth.admin.userId,
+
+          external_action_authorized:
+            false,
+        };
+
+      activityAction =
+        "growth_experiment_tracking_paused";
+    }
+
+    if (
+      action ===
+      "resume"
+    ) {
+      nextStatus =
+        "running";
+
+      let nextEndsAt =
+        existing.ends_at;
+
+      const pausedAt =
+        cleanString(
+          metadata.tracking_paused_at
+        );
+
+      if (
+        pausedAt &&
+        existing.ends_at
+      ) {
+        const pausedAtMs =
+          new Date(
+            pausedAt
+          ).getTime();
+
+        const previousEndMs =
+          new Date(
+            existing.ends_at
+          ).getTime();
+
+        if (
+          Number.isFinite(
+            pausedAtMs
+          ) &&
+          Number.isFinite(
+            previousEndMs
+          )
+        ) {
+          const pausedDuration =
+            Math.max(
+              0,
+              now.getTime() -
+                pausedAtMs
+            );
+
+          nextEndsAt =
+            new Date(
+              previousEndMs +
+                pausedDuration
+            ).toISOString();
+        }
+      }
+
+      updatePayload.status =
+        nextStatus;
+
+      updatePayload.ends_at =
+        nextEndsAt;
+
+      updatePayload.metadata =
+        {
+          ...metadata,
+
+          tracking_status:
+            "running",
+
+          tracking_paused_at:
+            null,
+
+          tracking_resumed_at:
+            nowIso,
+
+          tracking_resumed_by_user_id:
+            auth.admin.userId,
+
+          external_action_authorized:
+            false,
+        };
+
+      activityAction =
+        "growth_experiment_tracking_resumed";
+    }
+
+    if (
+      action ===
+      "complete"
+    ) {
+      const resultValue =
+        cleanNumber(
+          body.resultValue
+        );
+
+      const outcome =
+        cleanString(
+          body.outcome
+        );
+
+      const resultSummary =
+        cleanString(
+          body.resultSummary
+        );
+
+      if (
+        resultValue ===
+        null
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "A numeric result value is required to complete the experiment.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        ![
+          "keep",
+          "modify",
+          "stop",
+          "inconclusive",
+        ].includes(
+          outcome
+        )
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "A valid experiment outcome is required.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        !resultSummary
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "A result summary is required to complete the experiment.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        resultSummary.length >
+        2000
+      ) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              "Experiment result summary is too long.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      nextStatus =
+        "completed";
+
+      updatePayload.status =
+        nextStatus;
+
+      updatePayload.result_value =
+        resultValue;
+
+      updatePayload.outcome =
+        outcome;
+
+      updatePayload.result_summary =
+        resultSummary;
+
+      updatePayload.completed_at =
+        nowIso;
+
+      updatePayload.metadata =
+        {
+          ...metadata,
+
+          tracking_status:
+            "completed",
+
+          tracking_completed_at:
+            nowIso,
+
+          tracking_completed_by_user_id:
+            auth.admin.userId,
+
+          external_action_authorized:
+            false,
+        };
+
+      activityAction =
+        "growth_experiment_completed";
+    }
+
+    const {
+      data:
+        updatedRaw,
+      error:
+        updateError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_experiments"
+        )
+        .update(
+          updatePayload
+        )
+        .eq(
+          "id",
+          experimentId
+        )
+        .eq(
+          "created_by_agent_id",
+          lola.id
+        )
+        .eq(
+          "status",
+          existing.status
+        )
+        .select(
+          [
+            "id",
+            "title",
+            "hypothesis",
+            "proposed_action",
+            "target_metric_key",
+            "baseline_value",
+            "target_value",
+            "result_value",
+            "unit",
+            "status",
+            "outcome",
+            "started_at",
+            "ends_at",
+            "completed_at",
+            "result_summary",
+            "metadata",
+            "created_at",
+            "updated_at",
+          ].join(",")
+        )
+        .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (!updatedRaw) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Experiment state changed before the lifecycle update could be saved.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    const approvalUpdate:
+      Record<
+        string,
+        unknown
+      > = {};
+
+    if (
+      action ===
+      "start"
+    ) {
+      approvalUpdate.execution_status =
+        "running";
+    }
+
+    if (
+      action ===
+      "complete"
+    ) {
+      approvalUpdate.execution_status =
+        "completed";
+
+      approvalUpdate.executed_at =
+        nowIso;
+
+      approvalUpdate.execution_result =
+        {
+          experiment_id:
+            experimentId,
+
+          final_status:
+            "completed",
+
+          result_value:
+            cleanNumber(
+              body.resultValue
+            ),
+
+          outcome:
+            cleanString(
+              body.outcome
+            ),
+
+          result_summary:
+            cleanString(
+              body.resultSummary
+            ),
+
+          safety_note:
+            "Completion records the experiment measurement result only.",
+        };
+    }
+
+    if (
+      Object.keys(
+        approvalUpdate
+      ).length >
+      0
+    ) {
+      const {
+        error:
+          approvalUpdateError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from(
+            "ai_approvals"
+          )
+          .update(
+            approvalUpdate
+          )
+          .eq(
+            "id",
+            approval.id
+          )
+          .eq(
+            "status",
+            "approved"
+          );
+
+      if (
+        approvalUpdateError
+      ) {
+        throw approvalUpdateError;
+      }
+    }
+
+    const {
+      error:
+        activityError,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_activity"
+        )
+        .insert({
+          agent_id:
+            lola.id,
+
+          actor_user_id:
+            auth.admin.userId,
+
+          event_type:
+            "growth_experiment",
+
+          action:
+            activityAction,
+
+          entity_type:
+            "ai_experiment",
+
+          entity_id:
+            experimentId,
+
+          severity:
+            "info",
+
+          details: {
+            title:
+              existing.title,
+
+            previous_status:
+              existing.status,
+
+            new_status:
+              nextStatus,
+
+            target_metric_key:
+              existing.target_metric_key,
+
+            approval_id:
+              approval.id,
+
+            founder_controlled:
+              true,
+
+            external_action_authorized:
+              false,
+
+            safety_note:
+              "Lifecycle controls manage experiment tracking only and do not send messages, spend money, publish content, change pricing or execute external growth actions.",
+          },
+        });
+
+    if (
+      activityError
+    ) {
+      console.error(
+        "Lola experiment lifecycle audit failed:",
+        activityError
+      );
+    }
+
+    return Response.json({
+      ok: true,
+
+      experiment:
+        updatedRaw,
+
+      action,
+
+      externalActionExecuted:
+        false,
+
+      message:
+        action ===
+        "complete"
+          ? "Experiment measurement completed. No external action was executed by this lifecycle control."
+          : "Experiment tracking lifecycle updated. No external action was executed by this lifecycle control.",
+    });
+  } catch (error) {
+    console.error(
+      "Lola experiment lifecycle update failed:",
+      error
+    );
+
+    return Response.json(
+      {
+        ok: false,
+
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to update Lola growth experiment lifecycle.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}

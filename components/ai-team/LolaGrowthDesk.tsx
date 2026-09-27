@@ -160,6 +160,17 @@ type ExperimentsResponse = {
     ExperimentApprovalRow[];
 };
 
+type ExperimentCompletionDraft = {
+  resultValue: string;
+  outcome:
+    | ""
+    | "keep"
+    | "modify"
+    | "stop"
+    | "inconclusive";
+  resultSummary: string;
+};
+
 type ExperimentForm = {
   title: string;
   hypothesis: string;
@@ -435,13 +446,22 @@ function badgeClasses(
 
   if (
     normalized ===
+      "running"
+  ) {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (
+    normalized ===
       "watch" ||
     normalized ===
       "pending" ||
     normalized ===
       "in_progress" ||
     normalized ===
-      "observing"
+      "observing" ||
+    normalized ===
+      "paused"
   ) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
@@ -568,6 +588,25 @@ export function LolaGrowthDesk() {
     useState<ExperimentForm>({
       ...EMPTY_EXPERIMENT_FORM,
     });
+
+  const [
+    experimentActionId,
+    setExperimentActionId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    completionDrafts,
+    setCompletionDrafts,
+  ] =
+    useState<
+      Record<
+        string,
+        ExperimentCompletionDraft
+      >
+    >({});
 
   const loadWorkspace =
     useCallback(
@@ -798,6 +837,180 @@ export function LolaGrowthDesk() {
     } finally {
       setProposingExperiment(
         false
+      );
+    }
+  }
+
+  async function updateExperimentLifecycle(
+    experiment:
+      ExperimentRow,
+    action:
+      | "start"
+      | "pause"
+      | "resume"
+      | "complete"
+  ) {
+    try {
+      setExperimentActionId(
+        experiment.id
+      );
+
+      setExperimentNotice(
+        ""
+      );
+
+      setError("");
+
+      const completion =
+        completionDrafts[
+          experiment.id
+        ] ?? {
+          resultValue:
+            "",
+          outcome:
+            "",
+          resultSummary:
+            "",
+        };
+
+      if (
+        action ===
+        "complete" &&
+        (
+          !completion
+            .resultValue
+            .trim() ||
+          !completion
+            .outcome ||
+          !completion
+            .resultSummary
+            .trim()
+        )
+      ) {
+        throw new Error(
+          "Result value, outcome and result summary are required before completing an experiment."
+        );
+      }
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          "/api/admin/ai-team/lola/experiments",
+          {
+            method:
+              "PATCH",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                experimentId:
+                  experiment.id,
+
+                action,
+
+                resultValue:
+                  action ===
+                  "complete"
+                    ? completion
+                        .resultValue
+                    : undefined,
+
+                outcome:
+                  action ===
+                  "complete"
+                    ? completion
+                        .outcome
+                    : undefined,
+
+                resultSummary:
+                  action ===
+                  "complete"
+                    ? completion
+                        .resultSummary
+                    : undefined,
+              }),
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () =>
+              null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !==
+          true
+      ) {
+        throw new Error(
+          payload?.error ||
+            "Unable to update Lola growth experiment."
+        );
+      }
+
+      const notice =
+        action ===
+        "start"
+          ? "Experiment tracking started. No external growth action was executed."
+          : action ===
+              "pause"
+            ? "Experiment tracking paused."
+            : action ===
+                "resume"
+              ? "Experiment tracking resumed."
+              : "Experiment measurement completed and recorded.";
+
+      setExperimentNotice(
+        notice
+      );
+
+      if (
+        action ===
+        "complete"
+      ) {
+        setCompletionDrafts(
+          (current) => {
+            const next = {
+              ...current,
+            };
+
+            delete next[
+              experiment.id
+            ];
+
+            return next;
+          }
+        );
+      }
+
+      await loadWorkspace(
+        true
+      );
+    } catch (
+      lifecycleError
+    ) {
+      setError(
+        lifecycleError instanceof
+          Error
+          ? lifecycleError.message
+          : "Unable to update Lola growth experiment."
+      );
+    } finally {
+      setExperimentActionId(
+        null
       );
     }
   }
@@ -1964,6 +2177,311 @@ export function LolaGrowthDesk() {
                               </p>
                             </div>
                           </div>
+
+                          {experiment.status ===
+                            "approved" &&
+                          approval?.status ===
+                            "approved" ? (
+                            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                              <p className="text-xs leading-5 text-blue-700">
+                                Founder approval is recorded.
+                                Starting here opens the measurement
+                                window only. It does not perform the
+                                proposed external action.
+                              </p>
+
+                              <button
+                                type="button"
+                                disabled={
+                                  experimentActionId ===
+                                  experiment.id
+                                }
+                                onClick={() =>
+                                  void updateExperimentLifecycle(
+                                    experiment,
+                                    "start"
+                                  )
+                                }
+                                className="mt-3 inline-flex items-center justify-center rounded-lg bg-[#1C1C1E] px-3 py-2 text-xs font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {experimentActionId ===
+                                experiment.id
+                                  ? "Starting..."
+                                  : "Start Measurement"}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {experiment.status ===
+                            "running" ||
+                          experiment.status ===
+                            "paused" ? (
+                            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {experiment.status ===
+                                "running" ? (
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      experimentActionId ===
+                                      experiment.id
+                                    }
+                                    onClick={() =>
+                                      void updateExperimentLifecycle(
+                                        experiment,
+                                        "pause"
+                                      )
+                                    }
+                                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Pause
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      experimentActionId ===
+                                      experiment.id
+                                    }
+                                    onClick={() =>
+                                      void updateExperimentLifecycle(
+                                        experiment,
+                                        "resume"
+                                      )
+                                    }
+                                    className="rounded-lg bg-[#1C1C1E] px-3 py-2 text-xs font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Resume
+                                  </button>
+                                )}
+
+                                <span className="text-[10px] text-gray-500">
+                                  Lifecycle controls affect tracking
+                                  only; external actions remain
+                                  unauthorized.
+                                </span>
+                              </div>
+
+                              <div className="mt-4 border-t border-gray-200 pt-4">
+                                <p className="text-xs font-semibold text-[#1C1C1E]">
+                                  Complete Experiment
+                                </p>
+
+                                <p className="mt-1 text-[10px] leading-4 text-gray-500">
+                                  Record the measured result. Do not
+                                  claim causation beyond the evidence.
+                                </p>
+
+                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                  <div>
+                                    <label className="text-[10px] font-medium uppercase tracking-[0.1em] text-gray-400">
+                                      Result Value
+                                    </label>
+
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={
+                                        completionDrafts[
+                                          experiment.id
+                                        ]?.resultValue ??
+                                        ""
+                                      }
+                                      onChange={(event) =>
+                                        setCompletionDrafts(
+                                          (current) => ({
+                                            ...current,
+
+                                            [
+                                              experiment.id
+                                            ]: {
+                                              resultValue:
+                                                event.target
+                                                  .value,
+
+                                              outcome:
+                                                current[
+                                                  experiment.id
+                                                ]?.outcome ??
+                                                "",
+
+                                              resultSummary:
+                                                current[
+                                                  experiment.id
+                                                ]?.resultSummary ??
+                                                "",
+                                            },
+                                          })
+                                        )
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-400"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] font-medium uppercase tracking-[0.1em] text-gray-400">
+                                      Outcome
+                                    </label>
+
+                                    <select
+                                      value={
+                                        completionDrafts[
+                                          experiment.id
+                                        ]?.outcome ??
+                                        ""
+                                      }
+                                      onChange={(event) =>
+                                        setCompletionDrafts(
+                                          (current) => ({
+                                            ...current,
+
+                                            [
+                                              experiment.id
+                                            ]: {
+                                              resultValue:
+                                                current[
+                                                  experiment.id
+                                                ]?.resultValue ??
+                                                "",
+
+                                              outcome:
+                                                event.target
+                                                  .value as
+                                                  ExperimentCompletionDraft[
+                                                    "outcome"
+                                                  ],
+
+                                              resultSummary:
+                                                current[
+                                                  experiment.id
+                                                ]?.resultSummary ??
+                                                "",
+                                            },
+                                          })
+                                        )
+                                      }
+                                      className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-400"
+                                    >
+                                      <option value="">
+                                        Select outcome
+                                      </option>
+
+                                      <option value="keep">
+                                        Keep
+                                      </option>
+
+                                      <option value="modify">
+                                        Modify
+                                      </option>
+
+                                      <option value="stop">
+                                        Stop
+                                      </option>
+
+                                      <option value="inconclusive">
+                                        Inconclusive
+                                      </option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="mt-3">
+                                  <label className="text-[10px] font-medium uppercase tracking-[0.1em] text-gray-400">
+                                    Result Summary
+                                  </label>
+
+                                  <textarea
+                                    rows={3}
+                                    value={
+                                      completionDrafts[
+                                        experiment.id
+                                      ]?.resultSummary ??
+                                      ""
+                                    }
+                                    onChange={(event) =>
+                                      setCompletionDrafts(
+                                        (current) => ({
+                                          ...current,
+
+                                          [
+                                            experiment.id
+                                          ]: {
+                                            resultValue:
+                                              current[
+                                                experiment.id
+                                              ]?.resultValue ??
+                                              "",
+
+                                            outcome:
+                                              current[
+                                                experiment.id
+                                              ]?.outcome ??
+                                              "",
+
+                                            resultSummary:
+                                              event.target
+                                                .value,
+                                          },
+                                        })
+                                      )
+                                    }
+                                    placeholder="State what was measured and what the result supports."
+                                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-gray-400"
+                                  />
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={
+                                    experimentActionId ===
+                                    experiment.id
+                                  }
+                                  onClick={() =>
+                                    void updateExperimentLifecycle(
+                                      experiment,
+                                      "complete"
+                                    )
+                                  }
+                                  className="mt-3 inline-flex items-center justify-center rounded-lg bg-[#1C1C1E] px-3 py-2 text-xs font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {experimentActionId ===
+                                  experiment.id
+                                    ? "Saving..."
+                                    : "Complete Experiment"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {experiment.status ===
+                            "completed" ? (
+                            <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+                              <p className="text-xs font-semibold text-emerald-700">
+                                Measurement Complete
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-emerald-700">
+                                Result:{" "}
+                                {experiment.result_value ??
+                                  "—"}{" "}
+                                {experiment.unit ??
+                                  ""}
+                                {" · "}
+                                Outcome:{" "}
+                                {humanize(
+                                  experiment.outcome
+                                )}
+                              </p>
+
+                              {experiment.result_summary ? (
+                                <p className="mt-2 text-xs leading-5 text-gray-600">
+                                  {
+                                    experiment.result_summary
+                                  }
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
 
                           <div className="mt-3 border-t border-gray-100 pt-3 text-[10px] text-gray-400">
                             Created{" "}
