@@ -1,6 +1,6 @@
 import {
   aiTeamSupabaseAdmin,
-  requireTetamoAdmin,
+  requireTetamoAdminOrCron,
 } from "@/lib/ai-team/core/admin-auth";
 
 export const runtime =
@@ -400,13 +400,18 @@ export async function POST(
   context: RouteContext
 ) {
   const auth =
-    await requireTetamoAdmin(
+    await requireTetamoAdminOrCron(
       req
     );
 
   if (!auth.authorized) {
     return auth.response;
   }
+
+  const isCronAuth =
+    "authMode" in auth &&
+    auth.authMode ===
+      "cron";
 
   const {
     approvalId,
@@ -583,6 +588,40 @@ export async function POST(
   }
 
   /*
+   * Internal/cron auth is allowed ONLY to reconcile an
+   * approval that is already rejected.
+   *
+   * It cannot create a rejection, approve content,
+   * change the decision, or supply/replace Founder notes.
+   * The original persisted human review note must exist.
+   */
+  if (isCronAuth) {
+    if (
+      currentApproval.action_type !==
+        "publish_content" ||
+      decision !==
+        "rejected" ||
+      currentApproval.status !==
+        "rejected" ||
+      reviewNotes ||
+      !cleanString(
+        currentApproval.review_notes
+      )
+    ) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Cron may only reconcile an already-rejected AI content approval with an existing Founder review note.",
+        },
+        {
+          status: 403,
+        }
+      );
+    }
+  }
+
+  /*
    * Idempotent retry:
    * if the same human decision was already stored,
    * report success without changing anything.
@@ -636,6 +675,42 @@ export async function POST(
   }
 
   /*
+   * Cron reconciliation must have returned from the
+   * idempotent rejected branch above. It may never reach
+   * the approval mutation path.
+   */
+  if (isCronAuth) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Cron cannot create or change AI approval decisions.",
+      },
+      {
+        status: 403,
+      }
+    );
+  }
+
+  const reviewerUserId =
+    cleanString(
+      auth.admin.userId
+    );
+
+  if (!reviewerUserId) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "A human admin reviewer is required for a new AI approval decision.",
+      },
+      {
+        status: 403,
+      }
+    );
+  }
+
+  /*
    * Only pending approvals may receive a new
    * Founder/admin decision.
    *
@@ -679,7 +754,7 @@ export async function POST(
       decision,
 
     reviewed_by_user_id:
-      auth.admin.userId,
+      reviewerUserId,
 
     reviewed_at:
       reviewedAt,
