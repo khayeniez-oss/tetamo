@@ -784,15 +784,36 @@ export async function POST(
       );
     }
 
+    const linkedTaskMetadata =
+      asRecord(
+        verifiedLinkedTask.metadata
+      );
+
+    /*
+     * Founder rejection feedback from a previous draft is a
+     * binding redraft instruction for every Rupert task type.
+     *
+     * This lets ordinary weekly blogs and protected inquiry
+     * content use the same correction mechanism.
+     */
+    const founderRedraftFeedback =
+      cleanString(
+        linkedTaskMetadata
+          .last_content_rejection_reason
+      );
+
+    if (
+      founderRedraftFeedback
+    ) {
+      bindingConstraints.push(
+        `Founder redraft feedback: ${founderRedraftFeedback}`
+      );
+    }
+
     if (
       verifiedLinkedTask.source_type ===
         "rupert_lola_handoff"
     ) {
-      const linkedTaskMetadata =
-        asRecord(
-          verifiedLinkedTask.metadata
-        );
-
       const founderClarificationText =
         cleanString(
           linkedTaskMetadata
