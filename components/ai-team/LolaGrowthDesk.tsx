@@ -60,6 +60,10 @@ type DecisionRow = {
   title: string;
   status: string;
   rationale: string | null;
+  related_entity_type:
+    string | null;
+  related_entity_id:
+    string | null;
   metadata:
     Record<string, unknown> | null;
   created_at: string;
@@ -70,6 +74,8 @@ type HandoffRow = {
   handoff_type: string;
   summary: string;
   status: string;
+  context:
+    Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -600,6 +606,124 @@ export function LolaGrowthDesk() {
       ]
     );
 
+  const currentDecisions =
+    useMemo(
+      () => {
+        const seen =
+          new Set<string>();
+
+        return decisions.filter(
+          (decision) => {
+            if (
+              ![
+                "proposed",
+                "approved",
+                "deferred",
+              ].includes(
+                decision.status
+              )
+            ) {
+              return false;
+            }
+
+            const themeKey =
+              typeof decision
+                .metadata
+                ?.source_theme_id ===
+                "string"
+                ? decision
+                    .metadata
+                    .source_theme_id
+                : typeof decision
+                    .metadata
+                    ?.source_theme_key ===
+                    "string"
+                  ? decision
+                      .metadata
+                      .source_theme_key
+                  : decision
+                      .related_entity_id ||
+                    decision.id;
+
+            if (
+              seen.has(
+                themeKey
+              )
+            ) {
+              return false;
+            }
+
+            seen.add(
+              themeKey
+            );
+
+            return true;
+          }
+        );
+      },
+      [
+        decisions,
+      ]
+    );
+
+  const currentHandoffs =
+    useMemo(
+      () => {
+        const seen =
+          new Set<string>();
+
+        return handoffs.filter(
+          (handoff) => {
+            if (
+              ![
+                "pending",
+                "accepted",
+                "completed",
+              ].includes(
+                handoff.status
+              )
+            ) {
+              return false;
+            }
+
+            const themeKey =
+              typeof handoff
+                .context
+                ?.source_theme_id ===
+                "string"
+                ? handoff
+                    .context
+                    .source_theme_id
+                : typeof handoff
+                    .context
+                    ?.source_theme_key ===
+                    "string"
+                  ? handoff
+                      .context
+                      .source_theme_key
+                  : handoff.id;
+
+            if (
+              seen.has(
+                themeKey
+              )
+            ) {
+              return false;
+            }
+
+            seen.add(
+              themeKey
+            );
+
+            return true;
+          }
+        );
+      },
+      [
+        handoffs,
+      ]
+    );
+
   if (
     loading
   ) {
@@ -754,15 +878,15 @@ export function LolaGrowthDesk() {
           />
 
           <MetricCard
-            label="Payment Recovery"
+            label="Payment Failed"
             value={
               business
                 ?.crmSnapshot
-                .commercial
-                .paymentRecovery ??
+                .stages
+                .payment_failed ??
               0
             }
-            note={`${business?.crmSnapshot.stages.payment_started ?? 0} payment started · ${business?.crmSnapshot.stages.payment_failed ?? 0} payment failed`}
+            note={`${business?.crmSnapshot.stages.payment_started ?? 0} payment started · current CRM stage`}
             icon={
               <TrendingUp className="h-5 w-5" />
             }
@@ -957,13 +1081,13 @@ export function LolaGrowthDesk() {
           </div>
 
           <div className="mt-4 space-y-3">
-            {decisions.length ===
+            {currentDecisions.length ===
             0 ? (
               <p className="rounded-xl bg-gray-50 px-3 py-4 text-sm text-gray-500">
                 No Lola decisions recorded yet.
               </p>
             ) : (
-              decisions
+              currentDecisions
                 .slice(
                   0,
                   8
@@ -1032,13 +1156,13 @@ export function LolaGrowthDesk() {
           </div>
 
           <div className="mt-4 space-y-3">
-            {handoffs.length ===
+            {currentHandoffs.length ===
             0 ? (
               <p className="text-sm text-gray-500">
                 No Lola handoffs yet.
               </p>
             ) : (
-              handoffs
+              currentHandoffs
                 .slice(
                   0,
                   6
