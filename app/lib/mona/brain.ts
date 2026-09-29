@@ -82,6 +82,12 @@ export type MonaBrainDecision = {
   intent: MonaBrainIntent;
   intentSubject: string | null;
 
+  resourceAction: {
+    requested: boolean;
+    action: "send" | "postpone" | "decline" | "none";
+    resourceId: string | null;
+  };
+
   timingDependency: {
     active: boolean;
     reason: string | null;
@@ -1640,6 +1646,12 @@ function fallbackBrainDecision(
     intent: "unknown",
     intentSubject: null,
 
+    resourceAction: {
+      requested: false,
+      action: "none",
+      resourceId: null,
+    },
+
     timingDependency: {
       active: false,
       reason: null,
@@ -1807,6 +1819,19 @@ function parseBrainDecision(
         ? parsed.timingDependency
         : {};
 
+    const resourceAction =
+      parsed.resourceAction &&
+      typeof parsed.resourceAction === "object"
+        ? parsed.resourceAction
+        : {};
+
+    const allowedResourceActions = new Set([
+      "send",
+      "postpone",
+      "decline",
+      "none",
+    ]);
+
     const confidenceNumber =
       Number(parsed.confidence);
 
@@ -1900,6 +1925,25 @@ function parseBrainDecision(
 
       intentSubject:
         cleanNullableString(parsed.intentSubject),
+
+      resourceAction: {
+        requested:
+          resourceAction.requested === true,
+        action:
+          allowedResourceActions.has(
+            String(resourceAction.action)
+          )
+            ? (resourceAction.action as
+                | "send"
+                | "postpone"
+                | "decline"
+                | "none")
+            : "none",
+        resourceId:
+          cleanNullableString(
+            resourceAction.resourceId
+          ),
+      },
 
       timingDependency: {
         active:
@@ -2346,14 +2390,31 @@ function detectPriorClarificationAttempt(
 function isExplicitHumanRequest(
   message: string
 ) {
-  return (
-    /\b(?:admin|cs|customer service|human|orang|staff)\b/i.test(
-      message
-    ) &&
-    /\b(?:mau|ingin|pengen|boleh|bisa|hubungkan|sambungkan|bicara|ngobrol|chat|talk|speak)\b/i.test(
-      message
-    )
-  );
+  const normalized = message
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  /*
+   * An explicit human request must express a real desire to
+   * speak/connect/be transferred to a person.
+   *
+   * Do NOT treat generic assistance questions such as:
+   * "ada orang yang bisa bantu saya bikin listing?"
+   * as requests to hand the conversation to Admin.
+   */
+  const explicitTransferOrConversationRequest =
+    /(?:mau|ingin|pengen|boleh|bisa|tolong).{0,30}(?:bicara|ngobrol|chat|talk|speak|hubungkan|sambungkan).{0,30}(?:admin|cs|customer service|human|orang|staff)/i.test(
+      normalized
+    ) ||
+    /(?:hubungkan|sambungkan|connect|transfer).{0,30}(?:saya|aku|me)?.{0,20}(?:ke|dengan|to|with)?.{0,20}(?:admin|cs|customer service|human|orang|staff)/i.test(
+      normalized
+    ) ||
+    /(?:bicara|ngobrol|chat|talk|speak).{0,30}(?:dengan|to|with).{0,20}(?:admin|cs|customer service|human|orang|staff)/i.test(
+      normalized
+    );
+
+  return explicitTransferOrConversationRequest;
 }
 
 function looksLikeHumanActionRequired(
@@ -3191,6 +3252,46 @@ function enforceBrainRouting(
   }
 
   /*
+   * APPROVED RESOURCE FACTUAL CONSISTENCY
+   * -------------------------------------
+   *
+   * Brain is the semantic authority. This guard does not reinterpret the
+   * customer's raw words and does not create a SEND action.
+   *
+   * It repairs only an inconsistent resolved Brain state before the strict
+   * role gate can discard a legitimate general factual Knowledge request.
+   */
+  const resolvedMeaning =
+    String(result.latestMeaning || "").toLowerCase();
+
+  const isListingTutorialFactQuestion =
+    result.resourceAction.action === "none" &&
+    result.resourceAction.requested === false &&
+    result.resourceAction.resourceId === "listing_tutorial" &&
+    resolvedMeaning.includes("listing tutorial") &&
+    (
+      resolvedMeaning.includes("asks") ||
+      resolvedMeaning.includes("asking") ||
+      resolvedMeaning.includes("question")
+    );
+
+  if (isListingTutorialFactQuestion) {
+    result = {
+      ...result,
+      factualKnowledgeNeeded: true,
+      knowledgeRequest: Array.from(
+        new Set([
+          ...result.knowledgeRequest,
+          "approved facts about the Tetamo listing tutorial",
+        ])
+      ),
+      directQuestion:
+        result.directQuestion ||
+        result.latestMeaning,
+    };
+  }
+
+  /*
    * STRICT ROLE GATE + ONE ROLE CLARIFICATION.
    *
    * If role is still unknown, Sales AI cannot run.
@@ -3639,6 +3740,12 @@ Return ONLY valid JSON in exactly this structure:
 
   "intentSubject": null,
 
+  "resourceAction": {
+    "requested": false,
+    "action": "send|postpone|decline|none",
+    "resourceId": null
+  },
+
   "timingDependency": {
     "active": false,
     "reason": null
@@ -3671,6 +3778,20 @@ OUTPUT RULES:
 - intent must describe the customer's PRIMARY latest-turn need, not merely repeat conversationSituation.
 - intentSubject should name the specific package, feature, product, or referent when context supports one; otherwise null.
 - Resolve "contohnya", "yang tadi", "fiturnya", "yang itu", "bisa lihat?", and similar short references from the immediate real conversation before assigning intent.
+- resourceAction is a structured interpretation of whether the customer is asking for, postponing, or declining an approved customer resource.
+- Use resourceAction.action="send" only when the customer is actually asking or agreeing to receive a resource now.
+- Use resourceAction.action="postpone" when the customer wants the resource later or says not to send it yet.
+- Use resourceAction.action="decline" when the customer refuses the offered resource.
+- Use resourceAction.action="none" when the latest turn is not a resource-delivery decision.
+- resourceAction.requested=true only when action="send".
+- resourceAction.resourceId must identify the specific resolved resource when known from conversation context; otherwise null.
+- For the currently approved Tetamo listing tutorial, use resourceId="listing_tutorial".
+- Never assign resourceId="listing_tutorial" to payment links, invoices, receipts, package checkout, or any unrelated resource request.
+- A factual question ABOUT an approved resource is different from a request to SEND that resource.
+- If the customer asks what the listing tutorial is, what it covers, who it is for, or another factual question about that tutorial, keep resourceAction.action="none" unless they also ask to receive it now.
+- When the factual discussion is specifically about the approved Tetamo listing tutorial, preserve its identity with resourceAction.resourceId="listing_tutorial" even though resourceAction.action="none" and resourceAction.requested=false.
+- For a factual question about the listing tutorial, set factualKnowledgeNeeded=true and include a precise knowledgeRequest such as "approved facts about the Tetamo listing tutorial".
+- Do not infer or invent the tutorial contents from general listing knowledge. Ask Knowledge for approved facts about the resource.
 - A general feature question is platform_features, not package_features.
 - A named package feature question is package_features.
 - A testimonial/proof question is proof_testimonial and must not be collapsed into traffic_growth.

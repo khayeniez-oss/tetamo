@@ -886,6 +886,56 @@ async function isMonaStillAllowedToReply(
 }
 
 
+/*
+ * APPROVED MONA RESOURCE DELIVERY
+ * -------------------------------
+ *
+ * Brain decides whether the customer explicitly requested a resource.
+ * Knowledge validates that decision against Tetamo's approved registry.
+ *
+ * This helper performs no semantic guessing and never invents a URL.
+ */
+function getApprovedMonaResourceDelivery(generation: {
+  brain: {
+    resourceAction: {
+      requested: boolean;
+      action: "send" | "postpone" | "decline" | "none";
+      resourceId: string | null;
+    };
+  };
+  knowledge: {
+    resources: Array<{
+      id: string;
+      name: string;
+      url: string;
+    }>;
+  };
+}) {
+  const decision = generation.brain.resourceAction;
+
+  if (
+    decision.requested !== true ||
+    decision.action !== "send" ||
+    !decision.resourceId
+  ) {
+    return null;
+  }
+
+  const resource = generation.knowledge.resources.find(
+    (candidate) => candidate.id === decision.resourceId
+  );
+
+  if (!resource) {
+    return null;
+  }
+
+  return {
+    resourceId: resource.id,
+    message: `${resource.name}\n${resource.url}`,
+  };
+}
+
+
 async function sendMetaWhatsappText(params: {
   phoneNumberId: string;
   to: string;
@@ -1338,6 +1388,53 @@ export async function POST(request: Request) {
 
       if (sendResult.success) {
         replyCount += 1;
+
+        /*
+         * If Brain explicitly requested delivery and Knowledge supplied the
+         * matching approved resource, send it only AFTER Mona's normal reply
+         * has been confirmed by Meta.
+         *
+         * This is a Mona/system action, never an Admin handover.
+         */
+        const resourceDelivery =
+          getApprovedMonaResourceDelivery(generation);
+
+        if (resourceDelivery) {
+          const resourceSendResult =
+            await sendMetaWhatsappText({
+              phoneNumberId,
+              to: customerPhone,
+              message: resourceDelivery.message,
+            });
+
+          await saveOutboundMessage({
+            conversationId: conversation.id,
+            customerPhone,
+            businessPhoneNumberId: phoneNumberId,
+            profileName: item.profileName,
+            reply: resourceDelivery.message,
+            metaSendId: resourceSendResult.id,
+            metaSendError: resourceSendResult.success
+              ? null
+              : resourceSendResult.error,
+            aiGenerated: true,
+            source: resourceSendResult.success
+              ? "tetamo_mona_resource_meta"
+              : "tetamo_mona_resource_meta_send_failed",
+            sendSucceeded: resourceSendResult.success,
+          });
+
+          if (!resourceSendResult.success) {
+            console.error(
+              "Mona approved resource delivery failed:",
+              {
+                conversationId: conversation.id,
+                resourceId: resourceDelivery.resourceId,
+                error: resourceSendResult.error,
+              }
+            );
+          }
+        }
 
         const dependencyControlled =
           generation.brain.timingDependency.active ===

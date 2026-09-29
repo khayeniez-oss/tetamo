@@ -2293,6 +2293,85 @@ export async function writeMonaReply(
   }
 
   /*
+   * APPROVED RESOURCE FACTUAL DISCUSSION
+   * ------------------------------------
+   *
+   * Brain identifies the approved resource being discussed.
+   * Knowledge supplies the approved descriptive facts.
+   *
+   * Keep this separate from resource delivery:
+   * - do not expose the URL here;
+   * - do not infer additional tutorial contents;
+   * - do not fall back to model-generated resource details.
+   */
+  if (
+    params.brain.resourceAction.requested === false &&
+    params.brain.resourceAction.action === "none" &&
+    params.brain.resourceAction.resourceId ===
+      "listing_tutorial" &&
+    params.brain.factualKnowledgeNeeded &&
+    generalFactsText
+  ) {
+    const asksAboutAudience =
+      params.brain.knowledgeRequest.some((request) =>
+        request
+          .toLowerCase()
+          .includes("intended users")
+      );
+
+    const reply =
+      asksAboutAudience
+        ? params.brain.languageStyle.primaryLanguage === "en"
+          ? "Yes. The Tetamo Listing Tutorial is an official step-by-step resource for both Agents and Property Owners who want guidance on creating a property listing."
+          : "Iya Kak. Tetamo Listing Tutorial adalah panduan step-by-step resmi untuk Agent dan Property Owner yang ingin membuat listing properti."
+        : params.brain.languageStyle.primaryLanguage === "en"
+          ? "The Tetamo Listing Tutorial is an official step-by-step resource for Agents and Property Owners who want guidance on creating a property listing."
+          : "Tetamo Listing Tutorial adalah panduan step-by-step resmi untuk Agent dan Property Owner yang ingin membuat listing properti.";
+
+    return {
+      action: "reply",
+      reply,
+      source: "fallback",
+    };
+  }
+
+  /*
+   * APPROVED RESOURCE DELIVERY
+   * --------------------------
+   *
+   * Brain decides whether the customer wants a resource sent now.
+   * Knowledge decides whether that exact resource is approved and available.
+   *
+   * Once both conditions are true, Writer must not delay delivery with
+   * another qualification question or make a second semantic decision.
+   */
+  if (
+    params.brain.resourceAction.requested === true &&
+    params.brain.resourceAction.action === "send" &&
+    params.brain.resourceAction.resourceId
+  ) {
+    const approvedResource =
+      params.knowledge.resources.find(
+        (resource) =>
+          resource.id ===
+          params.brain.resourceAction.resourceId
+      );
+
+    if (approvedResource) {
+      const reply =
+        params.brain.languageStyle.primaryLanguage === "en"
+          ? "Sure."
+          : "Boleh Kak.";
+
+      return {
+        action: "reply",
+        reply,
+        source: "fallback",
+      };
+    }
+  }
+
+  /*
    * Proof/testimonial answers must stay tightly bounded to approved proof facts.
    * This intent previously drifted into generic no-guarantee disclaimers and
    * unrelated growth language even when the customer only asked for evidence.
@@ -2350,6 +2429,16 @@ export async function writeMonaReply(
     generalFactsText ||
     "No general Tetamo facts were required or retrieved for this reply.";
 
+  const approvedCustomerResources =
+    params.knowledge.resources.length
+      ? params.knowledge.resources
+          .map(
+            (resource) =>
+              `- ${resource.name}\n  Resource ID: ${resource.id}\n  URL: ${resource.url}\n  Purpose: ${resource.purpose}`
+          )
+          .join("\n")
+      : "none";
+
   const prompt = `
 ${MONA_WRITER_PROMPT}
 
@@ -2362,6 +2451,9 @@ Customer type: ${params.brain.customerType}
 Situation: ${params.brain.conversationSituation}
 Intent: ${params.brain.intent}
 Intent subject: ${params.brain.intentSubject || "none"}
+Resource action: ${params.brain.resourceAction.action}
+Resource requested now: ${params.brain.resourceAction.requested ? "yes" : "no"}
+Resource ID: ${params.brain.resourceAction.resourceId || "none"}
 Normalized latest message: ${params.brain.normalizedMessage}
 Latest meaning: ${params.brain.latestMeaning}
 Direct question: ${params.brain.directQuestion || "none"}
@@ -2418,6 +2510,19 @@ Should ask question: ${
 GENERAL APPROVED TETAMO KNOWLEDGE:
 Knowledge status: ${params.knowledge.status}
 ${approvedGeneralFacts}
+
+APPROVED CUSTOMER RESOURCES:
+${approvedCustomerResources}
+
+RESOURCE DELIVERY RULE:
+- Brain.resourceAction is authoritative for whether the customer wants a resource sent now.
+- If Brain.resourceAction.action is "send", use only the matching resource supplied under APPROVED CUSTOMER RESOURCES.
+- When the matching approved resource is supplied, share its exact URL directly in the reply.
+- Do not invent, alter, substitute, or guess a URL.
+- Do not substitute one approved resource for a different requested resource.
+- If no matching approved resource is supplied, do not claim that you sent it or can send it.
+- A customer merely discussing, asking about, or asking whether a resource exists is not permission to send it unless Brain.resourceAction.action is "send".
+- Approved customer-resource URLs are separate from screenshot/demo capability and do not imply that Mona can send screenshots, demos, or demo access.
 
 ROLE DESTINATIONS:
 

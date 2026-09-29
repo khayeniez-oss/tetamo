@@ -8,6 +8,10 @@ import {
   type TetamoProductAudience,
   type TetamoProductFeature,
 } from "../../data/tetamo-product";
+import {
+  TETAMO_RESOURCES,
+  type TetamoResource,
+} from "../../data/tetamo-resources";
 import type { MonaBrainDecision } from "./brain";
 import type { MonaSalesGuidance } from "./sales-router";
 
@@ -27,6 +31,7 @@ export type MonaKnowledgeResult = {
   retrievalQuery: string;
   matches: MonaKnowledgeMatch[];
   approvedFactsText: string;
+  resources: TetamoResource[];
 };
 
 type RetrieveMonaKnowledgeParams = {
@@ -35,6 +40,7 @@ type RetrieveMonaKnowledgeParams = {
   supabase?: unknown;
   brain: MonaBrainDecision;
   salesGuidance: MonaSalesGuidance;
+  latestCustomerMessage?: string;
   language?: "id" | "en" | "mixed" | "unknown";
 };
 
@@ -1198,9 +1204,106 @@ function formatApprovedFacts(
  * Missing knowledge is returned as status="not_found". It is not, by itself,
  * a reason to pause Mona or send the conversation to Admin.
  */
+function selectApprovedResources(
+  params: RetrieveMonaKnowledgeParams
+): TetamoResource[] {
+  const decision = params.brain.resourceAction;
+
+  /*
+   * Brain is the semantic authority.
+   *
+   * Knowledge does NOT reinterpret customer language here.
+   * It only validates an explicit SEND decision against Tetamo's
+   * approved resource registry.
+   */
+  if (
+    decision.requested !== true ||
+    decision.action !== "send" ||
+    !decision.resourceId
+  ) {
+    return [];
+  }
+
+  const resource =
+    Object.values(TETAMO_RESOURCES).find(
+      (candidate) =>
+        candidate.id === decision.resourceId
+    );
+
+  /*
+   * Brain may understand that the customer requested some resource
+   * that Tetamo has not approved/registered.
+   *
+   * Never invent a URL and never substitute a different resource.
+   */
+  if (!resource || resource.status !== "live") {
+    return [];
+  }
+
+  const audience =
+    audienceForBrain(params.brain);
+
+  if (
+    audience &&
+    !resource.audience.includes(audience) &&
+    !resource.audience.includes("all")
+  ) {
+    return [];
+  }
+
+  return [resource];
+}
+
 export async function retrieveMonaKnowledge(
   params: RetrieveMonaKnowledgeParams
 ): Promise<MonaKnowledgeResult> {
+  const resources =
+    selectApprovedResources(params);
+
+  /*
+   * FACTUAL DISCUSSION ABOUT AN APPROVED RESOURCE
+   *
+   * Delivery and factual discussion are intentionally separate:
+   *
+   * - resources[] is SEND-only and may expose the approved URL to Writer;
+   * - this branch supplies only approved descriptive facts when the customer
+   *   is asking ABOUT a known resource.
+   *
+   * Do not fall through to broad listing knowledge for a resource-specific
+   * factual question. That could make Writer describe tutorial contents that
+   * the resource registry never approved.
+   */
+  const discussedResource =
+    params.brain.resourceAction.action === "none" &&
+    params.brain.resourceAction.requested === false &&
+    params.brain.resourceAction.resourceId
+      ? Object.values(TETAMO_RESOURCES).find(
+          (candidate) =>
+            candidate.id ===
+              params.brain.resourceAction.resourceId &&
+            candidate.status === "live"
+        )
+      : undefined;
+
+  if (
+    discussedResource &&
+    params.brain.factualKnowledgeNeeded
+  ) {
+    return {
+      needed: true,
+      status: "found",
+      retrievalQuery:
+        params.brain.knowledgeRequest.join("\n"),
+      matches: [],
+      approvedFactsText: [
+        `Resource: ${discussedResource.name}`,
+        `Purpose: ${discussedResource.purpose}`,
+        `Audience: ${discussedResource.audience.join(", ")}`,
+      ].join("\n"),
+      resources: [],
+    };
+  }
+
   const salesFactsNeeded = getSalesFactsNeeded(
     params.salesGuidance
   );
@@ -1217,11 +1320,15 @@ export async function retrieveMonaKnowledge(
 
   if (!needed || !retrievalQuery) {
     return {
-      needed: false,
-      status: "not_required",
+      needed: resources.length > 0,
+      status:
+        resources.length > 0
+          ? "found"
+          : "not_required",
       retrievalQuery,
       matches: [],
       approvedFactsText: "",
+      resources,
     };
   }
 
@@ -1269,6 +1376,7 @@ export async function retrieveMonaKnowledge(
       retrievalQuery,
       matches: [],
       approvedFactsText: "",
+      resources,
     };
   }
 
@@ -1278,5 +1386,6 @@ export async function retrieveMonaKnowledge(
     retrievalQuery,
     matches,
     approvedFactsText: formatApprovedFacts(matches),
+    resources,
   };
 }

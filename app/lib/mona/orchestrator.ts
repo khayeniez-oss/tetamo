@@ -1703,6 +1703,8 @@ export async function runMonaOrchestrator(
         params.supabase,
       brain,
       salesGuidance,
+      latestCustomerMessage:
+        params.latestCustomerMessage,
       language:
         brain.languageStyle
           .primaryLanguage,
