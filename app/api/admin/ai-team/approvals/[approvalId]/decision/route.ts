@@ -600,6 +600,313 @@ async function reopenRejectedRupertBlogTask(
   };
 }
 
+async function completeApprovedRupertBlogTask(
+  approval: AiApprovalRow
+) {
+  if (
+    approval.action_type !==
+      "publish_content" ||
+    !approval.task_id ||
+    !approval.requested_by_agent_id
+  ) {
+    return {
+      applicable: false,
+      completed: false,
+    };
+  }
+
+  const payload =
+    approval.requested_payload &&
+    typeof approval.requested_payload ===
+      "object" &&
+    !Array.isArray(
+      approval.requested_payload
+    )
+      ? approval.requested_payload
+      : {};
+
+  const contentType =
+    cleanString(
+      payload.content_type
+    );
+
+  const publishAction =
+    cleanString(
+      payload.publish_action
+    );
+
+  const blogId =
+    cleanString(
+      payload.blog_id
+    );
+
+  const researchReportId =
+    cleanString(
+      payload.research_report_id
+    );
+
+  if (
+    contentType !== "blog" ||
+    publishAction !==
+      "publish_blog" ||
+    !blogId ||
+    !researchReportId
+  ) {
+    return {
+      applicable: false,
+      completed: false,
+    };
+  }
+
+  /*
+   * Founder approval closes Rupert's content task.
+   * It does NOT publish the blog.
+   *
+   * Publication remains a manual Founder action
+   * through Tetamo Blog Manager.
+   */
+  const {
+    data: agentData,
+    error: agentError,
+  } =
+    await aiTeamSupabaseAdmin
+      .from("ai_agents")
+      .select("id, agent_key")
+      .eq(
+        "id",
+        approval.requested_by_agent_id
+      )
+      .maybeSingle();
+
+  if (agentError) {
+    throw agentError;
+  }
+
+  const agent =
+    agentData as unknown as {
+      id: string;
+      agent_key: string;
+    } | null;
+
+  if (
+    !agent ||
+    cleanString(
+      agent.agent_key
+    ).toLowerCase() !==
+      "rupert"
+  ) {
+    return {
+      applicable: false,
+      completed: false,
+    };
+  }
+
+  const {
+    data: taskData,
+    error: taskError,
+  } =
+    await aiTeamSupabaseAdmin
+      .from("ai_tasks")
+      .select(
+        "id, status, source_type, assigned_to_agent_id, metadata"
+      )
+      .eq(
+        "id",
+        approval.task_id
+      )
+      .maybeSingle();
+
+  if (taskError) {
+    throw taskError;
+  }
+
+  const task =
+    taskData as unknown as
+      AiTaskRow | null;
+
+  if (!task) {
+    throw new Error(
+      "Linked Rupert task was not found."
+    );
+  }
+
+  if (
+    task.assigned_to_agent_id !==
+    approval.requested_by_agent_id
+  ) {
+    throw new Error(
+      "Linked task is no longer assigned to Rupert."
+    );
+  }
+
+  const metadata =
+    task.metadata &&
+    typeof task.metadata ===
+      "object" &&
+    !Array.isArray(
+      task.metadata
+    )
+      ? task.metadata
+      : {};
+
+  const currentReportId =
+    cleanString(
+      metadata.current_research_report_id
+    );
+
+  const originalReportId =
+    cleanString(
+      metadata.research_report_id
+    );
+
+  const qualityReviewState =
+    cleanString(
+      metadata.quality_review_state
+    );
+
+  const disposition =
+    cleanString(
+      metadata.post_research_disposition
+    );
+
+  const taskSourceType =
+    cleanString(
+      task.source_type
+    );
+
+  if (
+    taskSourceType ===
+      "rupert_lola_handoff"
+  ) {
+    if (
+      currentReportId !==
+        researchReportId ||
+      metadata.content_eligible !==
+        true ||
+      qualityReviewState !==
+        "passed" ||
+      disposition !==
+        "content_may_proceed"
+    ) {
+      throw new Error(
+        "Approved Rupert draft is no longer backed by the task's current verified draft-eligible research report."
+      );
+    }
+  } else {
+    const linkedReportId =
+      currentReportId ||
+      originalReportId;
+
+    if (
+      !linkedReportId ||
+      linkedReportId !==
+        researchReportId
+    ) {
+      throw new Error(
+        "Approved Rupert draft does not match the research report linked to its task."
+      );
+    }
+  }
+
+  /*
+   * Idempotent reconciliation.
+   */
+  if (
+    task.status ===
+      "completed"
+  ) {
+    return {
+      applicable: true,
+      completed: false,
+      alreadyCompleted: true,
+      taskId:
+        task.id,
+      blogId,
+    };
+  }
+
+  if (
+    task.status !==
+      "awaiting_approval"
+  ) {
+    throw new Error(
+      `Approved Rupert blog task cannot be completed from ${task.status}.`
+    );
+  }
+
+  const approvedAt =
+    new Date()
+      .toISOString();
+
+  const nextMetadata = {
+    ...metadata,
+
+    content_approved_at:
+      approvedAt,
+
+    approved_approval_id:
+      approval.id,
+
+    approved_blog_id:
+      blogId,
+
+    publication_authority:
+      "founder_manual",
+  };
+
+  const {
+    data: completedTaskData,
+    error: completeError,
+  } =
+    await aiTeamSupabaseAdmin
+      .from("ai_tasks")
+      .update({
+        status:
+          "completed",
+
+        result_summary:
+          `Founder approved Rupert blog draft ${blogId}. Content task completed; blog remains a draft awaiting manual Founder publication.`,
+
+        metadata:
+          nextMetadata,
+      })
+      .eq(
+        "id",
+        task.id
+      )
+      .eq(
+        "status",
+        "awaiting_approval"
+      )
+      .eq(
+        "assigned_to_agent_id",
+        approval.requested_by_agent_id
+      )
+      .select(
+        "id, status"
+      )
+      .maybeSingle();
+
+  if (completeError) {
+    throw completeError;
+  }
+
+  if (!completedTaskData) {
+    throw new Error(
+      "Rupert task changed before approved-content completion could be saved."
+    );
+  }
+
+  return {
+    applicable: true,
+    completed: true,
+    alreadyCompleted: false,
+    taskId:
+      task.id,
+    blogId,
+  };
+}
+
 export async function POST(
   req: Request,
   context: RouteContext
@@ -869,6 +1176,42 @@ export async function POST(
       }
     }
 
+    let rupertApproval = null;
+
+    if (
+      decision ===
+        "approved"
+    ) {
+      try {
+        rupertApproval =
+          await completeApprovedRupertBlogTask(
+            currentApproval
+          );
+      } catch (error) {
+        console.error(
+          "Approved Rupert task reconciliation failed:",
+          error
+        );
+
+        return Response.json(
+          {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unable to complete approved Rupert task.",
+            approval:
+              currentApproval,
+            decisionSaved:
+              true,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+    }
+
     let growthExperiment = null;
 
     try {
@@ -910,6 +1253,7 @@ export async function POST(
       alreadyReviewed:
         true,
       redraft,
+      rupertApproval,
       growthExperiment,
     });
   }
@@ -1136,6 +1480,47 @@ export async function POST(
     }
   }
 
+  let rupertApproval = null;
+
+  if (
+    decision ===
+      "approved"
+  ) {
+    try {
+      rupertApproval =
+        await completeApprovedRupertBlogTask(
+          savedApproval
+        );
+    } catch (error) {
+      console.error(
+        "Approved Rupert task completion failed:",
+        error
+      );
+
+      /*
+       * Founder approval itself is already safely persisted.
+       * This reports only the linked Rupert task
+       * reconciliation failure.
+       */
+      return Response.json(
+        {
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "AI approval was saved, but the Rupert task could not be completed.",
+          approval:
+            savedApproval,
+          decisionSaved:
+            true,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+  }
+
   let growthExperiment = null;
 
   try {
@@ -1176,6 +1561,7 @@ export async function POST(
     alreadyReviewed:
       false,
     redraft,
+    rupertApproval,
     growthExperiment,
   });
 }
