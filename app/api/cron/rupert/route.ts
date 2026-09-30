@@ -1541,10 +1541,22 @@ async function processDueTask({
         !researchResult
           .payload?.ok
       ) {
-        throw new Error(
+        const researchError =
           researchResult
-            .payload?.error ||
-            `Rupert research failed with HTTP ${researchResult.response.status}.`
+            .payload?.error;
+
+        const researchErrorMessage =
+          typeof researchError ===
+            "string"
+            ? researchError
+            : researchError != null
+              ? JSON.stringify(
+                  researchError
+                )
+              : "No error payload returned.";
+
+        throw new Error(
+          `Rupert research failed with HTTP ${researchResult.response.status}: ${researchErrorMessage}`
         );
       }
 
@@ -1797,6 +1809,36 @@ async function processDueTask({
         ? error.message
         : "Unknown Rupert scheduler error.";
 
+    /*
+     * Research may have written diagnostic metadata
+     * after this scheduler claimed the task.
+     *
+     * Reload the latest metadata before recording the
+     * scheduler failure so those diagnostics are not
+     * overwritten by the older claimMetadata snapshot.
+     */
+    const {
+      data:
+        latestTask,
+    } =
+      await aiTeamSupabaseAdmin
+        .from(
+          "ai_tasks"
+        )
+        .select(
+          "metadata"
+        )
+        .eq(
+          "id",
+          task.id
+        )
+        .maybeSingle();
+
+    const latestMetadata =
+      asRecord(
+        latestTask?.metadata
+      );
+
     await aiTeamSupabaseAdmin
       .from(
         "ai_tasks"
@@ -1810,6 +1852,7 @@ async function processDueTask({
 
         metadata: {
           ...claimMetadata,
+          ...latestMetadata,
 
           auto_retry_exhausted:
             attempt >= 2,
