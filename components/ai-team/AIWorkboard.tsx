@@ -1534,18 +1534,26 @@ export function AIWorkboard({
                               )}
                             </Badge>
 
-                            <Badge
-                              className={
-                                statusClasses(
+                            {approval.status === "approved" &&
+                            approval.action_type === "publish_content" &&
+                            approval.requested_by_agent?.display_name === "Rupert" ? (
+                              <Badge className={statusClasses("completed")}>
+                                Publication: Founder Manual
+                              </Badge>
+                            ) : (
+                              <Badge
+                                className={
+                                  statusClasses(
+                                    approval.execution_status
+                                  )
+                                }
+                              >
+                                Execution:{" "}
+                                {humanize(
                                   approval.execution_status
-                                )
-                              }
-                            >
-                              Execution:{" "}
-                              {humanize(
-                                approval.execution_status
-                              )}
-                            </Badge>
+                                )}
+                              </Badge>
+                            )}
                           </div>
 
                           <h3 className="mt-3 font-semibold text-[#1C1C1E]">
@@ -1583,6 +1591,35 @@ export function AIWorkboard({
                           {
                             approval.review_notes
                           }
+                        </div>
+                      ) : null}
+
+                      {approval.status === "approved" &&
+                      approval.action_type === "publish_content" &&
+                      approval.requested_by_agent?.display_name === "Rupert" ? (
+                        <div className="mt-4 border-t border-gray-100 pt-4">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void decideApproval(
+                                approval,
+                                "approved"
+                              )
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {busy ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-4 w-4" />
+                            )}
+                            Reconcile Task
+                          </button>
+
+                          <p className="mt-2 text-xs text-gray-500">
+                            Content approved. Publication remains Founder-controlled.
+                          </p>
                         </div>
                       ) : null}
 
