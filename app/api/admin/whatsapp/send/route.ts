@@ -4,6 +4,7 @@ import {
   markMonaFollowUpSuccessfullySent,
   runMonaScheduledFollowUp,
 } from "@/app/lib/mona/orchestrator";
+import { markMonaPursuitSuccessfullySent } from "@/app/lib/mona/journey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1453,6 +1454,31 @@ async function handleMonaFollowUpSend(params: {
       timingPersistenceWarning:
         true,
     });
+  }
+
+  /*
+   * Meta delivery and the existing silence-cycle timing update have
+   * both succeeded. Record one factual proactive pursuit in the
+   * persistent Mona sales journey.
+   *
+   * Failure here must not make an already-delivered WhatsApp
+   * follow-up retryable.
+   */
+  try {
+    await markMonaPursuitSuccessfullySent({
+      supabase:
+        supabaseAdmin,
+      conversationId,
+    });
+  } catch (error) {
+    console.error(
+      "Mona follow-up was delivered successfully but sales pursuit history could not be persisted:",
+      {
+        conversationId,
+        followUpNumber,
+        error,
+      }
+    );
   }
 
   await releaseMonaClaim({

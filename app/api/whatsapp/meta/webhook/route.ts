@@ -8,6 +8,7 @@ import {
   resetMonaFollowUpCycleForCustomerReply,
 } from "../../../../lib/mona/orchestrator";
 import { waitForMonaHumanDelay } from "../../../../lib/mona/timing";
+import { evaluateAndPersistMonaJourney } from "../../../../lib/mona/journey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1467,6 +1468,37 @@ export async function POST(request: Request) {
           console.error(
             "Mona reply sent successfully but follow-up timing state could not be started:",
             error
+          );
+        }
+
+        /*
+         * The customer has already received Mona's normal reply.
+         *
+         * Persist the durable sales journey separately from the
+         * resettable silence-cycle state. Brain + Sales were already
+         * produced for this turn; do not invoke another model here.
+         *
+         * Journey persistence failure must never resend the WhatsApp
+         * message that Meta already delivered.
+         */
+        try {
+          await evaluateAndPersistMonaJourney({
+            supabase: supabaseAdmin,
+            conversationId:
+              conversation.id,
+            brain:
+              generation.brain,
+            salesGuidance:
+              generation.salesGuidance,
+          });
+        } catch (error) {
+          console.error(
+            "Mona reply sent successfully but sales journey state could not be persisted:",
+            {
+              conversationId:
+                conversation.id,
+              error,
+            }
           );
         }
       }
