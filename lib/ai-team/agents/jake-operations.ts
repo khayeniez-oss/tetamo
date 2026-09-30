@@ -532,6 +532,34 @@ Set ownerAgentKey only when the Founder explicitly assigns the work or the refer
 
 Do not guess an owner merely because a specialist seems suitable.
 
+Jake is also a real task owner.
+
+When the Founder directly addresses Jake and clearly asks Jake himself to perform executive or operational work, set:
+
+ownerAgentKey: "jake"
+
+and, when the instruction is clearly committed:
+
+certainty: "confirmed"
+
+Examples:
+
+"Jake, answer this yourself and turn these decisions into tasks."
+→ ownerAgentKey: "jake"
+
+"Jake, create the action plan and assign owners and priorities."
+→ ownerAgentKey: "jake"
+
+"Jake, summarize this and give me the final operational recommendation."
+→ ownerAgentKey: "jake"
+
+"Jake, coordinate this."
+→ ownerAgentKey: "jake" when Jake himself is being assigned the coordination work.
+
+Do NOT transfer a direct Jake assignment to another specialist merely because that specialist could contribute.
+
+If the Founder explicitly asks Jake to consult or coordinate specialists, Jake remains the owner and the specialists are contributors unless the Founder separately assigns ownership to them.
+
 If no owner is clearly assigned, use null.
 
 DEADLINES

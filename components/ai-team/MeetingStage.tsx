@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import {
   Brain,
   Circle,
@@ -126,6 +128,951 @@ function getStateBadgeClasses(
   }
 }
 
+function getPortraitAnimationClass(
+  state: MeetingPresenceState
+) {
+  switch (state) {
+    case "listening":
+      return "tetamo-ai-listening";
+    case "thinking":
+      return "tetamo-ai-thinking";
+    case "speaking":
+      return "tetamo-ai-speaking";
+    case "acknowledging":
+      return "tetamo-ai-acknowledging";
+    case "flagging":
+      return "tetamo-ai-flagging";
+    case "idle":
+    default:
+      return "tetamo-ai-idle";
+  }
+}
+
+
+const JAKE_PORTRAITS: Record<
+  MeetingPresenceState,
+  string
+> = {
+  idle: "/ai-team/characters/jake-animation/jake-idle.png",
+  listening:
+    "/ai-team/characters/jake-animation/jake-listening.png",
+  thinking:
+    "/ai-team/characters/jake-animation/jake-thinking.png",
+  speaking:
+    "/ai-team/characters/jake-animation/jake-idle.png",
+  acknowledging:
+    "/ai-team/characters/jake-animation/jake-acknowledging.png",
+  flagging:
+    "/ai-team/characters/jake-animation/jake-flagging.png",
+};
+
+const JAKE_BLINK_SRC =
+  "/ai-team/characters/jake-animation/jake-blink.png";
+
+const JAKE_SPEAKING_PORTRAITS = {
+  closed:
+    "/ai-team/characters/jake-animation/jake-speaking-closed.png",
+  small:
+    "/ai-team/characters/jake-animation/jake-speaking-small.png",
+  medium:
+    "/ai-team/characters/jake-animation/jake-speaking-medium.png",
+  wide:
+    "/ai-team/characters/jake-animation/jake-speaking-wide.png",
+} as const;
+
+function JakeAnimatedPortrait({
+  state,
+}: {
+  state: MeetingPresenceState;
+}) {
+  const [isBlinking, setIsBlinking] =
+    useState(false);
+
+  const [audioLevel, setAudioLevel] =
+    useState(0);
+
+  const canBlink =
+    state === "idle" ||
+    state === "listening" ||
+    state === "speaking";
+
+  useEffect(() => {
+    const handleJakeAudioLevel = (
+      event: Event
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          agentKey?: string;
+          level?: number;
+        }>;
+
+      if (customEvent.detail?.agentKey !== "jake") {
+        return;
+      }
+
+      const nextLevel =
+        typeof customEvent.detail?.level === "number"
+          ? customEvent.detail.level
+          : 0;
+
+      setAudioLevel(
+        Math.min(1, Math.max(0, nextLevel))
+      );
+    };
+
+    window.addEventListener(
+      "tetamo:agent-audio-level",
+      handleJakeAudioLevel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tetamo:agent-audio-level",
+        handleJakeAudioLevel
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canBlink) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let blinkTimer: ReturnType<typeof setTimeout> | null =
+      null;
+    let reopenTimer: ReturnType<typeof setTimeout> | null =
+      null;
+    let cancelled = false;
+
+    const scheduleBlink = () => {
+      const delay =
+        3500 + Math.random() * 3500;
+
+      blinkTimer = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setIsBlinking(true);
+
+        reopenTimer = setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
+          setIsBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+
+      if (blinkTimer) {
+        clearTimeout(blinkTimer);
+      }
+
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+      }
+    };
+  }, [canBlink, state]);
+
+  let src = JAKE_PORTRAITS[state];
+
+  if (state === "speaking") {
+    if (audioLevel < 0.08) {
+      src = JAKE_SPEAKING_PORTRAITS.closed;
+    } else if (audioLevel < 0.28) {
+      src = JAKE_SPEAKING_PORTRAITS.small;
+    } else if (audioLevel < 0.55) {
+      src = JAKE_SPEAKING_PORTRAITS.medium;
+    } else {
+      src = JAKE_SPEAKING_PORTRAITS.wide;
+    }
+  }
+
+  if (isBlinking && canBlink) {
+    src = JAKE_BLINK_SRC;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Jake"
+      className={[
+        "h-full w-full object-contain will-change-transform",
+        getPortraitAnimationClass(state),
+      ].join(" ")}
+    />
+  );
+}
+
+const MONA_BLINK_SRC =
+  "/ai-team/characters/mona-animation/mona-blink.png";
+
+const MONA_SPEAKING_PORTRAITS = {
+  closed:
+    "/ai-team/characters/mona-animation/mona-speaking-closed.png",
+  small:
+    "/ai-team/characters/mona-animation/mona-speaking-small.png",
+  medium:
+    "/ai-team/characters/mona-animation/mona-speaking-medium.png",
+  wide:
+    "/ai-team/characters/mona-animation/mona-speaking-wide.png",
+} as const;
+
+function MonaAnimatedPortrait({
+  state,
+}: {
+  state: MeetingPresenceState;
+}) {
+  const [isBlinking, setIsBlinking] =
+    useState(false);
+
+  const [audioLevel, setAudioLevel] =
+    useState(0);
+
+  const canBlink =
+    state === "idle" ||
+    state === "listening" ||
+    state === "speaking";
+
+  useEffect(() => {
+    const handleMonaAudioLevel = (
+      event: Event
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          agentKey?: string;
+          level?: number;
+        }>;
+
+      if (customEvent.detail?.agentKey !== "mona") {
+        return;
+      }
+
+      const nextLevel =
+        typeof customEvent.detail?.level === "number"
+          ? customEvent.detail.level
+          : 0;
+
+      setAudioLevel(
+        Math.min(1, Math.max(0, nextLevel))
+      );
+    };
+
+    window.addEventListener(
+      "tetamo:agent-audio-level",
+      handleMonaAudioLevel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tetamo:agent-audio-level",
+        handleMonaAudioLevel
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canBlink) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let blinkTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let reopenTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let cancelled = false;
+
+    const scheduleBlink = () => {
+      const delay =
+        3500 + Math.random() * 3500;
+
+      blinkTimer = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setIsBlinking(true);
+
+        reopenTimer = setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+
+          setIsBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+
+      if (blinkTimer) {
+        clearTimeout(blinkTimer);
+      }
+
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+      }
+    };
+  }, [canBlink, state]);
+
+  let src = "/ai-team/characters/mona.png";
+
+  if (state === "speaking") {
+    if (audioLevel < 0.08) {
+      src = MONA_SPEAKING_PORTRAITS.closed;
+    } else if (audioLevel < 0.28) {
+      src = MONA_SPEAKING_PORTRAITS.small;
+    } else if (audioLevel < 0.55) {
+      src = MONA_SPEAKING_PORTRAITS.medium;
+    } else {
+      src = MONA_SPEAKING_PORTRAITS.wide;
+    }
+  }
+
+  if (isBlinking && canBlink) {
+    src = MONA_BLINK_SRC;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Mona"
+      className={[
+        "h-full w-full object-contain will-change-transform",
+        getPortraitAnimationClass(state),
+      ].join(" ")}
+    />
+  );
+}
+
+const RUPERT_BLINK_SRC =
+  "/ai-team/characters/rupert-animation/rupert-blink.png";
+
+const RUPERT_SPEAKING_PORTRAITS = {
+  closed:
+    "/ai-team/characters/rupert-animation/rupert-speaking-closed.png",
+  small:
+    "/ai-team/characters/rupert-animation/rupert-speaking-small.png",
+  medium:
+    "/ai-team/characters/rupert-animation/rupert-speaking-medium.png",
+  wide:
+    "/ai-team/characters/rupert-animation/rupert-speaking-wide.png",
+} as const;
+
+function RupertAnimatedPortrait({
+  state,
+}: {
+  state: MeetingPresenceState;
+}) {
+  const [isBlinking, setIsBlinking] =
+    useState(false);
+
+  const [audioLevel, setAudioLevel] =
+    useState(0);
+
+  const canBlink =
+    state === "idle" ||
+    state === "listening" ||
+    state === "speaking";
+
+  useEffect(() => {
+    const handleRupertAudioLevel = (
+      event: Event
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          agentKey?: string;
+          level?: number;
+        }>;
+
+      if (customEvent.detail?.agentKey !== "rupert") {
+        return;
+      }
+
+      const nextLevel =
+        typeof customEvent.detail?.level === "number"
+          ? customEvent.detail.level
+          : 0;
+
+      setAudioLevel(
+        Math.min(1, Math.max(0, nextLevel))
+      );
+    };
+
+    window.addEventListener(
+      "tetamo:agent-audio-level",
+      handleRupertAudioLevel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tetamo:agent-audio-level",
+        handleRupertAudioLevel
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canBlink) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let blinkTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let reopenTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let cancelled = false;
+
+    const scheduleBlink = () => {
+      const delay =
+        3500 + Math.random() * 3500;
+
+      blinkTimer = setTimeout(() => {
+        if (cancelled) return;
+
+        setIsBlinking(true);
+
+        reopenTimer = setTimeout(() => {
+          if (cancelled) return;
+
+          setIsBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+
+      if (blinkTimer) {
+        clearTimeout(blinkTimer);
+      }
+
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+      }
+    };
+  }, [canBlink, state]);
+
+  let src = "/ai-team/characters/rupert.png";
+
+  if (state === "speaking") {
+    if (audioLevel < 0.08) {
+      src = RUPERT_SPEAKING_PORTRAITS.closed;
+    } else if (audioLevel < 0.28) {
+      src = RUPERT_SPEAKING_PORTRAITS.small;
+    } else if (audioLevel < 0.55) {
+      src = RUPERT_SPEAKING_PORTRAITS.medium;
+    } else {
+      src = RUPERT_SPEAKING_PORTRAITS.wide;
+    }
+  }
+
+  if (isBlinking && canBlink) {
+    src = RUPERT_BLINK_SRC;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Rupert"
+      className={[
+        "h-full w-full object-contain will-change-transform",
+        getPortraitAnimationClass(state),
+      ].join(" ")}
+    />
+  );
+}
+
+const RANDOLPH_BLINK_SRC =
+  "/ai-team/characters/randolph-animation/randolph-blink.png";
+
+const RANDOLPH_SPEAKING_PORTRAITS = {
+  closed:
+    "/ai-team/characters/randolph-animation/randolph-speaking-closed.png",
+  small:
+    "/ai-team/characters/randolph-animation/randolph-speaking-small.png",
+  medium:
+    "/ai-team/characters/randolph-animation/randolph-speaking-medium.png",
+  wide:
+    "/ai-team/characters/randolph-animation/randolph-speaking-wide.png",
+} as const;
+
+function RandolphAnimatedPortrait({
+  state,
+}: {
+  state: MeetingPresenceState;
+}) {
+  const [isBlinking, setIsBlinking] =
+    useState(false);
+
+  const [audioLevel, setAudioLevel] =
+    useState(0);
+
+  const canBlink =
+    state === "idle" ||
+    state === "listening" ||
+    state === "speaking";
+
+  useEffect(() => {
+    const handleRandolphAudioLevel = (
+      event: Event
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          agentKey?: string;
+          level?: number;
+        }>;
+
+      if (
+        customEvent.detail?.agentKey !==
+        "randolph"
+      ) {
+        return;
+      }
+
+      const nextLevel =
+        typeof customEvent.detail?.level ===
+        "number"
+          ? customEvent.detail.level
+          : 0;
+
+      setAudioLevel(
+        Math.min(1, Math.max(0, nextLevel))
+      );
+    };
+
+    window.addEventListener(
+      "tetamo:agent-audio-level",
+      handleRandolphAudioLevel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tetamo:agent-audio-level",
+        handleRandolphAudioLevel
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canBlink) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let blinkTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let reopenTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let cancelled = false;
+
+    const scheduleBlink = () => {
+      const delay =
+        3500 + Math.random() * 3500;
+
+      blinkTimer = setTimeout(() => {
+        if (cancelled) return;
+
+        setIsBlinking(true);
+
+        reopenTimer = setTimeout(() => {
+          if (cancelled) return;
+
+          setIsBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+
+      if (blinkTimer) {
+        clearTimeout(blinkTimer);
+      }
+
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+      }
+    };
+  }, [canBlink, state]);
+
+  let src =
+    "/ai-team/characters/randolph.png";
+
+  if (state === "speaking") {
+    if (audioLevel < 0.08) {
+      src =
+        RANDOLPH_SPEAKING_PORTRAITS.closed;
+    } else if (audioLevel < 0.28) {
+      src =
+        RANDOLPH_SPEAKING_PORTRAITS.small;
+    } else if (audioLevel < 0.55) {
+      src =
+        RANDOLPH_SPEAKING_PORTRAITS.medium;
+    } else {
+      src =
+        RANDOLPH_SPEAKING_PORTRAITS.wide;
+    }
+  }
+
+  if (isBlinking && canBlink) {
+    src = RANDOLPH_BLINK_SRC;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Randolph"
+      className={[
+        "h-full w-full object-contain will-change-transform",
+        getPortraitAnimationClass(state),
+      ].join(" ")}
+    />
+  );
+}
+
+const LOLA_BLINK_SRC =
+  "/ai-team/characters/lola-animation/lola-blink.png";
+
+const LOLA_SPEAKING_PORTRAITS = {
+  closed:
+    "/ai-team/characters/lola-animation/lola-speaking-closed.png",
+  small:
+    "/ai-team/characters/lola-animation/lola-speaking-small.png",
+  medium:
+    "/ai-team/characters/lola-animation/lola-speaking-medium.png",
+  wide:
+    "/ai-team/characters/lola-animation/lola-speaking-wide.png",
+} as const;
+
+function LolaAnimatedPortrait({
+  state,
+}: {
+  state: MeetingPresenceState;
+}) {
+  const [isBlinking, setIsBlinking] =
+    useState(false);
+
+  const [audioLevel, setAudioLevel] =
+    useState(0);
+
+  const canBlink =
+    state === "idle" ||
+    state === "listening" ||
+    state === "speaking";
+
+  useEffect(() => {
+    const handleLolaAudioLevel = (
+      event: Event
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          agentKey?: string;
+          level?: number;
+        }>;
+
+      if (
+        customEvent.detail?.agentKey !==
+        "lola"
+      ) {
+        return;
+      }
+
+      const nextLevel =
+        typeof customEvent.detail?.level ===
+        "number"
+          ? customEvent.detail.level
+          : 0;
+
+      setAudioLevel(
+        Math.min(1, Math.max(0, nextLevel))
+      );
+    };
+
+    window.addEventListener(
+      "tetamo:agent-audio-level",
+      handleLolaAudioLevel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tetamo:agent-audio-level",
+        handleLolaAudioLevel
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canBlink) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let blinkTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let reopenTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let cancelled = false;
+
+    const scheduleBlink = () => {
+      const delay =
+        3500 + Math.random() * 3500;
+
+      blinkTimer = setTimeout(() => {
+        if (cancelled) return;
+
+        setIsBlinking(true);
+
+        reopenTimer = setTimeout(() => {
+          if (cancelled) return;
+
+          setIsBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+
+      if (blinkTimer) {
+        clearTimeout(blinkTimer);
+      }
+
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+      }
+    };
+  }, [canBlink, state]);
+
+  let src =
+    "/ai-team/characters/lola.png";
+
+  if (state === "speaking") {
+    if (audioLevel < 0.08) {
+      src =
+        LOLA_SPEAKING_PORTRAITS.closed;
+    } else if (audioLevel < 0.28) {
+      src =
+        LOLA_SPEAKING_PORTRAITS.small;
+    } else if (audioLevel < 0.55) {
+      src =
+        LOLA_SPEAKING_PORTRAITS.medium;
+    } else {
+      src =
+        LOLA_SPEAKING_PORTRAITS.wide;
+    }
+  }
+
+  if (isBlinking && canBlink) {
+    src = LOLA_BLINK_SRC;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Lola"
+      className={[
+        "h-full w-full object-contain will-change-transform",
+        getPortraitAnimationClass(state),
+      ].join(" ")}
+    />
+  );
+}
+
+const UNCLE_SAM_BLINK_SRC =
+  "/ai-team/characters/uncle-sam-animation/uncle-sam-blink.png";
+
+const UNCLE_SAM_SPEAKING_PORTRAITS = {
+  closed:
+    "/ai-team/characters/uncle-sam-animation/uncle-sam-speaking-closed.png",
+  small:
+    "/ai-team/characters/uncle-sam-animation/uncle-sam-speaking-small.png",
+  medium:
+    "/ai-team/characters/uncle-sam-animation/uncle-sam-speaking-medium.png",
+  wide:
+    "/ai-team/characters/uncle-sam-animation/uncle-sam-speaking-wide.png",
+} as const;
+
+function UncleSamAnimatedPortrait({
+  state,
+}: {
+  state: MeetingPresenceState;
+}) {
+  const [isBlinking, setIsBlinking] =
+    useState(false);
+
+  const [audioLevel, setAudioLevel] =
+    useState(0);
+
+  const canBlink =
+    state === "idle" ||
+    state === "listening" ||
+    state === "speaking";
+
+  useEffect(() => {
+    const handleUncleSamAudioLevel = (
+      event: Event
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          agentKey?: string;
+          level?: number;
+        }>;
+
+      if (
+        customEvent.detail?.agentKey !==
+        "uncle_sam"
+      ) {
+        return;
+      }
+
+      const nextLevel =
+        typeof customEvent.detail?.level ===
+        "number"
+          ? customEvent.detail.level
+          : 0;
+
+      setAudioLevel(
+        Math.min(1, Math.max(0, nextLevel))
+      );
+    };
+
+    window.addEventListener(
+      "tetamo:agent-audio-level",
+      handleUncleSamAudioLevel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "tetamo:agent-audio-level",
+        handleUncleSamAudioLevel
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canBlink) {
+      setIsBlinking(false);
+      return;
+    }
+
+    let blinkTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let reopenTimer:
+      | ReturnType<typeof setTimeout>
+      | null = null;
+
+    let cancelled = false;
+
+    const scheduleBlink = () => {
+      const delay =
+        3500 + Math.random() * 3500;
+
+      blinkTimer = setTimeout(() => {
+        if (cancelled) return;
+
+        setIsBlinking(true);
+
+        reopenTimer = setTimeout(() => {
+          if (cancelled) return;
+
+          setIsBlinking(false);
+          scheduleBlink();
+        }, 140);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+
+      if (blinkTimer) {
+        clearTimeout(blinkTimer);
+      }
+
+      if (reopenTimer) {
+        clearTimeout(reopenTimer);
+      }
+    };
+  }, [canBlink, state]);
+
+  let src =
+    "/ai-team/characters/uncle-sam.png";
+
+  if (state === "speaking") {
+    if (audioLevel < 0.08) {
+      src =
+        UNCLE_SAM_SPEAKING_PORTRAITS.closed;
+    } else if (audioLevel < 0.28) {
+      src =
+        UNCLE_SAM_SPEAKING_PORTRAITS.small;
+    } else if (audioLevel < 0.55) {
+      src =
+        UNCLE_SAM_SPEAKING_PORTRAITS.medium;
+    } else {
+      src =
+        UNCLE_SAM_SPEAKING_PORTRAITS.wide;
+    }
+  }
+
+  if (isBlinking && canBlink) {
+    src = UNCLE_SAM_BLINK_SRC;
+  }
+
+  return (
+    <img
+      src={src}
+      alt="Uncle Sam"
+      className={[
+        "h-full w-full object-contain will-change-transform",
+        getPortraitAnimationClass(state),
+      ].join(" ")}
+    />
+  );
+}
+
 function ParticipantTile({
   participant,
 }: {
@@ -142,12 +1089,41 @@ function ParticipantTile({
         getTileClasses(participant.state),
       ].join(" ")}
     >
-      <div className="relative aspect-video overflow-hidden bg-gray-100">
-        {participant.portraitSrc ? (
+      <div className="relative h-[320px] overflow-hidden bg-gray-100 xl:h-[360px]">
+        {participant.name === "Jake" ? (
+          <JakeAnimatedPortrait
+            state={participant.state}
+          />
+        ) : participant.name === "Mona" ? (
+          <MonaAnimatedPortrait
+            state={participant.state}
+          />
+        ) : participant.name === "Rupert" ? (
+          <RupertAnimatedPortrait
+            state={participant.state}
+          />
+        ) : participant.name === "Randolph" ? (
+          <RandolphAnimatedPortrait
+            state={participant.state}
+          />
+        ) : participant.name === "Lola" ? (
+          <LolaAnimatedPortrait
+            state={participant.state}
+          />
+        ) : participant.name === "Uncle Sam" ? (
+          <UncleSamAnimatedPortrait
+            state={participant.state}
+          />
+        ) : participant.portraitSrc ? (
           <img
             src={participant.portraitSrc}
             alt={participant.name}
-            className="h-full w-full object-cover"
+            className={[
+              "h-full w-full object-contain will-change-transform",
+              getPortraitAnimationClass(
+                participant.state
+              ),
+            ].join(" ")}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
@@ -177,11 +1153,11 @@ function ParticipantTile({
 
         {participant.state === "speaking" ? (
           <div className="absolute bottom-3 right-3 flex items-end gap-1 rounded-full bg-black/70 px-2.5 py-1.5">
-            <span className="h-2 w-1 rounded-full bg-white" />
-            <span className="h-4 w-1 rounded-full bg-white" />
-            <span className="h-3 w-1 rounded-full bg-white" />
-            <span className="h-5 w-1 rounded-full bg-white" />
-            <span className="h-2.5 w-1 rounded-full bg-white" />
+            <span className="tetamo-ai-wave-bar h-2 w-1 rounded-full bg-white" />
+            <span className="tetamo-ai-wave-bar h-4 w-1 rounded-full bg-white [animation-delay:120ms]" />
+            <span className="tetamo-ai-wave-bar h-3 w-1 rounded-full bg-white [animation-delay:240ms]" />
+            <span className="tetamo-ai-wave-bar h-5 w-1 rounded-full bg-white [animation-delay:80ms]" />
+            <span className="tetamo-ai-wave-bar h-2.5 w-1 rounded-full bg-white [animation-delay:190ms]" />
           </div>
         ) : null}
       </div>

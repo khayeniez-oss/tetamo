@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   MeetingStage,
@@ -197,6 +197,38 @@ export function MeetingRoom({
   const [turnsLoading, setTurnsLoading] =
     useState(false);
 
+  const [speakingTurnId, setSpeakingTurnId] =
+    useState<string | null>(null);
+
+  const [voiceError, setVoiceError] =
+    useState("");
+
+  const [isRecording, setIsRecording] =
+    useState(false);
+
+  const [isTranscribing, setIsTranscribing] =
+    useState(false);
+
+  const [microphoneError, setMicrophoneError] =
+    useState("");
+
+  const mediaRecorderRef =
+    useRef<MediaRecorder | null>(null);
+
+  const microphoneStreamRef =
+    useRef<MediaStream | null>(null);
+
+  const audioChunksRef =
+    useRef<Blob[]>([]);
+
+  const submitFounderTurnRef =
+    useRef<
+      (
+        submittedContent?: string,
+        inputSource?: "text" | "voice"
+      ) => Promise<void>
+    >(async () => {});
+
   const [
     founderClarificationItems,
     setFounderClarificationItems,
@@ -247,6 +279,462 @@ export function MeetingRoom({
 
   const [jakePreview, setJakePreview] =
     useState<JakeDecision | null>(null);
+
+
+  const stopMicrophoneStream = useCallback(() => {
+    microphoneStreamRef.current
+      ?.getTracks()
+      .forEach((track) => track.stop());
+
+    microphoneStreamRef.current = null;
+  }, []);
+
+  const transcribeFounderRecording = useCallback(
+    async (audioBlob: Blob) => {
+      try {
+        setIsTranscribing(true);
+        setMicrophoneError("");
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session?.access_token) {
+          throw new Error(
+            "Admin session not found. Please log in again."
+          );
+        }
+
+        const extension =
+          audioBlob.type.includes("mp4")
+            ? "mp4"
+            : audioBlob.type.includes("ogg")
+              ? "ogg"
+              : "webm";
+
+        const audioFile = new File(
+          [audioBlob],
+          `founder-recording.${extension}`,
+          {
+            type:
+              audioBlob.type ||
+              "audio/webm",
+          }
+        );
+
+        const formData = new FormData();
+        formData.append("audio", audioFile);
+
+        const response = await fetch(
+          "/api/admin/ai-team/transcribe",
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+            body: formData,
+          }
+        );
+
+        const payload = (await response.json()) as {
+          ok: boolean;
+          text?: string;
+          error?: string;
+        };
+
+        if (
+          !response.ok ||
+          !payload.ok ||
+          !payload.text
+        ) {
+          throw new Error(
+            payload.error ||
+              "Unable to transcribe recording."
+          );
+        }
+
+        setDraftTurn(payload.text);
+
+        await submitFounderTurnRef.current(
+          payload.text,
+          "voice"
+        );
+      } catch (error) {
+        console.error(
+          "Founder microphone transcription failed:",
+          error
+        );
+
+        setMicrophoneError(
+          error instanceof Error
+            ? error.message
+            : "Unable to transcribe recording."
+        );
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    []
+  );
+
+  const startFounderRecording =
+    useCallback(async () => {
+      if (!currentMeeting) {
+        setMicrophoneError(
+          "Start a meeting before using the microphone."
+        );
+        return;
+      }
+
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices?.getUserMedia ||
+        typeof MediaRecorder === "undefined"
+      ) {
+        setMicrophoneError(
+          "Microphone recording is not supported in this browser."
+        );
+        return;
+      }
+
+      try {
+        setMicrophoneError("");
+
+        const stream =
+          await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+
+        microphoneStreamRef.current = stream;
+        audioChunksRef.current = [];
+
+        const preferredMimeType =
+          MediaRecorder.isTypeSupported(
+            "audio/webm;codecs=opus"
+          )
+            ? "audio/webm;codecs=opus"
+            : MediaRecorder.isTypeSupported(
+                  "audio/mp4"
+                )
+              ? "audio/mp4"
+              : "";
+
+        const recorder = preferredMimeType
+          ? new MediaRecorder(stream, {
+              mimeType: preferredMimeType,
+            })
+          : new MediaRecorder(stream);
+
+        mediaRecorderRef.current = recorder;
+
+        recorder.addEventListener(
+          "dataavailable",
+          (event) => {
+            if (event.data.size > 0) {
+              audioChunksRef.current.push(
+                event.data
+              );
+            }
+          }
+        );
+
+        recorder.addEventListener(
+          "stop",
+          () => {
+            const audioBlob = new Blob(
+              audioChunksRef.current,
+              {
+                type:
+                  recorder.mimeType ||
+                  "audio/webm",
+              }
+            );
+
+            audioChunksRef.current = [];
+            mediaRecorderRef.current = null;
+            stopMicrophoneStream();
+
+            if (audioBlob.size > 0) {
+              void transcribeFounderRecording(
+                audioBlob
+              );
+            }
+          }
+        );
+
+        recorder.start();
+        setIsRecording(true);
+      } catch (error) {
+        console.error(
+          "Founder microphone failed:",
+          error
+        );
+
+        stopMicrophoneStream();
+
+        setMicrophoneError(
+          error instanceof Error
+            ? error.message
+            : "Unable to access microphone."
+        );
+      }
+    }, [
+      currentMeeting,
+      stopMicrophoneStream,
+      transcribeFounderRecording,
+    ]);
+
+  const stopFounderRecording =
+    useCallback(() => {
+      const recorder =
+        mediaRecorderRef.current;
+
+      if (
+        recorder &&
+        recorder.state !== "inactive"
+      ) {
+        recorder.stop();
+      } else {
+        stopMicrophoneStream();
+      }
+
+      setIsRecording(false);
+    }, [stopMicrophoneStream]);
+
+  const speakMeetingTurn = useCallback(
+    async (
+      turn: MeetingTurn,
+      agentKey: string
+    ) => {
+      if (turn.speaker_type !== "agent") {
+        return;
+      }
+
+      try {
+        setSpeakingTurnId(turn.id);
+        setVoiceError("");
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session?.access_token) {
+          throw new Error(
+            "Admin session not found. Please log in again."
+          );
+        }
+
+        const response = await fetch(
+          "/api/admin/ai-team/voice",
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              agentKey,
+              text: turn.content,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          let message =
+            "Unable to generate AI Team voice.";
+
+          try {
+            const payload =
+              await response.json();
+
+            if (payload?.error) {
+              message = payload.error;
+            }
+          } catch {
+            // Response was not JSON.
+          }
+
+          throw new Error(message);
+        }
+
+        const audioBlob =
+          await response.blob();
+
+        const audioUrl =
+          URL.createObjectURL(audioBlob);
+
+        const audio =
+          new Audio(audioUrl);
+
+        /*
+         * Jake animation bridge.
+         *
+         * While Jake's real Ballad audio is playing, measure the
+         * actual output level and broadcast it to MeetingStage.
+         * Other agents are deliberately untouched for now.
+         */
+        let audioContext: AudioContext | null = null;
+        let animationFrameId: number | null = null;
+
+        if (
+          agentKey === "jake" ||
+          agentKey === "mona" ||
+          agentKey === "rupert" ||
+          agentKey === "randolph" ||
+          agentKey === "lola" ||
+          agentKey === "uncle_sam"
+        ) {
+          try {
+            audioContext = new AudioContext();
+
+            const source =
+              audioContext.createMediaElementSource(audio);
+            const analyser =
+              audioContext.createAnalyser();
+
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.65;
+
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            const samples =
+              new Uint8Array(analyser.frequencyBinCount);
+
+            const broadcastAgentAudioLevel = () => {
+              analyser.getByteFrequencyData(samples);
+
+              let total = 0;
+
+              for (const sample of samples) {
+                total += sample;
+              }
+
+              const average =
+                samples.length > 0
+                  ? total / samples.length
+                  : 0;
+
+              const level = Math.min(
+                1,
+                Math.max(0, average / 110)
+              );
+
+              window.dispatchEvent(
+                new CustomEvent(
+                  "tetamo:agent-audio-level",
+                  {
+                    detail: {
+                      agentKey,
+                      level,
+                    },
+                  }
+                )
+              );
+
+              animationFrameId =
+                window.requestAnimationFrame(
+                  broadcastAgentAudioLevel
+                );
+            };
+
+            broadcastAgentAudioLevel();
+          } catch (animationError) {
+            console.warn(
+              "Agent audio animation bridge unavailable:",
+              animationError
+            );
+          }
+        }
+
+        await new Promise<void>(
+          (resolve, reject) => {
+            const cleanup = () => {
+              if (animationFrameId !== null) {
+                window.cancelAnimationFrame(
+                  animationFrameId
+                );
+                animationFrameId = null;
+              }
+
+              window.dispatchEvent(
+                new CustomEvent(
+                  "tetamo:agent-audio-level",
+                  {
+                    detail: {
+                      agentKey,
+                      level: 0,
+                    },
+                  }
+                )
+              );
+
+              if (audioContext) {
+                void audioContext.close();
+                audioContext = null;
+              }
+
+              URL.revokeObjectURL(audioUrl);
+              setSpeakingTurnId(null);
+            };
+
+            audio.addEventListener(
+              "ended",
+              () => {
+                cleanup();
+                resolve();
+              },
+              { once: true }
+            );
+
+            audio.addEventListener(
+              "error",
+              () => {
+                cleanup();
+                reject(
+                  new Error(
+                    "AI Team audio could not be played."
+                  )
+                );
+              },
+              { once: true }
+            );
+
+            audio.play().catch((error) => {
+              cleanup();
+              reject(error);
+            });
+          }
+        );
+      } catch (err) {
+        console.error(
+          "Failed to play AI Team voice:",
+          err
+        );
+
+        setSpeakingTurnId(null);
+
+        setVoiceError(
+          err instanceof Error
+            ? err.message
+            : "Unable to play AI Team voice."
+        );
+      }
+    },
+    []
+  );
 
   const loadCurrentMeeting = useCallback(
     async () => {
@@ -1020,6 +1508,13 @@ export function MeetingRoom({
         }
 
         setSpeaker(jakeId);
+
+        if (payload.savedTurn) {
+          await speakMeetingTurn(
+            payload.savedTurn,
+            "jake"
+          );
+        }
       } else if (
         payload.decision.action === "handoff" &&
         payload.decision.targetAgentKey
@@ -1150,6 +1645,11 @@ export function MeetingRoom({
 
             setSpeaker(targetAgentId);
 
+            await speakMeetingTurn(
+              specialistPayload.savedTurn,
+              specialistKey
+            );
+
             /*
              * The specialist has now spoken into the same shared
              * meeting history. Return floor control to Jake so he
@@ -1193,7 +1693,10 @@ export function MeetingRoom({
     }
   };
 
-  const submitFounderTurn = async () => {
+  const submitFounderTurn = async (
+    submittedContent?: string,
+    inputSource: "text" | "voice" = "text"
+  ) => {
     if (!currentMeeting) {
       setTurnError(
         "Start a meeting before sending a message."
@@ -1201,7 +1704,9 @@ export function MeetingRoom({
       return;
     }
 
-    const content = draftTurn.trim();
+    const content = (
+      submittedContent ?? draftTurn
+    ).trim();
 
     if (!content) {
       return;
@@ -1247,7 +1752,7 @@ export function MeetingRoom({
           },
           body: JSON.stringify({
             content,
-            inputSource: "text",
+            inputSource,
 
             relatedMeetingItemId:
               selectedClarification?.id ??
@@ -1385,6 +1890,9 @@ export function MeetingRoom({
       setSendingTurn(false);
     }
   };
+
+  submitFounderTurnRef.current =
+    submitFounderTurn;
 
   const participantIds = [
     "founder-khaye",
@@ -1830,25 +2338,62 @@ export function MeetingRoom({
                 : "Meeting history is stored in Supabase."}
             </p>
 
-            <button
-              type="button"
-              onClick={() =>
-                void submitFounderTurn()
-              }
-              disabled={
-                !currentMeeting ||
-                sendingTurn ||
-                !draftTurn.trim()
-              }
-              className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {sendingTurn
-                ? "Saving..."
-                : selectedFounderClarificationItem
-                  ? "Save clarification"
-                  : "Send"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isRecording) {
+                    stopFounderRecording();
+                  } else {
+                    void startFounderRecording();
+                  }
+                }}
+                disabled={
+                  !currentMeeting ||
+                  sendingTurn ||
+                  isTranscribing
+                }
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isRecording
+                    ? "border-red-300 bg-red-50 text-red-700"
+                    : "border-gray-200 bg-white text-[#1C1C1E] hover:bg-gray-50"
+                }`}
+              >
+                {isRecording
+                  ? "⏹ Stop"
+                  : isTranscribing
+                    ? "Transcribing..."
+                    : "🎙️ Talk"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void submitFounderTurn()
+                }
+                disabled={
+                  !currentMeeting ||
+                  sendingTurn ||
+                  isRecording ||
+                  isTranscribing ||
+                  !draftTurn.trim()
+                }
+                className="rounded-xl bg-[#1C1C1E] px-4 py-2 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sendingTurn
+                  ? "Saving..."
+                  : selectedFounderClarificationItem
+                    ? "Save clarification"
+                    : "Send"}
+              </button>
+            </div>
           </div>
+
+          {microphoneError ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {microphoneError}
+            </div>
+          ) : null}
 
           {turnError ? (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1916,6 +2461,12 @@ export function MeetingRoom({
             Conversation history
           </h3>
 
+          {voiceError ? (
+            <p className="mt-2 text-sm text-red-600">
+              {voiceError}
+            </p>
+          ) : null}
+
           {turnsLoading ? (
             <p className="mt-3 text-sm text-gray-500">
               Loading meeting history...
@@ -1940,6 +2491,64 @@ export function MeetingRoom({
                   <p className="mt-2 text-sm leading-6 text-gray-600">
                     {turn.content}
                   </p>
+
+                  {turn.speaker_type === "agent" &&
+                  [
+                    "jake",
+                    "mona",
+                    "rupert",
+                    "randolph",
+                    "lola",
+                    "uncle sam",
+                  ].includes(
+                    turn.speaker_name_snapshot
+                      .trim()
+                      .toLowerCase()
+                  ) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const speakerName =
+                          turn.speaker_name_snapshot
+                            .trim()
+                            .toLowerCase();
+
+                        const agentKey =
+                          speakerName === "uncle sam"
+                            ? "uncle_sam"
+                            : speakerName;
+
+                        const speakerAgent =
+                          orderedAgents.find(
+                            (agent) =>
+                              agent.agent_key === agentKey
+                          );
+
+                        if (speakerAgent) {
+                          setSpeaker(speakerAgent.id);
+                        }
+
+                        void speakMeetingTurn(
+                          turn,
+                          agentKey
+                        ).finally(() => {
+                          if (speakerAgent) {
+                            setListening(
+                              speakerAgent.id
+                            );
+                          }
+                        });
+                      }}
+                      disabled={
+                        speakingTurnId === turn.id
+                      }
+                      className="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {speakingTurnId === turn.id
+                        ? "Speaking..."
+                        : "🔊 Speak"}
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>

@@ -351,6 +351,74 @@ export async function captureAndPersistMeetingLiveOperations({
     }
 
     /*
+     * A task-like capture without a concrete owner is not yet
+     * executable work.
+     *
+     * Broad Founder questions such as "Team, what should we
+     * focus on?" may sound operational, but they must not
+     * silently create ownerless Workboard tasks.
+     *
+     * Preserve the item as Meeting Room discussion instead.
+     */
+    if (
+      isTaskLike(
+        capture.kind
+      ) &&
+      !owner
+    ) {
+      const {
+        error:
+          discussionError,
+      } =
+        await aiTeamSupabaseAdmin
+          .from(
+            "ai_meeting_items"
+          )
+          .insert({
+            meeting_id:
+              meetingId,
+
+            item_type:
+              "discussion",
+
+            title:
+              capture.title,
+
+            content:
+              capture.description ??
+              capture.sourceExcerpt,
+
+            presented_by_agent_id:
+              jake?.id ?? null,
+
+            status:
+              "pending",
+
+            metadata: {
+              ...commonMetadata,
+
+              capture_status:
+                "owner_required",
+
+              expected_outcome:
+                capture.expectedOutcome,
+
+              requires_approval:
+                capture.requiresApproval,
+            },
+          });
+
+      if (discussionError) {
+        console.error(
+          "AI Team ownerless task discussion capture failed:",
+          discussionError
+        );
+      }
+
+      continue;
+    }
+
+    /*
      * Confirmed operational task.
      */
     if (

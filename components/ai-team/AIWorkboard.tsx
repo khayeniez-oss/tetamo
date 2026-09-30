@@ -57,6 +57,8 @@ type TaskRow = {
     string | null;
   requires_approval:
     boolean;
+  metadata:
+    Record<string, unknown> | null;
   due_at:
     string | null;
   started_at:
@@ -420,6 +422,33 @@ export function AIWorkboard({
       >
     >({});
 
+  const [
+    founderReviewActionId,
+    setFounderReviewActionId,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    founderReviewFeedback,
+    setFounderReviewFeedback,
+  ] =
+    useState<
+      Record<
+        string,
+        string
+      >
+    >({});
+
+  const [
+    founderReviewEditingId,
+    setFounderReviewEditingId,
+  ] =
+    useState<
+      string | null
+    >(null);
+
   const loadWorkboard =
     useCallback(
       async (
@@ -782,6 +811,128 @@ export function AIWorkboard({
     }
   }
 
+  async function decideFounderReview(
+    task: TaskRow,
+    decision:
+      | "approved"
+      | "request_change"
+      | "rejected"
+  ) {
+    try {
+      setFounderReviewActionId(
+        task.id
+      );
+
+      setError("");
+      setNotice("");
+
+      const feedback =
+        cleanText(
+          founderReviewFeedback[
+            task.id
+          ]
+        );
+
+      if (
+        decision ===
+          "request_change" &&
+        !feedback
+      ) {
+        throw new Error(
+          "Add Founder feedback before requesting a change."
+        );
+      }
+
+      const token =
+        await getAccessToken();
+
+      const response =
+        await fetch(
+          `/api/admin/ai-team/tasks/${encodeURIComponent(
+            task.id
+          )}/founder-review`,
+          {
+            method:
+              "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                decision,
+                feedback,
+              }),
+          }
+        );
+
+      const payload =
+        await response
+          .json()
+          .catch(
+            () =>
+              null
+          );
+
+      if (
+        !response.ok ||
+        !payload ||
+        payload.ok !==
+          true
+      ) {
+        throw new Error(
+          cleanText(
+            payload?.error
+          ) ||
+            "Unable to save Founder review."
+        );
+      }
+
+      setNotice(
+        decision ===
+          "approved"
+          ? "Deliverable approved by Founder."
+          : decision ===
+              "request_change"
+            ? "Changes requested. A linked revision task was created for the same owner."
+            : "Deliverable rejected by Founder."
+      );
+
+      setFounderReviewFeedback(
+        (current) => ({
+          ...current,
+          [task.id]: "",
+        })
+      );
+
+      setFounderReviewEditingId(
+        null
+      );
+
+      await loadWorkboard(
+        true
+      );
+    } catch (
+      reviewError
+    ) {
+      setError(
+        reviewError instanceof
+          Error
+          ? reviewError.message
+          : "Unable to save Founder review."
+      );
+    } finally {
+      setFounderReviewActionId(
+        null
+      );
+    }
+  }
+
   if (
     loading
   ) {
@@ -1032,14 +1183,249 @@ export function AIWorkboard({
 
                     {task
                       .result_summary ? (
-                      <div className="mt-2 rounded-xl bg-emerald-50 px-4 py-3 text-xs leading-5 text-emerald-700">
-                        <span className="font-semibold">
-                          Result:
-                        </span>{" "}
-                        {
-                          task.result_summary
-                        }
-                      </div>
+                      <>
+                        <div className="mt-2 rounded-xl bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-800">
+                          <div className="mb-2 font-semibold">
+                            Deliverable
+                          </div>
+
+                          <div className="whitespace-pre-wrap">
+                            {
+                              task.result_summary
+                            }
+                          </div>
+                        </div>
+
+                        {task.status ===
+                        "completed" ? (
+                          (() => {
+                            const metadata =
+                              task.metadata &&
+                              typeof task.metadata ===
+                                "object" &&
+                              !Array.isArray(
+                                task.metadata
+                              )
+                                ? task.metadata
+                                : {};
+
+                            const rawReview =
+                              metadata[
+                                "founder_review"
+                              ];
+
+                            const founderReview =
+                              rawReview &&
+                              typeof rawReview ===
+                                "object" &&
+                              !Array.isArray(
+                                rawReview
+                              )
+                                ? rawReview as
+                                    Record<
+                                      string,
+                                      unknown
+                                    >
+                                : null;
+
+                            const reviewStatus =
+                              cleanText(
+                                founderReview
+                                  ?.status
+                              );
+
+                            const reviewFeedback =
+                              cleanText(
+                                founderReview
+                                  ?.feedback
+                              );
+
+                            const busy =
+                              founderReviewActionId ===
+                              task.id;
+
+                            const editing =
+                              founderReviewEditingId ===
+                              task.id;
+
+                            if (
+                              reviewStatus
+                            ) {
+                              return (
+                                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-semibold text-gray-800">
+                                      Founder Review:
+                                    </span>
+
+                                    <span className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700">
+                                      {
+                                        reviewStatus ===
+                                        "approved"
+                                          ? "Approved"
+                                          : reviewStatus ===
+                                              "changes_requested"
+                                            ? "Changes Requested"
+                                            : reviewStatus ===
+                                                "rejected"
+                                              ? "Rejected"
+                                              : humanize(
+                                                  reviewStatus
+                                                )
+                                      }
+                                    </span>
+                                  </div>
+
+                                  {reviewFeedback ? (
+                                    <div className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-600">
+                                      <span className="font-semibold text-gray-700">
+                                        Founder feedback:
+                                      </span>{" "}
+                                      {
+                                        reviewFeedback
+                                      }
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="mt-3 rounded-xl border border-gray-200 bg-white px-4 py-4">
+                                <div className="text-sm font-semibold text-gray-900">
+                                  Founder Review
+                                </div>
+
+                                <div className="mt-1 text-xs leading-5 text-gray-500">
+                                  Review the finished deliverable. This is separate from Safety Approval and does not publish, send, spend, or contact anyone.
+                                </div>
+
+                                {editing ? (
+                                  <div className="mt-3">
+                                    <textarea
+                                      value={
+                                        founderReviewFeedback[
+                                          task.id
+                                        ] ||
+                                        ""
+                                      }
+                                      onChange={(
+                                        event
+                                      ) =>
+                                        setFounderReviewFeedback(
+                                          (
+                                            current
+                                          ) => ({
+                                            ...current,
+                                            [
+                                              task.id
+                                            ]:
+                                              event
+                                                .target
+                                                .value,
+                                          })
+                                        )
+                                      }
+                                      rows={4}
+                                      placeholder="Tell the owner exactly what you want changed..."
+                                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-gray-400"
+                                      disabled={
+                                        busy
+                                      }
+                                    />
+
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void decideFounderReview(
+                                            task,
+                                            "request_change"
+                                          )
+                                        }
+                                        disabled={
+                                          busy
+                                        }
+                                        className="rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {
+                                          busy
+                                            ? "Saving..."
+                                            : "Submit Change Request"
+                                        }
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setFounderReviewEditingId(
+                                            null
+                                          )
+                                        }
+                                        disabled={
+                                          busy
+                                        }
+                                        className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void decideFounderReview(
+                                          task,
+                                          "approved"
+                                        )
+                                      }
+                                      disabled={
+                                        busy
+                                      }
+                                      className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      Approved
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setFounderReviewEditingId(
+                                          task.id
+                                        )
+                                      }
+                                      disabled={
+                                        busy
+                                      }
+                                      className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      Request Change
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void decideFounderReview(
+                                          task,
+                                          "rejected"
+                                        )
+                                      }
+                                      disabled={
+                                        busy
+                                      }
+                                      className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 )

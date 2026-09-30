@@ -75,6 +75,56 @@ type GenerateJakeMeetingDecisionInput = {
   agents: JakeMeetingAgent[];
 };
 
+function isDirectJakeSelfAssignment(
+  founderQuestion: string
+) {
+  const text =
+    founderQuestion
+      .trim()
+      .toLowerCase();
+
+  if (!text) {
+    return false;
+  }
+
+  /*
+   * Deterministic Founder-authority guard.
+   *
+   * Prompt instructions remain useful for normal routing, but an
+   * explicit Founder instruction for Jake himself must not be
+   * overridden by probabilistic specialist-domain routing.
+   */
+  const directlyAddressesJake =
+    /(?:^|[,.!?;:]\\s*)jake\\b/i.test(
+      founderQuestion
+    );
+
+  if (!directlyAddressesJake) {
+    return false;
+  }
+
+  const explicitlyRequestsJake =
+    /\\b(?:answer\\s+(?:this\\s+)?yourself|you\\s+are\\s+the\\s+owner|handle\\s+(?:this|it)\\s+yourself|do\\s+(?:this|it)\\s+yourself|create\\s+(?:the|this|a)\\s+(?:action\\s+plan|plan|task\\s+breakdown)|turn\\s+.*?into\\s+tasks|assign\\s+(?:an?\\s+)?owner|assign\\s+owners|prioriti[sz]e\\s+(?:this|these|the)|give\\s+me\\s+(?:the|your)\\s+(?:final\\s+)?(?:answer|recommendation|conclusion|deliverable)|summari[sz]e\\s+(?:this|these|the)|coordinate\\s+(?:this|it))\\b/i.test(
+      text
+    );
+
+  if (!explicitlyRequestsJake) {
+    return false;
+  }
+
+  /*
+   * Explicit consultation instructions are the exception.
+   * Jake remains executive owner, but the Founder has asked to hear
+   * or obtain specialist input first.
+   */
+  const explicitlyRequestsSpecialists =
+    /\\b(?:ask|consult|involve|get|obtain|hear\\s+from|coordinate\\s+with)\\b[\\s\\S]{0,100}\\b(?:mona|rupert|randolph|lola|uncle\\s+sam|specialist|team)\\b/i.test(
+      text
+    );
+
+  return !explicitlyRequestsSpecialists;
+}
+
 function buildMeetingTranscript(
   turns: JakeMeetingTurn[]
 ) {
@@ -260,6 +310,24 @@ export async function generateJakeMeetingPlan({
   recentTurns,
   agents,
 }: GenerateJakeMeetingPlanInput): Promise<JakeMeetingPlan> {
+  /*
+   * Founder authority is enforced before model-based routing.
+   *
+   * If Khaye explicitly assigns the answer/work to Jake himself,
+   * there is no specialist speaking queue unless she explicitly
+   * requested specialist consultation.
+   */
+  if (
+    isDirectJakeSelfAssignment(
+      founderQuestion
+    )
+  ) {
+    return {
+      specialistOrder: [],
+      needsJakeSynthesis: true,
+    };
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return {
       specialistOrder: [],
@@ -323,9 +391,40 @@ ROUTING RULES
 
 Choose the SMALLEST specialist set needed to answer the Founder properly.
 
+DIRECT ADDRESS OVERRIDES NORMAL DOMAIN ROUTING:
+- If the Founder directly asks a named ACTIVE SPECIALIST to answer, speak, respond, explain, give their view, or otherwise take the floor, include that specialist in specialistOrder.
+- A directly addressed specialist may be included even when the immediate question is not primarily about that specialist's normal domain.
+- If the Founder directly asks multiple named specialists to respond, include those requested specialists in the most natural conversational order.
+- Direct address requires conversational intent for that specialist to take the floor. Merely mentioning, describing, praising, criticising, or discussing a specialist does NOT count as asking them to speak.
+- Example: "Mona, can you answer me?" -> include Mona.
+- Example: "Mona, what do you think?" -> include Mona.
+- Example: "Mona and Rupert, both of you answer." -> include Mona and Rupert.
+- Example: "Mona is doing a good job." -> do not include Mona merely because her name appears.
+
+
+DIRECT EXECUTIVE ASSIGNMENT RULE:
+If the Founder directly addresses Jake and asks Jake personally to answer, summarize, coordinate, prioritize, organize, assign, convert meeting decisions into tasks, create the task breakdown, or give the executive conclusion, do NOT hand the request to a specialist merely because the subject overlaps a specialist domain.
+
+In that case:
+- specialist_order should be empty;
+- Jake should answer or perform the executive coordination himself after planning.
+
+Exception:
+If the Founder explicitly asks Jake to ask, consult, involve, coordinate with, or obtain input from named specialist(s), route to those specialist(s) in the requested natural order and let Jake synthesize afterward when appropriate.
+
+Examples:
+- "Jake, turn these meeting decisions into tasks." -> Jake, no specialist handoff.
+- "Jake, summarize what we decided." -> Jake, no specialist handoff.
+- "Jake, prioritize these actions." -> Jake, no specialist handoff.
+- "Jake, ask Mona for the sales numbers." -> Mona.
+- "Jake, get Mona and Lola's input then give me the conclusion." -> Mona, Lola, then Jake synthesis.
+
+- Example: "Jake, can you answer?" -> do not add a specialist; Jake can answer after planning.
+- Never include a directly addressed specialist who is absent from ACTIVE SPECIALISTS.
+
 Normal executive questions should usually need 1 to 3 specialists, not everyone.
 
-Do not create a round-robin because the Founder says:
+Do not create a round-robin merely because the Founder says:
 "team",
 "everyone",
 "guys",
@@ -648,6 +747,12 @@ You are NOT executing business actions in this function.
 IMPORTANT BEHAVIOR
 - Behave like a natural COO in a real shared meeting.
 - Do not answer every question yourself.
+- When the Founder directly assigns Jake the current request, Jake must actually complete the requested executive response in this turn.
+- If the Founder already asked Jake to create, assign, prioritize, summarize, coordinate, recommend, conclude or provide a deliverable, do that work now.
+- Do not end with "let me know if you want me to..." for work the Founder already requested.
+- Do not ask the Founder for permission to perform the exact internal planning or response she already assigned.
+- When Jake is the only eligible agent because the fixed Founder-turn plan has no specialist queue, answer the Founder's actual request directly rather than merely summarizing context.
+- Never invent missing Tetamo facts, metrics, tools, staff, systems, dates, approvals or completed actions in order to make the answer look more complete.
 - If Khaye directly asks a specialist about their area, hand the floor to that specialist.
 - If a specialist is clearly better suited to answer, hand the floor to them.
 - If Khaye gives a general greeting such as "Morning everyone", Jake may reply briefly on behalf of the room.

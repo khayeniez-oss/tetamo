@@ -11,6 +11,10 @@ import {
   startAssignedMeetingTasksForAgent,
 } from "@/lib/ai-team/core/task-lifecycle";
 
+import {
+  executeMeetingTask,
+} from "@/lib/ai-team/core/meeting-task-executor";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -442,6 +446,7 @@ export async function POST(
      * to in_progress. It never marks the work completed.
      */
     try {
+      const taskStartResult =
       await startAssignedMeetingTasksForAgent({
         meetingId,
 
@@ -454,6 +459,39 @@ export async function POST(
         actorAgentKey:
           "randolph",
       });
+
+      /*
+       * Execute only tasks that changed from pending to
+       * in_progress during this exact acknowledgement.
+       *
+       * Existing in-progress Workboard tasks are never scanned.
+       */
+      for (
+        const taskId of
+        taskStartResult.startedTaskIds
+      ) {
+        try {
+          await executeMeetingTask({
+            taskId,
+          });
+        } catch (
+          taskExecutionError
+        ) {
+          /*
+           * Execution failure must not erase the valid
+           * Meeting Room response or falsely complete work.
+           * The task remains in_progress for inspection/retry.
+           */
+          console.error(
+            "randolph Meeting Room task execution failed:",
+            {
+              taskId,
+              error:
+                taskExecutionError,
+            }
+          );
+        }
+      }
     } catch (
       taskLifecycleError
     ) {

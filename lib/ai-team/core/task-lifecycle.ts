@@ -801,15 +801,20 @@ export async function startAssignedMeetingTasksForAgent({
 
   let started = 0;
 
+  const startedTaskIds:
+    string[] = [];
+
   for (
     const task of tasks
   ) {
+    const taskId =
+      String(
+        task.id
+      );
+
     const result =
       await transitionAssignedAITask({
-        taskId:
-          String(
-            task.id
-          ),
+        taskId,
 
         actorAgentKey,
 
@@ -827,6 +832,10 @@ export async function startAssignedMeetingTasksForAgent({
       result.changed
     ) {
       started += 1;
+
+      startedTaskIds.push(
+        taskId
+      );
     }
   }
 
@@ -835,5 +844,14 @@ export async function startAssignedMeetingTasksForAgent({
       tasks.length,
 
     started,
+
+    /*
+     * Only tasks whose transition actually changed
+     * pending -> in_progress are returned here.
+     *
+     * Meeting execution must use this list rather
+     * than scanning existing in-progress tasks.
+     */
+    startedTaskIds,
   };
 }

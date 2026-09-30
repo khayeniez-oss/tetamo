@@ -15,6 +15,14 @@ import {
   isAIAgentKey,
 } from "@/lib/ai-team/permissions/agent-permissions";
 
+import {
+  startAssignedMeetingTasksForAgent,
+} from "@/lib/ai-team/core/task-lifecycle";
+
+import {
+  executeMeetingTask,
+} from "@/lib/ai-team/core/meeting-task-executor";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -715,6 +723,53 @@ export async function POST(
           },
           { status: 500 }
         );
+      }
+
+      /*
+       * Jake must enter the same Meeting Room task lifecycle
+       * as every specialist.
+       *
+       * This only starts tasks explicitly assigned to Jake for
+       * this exact Founder turn. Ownership protection remains
+       * enforced by transitionAssignedAITask().
+       */
+      if (latestFounderTurn) {
+        const taskStartResult =
+          await startAssignedMeetingTasksForAgent({
+            meetingId,
+            founderTurnId:
+              latestFounderTurn.id,
+            specialistTurnId:
+              savedTurn.id,
+            actorAgentKey:
+              "jake",
+          });
+
+        /*
+         * Execute only Jake tasks started by this exact
+         * Founder-turn acknowledgement.
+         */
+        for (
+          const taskId of
+          taskStartResult.startedTaskIds
+        ) {
+          try {
+            await executeMeetingTask({
+              taskId,
+            });
+          } catch (
+            taskExecutionError
+          ) {
+            console.error(
+              "Jake Meeting Room task execution failed:",
+              {
+                taskId,
+                error:
+                  taskExecutionError,
+              }
+            );
+          }
+        }
       }
     }
 

@@ -25,3 +25,132 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+
+/* =========================================================
+   Tetamo AI Team — Meeting Room character presence
+   ========================================================= */
+
+@keyframes tetamo-ai-idle {
+  0%, 100% {
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    transform: scale(1.006) translateY(-1px);
+  }
+}
+
+@keyframes tetamo-ai-listening {
+  0%, 100% {
+    transform: scale(1.015) translateY(0);
+  }
+  50% {
+    transform: scale(1.025) translateY(-2px);
+  }
+}
+
+@keyframes tetamo-ai-thinking {
+  0%, 100% {
+    transform: scale(1.01) translateX(0) rotate(0deg);
+  }
+  33% {
+    transform: scale(1.015) translateX(-2px) rotate(-0.35deg);
+  }
+  66% {
+    transform: scale(1.015) translateX(2px) rotate(0.35deg);
+  }
+}
+
+@keyframes tetamo-ai-speaking {
+  0%, 100% {
+    transform: scale(1.025) translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.035) translateY(-2px) rotate(-0.3deg);
+  }
+  50% {
+    transform: scale(1.03) translateY(0) rotate(0.2deg);
+  }
+  75% {
+    transform: scale(1.038) translateY(-1px) rotate(0.35deg);
+  }
+}
+
+@keyframes tetamo-ai-acknowledging {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  35% {
+    transform: translateY(3px) rotate(0.5deg);
+  }
+  65% {
+    transform: translateY(-1px) rotate(-0.25deg);
+  }
+}
+
+@keyframes tetamo-ai-flagging {
+  0%, 100% {
+    transform: scale(1.015) translateX(0);
+  }
+  20% {
+    transform: scale(1.025) translateX(-3px) rotate(-0.4deg);
+  }
+  40% {
+    transform: scale(1.025) translateX(3px) rotate(0.4deg);
+  }
+  60% {
+    transform: scale(1.025) translateX(-2px) rotate(-0.25deg);
+  }
+  80% {
+    transform: scale(1.02) translateX(2px) rotate(0.25deg);
+  }
+}
+
+@keyframes tetamo-ai-wave {
+  0%, 100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.tetamo-ai-idle {
+  animation: tetamo-ai-idle 4.8s ease-in-out infinite;
+}
+
+.tetamo-ai-listening {
+  animation: tetamo-ai-listening 2.8s ease-in-out infinite;
+}
+
+.tetamo-ai-thinking {
+  animation: tetamo-ai-thinking 2.1s ease-in-out infinite;
+}
+
+.tetamo-ai-speaking {
+  animation: tetamo-ai-speaking 1.35s ease-in-out infinite;
+}
+
+.tetamo-ai-acknowledging {
+  animation: tetamo-ai-acknowledging 0.65s ease-in-out 2;
+}
+
+.tetamo-ai-flagging {
+  animation: tetamo-ai-flagging 0.55s ease-in-out 2;
+}
+
+.tetamo-ai-wave-bar {
+  transform-origin: bottom;
+  animation: tetamo-ai-wave 0.65s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tetamo-ai-idle,
+  .tetamo-ai-listening,
+  .tetamo-ai-thinking,
+  .tetamo-ai-speaking,
+  .tetamo-ai-acknowledging,
+  .tetamo-ai-flagging,
+  .tetamo-ai-wave-bar {
+    animation: none !important;
+  }
+}
