@@ -3264,10 +3264,51 @@ function enforceBrainRouting(
   const resolvedMeaning =
     String(result.latestMeaning || "").toLowerCase();
 
+  /*
+   * LISTING HOW-TO → APPROVED ROLE-SPECIFIC TUTORIAL
+   *
+   * If Mona already knows the customer is an Agent/Agency or Owner,
+   * a direct how-to-list request is itself sufficient reason to send
+   * the applicable approved tutorial.
+   *
+   * Unknown roles are intentionally left alone so normal role
+   * clarification can happen instead of guessing.
+   */
+  if (
+    result.intent === "how_to_list" &&
+    result.clarification.needed === false &&
+    (
+      result.customerType === "agent" ||
+      result.customerType === "agency" ||
+      result.customerType === "owner"
+    ) &&
+    (
+      result.resourceAction.action === "none" ||
+      result.resourceAction.action === "send"
+    )
+  ) {
+    const listingTutorialResourceId =
+      result.customerType === "owner"
+        ? "listing_tutorial_owner"
+        : "listing_tutorial_agent";
+
+    result = {
+      ...result,
+      resourceAction: {
+        requested: true,
+        action: "send",
+        resourceId: listingTutorialResourceId,
+      },
+    };
+  }
+
   const isListingTutorialFactQuestion =
     result.resourceAction.action === "none" &&
     result.resourceAction.requested === false &&
-    result.resourceAction.resourceId === "listing_tutorial" &&
+    (
+      result.resourceAction.resourceId === "listing_tutorial_agent" ||
+      result.resourceAction.resourceId === "listing_tutorial_owner"
+    ) &&
     resolvedMeaning.includes("listing tutorial") &&
     (
       resolvedMeaning.includes("asks") ||
@@ -3785,13 +3826,19 @@ OUTPUT RULES:
 - Use resourceAction.action="none" when the latest turn is not a resource-delivery decision.
 - resourceAction.requested=true only when action="send".
 - resourceAction.resourceId must identify the specific resolved resource when known from conversation context; otherwise null.
-- For the currently approved Tetamo listing tutorial, use resourceId="listing_tutorial".
-- Never assign resourceId="listing_tutorial" to payment links, invoices, receipts, package checkout, or any unrelated resource request.
+- Tetamo has separate approved listing tutorials for Agents and Property Owners.
+- For an established Agent or Agency asking for or agreeing to receive the listing tutorial, use resourceId="listing_tutorial_agent".
+- For an established Property Owner asking for or agreeing to receive the listing tutorial, use resourceId="listing_tutorial_owner".
+- If the customer's role is already established from the real conversation, do not ask for the role again merely to choose the listing tutorial.
+- If the customer's role is genuinely unknown and the correct tutorial depends on that role, use the existing role clarification process rather than guessing.
+- Never send both listing tutorials unless the customer explicitly asks for both.
+- Never assign either listing tutorial resource ID to payment links, invoices, receipts, package checkout, or any unrelated resource request.
 - A factual question ABOUT an approved resource is different from a request to SEND that resource.
-- If the customer asks what the listing tutorial is, what it covers, who it is for, or another factual question about that tutorial, keep resourceAction.action="none" unless they also ask to receive it now.
-- When the factual discussion is specifically about the approved Tetamo listing tutorial, preserve its identity with resourceAction.resourceId="listing_tutorial" even though resourceAction.action="none" and resourceAction.requested=false.
-- For a factual question about the listing tutorial, set factualKnowledgeNeeded=true and include a precise knowledgeRequest such as "approved facts about the Tetamo listing tutorial".
-- Do not infer or invent the tutorial contents from general listing knowledge. Ask Knowledge for approved facts about the resource.
+- If the customer asks what their applicable listing tutorial is, what it covers, who it is for, or another factual question about it, keep resourceAction.action="none" unless they also ask to receive it now.
+- For an established Agent or Agency factual discussion about the listing tutorial, preserve resourceAction.resourceId="listing_tutorial_agent".
+- For an established Property Owner factual discussion about the listing tutorial, preserve resourceAction.resourceId="listing_tutorial_owner".
+- For a factual question about a listing tutorial, set factualKnowledgeNeeded=true and include a precise knowledgeRequest such as "approved facts about the applicable Tetamo listing tutorial".
+- Do not infer or invent tutorial contents from general listing knowledge. Ask Knowledge for approved facts about the resource.
 - A general feature question is platform_features, not package_features.
 - A named package feature question is package_features.
 - A testimonial/proof question is proof_testimonial and must not be collapsed into traffic_growth.

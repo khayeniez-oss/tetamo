@@ -2307,17 +2307,18 @@ export async function writeMonaReply(
   if (
     params.brain.resourceAction.requested === false &&
     params.brain.resourceAction.action === "none" &&
-    params.brain.resourceAction.resourceId ===
-      "listing_tutorial" &&
+    (
+      params.brain.resourceAction.resourceId ===
+        "listing_tutorial_agent" ||
+      params.brain.resourceAction.resourceId ===
+        "listing_tutorial_owner"
+    ) &&
     params.brain.factualKnowledgeNeeded &&
     generalFactsText
   ) {
-    const asksAboutAudience =
-      params.brain.knowledgeRequest.some((request) =>
-        request
-          .toLowerCase()
-          .includes("intended users")
-      );
+    const isAgentTutorial =
+      params.brain.resourceAction.resourceId ===
+      "listing_tutorial_agent";
 
     const reply =
       asksAboutAudience
