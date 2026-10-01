@@ -2321,13 +2321,13 @@ export async function writeMonaReply(
       "listing_tutorial_agent";
 
     const reply =
-      asksAboutAudience
-        ? params.brain.languageStyle.primaryLanguage === "en"
-          ? "Yes. The Tetamo Listing Tutorial is an official step-by-step resource for both Agents and Property Owners who want guidance on creating a property listing."
-          : "Iya Kak. Tetamo Listing Tutorial adalah panduan step-by-step resmi untuk Agent dan Property Owner yang ingin membuat listing properti."
-        : params.brain.languageStyle.primaryLanguage === "en"
-          ? "The Tetamo Listing Tutorial is an official step-by-step resource for Agents and Property Owners who want guidance on creating a property listing."
-          : "Tetamo Listing Tutorial adalah panduan step-by-step resmi untuk Agent dan Property Owner yang ingin membuat listing properti.";
+      params.brain.languageStyle.primaryLanguage === "en"
+        ? isAgentTutorial
+          ? "The Tetamo Agent Listing Tutorial is the official step-by-step resource for Agents who want guidance on creating a property listing."
+          : "The Tetamo Property Owner Listing Tutorial is the official step-by-step resource for Property Owners who want guidance on creating a property listing."
+        : isAgentTutorial
+          ? "Tetamo Agent Listing Tutorial adalah panduan step-by-step resmi untuk Agent yang ingin membuat listing properti."
+          : "Tetamo Property Owner Listing Tutorial adalah panduan step-by-step resmi untuk Property Owner yang ingin membuat listing properti.";
 
     return {
       action: "reply",
