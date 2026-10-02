@@ -2272,6 +2272,7 @@ function recoverEstablishedCustomerType(
     }
 
     if (
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:buyer|pembeli|renter|penyewa)\b/i.test(text) ||
       /\b(?:saya|aku|sy|gue|gw)\s+(?:lagi\s+|sedang\s+|mau\s+|ingin\s+)?(?:cari|mencari)\s+(?:rumah|villa|vila|apartemen|property|properti|tanah)\b/i.test(text) ||
       /\b(?:saya|aku|sy|gue|gw)\s+mau\s+(?:beli|sewa)\s+(?:rumah|villa|vila|apartemen|property|properti|tanah)\b/i.test(text)
     ) {
@@ -2490,6 +2491,70 @@ function repairPreciseBrainIntent(
 
   const packageSubject = canonicalPackageSubject(latest);
   const asksFeatures = /\bfitur(?:nya)?\b|\bfeatures?\b/i.test(latest);
+
+  /*
+   * GENERAL TETAMO FACT / COMMERCIAL TRUTH REPAIR
+   *
+   * The model may understand a short factual customer message correctly while
+   * still returning intent=unknown and no directQuestion. Repair the routing
+   * category here, but do NOT answer the fact here. Approved Knowledge remains
+   * the factual source of truth.
+   */
+  const mentionsPropertyAddressOrLocation =
+    /\b(?:alamat|address|lokasi|location)\s+(?:property|properti|villa|rumah|apartemen|apartment|tanah|land)\b|\b(?:property|properti|villa|rumah|apartemen|apartment|tanah|land)\b[^.!?]{0,40}\b(?:alamat|address|lokasi|location)\b/i.test(
+      lower
+    );
+
+  const asksTetamoOfficeOrCompanyFact =
+    !mentionsPropertyAddressOrLocation &&
+    /\b(?:kantor(?:nya)?|office(?:nya)?|alamat(?:nya)?|address|lokasi\s+kantor(?:nya)?|company|perusahaan(?:nya)?|pt\.?|pty\.?\s*ltd|abn)\b/i.test(
+      lower
+    );
+
+  const discussesCommissionTracking =
+    /\b(?:track|tracking|catat|record|dashboard)\b[^.!?]{0,50}\bkomisi(?:nya)?\b|\bkomisi(?:nya)?\b[^.!?]{0,50}\b(?:track|tracking|catat|record|dashboard)\b/i.test(
+      lower
+    );
+
+  const discussesTetamoCommission =
+    !discussesCommissionTracking &&
+    /\b(?:komisi(?:nya)?|commission|jasa\s+komisi|fee\s+perantara|komisi\s+perantara)\b/i.test(
+      lower
+    );
+
+  const discussesPropertyTransactionPayment =
+    /\b(?:deposit|property|properti|villa|rumah|apartemen|apartment|tanah|land)\b[^.!?]{0,60}\b(?:transfer|rekening(?:nya)?|pembayaran(?:nya)?|payment)\b|\b(?:transfer|rekening(?:nya)?|pembayaran(?:nya)?|payment)\b[^.!?]{0,60}\b(?:owner|pemilik|seller|penjual)\b/i.test(
+      lower
+    );
+
+  const asksPaymentMethod =
+    !discussesPropertyTransactionPayment &&
+    /\b(?:bayar(?:nya)?|pembayaran(?:nya)?|payment|cara\s+bayar|cara\s+pembayaran(?:nya)?|metode\s+pembayaran(?:nya)?|qris|transfer|rekening(?:nya)?)\b/i.test(
+      lower
+    );
+
+  if (asksTetamoOfficeOrCompanyFact) {
+    applyPreciseMeaning(
+      "general_information",
+      "Tetamo company / office information",
+      "Customer is asking for or discussing factual Tetamo company or office information.",
+      "What are the approved Tetamo company or office facts relevant to the customer's message?"
+    );
+  } else if (discussesTetamoCommission) {
+    applyPreciseMeaning(
+      "general_information",
+      "Tetamo commission / business model",
+      "Customer is asking about or stating a commission or intermediary-fee claim that may need correction against Tetamo's approved business-model facts.",
+      "What are the approved Tetamo commission and business-model facts relevant to the customer's message?"
+    );
+  } else if (asksPaymentMethod) {
+    applyPreciseMeaning(
+      "payment",
+      "Tetamo payment flow",
+      "Customer is asking how Tetamo payment works or which payment method or destination applies.",
+      "How should the customer complete the applicable Tetamo payment flow?"
+    );
+  }
 
   const asksPackageToolCapability =
     /\b(?:bisa|bsa|bs|can|include|included|termasuk)\b.{0,80}\b(?:generate|buat|create|dokumen|document|documents|professional|profesional|proposal|inventory|agreement|loi)\b/i.test(
@@ -2735,6 +2800,7 @@ function applyKnownRoleIntentRouting(
     "how_to_list",
     "how_to_use",
     "registration",
+    "general_information",
   ]);
 
   let result = { ...decision };
@@ -2905,7 +2971,8 @@ function enforceBrainRouting(
       result.intent === "feature_availability" ||
       result.intent === "feature_details" ||
       result.intent === "feature_example" ||
-      result.intent === "how_to_use";
+      result.intent === "how_to_use" ||
+      result.intent === "general_information";
 
     const roleNeutralPayment =
       result.intent === "payment";

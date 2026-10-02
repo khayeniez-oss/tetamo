@@ -1357,9 +1357,51 @@ export async function retrieveMonaKnowledge(
     ? []
     : chooseMatches(retrievalQuery);
 
+  /*
+   * SUBJECT-GROUNDED GENERAL INFORMATION
+   * ------------------------------------
+   *
+   * Brain has already resolved these customer messages to a specific approved
+   * factual subject. Guarantee that the authoritative hardcoded section for
+   * that subject is present before broad ranked retrieval.
+   *
+   * This does not change the generic scorer and does not put business facts in
+   * Brain. Knowledge remains the source of factual truth.
+   */
+  const subjectGroundedSectionIds =
+    params.brain.intent === "general_information"
+      ? params.brain.intentSubject ===
+        "Tetamo company / office information"
+        ? ["who-is-tetamo"]
+        : params.brain.intentSubject ===
+            "Tetamo commission / business model"
+          ? ["tetamo-business-model"]
+          : []
+      : [];
+
+  const subjectGroundedMatches: MonaKnowledgeMatch[] =
+    subjectGroundedSectionIds
+      .map((sectionId, index) => {
+        const section = TETAMO_KNOWLEDGE.find(
+          (candidate) => candidate.id === sectionId
+        );
+
+        return section
+          ? {
+              section,
+              score: 900 - index,
+            }
+          : null;
+      })
+      .filter(
+        (match): match is MonaKnowledgeMatch =>
+          match !== null
+      );
+
   const seen = new Set<string>();
   const matches = [
     ...productMatches,
+    ...subjectGroundedMatches,
     ...legacyMatches,
   ]
     .filter((match) => {

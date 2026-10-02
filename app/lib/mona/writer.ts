@@ -1280,6 +1280,88 @@ function deterministicIntentFallbackReply(
 
   const has = (pattern: RegExp) => pattern.test(facts);
 
+  /*
+   * GENERAL INFORMATION
+   * -------------------
+   *
+   * Brain has already identified the factual subject and Knowledge has already
+   * retrieved approved Tetamo truth. This fallback may phrase only facts that
+   * are actually present in that approved Knowledge result.
+   *
+   * If the required fact is absent, return no deterministic answer and preserve
+   * the existing safe fallback behavior rather than inventing one.
+   */
+  if (intent === "general_information" && facts) {
+    const companyOfficeSubject =
+      /company|office/i.test(subject || "");
+
+    const commissionSubject =
+      /commission|business model/i.test(subject || "");
+
+    if (companyOfficeSubject) {
+      const hasSydneyOffice =
+        /office in Sydney, Australia/i.test(facts);
+
+      const hasAustralianRegistration =
+        /registered in Australia/i.test(facts);
+
+      const abnMatch =
+        facts.match(/ABN\s+([0-9 ]{11,})/i);
+
+      if (hasSydneyOffice) {
+        const registration =
+          hasAustralianRegistration
+            ? abnMatch
+              ? language === "en"
+                ? ` Tetamo Pty Ltd is registered in Australia under ABN ${abnMatch[1].trim()}.`
+                : ` Tetamo Pty Ltd terdaftar di Australia dengan ABN ${abnMatch[1].trim()}.`
+              : language === "en"
+                ? " Tetamo Pty Ltd is registered in Australia."
+                : " Tetamo Pty Ltd terdaftar di Australia."
+            : "";
+
+        return {
+          action: "reply",
+          reply:
+            language === "en"
+              ? `Tetamo has an office in Sydney, Australia.${registration}`
+              : `Kantor Tetamo berada di Sydney, Australia, Kak.${registration}`,
+          source: "fallback",
+        };
+      }
+    }
+
+    if (commissionSubject) {
+      const noOwnerAgentCommission =
+        /does not collect a sales commission from property owners or (?:property )?agents/i.test(
+          facts
+        );
+
+      const separateCommissionArrangement =
+        /commission arrangement[^\n]*separate from Tetamo/i.test(
+          facts
+        );
+
+      if (noOwnerAgentCommission) {
+        const separation =
+          separateCommissionArrangement
+            ? language === "en"
+              ? " Any commission arrangement between an owner, agent, agency, or other intermediary is separate from Tetamo."
+              : " Kalau ada arrangement komisi antara owner, agent, agency, atau perantara lain, itu terpisah dari Tetamo."
+            : "";
+
+        return {
+          action: "reply",
+          reply:
+            language === "en"
+              ? `Tetamo does not collect a sales commission from property owners or agents when a property is sold or rented through Tetamo.${separation}`
+              : `Tetamo tidak mengambil komisi penjualan atau penyewaan dari property owner maupun agent, Kak.${separation}`,
+          source: "fallback",
+        };
+      }
+    }
+  }
+
   if (intent === "acknowledgement") {
     return {
       action: "reply",
