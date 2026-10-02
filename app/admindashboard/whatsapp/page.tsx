@@ -413,10 +413,13 @@ export default function AdminWhatsappInboxPage() {
     nextPage = page,
     nextChannelFilter = channelFilter,
     nextPageSize = pageSize,
-    nextSalesStageFilter = salesStageFilter
+    nextSalesStageFilter = salesStageFilter,
+    showLoading = true
   ) {
     try {
-      setLoadingConversations(true);
+      if (showLoading) {
+        setLoadingConversations(true);
+      }
       setError("");
 
       const token = await getAccessToken();
@@ -475,15 +478,22 @@ export default function AdminWhatsappInboxPage() {
       console.error("Load WhatsApp conversations error:", err);
       setError(err?.message || "Failed to load WhatsApp conversations.");
     } finally {
-      setLoadingConversations(false);
+      if (showLoading) {
+        setLoadingConversations(false);
+      }
     }
   }
 
-  async function loadMessages(conversationId: string) {
+  async function loadMessages(
+    conversationId: string,
+    showLoading = true
+  ) {
     if (!conversationId) return;
 
     try {
-      setLoadingMessages(true);
+      if (showLoading) {
+        setLoadingMessages(true);
+      }
       setError("");
 
       const token = await getAccessToken();
@@ -517,7 +527,9 @@ export default function AdminWhatsappInboxPage() {
       console.error("Load WhatsApp messages error:", err);
       setError(err?.message || "Failed to load WhatsApp messages.");
     } finally {
-      setLoadingMessages(false);
+      if (showLoading) {
+        setLoadingMessages(false);
+      }
     }
   }
 
@@ -554,8 +566,15 @@ export default function AdminWhatsappInboxPage() {
         throw new Error(result.error || "Failed to update conversation.");
       }
 
-      await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
-      await loadMessages(selectedConversationId);
+      await loadConversations(
+        filter,
+        page,
+        channelFilter,
+        pageSize,
+        salesStageFilter,
+        false
+      );
+      await loadMessages(selectedConversationId, false);
     } catch (err: any) {
       console.error("Update WhatsApp conversation error:", err);
       setError(err?.message || "Failed to update conversation.");
@@ -599,8 +618,15 @@ export default function AdminWhatsappInboxPage() {
       }
 
       setSuccessMessage(`Moved to ${SALES_STAGE_LABELS[salesStage]}.`);
-      await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
-      await loadMessages(selectedConversationId);
+      await loadConversations(
+        filter,
+        page,
+        channelFilter,
+        pageSize,
+        salesStageFilter,
+        false
+      );
+      await loadMessages(selectedConversationId, false);
     } catch (err: any) {
       console.error("Update WhatsApp sales stage error:", err);
       setError(err?.message || "Failed to update sales stage.");
@@ -671,8 +697,15 @@ export default function AdminWhatsappInboxPage() {
         }. AI remains paused until you resume it.`
       );
 
-      await loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
-      await loadMessages(selectedConversationId);
+      await loadConversations(
+        filter,
+        page,
+        channelFilter,
+        pageSize,
+        salesStageFilter,
+        false
+      );
+      await loadMessages(selectedConversationId, false);
     } catch (err: any) {
       setError(err?.message || "Failed to send WhatsApp reply.");
     } finally {
@@ -863,8 +896,17 @@ export default function AdminWhatsappInboxPage() {
             <button
               type="button"
               onClick={() => {
-                loadConversations(filter, page, channelFilter, pageSize, salesStageFilter);
-                if (selectedConversationId) loadMessages(selectedConversationId);
+                loadConversations(
+                  filter,
+                  page,
+                  channelFilter,
+                  pageSize,
+                  salesStageFilter,
+                  false
+                );
+                if (selectedConversationId) {
+                  loadMessages(selectedConversationId, false);
+                }
               }}
               className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
@@ -1472,7 +1514,7 @@ export default function AdminWhatsappInboxPage() {
               </div>
 
               <div className="max-h-[640px] space-y-4 overflow-y-auto bg-gray-50 p-4 sm:p-5">
-                {loadingMessages ? (
+                {loadingMessages && messages.length === 0 ? (
                   <div className="rounded-2xl border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
                     Loading messages...
                   </div>
