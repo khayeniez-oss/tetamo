@@ -1365,6 +1365,13 @@ async function callJson(
   secret: string,
   body: unknown
 ) {
+  const vercelBypassSecret =
+    String(
+      process.env
+        .VERCEL_AUTOMATION_BYPASS_SECRET ||
+        ""
+    ).trim();
+
   const response =
     await fetch(
       url,
@@ -1378,6 +1385,13 @@ async function callJson(
 
           "Content-Type":
             "application/json",
+
+          ...(vercelBypassSecret
+            ? {
+                "x-vercel-protection-bypass":
+                  vercelBypassSecret,
+              }
+            : {}),
         },
 
         body:
