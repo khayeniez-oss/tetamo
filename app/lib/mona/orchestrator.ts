@@ -40,6 +40,7 @@ import {
 } from "./stage";
 
 import {
+  adjustMonaFollowUpDueForWitaQuietHours,
   evaluateMonaSilenceFollowUp,
   type MonaSilenceFollowUpDecision,
   type MonaSilenceFollowUpState,
@@ -60,6 +61,8 @@ export type MonaScheduledFollowUpResult =
       action: "silent";
       reason: string;
       followUpNumber: MonaFollowUpNumber | null;
+      timingAction?: "none" | "stop";
+      nextDueAt?: string | null;
     };
 
 export type MonaOrchestratorResult =
@@ -560,13 +563,18 @@ function normalizeFollowUpCount(
   return 0;
 }
 
-function addHoursIso(
+function addFollowUpHoursIso(
   value: Date,
   hours: number
 ) {
-  return new Date(
-    value.getTime() +
-      hours * 60 * 60 * 1000
+  const rawDueAt =
+    new Date(
+      value.getTime() +
+        hours * 60 * 60 * 1000
+    );
+
+  return adjustMonaFollowUpDueForWitaQuietHours(
+    rawDueAt
   ).toISOString();
 }
 
@@ -702,7 +710,7 @@ export async function markMonaReplySuccessfullySent(
   const nextDueAt =
     dependencyControlled
       ? null
-      : addHoursIso(
+      : addFollowUpHoursIso(
           sentAt,
           1
         );
@@ -783,7 +791,7 @@ export async function markMonaFollowUpSuccessfullySent(
     params.followUpNumber === 1
   ) {
     const nextDueAt =
-      addHoursIso(
+      addFollowUpHoursIso(
         sentAt,
         12
       );
@@ -1058,6 +1066,10 @@ export async function runMonaScheduledFollowUp(
         timingDecision.reason ||
         "No Mona silence follow-up is due.",
       followUpNumber: null,
+      timingAction:
+        timingDecision.action,
+      nextDueAt:
+        timingDecision.nextDueAt,
     };
   }
 

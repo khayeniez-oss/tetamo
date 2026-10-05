@@ -88,6 +88,67 @@ const FIRST_SILENCE_FOLLOW_UP_MS =
 const SECOND_SILENCE_FOLLOW_UP_MS =
   12 * 60 * 60 * 1000;
 
+/*
+ * AUTOMATED FOLLOW-UP CONTACT WINDOW
+ * ----------------------------------
+ *
+ * This applies ONLY to automated silence follow-ups.
+ * Normal customer-triggered Mona replies remain available 24/7.
+ *
+ * Follow-ups may be sent from 06:00 until before 21:00 WITA.
+ * A calculated due time from 21:00 through 05:59 WITA is deferred
+ * to 06:00 WITA.
+ *
+ * WITA is UTC+8 year-round.
+ */
+const WITA_OFFSET_MS =
+  8 * 60 * 60 * 1000;
+
+const FOLLOW_UP_START_HOUR_WITA = 6;
+const FOLLOW_UP_END_HOUR_WITA = 21;
+
+export function adjustMonaFollowUpDueForWitaQuietHours(
+  dueAt: Date
+) {
+  const wita =
+    new Date(
+      dueAt.getTime() +
+        WITA_OFFSET_MS
+    );
+
+  const hour =
+    wita.getUTCHours();
+
+  if (
+    hour >= FOLLOW_UP_START_HOUR_WITA &&
+    hour < FOLLOW_UP_END_HOUR_WITA
+  ) {
+    return new Date(
+      dueAt.getTime()
+    );
+  }
+
+  if (
+    hour >= FOLLOW_UP_END_HOUR_WITA
+  ) {
+    wita.setUTCDate(
+      wita.getUTCDate() + 1
+    );
+  }
+
+  wita.setUTCHours(
+    FOLLOW_UP_START_HOUR_WITA,
+    0,
+    0,
+    0
+  );
+
+  return new Date(
+    wita.getTime() -
+      WITA_OFFSET_MS
+  );
+}
+
 function sleep(
   milliseconds: number
 ) {
@@ -553,9 +614,11 @@ export function evaluateMonaSilenceFollowUp(
       .followUpsSent === 0
   ) {
     const dueAt =
-      addMilliseconds(
-        waitingSince,
-        FIRST_SILENCE_FOLLOW_UP_MS
+      adjustMonaFollowUpDueForWitaQuietHours(
+        addMilliseconds(
+          waitingSince,
+          FIRST_SILENCE_FOLLOW_UP_MS
+        )
       );
 
     if (
@@ -611,9 +674,11 @@ export function evaluateMonaSilenceFollowUp(
     }
 
     const dueAt =
-      addMilliseconds(
-        firstFollowUpSentAt,
-        SECOND_SILENCE_FOLLOW_UP_MS
+      adjustMonaFollowUpDueForWitaQuietHours(
+        addMilliseconds(
+          firstFollowUpSentAt,
+          SECOND_SILENCE_FOLLOW_UP_MS
+        )
       );
 
     if (

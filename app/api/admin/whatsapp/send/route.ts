@@ -783,6 +783,36 @@ async function releaseMonaClaim(params: {
   }
 }
 
+async function deferMonaFollowUpClaim(params: {
+  conversationId: string;
+  claimToken: string;
+  nextDueAt: string;
+}) {
+  const { error } = await supabaseAdmin
+    .from("whatsapp_conversations")
+    .update({
+      mona_next_followup_due_at:
+        params.nextDueAt,
+      mona_followup_claimed_at: null,
+      mona_followup_claim_token: null,
+    })
+    .eq(
+      "id",
+      params.conversationId
+    )
+    .eq(
+      "mona_followup_claim_token",
+      params.claimToken
+    );
+
+  if (error) {
+    console.error(
+      "Failed to defer Mona follow-up claim:",
+      error
+    );
+  }
+}
+
 async function stopMonaFollowUpCycle(params: {
   conversationId: string;
   claimToken?: string | null;
@@ -1210,6 +1240,30 @@ async function handleMonaFollowUpSend(params: {
     });
 
   if (generation.action !== "reply") {
+    if (
+      generation.timingAction === "none" &&
+      generation.nextDueAt
+    ) {
+      await deferMonaFollowUpClaim({
+        conversationId,
+        claimToken,
+        nextDueAt:
+          generation.nextDueAt,
+      });
+
+      return Response.json({
+        success: true,
+        mode: "mona_followup",
+        action: "silent",
+        followUpNumber:
+          generation.followUpNumber,
+        reason:
+          generation.reason,
+        nextDueAt:
+          generation.nextDueAt,
+      });
+    }
+
     await stopMonaFollowUpCycle({
       conversationId,
       claimToken,
