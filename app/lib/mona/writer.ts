@@ -1316,6 +1316,54 @@ function deterministicIntentFallbackReply(
           ? "A Verification Badge is available only after approval; purchasing a package does not automatically verify the listing."
           : "Badge verifikasi bisa didapat setelah disetujui; membeli paket tidak otomatis membuat listing terverifikasi.");
       }
+
+      if (
+        /Owner listing package upgrades are not currently available/i.test(approved) &&
+        /\b(?:upgrade|upgrading|naik\s+paket|selisih)\b/i.test(
+          params.latestCustomerMessage
+        )
+      ) {
+        rows.push(english
+          ? "Owner listing package upgrades are not currently available."
+          : "Upgrade paket listing Owner saat ini belum tersedia, Kak.");
+      }
+
+      // Calculate only an explicit quantity using one approved package price.
+      const question = params.latestCustomerMessage;
+      const allOnePackage = question.match(
+        /(?:pakai|menggunakan|use|using)\s+(?:paket\s+)?(Basic|Priority|Featured)\b/i
+      );
+      const counts: Record<string, number> = {
+        satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5,
+        enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10,
+        one: 1, two: 2, three: 3, four: 4, five: 5,
+        six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+      };
+      const groupedCount = question.match(
+        /\bke(dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)nya\b/i
+      );
+      const explicitCount = question.match(
+        /\b(\d+|satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:villa|vila|listing|properti|property|properties|units?|unit)\b/i
+      );
+      const countText = groupedCount?.[1] || explicitCount?.[1];
+      const quantity = countText
+        ? counts[countText.toLowerCase()] ?? Number(countText)
+        : null;
+      if (allOnePackage && quantity && Number.isSafeInteger(quantity) && quantity > 0) {
+        const name = allOnePackage[1][0].toUpperCase() +
+          allOnePackage[1].slice(1).toLowerCase();
+        const price = approved.match(
+          new RegExp(name + " Listing costs Rp([0-9.,]+)\\.")
+        );
+        const unitPrice = price ? Number(price[1].replace(/[.,]/g, "")) : NaN;
+        const total = unitPrice * quantity;
+        if (Number.isSafeInteger(total) && unitPrice > 0) {
+          const amount = total.toLocaleString("id-ID");
+          rows.unshift(english
+            ? `For ${quantity} ${name} listings, the total is Rp${amount}.`
+            : `Untuk ${quantity} listing ${name}, totalnya Rp${amount}.`);
+        }
+      }
       return { action: "reply", reply: rows.join("\n\n"), source: "fallback" };
     }
   }
@@ -1910,6 +1958,22 @@ function replyViolationReason(
   commercialFactsText: string,
   generalFactsText: string
 ): string | null {
+
+  // Enforce the approved Owner upgrade policy sentence by sentence.
+  if (
+    params.brain.customerType === "owner" &&
+    /Owner listing package upgrades are not currently available/i.test(
+      commercialFactsText + "\n" + generalFactsText
+    )
+  ) {
+    const upgradeClaim = raw.split(/[.!?\n]+/).some(sentence =>
+      /\b(?:upgrade|upgrading|upgraded|naik\s+paket|peningkatan\s+paket|selisih|prorat\w*)\b/i.test(sentence) &&
+      !/(?:belum\s+(?:bisa|tersedia|dapat)|tidak\s+(?:bisa|tersedia|dapat|mendukung)|not\s+(?:currently\s+)?(?:available|supported|possible)|unavailable|cannot|can't)/i.test(sentence)
+    );
+    if (upgradeClaim) {
+      return "Owner package upgrades are not currently available. Remove upgrade, price-difference payment, proration or upgrade-credit promises and preserve the supported price answer.";
+    }
+  }
   if (requiresApprovedReplyFacts(params.brain) &&
       (commercialFactsText.trim() || generalFactsText.trim()) &&
       /^(?:boleh(?: kak)?|baik(?: kak)?|siap(?: kak)?|oke(?: kak)?|sure|okay|ok)[.!\s]*$/i.test(raw.trim())) {
@@ -2760,6 +2824,10 @@ FACT BOUNDARY:
 - Commercial package facts come from APPROVED COMMERCIAL FACTS inside PRIVATE SALES GUIDANCE.
 - Broader Tetamo facts come from GENERAL APPROVED TETAMO KNOWLEDGE.
 - Do not invent anything outside those supplied sources.
+- Payment and package policies require explicit approved facts. A difference between two package prices does not prove that upgrading, paying only the difference, prorating, refunds, credits, or transferring a package is available.
+- If approved facts say Owner package upgrades are not currently available, explicitly say so when the customer asks about upgrading. Do not promise future availability or suggest an unapproved workaround.
+- For a compound price-and-upgrade question, calculate the total from the approved unit price and the established listing count, then answer upgrade availability separately. Do not omit either part.
+
 - For compound or multi-part customer questions, evaluate every factual part against the supplied approved facts. Answer the supported parts normally.
 - If a requested Tetamo fact is not stated in the supplied approved facts, do not infer, guess, or manufacture an answer for that part. Say naturally that the specific information is not verified or available to you, without turning missing knowledge into a negative claim about Tetamo.
 - Do not mention or imply a promo, discount, bonus, campaign offer, special deal or limited offer unless explicitly supplied.
@@ -3192,6 +3260,10 @@ FACT BOUNDARY:
 - Commercial package facts come only from APPROVED COMMERCIAL FACTS inside PRIVATE SALES GUIDANCE.
 - Broader Tetamo facts come only from GENERAL APPROVED TETAMO KNOWLEDGE.
 - Do not invent anything outside those supplied sources.
+- Payment and package policies require explicit approved facts. A difference between two package prices does not prove that upgrading, paying only the difference, prorating, refunds, credits, or transferring a package is available.
+- If approved facts say Owner package upgrades are not currently available, explicitly say so when the customer asks about upgrading. Do not promise future availability or suggest an unapproved workaround.
+- For a compound price-and-upgrade question, calculate the total from the approved unit price and the established listing count, then answer upgrade availability separately. Do not omit either part.
+
 - Do not imply a promo, discount, bonus, campaign offer, special deal or limited offer unless explicitly supplied.
 - Campaign history never establishes customer role.
 - If customer role is unknown, do not expose Agent or Owner package facts or prices.

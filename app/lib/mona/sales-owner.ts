@@ -2598,6 +2598,10 @@ function applyDeterministicOwnerSalesGuards(
     handoverRecommended = false;
   }
 
+  commercialFacts.add(
+    "Owner listing package upgrades are not currently available. Do not promise an upgrade from Basic or Priority to Featured, payment of only the price difference, prorated upgrade charges, or an upgrade credit."
+  );
+
   return {
     ...guidance,
     knownInformation: known,
