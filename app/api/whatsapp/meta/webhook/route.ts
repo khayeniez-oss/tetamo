@@ -1,3 +1,4 @@
+import { phase1Run, phase1RouteIds } from "../../../../lib/mona/phase1-trace.mjs";
 
 
 
@@ -1083,6 +1084,20 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  return phase1Run(phase1RouteIds(request), () => processMetaWebhook(request));
+}
+
+function logMonaOutcome(event: string, values: Record<string, unknown>) {
+  // IDs and routing metadata only: no message bodies, prompts or credentials.
+  console.log("MONA_WHATSAPP_OUTCOME", {
+    revision: "whatsapp-reply-grounding-v1",
+    commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+    event,
+    ...values,
+  });
+}
+
+async function processMetaWebhook(request: Request) {
   try {
     const payload = await request.json().catch(() => null);
 
@@ -1169,6 +1184,12 @@ export async function POST(request: Request) {
         ignoredCount += 1;
         continue;
       }
+
+      logMonaOutcome("inbound_stored", {
+        conversationId: conversation.id,
+        messageId: inboundSave.messageId,
+        providerMessageId: metaMessageId,
+      });
 
       /*
        * If Admin already owns this conversation, Safety will intentionally stop
@@ -1270,6 +1291,19 @@ export async function POST(request: Request) {
           conversation.handover_to_admin === true,
       });
 
+      logMonaOutcome("generation_finished", {
+        conversationId: conversation.id,
+        messageId: inboundSave.messageId,
+        action: generation.action,
+        ...(generation.action === "reply" ? {
+          source: generation.source,
+          intent: generation.brain.intent,
+          knowledgeStatus: generation.knowledge.status,
+          knowledgeMatches: generation.knowledge.matches.length,
+          commercialFactCount: generation.salesGuidance.guidance?.commercialFacts.length || 0,
+        } : {}),
+      });
+
       await saveSalesStageSuggestion({
         conversationId: conversation.id,
         previousStage:
@@ -1313,6 +1347,10 @@ export async function POST(request: Request) {
       const reply = String(generation.reply || "").trim();
 
       if (!reply) {
+        logMonaOutcome("empty_reply", {
+          conversationId: conversation.id,
+          messageId: inboundSave.messageId,
+        });
         processedCount += 1;
         ignoredCount += 1;
         continue;
@@ -1362,6 +1400,13 @@ export async function POST(request: Request) {
         phoneNumberId,
         to: customerPhone,
         message: reply,
+      });
+
+      logMonaOutcome("send_finished", {
+        conversationId: conversation.id,
+        messageId: inboundSave.messageId,
+        success: sendResult.success,
+        providerSendId: sendResult.id,
       });
 
       const sourcePrefix =

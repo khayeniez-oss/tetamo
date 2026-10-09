@@ -1,3 +1,4 @@
+import { phase1Stage, phase1Next, phase1Mark, phase1Result } from "./phase1-trace.mjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type MonaMemorySpeaker =
@@ -164,6 +165,10 @@ function formatTranscriptMessage(message: MonaMemoryMessage) {
 export async function loadFullConversationMemory(
   params: LoadConversationMemoryParams
 ): Promise<MonaConversationMemory> {
+  const __phase1Span = phase1Stage("memory");
+  __phase1Span.phase("prepare");
+  try {
+
   const excludedIds = new Set(
     (params.excludedMessageIds || [])
       .map((value) => String(value || "").trim())
@@ -174,10 +179,15 @@ export async function loadFullConversationMemory(
 
   let from = 0;
 
+  __phase1Span.phase("pages.wait");
   while (true) {
+    const __phase1Page = phase1Stage("memory.page", { page_index: from / PAGE_SIZE, offset: from, page_size: PAGE_SIZE });
+    __phase1Page.phase("query.prepare");
+    try {
+
     const to = from + PAGE_SIZE - 1;
 
-    const { data, error } = await params.supabase
+    const { data, error } = await phase1Next(__phase1Page, "database.request", params.supabase
       .from("whatsapp_messages")
       .select(
         [
@@ -193,7 +203,8 @@ export async function loadFullConversationMemory(
       )
       .eq("conversation_id", params.conversationId)
       .order("created_at", { ascending: true })
-      .range(from, to);
+      .range(from, to));
+    __phase1Page.phase("parse_and_accumulate");
 
     if (error) {
       throw new Error(
@@ -202,6 +213,7 @@ export async function loadFullConversationMemory(
     }
 
     const page = (data || []) as unknown as StoredMessageRow[];
+    phase1Mark("memory.page.rows", { rows: page.length, page_index: from / PAGE_SIZE });
 
     rows.push(...page);
 
@@ -210,7 +222,10 @@ export async function loadFullConversationMemory(
     }
 
     from += PAGE_SIZE;
-  }
+
+    } catch (__phase1PageError) { __phase1Page.error(__phase1PageError); throw __phase1PageError; } finally { __phase1Page.end(); }
+}
+  __phase1Span.phase("assemble_memory");
 
   const messages = rows
     .filter((row) => !excludedIds.has(String(row.id)))
@@ -294,7 +309,7 @@ export async function loadFullConversationMemory(
    */
   const humanInterventionDetected = hasAdminMessages;
 
-  return {
+  return phase1Result(__phase1Span, {
     conversationId: params.conversationId,
     messages,
     totalMessages: messages.length,
@@ -310,5 +325,12 @@ export async function loadFullConversationMemory(
 
     campaignOnlyBeforeCustomerConversation,
     humanInterventionDetected,
-  };
+  }, 1);
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
+  }
 }

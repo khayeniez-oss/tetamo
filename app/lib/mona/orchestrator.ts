@@ -1,3 +1,4 @@
+import { phase1Stage, phase1Next, phase1Result, phase1Mark } from "./phase1-trace.mjs";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -594,8 +595,12 @@ export async function resetMonaFollowUpCycleForCustomerReply(
     conversationId: string;
   }
 ) {
+  const __phase1Span = phase1Stage("followup.reset");
+  __phase1Span.phase("prepare");
+  try {
+
   const { error } =
-    await params.supabase
+    await phase1Next(__phase1Span, "database.request", params.supabase
       .from("whatsapp_conversations")
       .update({
         mona_followup_count: 0,
@@ -608,12 +613,20 @@ export async function resetMonaFollowUpCycleForCustomerReply(
       .eq(
         "id",
         params.conversationId
-      );
+      ));
+    __phase1Span.phase("validate_result");
 
   if (error) {
     throw new Error(
       `Failed to reset Mona follow-up cycle: ${error.message}`
     );
+  }
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
   }
 }
 
@@ -635,6 +648,10 @@ export async function persistMonaDependencyState(
     brain: MonaBrainDecision;
   }
 ) {
+  const __phase1Span = phase1Stage("dependency.persist");
+  __phase1Span.phase("prepare");
+  try {
+
   const dependencyControlled =
     params.brain.timingDependency.active ===
     true;
@@ -649,7 +666,7 @@ export async function persistMonaDependencyState(
       : null;
 
   const { error } =
-    await params.supabase
+    await phase1Next(__phase1Span, "database.request", params.supabase
       .from("whatsapp_conversations")
       .update({
         mona_dependency_controlled:
@@ -660,7 +677,8 @@ export async function persistMonaDependencyState(
       .eq(
         "id",
         params.conversationId
-      );
+      ));
+    __phase1Span.phase("validate_result");
 
   if (error) {
     throw new Error(
@@ -668,10 +686,17 @@ export async function persistMonaDependencyState(
     );
   }
 
-  return {
+  return phase1Result(__phase1Span, {
     dependencyControlled,
     dependencyReason,
-  };
+  }, 1);
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
+  }
 }
 
 /*
@@ -1299,6 +1324,10 @@ export async function runMonaScheduledFollowUp(
 export async function runMonaOrchestrator(
   params: RunMonaOrchestratorParams
 ): Promise<MonaOrchestratorResult> {
+  const __phase1Span = phase1Stage("orchestrator");
+  __phase1Span.phase("safety");
+  try {
+
   /*
    * SAFETY FIRST.
    *
@@ -1352,29 +1381,30 @@ export async function runMonaOrchestrator(
   if (
     safety.action === "silent"
   ) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "silent",
       reason: safety.reason,
       suggestedSalesStage: null,
-    };
+    }, 1);
   }
 
   if (
     safety.action ===
     "handover"
   ) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "handover",
       reason: safety.reason,
       suggestedSalesStage: null,
-    };
+    }, 2);
   }
 
   /*
    * Explicit transaction evidence is a deterministic CRM observation only.
    * It never controls semantic understanding or routing.
    */
-  const explicitTransactionStage =
+  __phase1Span.phase("crm.explicit_stage");
+    const explicitTransactionStage =
     evaluateExplicitTransactionStage({
       latestCustomerMessage:
         params.latestCustomerMessage,
@@ -1393,13 +1423,16 @@ export async function runMonaOrchestrator(
    * follow-up cycle anyway.
    */
   try {
+    __phase1Span.phase("followup.reset.wait");
     await resetMonaFollowUpCycleForCustomerReply({
       supabase:
         params.supabase,
       conversationId:
         params.conversationId,
     });
+    __phase1Span.phase("deterministic.validation_and_routing");
   } catch (error) {
+    __phase1Span.phase("error.handling");
     console.error(
       "Mona follow-up reset failed:",
       error
@@ -1410,6 +1443,7 @@ export async function runMonaOrchestrator(
     MonaConversationMemory;
 
   try {
+    __phase1Span.phase("memory.wait");
     memory =
       await loadFullConversationMemory({
         supabase:
@@ -1420,7 +1454,9 @@ export async function runMonaOrchestrator(
           params.excludedMessageIds ||
           [],
       });
+    __phase1Span.phase("deterministic.validation_and_routing");
   } catch (error) {
+    __phase1Span.phase("error.handling");
     console.error(
       "Mona memory loading failed:",
       error
@@ -1431,16 +1467,17 @@ export async function runMonaOrchestrator(
      * failure, not a customer case requiring Admin. Do not pause AI or create
      * Needs Admin merely because storage temporarily failed.
      */
-    return {
+    return phase1Result(__phase1Span, {
       action: "silent",
       reason:
         "Mona could not load conversation memory because of a technical failure, so no AI reply was generated.",
       suggestedSalesStage:
         explicitTransactionStage,
-    };
+    }, 3);
   }
 
-  let brain =
+  __phase1Span.phase("brain.wait");
+    let brain =
     await analyseMonaBrain({
       memory,
       latestCustomerMessage:
@@ -1452,6 +1489,7 @@ export async function runMonaOrchestrator(
         params.campaignContext ||
         null,
     });
+    __phase1Span.phase("deterministic.validation_and_routing");
 
   brain =
     repairNormalObjectionBrainRouting(
@@ -1473,7 +1511,7 @@ export async function runMonaOrchestrator(
     !brain.understood ||
     brain.handoverRecommended
   ) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "handover",
       reason:
         brain.handoverReason ||
@@ -1481,7 +1519,7 @@ export async function runMonaOrchestrator(
       suggestedSalesStage:
         explicitTransactionStage ||
         null,
-    };
+    }, 4);
   }
 
   const conversationContext =
@@ -1489,7 +1527,8 @@ export async function runMonaOrchestrator(
       memory
     );
 
-  let salesGuidance =
+  __phase1Span.phase("sales.wait");
+    let salesGuidance =
     await routeMonaSalesStrategy({
       brain,
       customerMessage:
@@ -1499,6 +1538,7 @@ export async function runMonaOrchestrator(
         params.salesStage ||
         null,
     });
+    __phase1Span.phase("deterministic.validation_and_routing");
 
   salesGuidance =
     repairNormalObjectionSalesRouting(
@@ -1521,8 +1561,10 @@ export async function runMonaOrchestrator(
     getSalesSemanticConflict(
       salesGuidance
     );
+  phase1Mark("semantic.review", { triggered: Boolean(initialSemanticConflict) });
 
   if (initialSemanticConflict) {
+    __phase1Span.phase("brain.review.wait");
     brain =
       await analyseMonaBrain({
         memory,
@@ -1543,6 +1585,7 @@ export async function runMonaOrchestrator(
             initialSemanticConflict.suggestedMeaning,
         },
       });
+    __phase1Span.phase("deterministic.validation_and_routing");
 
     brain =
       repairNormalObjectionBrainRouting(
@@ -1555,7 +1598,7 @@ export async function runMonaOrchestrator(
       !brain.understood ||
       brain.handoverRecommended
     ) {
-      return {
+      return phase1Result(__phase1Span, {
         action: "handover",
         reason:
           brain.handoverReason ||
@@ -1563,13 +1606,14 @@ export async function runMonaOrchestrator(
         suggestedSalesStage:
           explicitTransactionStage ||
           null,
-      };
+      }, 5);
     }
 
     /*
      * Re-route once using Brain's reviewed meaning.
      * There is deliberately no second Brain/Sales loop.
      */
+    __phase1Span.phase("sales.review.wait");
     salesGuidance =
       await routeMonaSalesStrategy({
         brain,
@@ -1580,6 +1624,7 @@ export async function runMonaOrchestrator(
           params.salesStage ||
           null,
       });
+    __phase1Span.phase("deterministic.validation_and_routing");
 
     salesGuidance =
       repairNormalObjectionSalesRouting(
@@ -1611,13 +1656,13 @@ export async function runMonaOrchestrator(
        * it, do not send a possibly-wrong customer answer. Wait for a new real
        * customer turn rather than bouncing internally forever.
        */
-      return {
+      return phase1Result(__phase1Span, {
         action: "silent",
         reason:
           "Sales still reported a semantic conflict after the one allowed Brain re-evaluation, so Mona did not send a disputed reply.",
         suggestedSalesStage:
           stageAfterReview,
-      };
+      }, 6);
     }
   }
 
@@ -1641,6 +1686,7 @@ export async function runMonaOrchestrator(
    * Persistence failure is technical and must not create Needs Admin.
    */
   try {
+    __phase1Span.phase("dependency.persist.wait");
     await persistMonaDependencyState({
       supabase:
         params.supabase,
@@ -1648,7 +1694,9 @@ export async function runMonaOrchestrator(
         params.conversationId,
       brain,
     });
+    __phase1Span.phase("deterministic.validation_and_routing");
   } catch (error) {
+    __phase1Span.phase("error.handling");
     console.error(
       "Mona dependency persistence failed:",
       error
@@ -1656,12 +1704,12 @@ export async function runMonaOrchestrator(
   }
 
   if (!brain.replyNeeded) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "silent",
       reason:
         "Mona Brain determined that no conversational reply was needed.",
       suggestedSalesStage,
-    };
+    }, 7);
   }
 
   /*
@@ -1692,13 +1740,13 @@ export async function runMonaOrchestrator(
       genuineHumanSalesReason ||
       !normalObjection
     ) {
-      return {
+      return phase1Result(__phase1Span, {
         action: "handover",
         reason:
           salesGuidance.guidance.reason ||
           "Sales determined that genuine human commercial action is required.",
         suggestedSalesStage,
-      };
+      }, 8);
     }
 
     salesGuidance =
@@ -1709,7 +1757,8 @@ export async function runMonaOrchestrator(
       );
   }
 
-  const knowledge =
+  __phase1Span.phase("knowledge.wait");
+    const knowledge =
     await retrieveMonaKnowledge({
       supabase:
         params.supabase,
@@ -1721,13 +1770,15 @@ export async function runMonaOrchestrator(
         brain.languageStyle
           .primaryLanguage,
     });
+    __phase1Span.phase("deterministic.validation_and_routing");
 
   /*
    * Knowledge status="not_found" is NOT a handover by itself.
    * Writer must stay inside approved facts and may safely remain silent if a
    * technically reliable answer cannot be produced.
    */
-  const writer =
+  __phase1Span.phase("writer.wait");
+    const writer =
     await writeMonaReply({
       memory,
       brain,
@@ -1736,8 +1787,9 @@ export async function runMonaOrchestrator(
       latestCustomerMessage:
         params.latestCustomerMessage,
     });
+    __phase1Span.phase("deterministic.validation_and_routing");
 
-  return resolveWriterResult(
+  return phase1Result(__phase1Span, resolveWriterResult(
     writer,
     {
       memory,
@@ -1746,5 +1798,12 @@ export async function runMonaOrchestrator(
       knowledge,
       suggestedSalesStage,
     }
-  );
+  ), 9);
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
+  }
 }

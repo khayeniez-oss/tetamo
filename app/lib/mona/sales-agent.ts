@@ -1,3 +1,4 @@
+import { phase1Stage, phase1Result, phase1OpenAIOptions, phase1Request, phase1Response, phase1Next } from "./phase1-trace.mjs";
 
 import OpenAI from "openai";
 import type { MonaBrainDecision } from "./brain";
@@ -2305,6 +2306,23 @@ function applyDeterministicAgentSalesGuards(
     commercialFacts.clear();
   }
 
+  // Use Brain's resolved question even when the customer's latest text is
+  // only an answer to qualification or an acceptance of an explanation.
+  if (!hardRejection && !currentTurnObjectionLocked &&
+      ["package_price", "package_features", "package_recommendation"].includes(brainIntent)) {
+    const subject = (params.brain.intentSubject || "").toLowerCase();
+    const named = (Object.keys(AGENT_PACKAGES) as AgentPackageId[]).find(
+      id => subject.includes(AGENT_PACKAGES[id].name.toLowerCase())
+    );
+    const applicable = named ? [named] : recommendedPackage ? [recommendedPackage] :
+      ["silver", "gold", "agent_pro"] as AgentPackageId[];
+    for (const id of applicable) {
+      for (const fact of AGENT_PACKAGES[id].facts) commercialFacts.add(fact);
+    }
+    shouldAskQuestion = false;
+    recommendedDirection += " Answer the resolved package question now using these approved facts; do not merely offer to explain it again.";
+  }
+
   const allowLegacyPackageFacts =
     brainIntent === "unknown" ||
     brainIntent === "package_features" ||
@@ -2355,7 +2373,7 @@ function applyDeterministicAgentSalesGuards(
     recommendedPackage,
     packageRecommendationReason,
     commercialFacts:
-      Array.from(commercialFacts).slice(0, 40),
+      Array.from(commercialFacts).slice(0, ["package_price", "package_features", "package_recommendation"].includes(brainIntent) ? 100 : 40),
     needsTetamoFacts,
     factsNeeded:
       Array.from(factsNeeded).slice(0, 20),
@@ -2367,14 +2385,20 @@ function applyDeterministicAgentSalesGuards(
 export async function generateAgentSalesGuidance(
   params: GenerateAgentSalesGuidanceParams
 ): Promise<AgentSalesGuidance> {
+  const __phase1Span = phase1Stage("sales.agent");
+  __phase1Span.phase("fallback_or_prepare");
+  try {
+
   if (!process.env.OPENAI_API_KEY) {
-    return applyDeterministicAgentSalesGuards(
+    return phase1Result(__phase1Span, applyDeterministicAgentSalesGuards(
       fallbackGuidance(),
       params
-    );
+    ), 1);
   }
 
-  const openai = new OpenAI({
+  __phase1Span.phase("prompt.prepare");
+    const openai = new OpenAI({
+    ...phase1OpenAIOptions(),
     apiKey: process.env.OPENAI_API_KEY,
   });
 
@@ -2494,28 +2518,38 @@ Do not include markdown.
 
   try {
     const response =
-      await openai.responses.create({
+      await openai.responses.create(phase1Request(__phase1Span, {
         model: "gpt-4.1-mini",
         input: prompt,
         temperature: 0.1,
         max_output_tokens: 950,
-      });
+      }));
+    phase1Response(__phase1Span, response);
 
-    return applyDeterministicAgentSalesGuards(
-      parseAgentSalesGuidance(
+    return phase1Result(__phase1Span, applyDeterministicAgentSalesGuards(
+      phase1Next(__phase1Span, "validation", parseAgentSalesGuidance(
         String(response.output_text || "")
-      ),
+      )),
       params
-    );
+    ), 2);
   } catch (error) {
+    __phase1Span.error(error);
+    __phase1Span.phase("fallback.validation");
     console.error(
       "Tetamo Agent Sales AI guidance failed:",
       error
     );
 
-    return applyDeterministicAgentSalesGuards(
+    return phase1Result(__phase1Span, applyDeterministicAgentSalesGuards(
       fallbackGuidance(),
       params
-    );
+    ), 3);
+  }
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
   }
 }

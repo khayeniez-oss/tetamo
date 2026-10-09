@@ -1,3 +1,5 @@
+import { requiresApprovedReplyFacts } from "./reply-contract";
+import { phase1Stage, phase1Result, phase1OpenAIOptions, phase1Request, phase1Response } from "./phase1-trace.mjs";
 import OpenAI from "openai";
 import type { MonaConversationMemory } from "./memory";
 import type { MonaBrainDecision } from "./brain";
@@ -358,6 +360,8 @@ how_to_list / registration:
 - for an Owner listing, preserve the approved verification sequence: after successful payment is confirmed, the listing becomes active and can appear publicly on the marketplace as Pending Verification while Tetamo completes verification; final verification later changes the status to Verified;
 - never say an Owner listing must wait until final Tetamo verification before it can appear publicly if approved facts say Pending Verification can be public;
 - when approved facts say Tetamo Partner is the primary Agent/Owner route, direct them to download/open Tetamo Partner on iOS or Android.
+- when approved Product Truth says an Agent or Owner asking what they need or the minimum/basic requirement to start listing should download/open Tetamo Partner and start creating/managing listings there, answer from that approved fact directly.
+- do not invent additional listing prerequisites such as complete property data, clear photos, documents, certificates, payment, verification, package selection, or other requirements unless those exact prerequisites are explicitly supplied as approved facts for the customer's question.
 
 acknowledgement:
 - do not reopen selling;
@@ -1251,10 +1255,10 @@ function deterministicPaymentFlowReply(
     reply:
       language === "en"
         ? isOwner
-          ? "For payment, download or open Tetamo Partner, choose the applicable package or product, complete or review the listing when required, then follow the payment flow shown in the app and pay directly there."
+          ? "For payment, download or open Tetamo Partner, create and review your property listing, choose the Owner package at the end of the listing flow, then follow the payment flow shown in the app and pay directly there."
           : "For payment, download or open Tetamo Partner, choose the membership or product you want, then follow the payment flow shown in the app and pay directly there."
         : isOwner
-          ? "Untuk pembayaran, Kakak bisa download atau buka Tetamo Partner, pilih paket atau produk yang sesuai, selesaikan atau review listing jika diperlukan, lalu ikuti proses pembayaran langsung di aplikasi ya."
+          ? "Untuk pembayaran, Kakak bisa download atau buka Tetamo Partner, buat dan review listing properti, pilih paket Owner di akhir alur listing, lalu ikuti proses pembayaran langsung di aplikasi ya."
           : "Untuk pembayaran, Kakak bisa download atau buka Tetamo Partner, pilih membership atau produk yang diinginkan, lalu ikuti proses pembayaran langsung di aplikasi ya.",
     source: "fallback",
   };
@@ -1552,6 +1556,72 @@ function deterministicIntentFallbackReply(
     }
   }
 
+  /*
+   * HOW TO LIST
+   * -----------
+   *
+   * This is a safety fallback only. Normal replies still come from Writer.
+   *
+   * If Writer fails validation twice, an understood listing question must not
+   * disappear when Knowledge already contains the approved Tetamo Partner
+   * listing route.
+   */
+  if (intent === "how_to_list") {
+    const customerType = params.brain.customerType;
+
+    const approvedPartnerRoute =
+      /Tetamo Partner/i.test(facts) &&
+      /(?:iOS|Android)/i.test(facts) &&
+      /(?:creating|create|buat).{0,80}(?:managing|manage|kelola).{0,80}(?:listing|property|properti)|(?:listing|property|properti).{0,80}(?:creating|create|buat).{0,80}(?:managing|manage|kelola)/i.test(
+        facts
+      );
+
+    const asksMinimumStartRequirement =
+      (params.brain.customerNeeds || []).some((need) =>
+        /(?:minimum|minimal|basic).{0,40}(?:requirement|requirements|syarat)|(?:requirement|requirements|syarat).{0,40}(?:minimum|minimal|basic)/i.test(
+          need
+        )
+      );
+
+    if (
+      approvedPartnerRoute &&
+      (customerType === "owner" || customerType === "agent" || customerType === "agency")
+    ) {
+      const role =
+        customerType === "owner"
+          ? language === "en"
+            ? "property owner"
+            : "pemilik properti"
+          : language === "en"
+            ? "agent"
+            : "agent";
+
+      const hasSeparateHowToNeed =
+        (params.brain.customerNeeds || []).some((need) =>
+          /(?:how|cara|gimana|bagaimana).{0,50}(?:post|posting|list|listing|upload|pasang|buat)|(?:post|posting|list|listing|upload|pasang|buat).{0,50}(?:how|cara|gimana|bagaimana)/i.test(
+            need
+          )
+        );
+
+      return {
+        action: "reply",
+        reply:
+          language === "en"
+            ? asksMinimumStartRequirement && hasSeparateHowToNeed
+              ? ((customerType === "owner" && /How Owner Listings Work/i.test(facts) && /After payment is successfully confirmed/i.test(facts)) ? `To start, download or open Tetamo Partner on iOS or Android to create and manage listings as an owner. To post: register or log in as an Owner, create a listing, enter the property details, location and price, upload photos/videos, and complete the requested verification information. Once the listing is complete, select an Owner package at the end of the flow and follow the payment process shown in the app. After payment is confirmed, the listing becomes active and publicly visible as Pending Verification while Tetamo verifies it. Successful verification changes its status to Verified.` : `To start, download or open Tetamo Partner on iOS or Android. As a ${role}, you can create and manage your property listings there. To post the properties, start a new listing in Tetamo Partner and follow the listing flow in the app.`)
+              : asksMinimumStartRequirement
+                ? `To start listing as a ${role}, download or open Tetamo Partner on iOS or Android. You can start creating and managing your property listings there.`
+                : `To post your property listing as a ${role}, download or open Tetamo Partner on iOS or Android and start creating and managing the listing there.`
+            : asksMinimumStartRequirement && hasSeparateHowToNeed
+              ? ((customerType === "owner" && /How Owner Listings Work/i.test(facts) && /After payment is successfully confirmed/i.test(facts)) ? `Untuk mulai, Kakak bisa download atau buka Tetamo Partner di iOS atau Android untuk membuat dan mengelola listing sebagai pemilik. Untuk cara postingnya: daftar atau login sebagai Owner, buat listing baru, isi detail properti, lokasi dan harga, upload foto/video, lalu lengkapi informasi verifikasi yang diminta. Setelah listing selesai, pilih paket Owner di akhir alur dan ikuti pembayaran yang ditampilkan di aplikasi. Setelah pembayaran terkonfirmasi, listing aktif dan tampil dengan status Pending Verification sambil Tetamo melakukan verifikasi. Setelah verifikasi berhasil, statusnya menjadi Verified.` : `Untuk mulai, Kakak bisa download atau buka Tetamo Partner di iOS atau Android. Sebagai ${role}, Kakak bisa buat dan kelola listing properti dari sana. Untuk posting propertinya, mulai listing baru di Tetamo Partner lalu ikuti alur listing di aplikasi.`)
+              : asksMinimumStartRequirement
+                ? `Untuk mulai listing sebagai ${role}, Kakak bisa download atau buka Tetamo Partner di iOS atau Android. Dari sana Kakak bisa mulai buat dan kelola listing properti.`
+                : `Untuk posting listing sebagai ${role}, Kakak bisa download atau buka Tetamo Partner di iOS atau Android, lalu mulai buat dan kelola listing properti dari sana.`,
+        source: "fallback",
+      };
+    }
+  }
+
   return null;
 }
 
@@ -1791,6 +1861,40 @@ function replyViolationReason(
   commercialFactsText: string,
   generalFactsText: string
 ): string | null {
+  if (requiresApprovedReplyFacts(params.brain) &&
+      (commercialFactsText.trim() || generalFactsText.trim()) &&
+      /^(?:boleh(?: kak)?|baik(?: kak)?|siap(?: kak)?|oke(?: kak)?|sure|okay|ok)[.!\s]*$/i.test(raw.trim())) {
+    return "A factual request with approved facts needs an explanation, not only an acknowledgement.";
+  }
+
+  /*
+   * RESOURCE DELIVERY PROMISE GUARD
+   * -------------------------------
+   *
+   * Brain is authoritative about whether a resource should be sent now.
+   * When action is "none", Writer may offer to send a resource if the
+   * customer wants it, but must not claim or promise that delivery is
+   * happening or will happen.
+   */
+  if (params.brain.resourceAction.action !== "send") {
+    const falselyPromisesResourceDelivery =
+      /(?:nanti\s+)?(?:saya|kami)\s+(?:akan\s+)?kirim(?:kan)?\b|(?:saya|kami)\s+(?:sudah|udah|telah)\s+kirim(?:kan)?\b|(?:i|we)(?:'ll|\s+will)\s+send\b|(?:i|we)(?:'ve|\s+have)\s+sent\b/i.test(
+        raw
+      );
+
+    const conditionalOfferOnly =
+      /(?:kalau|jika|if)\b.{0,50}(?:mau|ingin|butuh|perlu|want|would\s+like|need)\b.{0,80}(?:bisa|boleh|can)\b.{0,30}(?:saya|kami|i|we)?\s*(?:kirim|send)\b/i.test(
+        raw
+      );
+
+    if (
+      falselyPromisesResourceDelivery &&
+      !conditionalOfferOnly
+    ) {
+      return "The draft promised or claimed resource delivery even though Brain.resourceAction.action is not send. It may offer to send the resource if the customer wants it, but must not say that it is being sent, will be sent, or was sent.";
+    }
+  }
+
   const unsupportedPerformanceClaim =
     /(?:jamin|menjamin|guarantee|guaranteed)\s+(?:lead|leads|closing|sales|penjualan|rentals?|penyewaan|viewing|buyer|buyers|pembeli)|(?:serious|serius|qualified|terkualifikasi)\s+(?:buyer|buyers|pembeli|lead|leads)\s+(?:pasti|guaranteed|terjamin)|(?:pasti|dijamin)\s+(?:closing|laku|terjual|tersewa|dapat\s+lead)/i.test(
       raw
@@ -1882,7 +1986,7 @@ function replyViolationReason(
     );
 
   const draftMakesVisibilityWaitForVerification =
-    /(?:tampil|muncul|tayang|public|publik|marketplace).{0,70}(?:setelah|sesudah|setelah\s+itu).{0,35}(?:diverifikasi|verifikasi\s+selesai|verified)|(?:setelah|sesudah).{0,40}(?:diverifikasi|verifikasi\s+selesai|verified).{0,70}(?:tampil|muncul|tayang|public|publik|marketplace)/i.test(
+    /(?:tampil|muncul|tayang|public|publik|marketplace).{0,70}(?:setelah|sesudah|setelah\s+itu).{0,35}(?:diverifikasi|verifikasi\s+selesai|verified)|(?:setelah|sesudah).{0,40}(?:diverifikasi|verifikasi\s+selesai|verified).{0,70}(?:tampil|muncul|tayang|public|publik|marketplace)|(?:bayar|dibayar|pembayaran|payment).{0,35}(?:dan|&).{0,20}(?:verifikasi|verification)(?:\s+selesai)?.{0,50}(?:aktif|active|terlihat|dilihat|tampil|muncul|tayang|public|publik|marketplace)|(?:lolos\s+verifikasi|verified|status\s+verified|menjadi\s+verified|berubah\s+(?:jadi|menjadi)\s+verified).{0,80}(?:bisa\s+)?(?:dilihat\s+publik|terlihat\s+publik|tampil|muncul|tayang|public|publik|marketplace)/i.test(
       raw
     );
 
@@ -1892,6 +1996,70 @@ function replyViolationReason(
     draftMakesVisibilityWaitForVerification
   ) {
     return "The draft reversed the approved Owner listing sequence. After successful payment, the listing can be active/public as Pending Verification while Tetamo completes verification; it does not need to wait for final verification before appearing publicly.";
+  }
+
+  /*
+   * MINIMUM LISTING START REQUIREMENT GUARD
+   * ---------------------------------------
+   *
+   * Brain.customerNeeds is the semantic source for whether the customer asked
+   * what they need / the minimum requirement to start listing.
+   *
+   * Approved Product Truth says that, for an Agent or Owner asking this,
+   * Mona should direct them to download/open Tetamo Partner, where they can
+   * start creating and managing listings.
+   *
+   * The normal listing workflow may still be explained when the customer also
+   * asks how to post. Writer must not relabel workflow steps such as property
+   * details, photos, documents, payment, verification, or package selection as
+   * the minimum/basic requirement unless Product Truth explicitly says so.
+   */
+  const asksForMinimumListingStartRequirement =
+    ownerHowToList &&
+    (params.brain.customerNeeds || []).some((need) =>
+      /(?:minimum|minimal|basic).{0,40}(?:requirement|requirements|syarat)|(?:requirement|requirements|syarat).{0,40}(?:minimum|minimal|basic)/i.test(
+        need
+      )
+    );
+
+  const approvedMinimumListingStartRoute =
+    /minimum\/basic requirement.{0,220}(?:download|open).{0,120}Tetamo Partner/i.test(
+      generalFactsText
+    );
+
+  const draftRelabelsWorkflowAsMinimumRequirement =
+    /(?:minimal(?:\s+syarat(?:nya)?)?|minimum(?:\s+(?:requirement|requirements))?|basic\s+requirement(?:s)?).{0,100}(?:data\s+properti|property\s+(?:data|details)|detail\s+properti|foto|photo|video|dokumen|document|sertifikat|certificate|lokasi|location|harga|price|payment|pembayaran|verifikasi|verification|paket|package|akun|account|daftar|register|login)/i.test(
+      raw
+    );
+
+  const draftClaimsNoSpecialListingRequirement =
+    /(?:tidak|nggak|gak|ga)\s+ada\s+(?:syarat|persyaratan)(?:\s+khusus)?|no\s+(?:special\s+)?requirements?/i.test(
+      raw
+    );
+
+  const draftRedefinesMinimumAsGenericProcess =
+    /(?:minimal(?:\s+syarat(?:nya)?)?|minimum(?:\s+(?:requirement|requirements))?|basic\s+requirement(?:s)?).{0,100}(?:cukup\s+dengan\s+)?(?:ikuti|mengikuti|follow)(?:\s+the)?\s+(?:proses|process|alur|flow)/i.test(
+      raw
+    );
+
+  const draftStatesApprovedListingStartRoute =
+    /Tetamo Partner/i.test(raw) &&
+    /(?:download|unduh|buka|open)/i.test(raw) &&
+    /(?:buat|create|creating|kelola|manage|managing).{0,100}(?:listing|properti|property)|(?:listing|properti|property).{0,100}(?:buat|create|creating|kelola|manage|managing)/i.test(
+      raw
+    );
+
+  if (
+    asksForMinimumListingStartRequirement &&
+    approvedMinimumListingStartRoute &&
+    (
+      draftRelabelsWorkflowAsMinimumRequirement ||
+      draftClaimsNoSpecialListingRequirement ||
+      draftRedefinesMinimumAsGenericProcess ||
+      !draftStatesApprovedListingStartRoute
+    )
+  ) {
+    return "The draft did not preserve the approved minimum/basic listing-start answer. Approved Product Truth says the Agent/Owner should be directed to download/open Tetamo Partner and start creating/managing listings there. Do not invent another minimum requirement, claim that no requirements exist, or relabel normal workflow steps as the minimum requirement.";
   }
 
   const paymentViolation =
@@ -2239,6 +2407,10 @@ function replyViolationReason(
 export async function writeMonaReply(
   params: WriteMonaReplyParams
 ): Promise<MonaWriterResult> {
+  const __phase1Span = phase1Stage("writer");
+  __phase1Span.phase("deterministic");
+  try {
+
   /*
    * Brain owns clarification and human handover.
    * Do not turn Writer uncertainty into Needs Admin.
@@ -2246,33 +2418,33 @@ export async function writeMonaReply(
   if (
     params.brain.handoverRecommended
   ) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "handover",
       reply: "",
       source: "fallback",
       reason:
         params.brain.handoverReason ||
         "Mona Brain recommended human review.",
-    };
+    }, 1);
   }
 
   if (!params.brain.understood) {
-    return fallbackReply(params);
+    return phase1Result(__phase1Span, fallbackReply(params), 2);
   }
 
   if (!params.brain.replyNeeded) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "silent",
       reply: "",
       source: "fallback",
-    };
+    }, 3);
   }
 
   const identityReply =
     deterministicIdentityReply(params);
 
   if (identityReply) {
-    return identityReply;
+    return phase1Result(__phase1Span, identityReply, 4);
   }
 
   const isNewAgentIntroduction =
@@ -2287,48 +2459,16 @@ export async function writeMonaReply(
     );
 
   if (isNewAgentIntroduction) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "reply",
       reply:
         "Baik Kak. Untuk Agent, Tetamo bukan cuma tempat upload listing. Kakak bisa kelola listing, menerima enquiry langsung melalui WhatsApp, kelola Leads Dashboard dan Jadwal Viewing, pakai Generate AI, serta Professional Agent Tools seperti Proposal & Portfolio, Inventory & Handover, Rental Agreement, Sale Agreement, dan Letters & Documents termasuk LOI. Boleh tahu kira-kira Kakak saat ini mengelola berapa listing aktif? Biar saya bisa bantu rekomendasikan membership yang paling sesuai.",
       source: "fallback",
-    };
+    }, 5);
   }
 
-  /*
-   * DIRECT AGENT PACKAGE ANSWERS.
-   *
-   * Direct package price/capability questions should be answered directly.
-   * Do not turn them into discovery or qualification questions.
-   */
-  if (
-    params.brain.customerType === "agent" &&
-    params.brain.intent === "package_price" &&
-    params.brain.intentSubject === "Silver"
-  ) {
-    return {
-      action: "reply",
-      reply:
-        "Paket Silver untuk Agent harganya Rp499.000 per tahun Kak, dengan kapasitas hingga 30 listing aktif.",
-      source: "fallback",
-    };
-  }
-
-  if (
-    params.brain.customerType === "agent" &&
-    params.brain.intent === "package_features" &&
-    params.brain.intentSubject === "Silver" &&
-    /\b(?:generate|dokumen|document|professional|profesional|agreement|loi)\b/i.test(
-      params.latestCustomerMessage
-    )
-  ) {
-    return {
-      action: "reply",
-      reply:
-        "Untuk paket Silver, Kakak tetap bisa explore Professional Agent Tools, tetapi untuk membuat, menyimpan, melihat full preview, atau generate dokumen profesional diperlukan paket Gold atau Agent Pro ya Kak.",
-      source: "fallback",
-    };
-  }
+  // Package questions continue through the common fact-grounded Writer path.
+  // A canned one-line price answer must not discard a second factual question.
 
   if (
     params.salesGuidance.guidance
@@ -2338,24 +2478,24 @@ export async function writeMonaReply(
      * Orchestrator should intercept semantic conflict and return it to Brain
      * once. Writer must not answer from a disputed interpretation.
      */
-    return {
+    return phase1Result(__phase1Span, {
       action: "silent",
       reply: "",
       source: "fallback",
-    };
+    }, 8);
   }
 
   if (
     params.salesGuidance.guidance
       ?.handoverRecommended
   ) {
-    return {
+    return phase1Result(__phase1Span, {
       action: "handover",
       reply: "",
       source: "fallback",
       reason:
         "Approved Sales logic determined that human commercial action is required.",
-    };
+    }, 9);
   }
 
   const commercialFactsText =
@@ -2370,8 +2510,9 @@ export async function writeMonaReply(
   const paymentFlowReply =
     deterministicPaymentFlowReply(params);
 
-  if (paymentFlowReply) {
-    return paymentFlowReply;
+  if (paymentFlowReply && params.brain.knowledgeRequest.length <= 1 &&
+      (params.brain.customerNeeds || []).length <= 1) {
+    return phase1Result(__phase1Span, paymentFlowReply, 10);
   }
 
   /*
@@ -2386,73 +2527,19 @@ export async function writeMonaReply(
    * - do not infer additional tutorial contents;
    * - do not fall back to model-generated resource details.
    */
-  if (
-    params.brain.resourceAction.requested === false &&
-    params.brain.resourceAction.action === "none" &&
-    (
-      params.brain.resourceAction.resourceId ===
-        "listing_tutorial_agent" ||
-      params.brain.resourceAction.resourceId ===
-        "listing_tutorial_owner"
-    ) &&
-    params.brain.factualKnowledgeNeeded &&
-    generalFactsText
-  ) {
-    const isAgentTutorial =
-      params.brain.resourceAction.resourceId ===
-      "listing_tutorial_agent";
-
-    const reply =
-      params.brain.languageStyle.primaryLanguage === "en"
-        ? isAgentTutorial
-          ? "The Tetamo Agent Listing Tutorial is the official step-by-step resource for Agents who want guidance on creating a property listing."
-          : "The Tetamo Property Owner Listing Tutorial is the official step-by-step resource for Property Owners who want guidance on creating a property listing."
-        : isAgentTutorial
-          ? "Tetamo Agent Listing Tutorial adalah panduan step-by-step resmi untuk Agent yang ingin membuat listing properti."
-          : "Tetamo Property Owner Listing Tutorial adalah panduan step-by-step resmi untuk Property Owner yang ingin membuat listing properti.";
-
-    return {
-      action: "reply",
-      reply,
-      source: "fallback",
-    };
-  }
-
   /*
    * APPROVED RESOURCE DELIVERY
    * --------------------------
    *
-   * Brain decides whether the customer wants a resource sent now.
-   * Knowledge decides whether that exact resource is approved and available.
+   * Resource delivery is performed separately by the WhatsApp transport
+   * after Brain selects a resource and Knowledge validates it.
    *
-   * Once both conditions are true, Writer must not delay delivery with
-   * another qualification question or make a second semantic decision.
+   * Do not return a canned conversational acknowledgement here.
+   * Writer must continue and compose the natural customer-facing reply from
+   * the full turn, including any substantive question the customer asked.
+   * The approved resource is supplied to Writer below for context, while the
+   * transport remains responsible for sending the exact approved URL.
    */
-  if (
-    params.brain.resourceAction.requested === true &&
-    params.brain.resourceAction.action === "send" &&
-    params.brain.resourceAction.resourceId
-  ) {
-    const approvedResource =
-      params.knowledge.resources.find(
-        (resource) =>
-          resource.id ===
-          params.brain.resourceAction.resourceId
-      );
-
-    if (approvedResource) {
-      const reply =
-        params.brain.languageStyle.primaryLanguage === "en"
-          ? "Sure."
-          : "Boleh Kak.";
-
-      return {
-        action: "reply",
-        reply,
-        source: "fallback",
-      };
-    }
-  }
 
   /*
    * Proof/testimonial answers must stay tightly bounded to approved proof facts.
@@ -2468,7 +2555,7 @@ export async function writeMonaReply(
       deterministicIntentFallbackReply(params);
 
     if (proofReply) {
-      return proofReply;
+      return phase1Result(__phase1Span, proofReply, 13);
     }
   }
 
@@ -2486,16 +2573,18 @@ export async function writeMonaReply(
       deterministicIntentFallbackReply(params);
 
     if (featureReply) {
-      return featureReply;
+      return phase1Result(__phase1Span, featureReply, 14);
     }
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return fallbackReply(params);
+    return phase1Result(__phase1Span, fallbackReply(params), 15);
   }
 
-  const openai =
+  __phase1Span.phase("prompt.prepare");
+    const openai =
     new OpenAI({
+    ...phase1OpenAIOptions(),
       apiKey:
         process.env.OPENAI_API_KEY,
     });
@@ -2600,7 +2689,9 @@ ${approvedCustomerResources}
 RESOURCE DELIVERY RULE:
 - Brain.resourceAction is authoritative for whether the customer wants a resource sent now.
 - If Brain.resourceAction.action is "send", use only the matching resource supplied under APPROVED CUSTOMER RESOURCES.
-- When the matching approved resource is supplied, share its exact URL directly in the reply.
+- The approved resource itself is delivered separately by the WhatsApp transport after this conversational reply.
+- Do NOT include, reproduce, rewrite, or expose the resource URL in this reply.
+- Respond naturally to the customer's message and, when useful, briefly indicate that the approved resource is being provided separately.
 - Do not invent, alter, substitute, or guess a URL.
 - Do not substitute one approved resource for a different requested resource.
 - If no matching approved resource is supplied, do not claim that you sent it or can send it.
@@ -2620,6 +2711,8 @@ FACT BOUNDARY:
 - Commercial package facts come from APPROVED COMMERCIAL FACTS inside PRIVATE SALES GUIDANCE.
 - Broader Tetamo facts come from GENERAL APPROVED TETAMO KNOWLEDGE.
 - Do not invent anything outside those supplied sources.
+- For compound or multi-part customer questions, evaluate every factual part against the supplied approved facts. Answer the supported parts normally.
+- If a requested Tetamo fact is not stated in the supplied approved facts, do not infer, guess, or manufacture an answer for that part. Say naturally that the specific information is not verified or available to you, without turning missing knowledge into a negative claim about Tetamo.
 - Do not mention or imply a promo, discount, bonus, campaign offer, special deal or limited offer unless explicitly supplied.
 - Campaign history only provides conversation context.
 - Campaign history never proves customer role.
@@ -2633,6 +2726,12 @@ ${memoryText}
 LATEST CUSTOMER MESSAGE:
 ${params.latestCustomerMessage}
 
+ANSWER COMPLETENESS:
+- Treat latestMeaning and knowledgeRequest as the full current request, including a customer's acceptance of your previous offer to explain.
+- Give the requested explanation now when approved facts are supplied. Do not replace it with another offer to explain or an unnecessary discovery question.
+- Address every factual need in knowledgeRequest. If a fact is absent, acknowledge that specific gap naturally while answering the supported parts.
+- A resource link supplements the reply; it must not replace a requested explanation.
+
 Write Mona's final WhatsApp reply now.
 `.trim();
 
@@ -2640,23 +2739,37 @@ Write Mona's final WhatsApp reply now.
     const createDraft = async (
       input: string
     ) => {
+  const __phase1Draft = phase1Stage("writer.draft");
+  __phase1Draft.phase("request.prepare");
+  try {
+
       const response =
-        await openai.responses.create({
+        await openai.responses.create(phase1Request(__phase1Draft, {
           model: "gpt-4.1-mini",
           input,
           temperature: 0.45,
           max_output_tokens: 700,
-        });
+        }));
+    phase1Response(__phase1Draft, response);
 
-      return cleanReply(
+      return phase1Result(__phase1Draft, cleanReply(
         String(
           response.output_text || ""
         )
-      );
-    };
+      ), 1);
 
+  } catch (__phase1Error) {
+    __phase1Draft.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Draft.end();
+  }
+};
+
+    __phase1Span.phase("draft.wait");
     let raw =
       await createDraft(prompt);
+    __phase1Span.phase("validation");
 
     const tokenViolation = (
       value: string
@@ -2700,7 +2813,8 @@ Write Mona's final WhatsApp reply now.
      * A bad Writer draft is a Writer problem, not an Admin problem.
      */
     if (violation) {
-      const correctionPrompt = `
+      __phase1Span.phase("rewrite.prompt.prepare");
+    const correctionPrompt = `
 ${prompt}
 
 ==================================================
@@ -2735,6 +2849,8 @@ Requirements:
 - for an objection, follow Sales Guidance recommendedDirection and use relevant approved facts;
 - if Sales Guidance says shouldAskQuestion=false, do not add a question to the objection response;
 - for Owner how_to_list, preserve the approved sequence: successful payment -> listing active/public as Pending Verification while Tetamo verifies -> later Verified; never say marketplace visibility must wait for final verification;
+- if Brain.customerNeeds says the customer asks what they need or the minimum/basic requirement to start listing, answer that need explicitly from the approved Product Truth: direct the Agent/Owner to download/open Tetamo Partner, where they can start creating and managing listings;
+- if the same customer also asks how to post, you may explain the approved listing workflow separately, but do not relabel workflow steps such as property details, photos, documents, payment, verification, or package selection as the minimum/basic requirement;
 - if approved package facts say a Verification Badge is available after approval, explicitly preserve "after approval / setelah disetujui"; never present the verification badge as automatically included merely because the package was purchased;
 - for payment replies, preserve the approved Tetamo Partner payment flow and do not invent manual/direct bank transfer, rekening details, named banks, named e-wallets, or payment links;
 - if approved facts say Tetamo Partner, explicitly retain Tetamo Partner and tell the customer to follow the payment flow shown in the app;
@@ -2743,10 +2859,12 @@ Requirements:
 - return only the corrected customer-facing WhatsApp text.
       `.trim();
 
-      raw =
+      __phase1Span.phase("rewrite.wait");
+    raw =
         await createDraft(
           correctionPrompt
         );
+    __phase1Span.phase("validation");
 
       violation =
         tokenViolation(raw) ||
@@ -2766,11 +2884,11 @@ Requirements:
       raw === "[[SILENT]]" &&
       !params.brain.replyNeeded
     ) {
-      return {
+      return phase1Result(__phase1Span, {
         action: "silent",
         reply: "",
         source: "openai",
-      };
+      }, 16);
     }
 
     if (!raw || violation) {
@@ -2780,21 +2898,30 @@ Requirements:
           "Unknown Writer validation failure."
       );
 
-      return fallbackReply(params);
+      return phase1Result(__phase1Span, fallbackReply(params), 17);
     }
 
-    return {
+    return phase1Result(__phase1Span, {
       action: "reply",
       reply: raw,
       source: "openai",
-    };
+    }, 18);
   } catch (error) {
+    __phase1Span.error(error);
+    __phase1Span.phase("fallback.validation");
     console.error(
       "Tetamo Mona Writer failed:",
       error
     );
 
-    return fallbackReply(params);
+    return phase1Result(__phase1Span, fallbackReply(params), 19);
+  }
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
   }
 }
 /*

@@ -1,3 +1,5 @@
+import { preserveReplyFactRequest } from "./reply-contract";
+import { phase1Stage, phase1Result, phase1OpenAIOptions, phase1Request, phase1Response } from "./phase1-trace.mjs";
 
 import OpenAI from "openai";
 import type { MonaConversationMemory } from "./memory";
@@ -78,6 +80,7 @@ export type MonaBrainDecision = {
 
   normalizedMessage: string;
   latestMeaning: string;
+  customerNeeds: string[];
   conversationSituation: MonaConversationSituation;
   intent: MonaBrainIntent;
   intentSubject: string | null;
@@ -1302,6 +1305,35 @@ Examples include:
 
 knowledgeRequest must describe ONLY the exact facts needed.
 
+COMPOUND FACTUAL QUESTIONS:
+
+When the customer's latest message contains more than one distinct factual need,
+knowledgeRequest MUST preserve every factual need that requires approved Tetamo
+Knowledge.
+
+Use one clear knowledgeRequest item per distinct factual need.
+
+Do not collapse a multi-part factual question into only the primary intent.
+Do not silently drop a secondary factual question just because one intent is
+dominant.
+
+Example structure:
+
+Customer asks how to do X and also asks the requirements for X.
+
+knowledgeRequest=[
+  "approved Tetamo facts explaining how to do X",
+  "approved Tetamo facts about the requirements for X"
+]
+
+If one requested fact is not known, still request that fact from Knowledge.
+Knowledge — not Brain — determines whether the approved fact exists.
+
+latestMeaning, knowledgeRequest, and directQuestion must remain semantically
+consistent: a factual need preserved in latestMeaning must not disappear from
+knowledgeRequest merely because another factual need determines the primary
+intent.
+
 ==================================================
 KNOWLEDGE EPISTEMIC RULE
 ==================================================
@@ -1674,6 +1706,7 @@ function fallbackBrainDecision(
     factualKnowledgeNeeded: false,
     knowledgeRequest: [],
 
+    customerNeeds: [],
     directQuestion: null,
 
     recommendedNextStep:
@@ -2007,6 +2040,11 @@ function parseBrainDecision(
       knowledgeRequest:
         cleanStringArray(
           parsed.knowledgeRequest
+        ),
+
+      customerNeeds:
+        cleanStringArray(
+          parsed.customerNeeds
         ),
 
       directQuestion:
@@ -2783,6 +2821,10 @@ function applyKnownRoleIntentRouting(
   ]);
 
   const knowledgeBackedIntents = new Set<MonaBrainIntent>([
+    "package_price",
+    "package_features",
+    "package_recommendation",
+    "payment",
     "platform_features",
     "feature_details",
     "feature_example",
@@ -2975,7 +3017,8 @@ function enforceBrainRouting(
       result.intent === "general_information";
 
     const roleNeutralPayment =
-      result.intent === "payment";
+      result.intent === "payment" &&
+      !looksLikeHumanActionRequired(latestMessage);
 
     if (
       roleNeutralKnowledgeIntent ||
@@ -3332,42 +3375,17 @@ function enforceBrainRouting(
     String(result.latestMeaning || "").toLowerCase();
 
   /*
-   * LISTING HOW-TO → APPROVED ROLE-SPECIFIC TUTORIAL
+   * LISTING TUTORIAL RESOURCE DELIVERY
+   * ----------------------------------
    *
-   * If Mona already knows the customer is an Agent/Agency or Owner,
-   * a direct how-to-list request is itself sufficient reason to send
-   * the applicable approved tutorial.
+   * Brain's semantic resourceAction remains authoritative.
    *
-   * Unknown roles are intentionally left alone so normal role
-   * clarification can happen instead of guessing.
+   * A how-to-list question is not itself a request to receive a tutorial.
+   * Only an explicit request or acceptance to receive the applicable resource
+   * may produce resourceAction.action="send".
+   *
+   * Role-specific resource IDs are preserved when Brain resolves them.
    */
-  if (
-    result.intent === "how_to_list" &&
-    result.clarification.needed === false &&
-    (
-      result.customerType === "agent" ||
-      result.customerType === "agency" ||
-      result.customerType === "owner"
-    ) &&
-    (
-      result.resourceAction.action === "none" ||
-      result.resourceAction.action === "send"
-    )
-  ) {
-    const listingTutorialResourceId =
-      result.customerType === "owner"
-        ? "listing_tutorial_owner"
-        : "listing_tutorial_agent";
-
-    result = {
-      ...result,
-      resourceAction: {
-        requested: true,
-        action: "send",
-        resourceId: listingTutorialResourceId,
-      },
-    };
-  }
 
   const isListingTutorialFactQuestion =
     result.resourceAction.action === "none" &&
@@ -3640,8 +3658,8 @@ function enforceBrainRouting(
           "information",
         salesStrategyNeeded: true,
         salesStrategist: "agent",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
+        factualKnowledgeNeeded: result.factualKnowledgeNeeded,
+        knowledgeRequest: result.knowledgeRequest,
         recommendedNextStep:
           "Route the fee/value question to Agent Sales AI. This is not active payment intent.",
       };
@@ -3654,8 +3672,8 @@ function enforceBrainRouting(
           "information",
         salesStrategyNeeded: true,
         salesStrategist: "owner",
-        factualKnowledgeNeeded: false,
-        knowledgeRequest: [],
+        factualKnowledgeNeeded: result.factualKnowledgeNeeded,
+        knowledgeRequest: result.knowledgeRequest,
         recommendedNextStep:
           "Route the fee/value question to Owner Sales AI. This is not active payment intent.",
       };
@@ -3673,9 +3691,9 @@ function enforceBrainRouting(
       ...result,
       conversationSituation:
         "hesitation",
-      factualKnowledgeNeeded: false,
-      knowledgeRequest: [],
-      directQuestion: null,
+      factualKnowledgeNeeded: result.factualKnowledgeNeeded,
+      knowledgeRequest: result.knowledgeRequest,
+      directQuestion: result.directQuestion,
       recommendedNextStep:
         "Let the relevant Sales AI handle the hesitation with low pressure: acknowledge the timing/dependency, do not restart discovery, and do not force another question.",
     };
@@ -3700,12 +3718,16 @@ function enforceBrainRouting(
     }
   }
 
-  return result;
+  return preserveReplyFactRequest(result);
 }
 
 export async function analyseMonaBrain(
   params: AnalyseMonaBrainParams
 ): Promise<MonaBrainDecision> {
+  const __phase1Span = phase1Stage("brain");
+  __phase1Span.phase("prepare");
+  try {
+
   const fallback =
     fallbackBrainDecision(
       params.latestCustomerMessage
@@ -3717,15 +3739,17 @@ export async function analyseMonaBrain(
     );
 
   if (!process.env.OPENAI_API_KEY) {
-    return enforceBrainRouting(
+    return phase1Result(__phase1Span, enforceBrainRouting(
       fallback,
       params.latestCustomerMessage,
       priorClarification,
       params.memory
-    );
+    ), 1);
   }
 
-  const openai = new OpenAI({
+  __phase1Span.phase("prompt.prepare");
+    const openai = new OpenAI({
+    ...phase1OpenAIOptions(),
     apiKey:
       process.env.OPENAI_API_KEY,
   });
@@ -3876,6 +3900,7 @@ Return ONLY valid JSON in exactly this structure:
   "factualKnowledgeNeeded": false,
   "knowledgeRequest": [],
 
+  "customerNeeds": [],
   "directQuestion": null,
 
   "recommendedNextStep": "brief internal instruction for what should happen next"
@@ -3884,6 +3909,17 @@ Return ONLY valid JSON in exactly this structure:
 OUTPUT RULES:
 
 - intent must describe the customer's PRIMARY latest-turn need, not merely repeat conversationSituation.
+- A PRIMARY intent does not erase secondary factual needs in the same customer message.
+- customerNeeds must contain ALL distinct current-turn needs understood from the customer's latest message.
+- Use one concise customerNeeds item per distinct need.
+- customerNeeds describes what the customer needs; it is not limited to factual Knowledge retrieval.
+- Do not collapse multiple customerNeeds into only the primary intent.
+- customerNeeds must remain semantically consistent with latestMeaning.
+- knowledgeRequest is an ARRAY of factual needs, not a restatement of the primary intent.
+- When the latest customer message contains multiple distinct factual questions that require approved Tetamo Knowledge, include EVERY such factual need as a separate knowledgeRequest item.
+- Never collapse a compound factual question into one generic knowledgeRequest merely because one question determines intent.
+- Every factual need preserved in latestMeaning that requires approved Tetamo Knowledge must also be preserved in knowledgeRequest.
+- If Knowledge may not contain an answer to one of those factual needs, still include that need in knowledgeRequest; Knowledge determines whether the fact is approved, unknown, or unverified.
 - intentSubject should name the specific package, feature, product, or referent when context supports one; otherwise null.
 - Resolve "contohnya", "yang tadi", "fiturnya", "yang itu", "bisa lihat?", and similar short references from the immediate real conversation before assigning intent.
 - resourceAction is a structured interpretation of whether the customer is asking for, postponing, or declining an approved customer resource.
@@ -3935,12 +3971,13 @@ OUTPUT RULES:
 
   try {
     const response =
-      await openai.responses.create({
+      await openai.responses.create(phase1Request(__phase1Span, {
         model: "gpt-4.1-mini",
         input: prompt,
         temperature: 0.1,
         max_output_tokens: 1050,
-      });
+      }));
+    phase1Response(__phase1Span, response);
 
     let decision =
       parseBrainDecision(
@@ -3950,6 +3987,7 @@ OUTPUT RULES:
         fallback
       );
 
+    __phase1Span.phase("validation");
     decision =
       enforceBrainRouting(
         decision,
@@ -3959,7 +3997,7 @@ OUTPUT RULES:
       );
 
     if (!decision.understood) {
-      return {
+      return phase1Result(__phase1Span, {
         ...decision,
         replyNeeded: false,
         handoverRecommended: true,
@@ -3968,21 +4006,30 @@ OUTPUT RULES:
           "Mona could not reliably understand the message from the available conversation.",
         salesStrategyNeeded: false,
         salesStrategist: "none",
-      };
+      }, 2);
     }
 
-    return decision;
+    return phase1Result(__phase1Span, preserveReplyFactRequest(decision), 3);
   } catch (error) {
+    __phase1Span.error(error);
+    __phase1Span.phase("fallback.validation");
     console.error(
       "Tetamo Mona Brain analysis failed:",
       error
     );
 
-    return enforceBrainRouting(
+    return phase1Result(__phase1Span, enforceBrainRouting(
       fallback,
       params.latestCustomerMessage,
       priorClarification,
       params.memory
-    );
+    ), 4);
+  }
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
   }
 }

@@ -42,6 +42,7 @@ export const TETAMO_PRODUCT_FEATURES: TetamoProductFeature[] = [
       "Tetamo Partner is live on iOS and Android.",
       "Tetamo Partner is designed for property agents, property owners, developers, and other property partners.",
       "For an Agent or Owner who asks how to list, Mona should make Tetamo Partner the primary self-service route and tell them to download/open Tetamo Partner on iOS or Android.",
+      "For an Agent or Owner asking what they need or what the minimum/basic requirement is to start listing, Mona should direct them to download/open Tetamo Partner on iOS or Android, where they can start creating and managing their property listings.",
       "Tetamo Partner is separate from the Tetamo Marketplace app used for property discovery and browsing.",
     ],
     aliases: [

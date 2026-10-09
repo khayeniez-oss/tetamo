@@ -113,6 +113,26 @@ function shouldProtectCurrentStage(
   }
 
   /*
+   * Once explicit package intent has been established, an ordinary later
+   * enquiry must not erase that commercial progress.
+   *
+   * Package stages may still move into follow-up, payment, failure,
+   * or a closed state when later evidence supports that transition.
+   */
+  if (
+    (
+      currentStage === "agent_package" ||
+      currentStage === "owner_package"
+    ) &&
+    [
+      "new_inquiry",
+      "lead",
+    ].includes(nextStage)
+  ) {
+    return true;
+  }
+
+  /*
    * Once payment has started, ordinary information/package conversation
    * must not push CRM backwards.
    */
@@ -405,24 +425,32 @@ export function evaluateMonaSalesStage(
    * ==================================================
    * AGENT / AGENCY
    * ==================================================
+   *
+   * Customer role and package intent are separate facts.
+   *
+   * Being an Agent / Agency does NOT by itself mean the customer has
+   * entered the Agent package journey.
    */
 
   if (
     isActiveSalesSituation &&
     (
-      params.brain.customerType ===
-        "agent" ||
-      params.brain.customerType ===
-        "agency"
+      params.brain.customerType === "agent" ||
+      params.brain.customerType === "agency"
     )
   ) {
+    const hasAgentPackageIntent = [
+      "package_features",
+      "package_price",
+      "package_recommendation",
+    ].includes(params.brain.intent);
+
     return makeSuggestion(
-      "agent_package",
-      params.brain.customerType ===
-        "agency"
-        ? "Customer is identified as an agency in the Agent commercial journey."
-        : "Customer is identified as an agent in an active Tetamo sales conversation.",
-      90,
+      hasAgentPackageIntent ? "agent_package" : "lead",
+      hasAgentPackageIntent
+        ? "Agent or agency is explicitly discussing Tetamo package pricing, features, or recommendation."
+        : "Agent or agency has a genuine Tetamo enquiry, but package intent is not yet established.",
+      hasAgentPackageIntent ? 92 : 86,
       currentStage
     );
   }
@@ -431,17 +459,26 @@ export function evaluateMonaSalesStage(
    * ==================================================
    * OWNER
    * ==================================================
+   *
+   * Owner identity does NOT by itself establish Owner package intent.
    */
 
   if (
     isActiveSalesSituation &&
-    params.brain.customerType ===
-      "owner"
+    params.brain.customerType === "owner"
   ) {
+    const hasOwnerPackageIntent = [
+      "package_features",
+      "package_price",
+      "package_recommendation",
+    ].includes(params.brain.intent);
+
     return makeSuggestion(
-      "owner_package",
-      "Customer is identified in the Owner commercial journey.",
-      90,
+      hasOwnerPackageIntent ? "owner_package" : "lead",
+      hasOwnerPackageIntent
+        ? "Owner is explicitly discussing Tetamo package pricing, features, or recommendation."
+        : "Owner has a genuine Tetamo enquiry, but package intent is not yet established.",
+      hasOwnerPackageIntent ? 92 : 86,
       currentStage
     );
   }

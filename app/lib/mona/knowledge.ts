@@ -1,3 +1,5 @@
+import { requiresApprovedReplyFacts } from "./reply-contract";
+import { phase1Stage, phase1Result } from "./phase1-trace.mjs";
 import {
   TETAMO_KNOWLEDGE,
   type TetamoKnowledgeSection,
@@ -1257,6 +1259,10 @@ function selectApprovedResources(
 export async function retrieveMonaKnowledge(
   params: RetrieveMonaKnowledgeParams
 ): Promise<MonaKnowledgeResult> {
+  const __phase1Span = phase1Stage("knowledge");
+  __phase1Span.phase("lookup_and_validation");
+  try {
+
   const resources =
     selectApprovedResources(params);
 
@@ -1287,9 +1293,10 @@ export async function retrieveMonaKnowledge(
 
   if (
     discussedResource &&
-    params.brain.factualKnowledgeNeeded
+    params.brain.factualKnowledgeNeeded &&
+    params.brain.intent !== "how_to_list"
   ) {
-    return {
+    return phase1Result(__phase1Span, {
       needed: true,
       status: "found",
       retrievalQuery:
@@ -1301,7 +1308,7 @@ export async function retrieveMonaKnowledge(
         `Audience: ${discussedResource.audience.join(", ")}`,
       ].join("\n"),
       resources: [],
-    };
+    }, 1);
   }
 
   const salesFactsNeeded = getSalesFactsNeeded(
@@ -1309,8 +1316,7 @@ export async function retrieveMonaKnowledge(
   );
 
   const needed =
-    params.brain.factualKnowledgeNeeded ||
-    params.brain.knowledgeRequest.length > 0 ||
+    requiresApprovedReplyFacts(params.brain) ||
     salesFactsNeeded.length > 0;
 
   const retrievalQuery = buildRetrievalQuery(
@@ -1319,7 +1325,7 @@ export async function retrieveMonaKnowledge(
   );
 
   if (!needed || !retrievalQuery) {
-    return {
+    return phase1Result(__phase1Span, {
       needed: resources.length > 0,
       status:
         resources.length > 0
@@ -1329,7 +1335,7 @@ export async function retrieveMonaKnowledge(
       matches: [],
       approvedFactsText: "",
       resources,
-    };
+    }, 2);
   }
 
   const productTruthSections =
@@ -1412,22 +1418,29 @@ export async function retrieveMonaKnowledge(
     .slice(0, 6);
 
   if (!matches.length) {
-    return {
+    return phase1Result(__phase1Span, {
       needed: true,
       status: "not_found",
       retrievalQuery,
       matches: [],
       approvedFactsText: "",
       resources,
-    };
+    }, 3);
   }
 
-  return {
+  return phase1Result(__phase1Span, {
     needed: true,
     status: "found",
     retrievalQuery,
     matches,
     approvedFactsText: formatApprovedFacts(matches),
     resources,
-  };
+  }, 4);
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
+  }
 }

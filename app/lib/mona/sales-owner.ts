@@ -1,3 +1,4 @@
+import { phase1Stage, phase1Result, phase1OpenAIOptions, phase1Request, phase1Response, phase1Next } from "./phase1-trace.mjs";
 import OpenAI from "openai";
 import type { MonaBrainDecision } from "./brain";
 
@@ -69,10 +70,10 @@ const OWNER_PACKAGES: Record<
   basic: {
     id: "basic",
     name: "Basic Listing",
-    priceIdr: 50000,
+    priceIdr: 49000,
     durationDays: 365,
     facts: [
-      "Basic Listing costs Rp50.000.",
+      "Basic Listing costs Rp49.000.",
       "Basic Listing is active for 1 year.",
       "Basic Listing supports 1 active property listing.",
       "Basic includes AI-generated title and description.",
@@ -88,10 +89,10 @@ const OWNER_PACKAGES: Record<
   priority: {
     id: "priority",
     name: "Priority Listing",
-    priceIdr: 150000,
+    priceIdr: 149000,
     durationDays: 365,
     facts: [
-      "Priority Listing costs Rp150.000.",
+      "Priority Listing costs Rp149.000.",
       "Priority Listing is active for 1 year.",
       "Priority Listing supports 1 active property listing.",
       "Priority includes AI-generated title and description.",
@@ -108,10 +109,10 @@ const OWNER_PACKAGES: Record<
   featured: {
     id: "featured",
     name: "Featured Listing",
-    priceIdr: 550000,
+    priceIdr: 599000,
     durationDays: 365,
     facts: [
-      "Featured Listing costs Rp550.000.",
+      "Featured Listing costs Rp599.000.",
       "Featured Listing is active for 1 year.",
       "Featured Listing supports 1 active property listing.",
       "Featured status remains active for 1 year.",
@@ -150,7 +151,7 @@ const SPOTLIGHT_FACTS = [
 
 const OWNER_PAYMENT_FACTS = [
   "For Owner listing payment, the Owner should use the Tetamo Partner app.",
-  "The Owner should download or open Tetamo Partner, log in, choose the applicable Owner package or product, complete the property listing when required, and continue to payment.",
+  "The Owner should download or open Tetamo Partner, log in, create and review the property listing, choose the applicable Owner package at the end of the listing flow, and continue to payment.",
   "The Owner completes payment by following the payment flow shown inside Tetamo Partner.",
   "The customer should complete payment only through the payment options presented by the payment system in the app.",
   "After successful payment is confirmed, the Owner listing or purchased product is activated and can follow the applicable verification flow.",
@@ -162,7 +163,7 @@ const OWNER_PAYMENT_FACTS = [
 const OWNER_REGISTRATION_STEPS = [
   "Download or open Tetamo Partner on iOS or Android.",
   "Register or log in as an Owner in Tetamo Partner.",
-  "Choose the applicable Owner listing package and create the property listing.",
+  "Create and complete the property listing, then choose the applicable Owner listing package at the end of the listing flow.",
   "Review the listing and continue to the payment flow in Tetamo Partner.",
   "Complete payment by following the payment flow shown inside Tetamo Partner.",
   "After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.",
@@ -171,12 +172,13 @@ const OWNER_REGISTRATION_STEPS = [
 const OWNER_LISTING_STEPS = [
   "Download or open Tetamo Partner on iOS or Android.",
   "Register or log in as an Owner in Tetamo Partner.",
-  "Choose the applicable Owner listing package and start the listing.",
+  "Start a new property listing in Tetamo Partner.",
   "Enter the property details, location, price, transaction type, facilities and other required information.",
   "Upload property photos and supported videos.",
   "Use Generate AI to create the listing title and description when desired.",
   "Complete the required listing verification information.",
   "Review the property information.",
+  "Choose the applicable Owner listing package at the end of the listing flow.",
   "Complete payment through the payment flow shown inside Tetamo Partner.",
   "After payment is successfully confirmed, the listing becomes active.",
   "The listing automatically appears publicly with Pending Verification status while awaiting Tetamo verification.",
@@ -341,7 +343,7 @@ Do NOT request Owner package pricing/features from general Tetamo Knowledge.
 
 BASIC LISTING
 
-- Rp50.000.
+- Rp49.000.
 - Active for 1 year.
 - 1 active listing.
 - AI-generated title and description.
@@ -354,7 +356,7 @@ BASIC LISTING
 
 PRIORITY LISTING
 
-- Rp150.000.
+- Rp149.000.
 - Active for 1 year.
 - 1 active listing.
 - AI-generated title and description.
@@ -368,7 +370,7 @@ PRIORITY LISTING
 
 FEATURED LISTING
 
-- Rp550.000.
+- Rp599.000.
 - Active for 1 year.
 - 1 active listing.
 - Featured for the full 1-year listing term.
@@ -503,7 +505,7 @@ OWNER REGISTRATION FLOW
 
 1. Download/open Tetamo Partner on iOS or Android.
 2. Register/login as Owner in Tetamo Partner.
-3. Choose the applicable Owner listing package and create the property listing.
+3. Create and complete the property listing, then choose the applicable Owner listing package at the end of the listing flow.
 4. Review the listing and proceed to the applicable Tetamo Owner checkout.
 5. Complete payment by following the payment flow shown in Tetamo Partner.
 6. After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.
@@ -2543,6 +2545,23 @@ function applyDeterministicOwnerSalesGuards(
     commercialFacts.clear();
   }
 
+  // Resolved contextual requests must not depend on repeating price/package
+  // keywords in the latest raw message (e.g. "Saya pemilik", "Tolong jelaskan").
+  if (!hardRejection && !currentTurnObjectionLocked &&
+      ["package_price", "package_features", "package_recommendation"].includes(brainIntent)) {
+    const namedPackage = (Object.keys(OWNER_PACKAGES) as OwnerPackageId[]).find(
+      id => new RegExp(`\\b${id}\\b`, "i").test(params.brain.intentSubject || "")
+    );
+    const applicable = namedPackage ? [namedPackage] :
+      recommendedPackage ? [recommendedPackage] :
+      ["basic", "priority", "featured"] as OwnerPackageId[];
+    for (const id of applicable) {
+      for (const fact of OWNER_PACKAGES[id].facts) commercialFacts.add(fact);
+    }
+    shouldAskQuestion = false;
+    recommendedDirection += " Answer the resolved package question now using these approved facts; do not merely offer to explain it again.";
+  }
+
   const allowLegacyPackageFacts =
     brainIntent === "unknown" ||
     brainIntent === "package_features" ||
@@ -2597,7 +2616,7 @@ function applyDeterministicOwnerSalesGuards(
     commercialFacts:
       Array.from(
         commercialFacts
-      ).slice(0, 40),
+      ).slice(0, ["package_price", "package_features", "package_recommendation"].includes(brainIntent) ? 100 : 40),
     needsTetamoFacts,
     factsNeeded:
       Array.from(
@@ -2611,14 +2630,20 @@ function applyDeterministicOwnerSalesGuards(
 export async function generateOwnerSalesGuidance(
   params: GenerateOwnerSalesGuidanceParams
 ): Promise<OwnerSalesGuidance> {
+  const __phase1Span = phase1Stage("sales.owner");
+  __phase1Span.phase("fallback_or_prepare");
+  try {
+
   if (!process.env.OPENAI_API_KEY) {
-    return applyDeterministicOwnerSalesGuards(
+    return phase1Result(__phase1Span, applyDeterministicOwnerSalesGuards(
       fallbackGuidance(),
       params
-    );
+    ), 1);
   }
 
-  const openai = new OpenAI({
+  __phase1Span.phase("prompt.prepare");
+    const openai = new OpenAI({
+    ...phase1OpenAIOptions(),
     apiKey: process.env.OPENAI_API_KEY,
   });
 
@@ -2737,30 +2762,40 @@ Do not include markdown.
 
   try {
     const response =
-      await openai.responses.create({
+      await openai.responses.create(phase1Request(__phase1Span, {
         model: "gpt-4.1-mini",
         input: prompt,
         temperature: 0.1,
         max_output_tokens: 950,
-      });
+      }));
+    phase1Response(__phase1Span, response);
 
-    return applyDeterministicOwnerSalesGuards(
-      parseOwnerSalesGuidance(
+    return phase1Result(__phase1Span, applyDeterministicOwnerSalesGuards(
+      phase1Next(__phase1Span, "validation", parseOwnerSalesGuidance(
         String(
           response.output_text || ""
         )
-      ),
+      )),
       params
-    );
+    ), 2);
   } catch (error) {
+    __phase1Span.error(error);
+    __phase1Span.phase("fallback.validation");
     console.error(
       "Tetamo Owner Sales AI guidance failed:",
       error
     );
 
-    return applyDeterministicOwnerSalesGuards(
+    return phase1Result(__phase1Span, applyDeterministicOwnerSalesGuards(
       fallbackGuidance(),
       params
-    );
+    ), 3);
+  }
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
   }
 }

@@ -1,3 +1,4 @@
+import { phase1Stage, phase1Result } from "./phase1-trace.mjs";
 import type { MonaBrainDecision } from "./brain";
 import {
   generateAgentSalesGuidance,
@@ -39,6 +40,10 @@ function noSalesGuidance(): MonaSalesGuidance {
 export async function routeMonaSalesStrategy(
   params: RouteMonaSalesParams
 ): Promise<MonaSalesGuidance> {
+  const __phase1Span = phase1Stage("sales.route");
+  __phase1Span.phase("routing");
+  try {
+
   const { brain } = params;
 
   /*
@@ -50,7 +55,7 @@ export async function routeMonaSalesStrategy(
     brain.handoverRecommended ||
     brain.clarification.needed
   ) {
-    return noSalesGuidance();
+    return phase1Result(__phase1Span, noSalesGuidance(), 1);
   }
 
   /*
@@ -58,7 +63,7 @@ export async function routeMonaSalesStrategy(
    * is needed for this customer turn.
    */
   if (!brain.salesStrategyNeeded) {
-    return noSalesGuidance();
+    return phase1Result(__phase1Span, noSalesGuidance(), 2);
   }
 
   const customerType = brain.customerType;
@@ -74,6 +79,7 @@ export async function routeMonaSalesStrategy(
     customerType === "agent" ||
     customerType === "agency"
   ) {
+    __phase1Span.phase("specialist.wait");
     const guidance =
       await generateAgentSalesGuidance({
         brain,
@@ -85,10 +91,10 @@ export async function routeMonaSalesStrategy(
           params.salesStage,
       });
 
-    return {
+    return phase1Result(__phase1Span, {
       strategist: "agent",
       guidance,
-    };
+    }, 3);
   }
 
   /*
@@ -97,6 +103,7 @@ export async function routeMonaSalesStrategy(
    * Owner Sales receives the same complete Brain context.
    */
   if (customerType === "owner") {
+    __phase1Span.phase("specialist.wait");
     const guidance =
       await generateOwnerSalesGuidance({
         brain,
@@ -108,15 +115,22 @@ export async function routeMonaSalesStrategy(
           params.salesStage,
       });
 
-    return {
+    return phase1Result(__phase1Span, {
       strategist: "owner",
       guidance,
-    };
+    }, 4);
   }
 
   /*
    * Buyer/Renter, Developer and Unknown do not enter
    * Agent or Owner Sales AI.
    */
-  return noSalesGuidance();
+  return phase1Result(__phase1Span, noSalesGuidance(), 5);
+
+  } catch (__phase1Error) {
+    __phase1Span.error(__phase1Error);
+    throw __phase1Error;
+  } finally {
+    __phase1Span.end();
+  }
 }
