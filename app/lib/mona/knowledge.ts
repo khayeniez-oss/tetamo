@@ -1411,6 +1411,44 @@ export async function retrieveMonaKnowledge(
     ...legacyMatches,
   ]
     .filter((match) => {
+      /*
+       * Dedicated role sections must fit the current customer or
+       * an explicitly requested other-role topic. Historical mentions
+       * in the retrieval query do not establish current relevance.
+       */
+      const dedicatedRoleSections: Record<string, string> = {
+        "what-agents-can-do": "agent",
+        "how-agent-listings-work": "agent",
+        "agent-registration-requirements-capabilities": "agent",
+        "tetamo-professional-agent-tools": "agent",
+        "what-owners-can-do": "owner",
+        "how-owner-listings-work": "owner",
+      };
+      const sectionRole = dedicatedRoleSections[match.section.id];
+      const currentRole =
+        params.brain.customerType === "agency"
+          ? "agent"
+          : params.brain.customerType;
+      const currentTopic = [
+        params.brain.normalizedMessage,
+        params.brain.intentSubject || "",
+      ].join(" ");
+      const explicitlyRequestsSectionRole =
+        sectionRole === "agent"
+          ? /\b(?:agent|agents|agen|agency|agensi|broker)\b/i.test(currentTopic)
+          : sectionRole === "owner"
+            ? /\b(?:owner|owners|pemilik)\b/i.test(currentTopic)
+            : false;
+
+      if (
+        sectionRole &&
+        (currentRole === "owner" || currentRole === "agent") &&
+        sectionRole !== currentRole &&
+        !explicitlyRequestsSectionRole
+      ) {
+        return false;
+      }
+
       if (seen.has(match.section.id)) return false;
       seen.add(match.section.id);
       return true;

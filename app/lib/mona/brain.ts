@@ -2943,6 +2943,93 @@ function enforceBrainRouting(
     };
   }
 
+  /*
+   * Keep routing and current customer context consistent.
+   * Older identity episodes remain in full Memory, but must not become
+   * current customer facts after a newer explicit identity statement.
+   */
+  if (establishedCustomerType) {
+    const customerEvidence = [
+      ...memory.messages,
+      {
+        speaker: "Customer",
+        message: latestMessage,
+      } as MonaConversationMemory["messages"][number],
+    ];
+    let identityStart = -1;
+
+    for (let index = customerEvidence.length - 1; index >= 0; index -= 1) {
+      const item = customerEvidence[index];
+      if (item.speaker !== "Customer") continue;
+
+      const explicitRole = recoverEstablishedCustomerType({
+        ...memory,
+        messages: [item],
+      });
+
+      if (explicitRole === establishedCustomerType) {
+        identityStart = index;
+        break;
+      }
+    }
+
+    if (identityStart >= 0) {
+      const currentStatements = Array.from(new Set(
+        customerEvidence
+          .slice(identityStart)
+          .filter((item) => item.speaker === "Customer")
+          .map((item) => String(item.message || "").trim())
+          .filter(Boolean)
+      ));
+
+      result = {
+        ...result,
+        knownContext: {
+          ...result.knownContext,
+          summary:
+            `Current customer role: ${establishedCustomerType}. ` +
+            "The following are customer statements in the current identity context. " +
+            "Questions, comparisons and quoted Mona advice are not confirmed selections, payments or product facts. " +
+            currentStatements.join(" | "),
+          importantFacts: [
+            `Current customer role: ${establishedCustomerType}`,
+            ...currentStatements.map(
+              (statement) => `Customer statement: ${statement}`
+            ),
+          ],
+          // Full Memory still contains the actual prior answers.
+          // Do not retain model-generated topic summaries from an older identity.
+          alreadyAnsweredTopics: [],
+        },
+      };
+    }
+  }
+
+  /*
+   * Reconcile the objection subtype with Brain's own resolved meaning.
+   * A short continuation of a bad experience is not automatically
+   * an objection about already using another solution.
+   */
+  if (
+    result.intent === "existing_solution_objection" &&
+    /portal|advertis|paid|iklan|platform/i.test(result.latestMeaning || "") &&
+    (
+      /\b(?:bad|negative|disappointing|poor)\b[^.!?]{0,80}\b(?:experience|results?|outcome)\b/i.test(result.latestMeaning || "") ||
+      /\b(?:experience|results?|outcome)\b[^.!?]{0,80}\b(?:bad|negative|disappointing|poor)\b/i.test(result.latestMeaning || "") ||
+      /pengalaman[^.!?]{0,50}(?:buruk|mengecewakan)/i.test(result.latestMeaning || "")
+    )
+  ) {
+    result = {
+      ...result,
+      intent: "bad_past_experience",
+      conversationSituation: "objection",
+      factualKnowledgeNeeded: true,
+      knowledgeRequest: [
+        "Approved Tetamo facts relevant to the customer's previous disappointing paid-advertising experience and current concern.",
+      ],
+    };
+  }
+
   result = repairPreciseBrainIntent(
     result,
     latestMessage
@@ -3762,10 +3849,67 @@ export async function analyseMonaBrain(
       process.env.OPENAI_API_KEY,
   });
 
-  const conversation =
-    buildConversationForBrain(
-      params.memory
-    );
+  /*
+   * Separate current identity evidence from earlier conversation history
+   * before asking the model to resolve the current meaning.
+   */
+  const identityEvidence = [
+    ...params.memory.messages,
+    {
+      speaker: "Customer",
+      message: params.latestCustomerMessage,
+    } as MonaConversationMemory["messages"][number],
+  ];
+  const currentIdentity = recoverEstablishedCustomerType({
+    ...params.memory,
+    messages: identityEvidence,
+  });
+
+  let currentIdentityStart = -1;
+  if (currentIdentity) {
+    for (let index = identityEvidence.length - 1; index >= 0; index -= 1) {
+      const item = identityEvidence[index];
+      if (item.speaker !== "Customer") continue;
+      if (
+        recoverEstablishedCustomerType({
+          ...params.memory,
+          messages: [item],
+        }) === currentIdentity
+      ) {
+        currentIdentityStart = index;
+        break;
+      }
+    }
+  }
+
+  const formatIdentityHistory = (
+    messages: MonaConversationMemory["messages"]
+  ) => messages
+    .map((item) => `[${item.createdAt || "current"}] ${item.speaker}: ${item.message}`)
+    .join("\n");
+
+  const conversation = currentIdentityStart >= 0
+    ? [
+        "CURRENT CUSTOMER IDENTITY:",
+        currentIdentity,
+        "",
+        "IDENTITY AND MEANING CONSISTENCY:",
+        "- The latest explicit customer identity supersedes older identity statements for this current journey.",
+        "- Asking about another role's tutorial or features does not change the customer's identity.",
+        "- Previous Mona replies do not establish customer identity or confirm a customer choice.",
+        "- customerType, latestMeaning, knownContext, customerNeeds and Sales routing must describe the same current customer.",
+        "- Do not describe this customer as an older role inside latestMeaning while assigning the current role in customerType.",
+        "- Earlier listing counts, packages or payment stages are historical unless the current customer context establishes their relevance.",
+        "- Resolve short replies using the immediate current exchange and its unresolved concern.",
+        "- A continuation of disappointment with paid advertising remains a bad-past-experience concern; it is not automatically a duplicate-value objection.",
+        "",
+        "EARLIER HISTORY — RETAINED FOR REFERENCE:",
+        formatIdentityHistory(identityEvidence.slice(0, currentIdentityStart)) || "none",
+        "",
+        "CURRENT IDENTITY CONTEXT — USE FOR THE CURRENT TURN:",
+        formatIdentityHistory(identityEvidence.slice(currentIdentityStart)),
+      ].join("\n")
+    : buildConversationForBrain(params.memory);
 
   const prompt = `
 ${MONA_BRAIN_PROMPT}
