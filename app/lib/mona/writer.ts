@@ -1060,7 +1060,7 @@ function deterministicObjectionFallbackReply(
     )
   ) {
     approvedValuePartsId.push(
-      "buyer/renter matching"
+      "pencocokan properti dengan kebutuhan pembeli atau penyewa"
     );
     approvedValuePartsEn.push(
       "buyer/renter matching"
@@ -1073,7 +1073,7 @@ function deterministicObjectionFallbackReply(
     )
   ) {
     approvedValuePartsId.push(
-      "inquiry langsung lewat WhatsApp"
+      "calon pembeli bisa menghubungi Kakak langsung lewat WhatsApp"
     );
     approvedValuePartsEn.push(
       "direct WhatsApp enquiries"
@@ -1086,7 +1086,7 @@ function deterministicObjectionFallbackReply(
     )
   ) {
     approvedValuePartsId.push(
-      "Leads Dashboard"
+      "pencatatan enquiry agar lebih mudah ditindaklanjuti"
     );
     approvedValuePartsEn.push(
       "the Leads Dashboard"
@@ -1186,7 +1186,7 @@ function deterministicObjectionFallbackReply(
     reply =
       language === "en"
         ? `I understand why you'd be cautious after a disappointing paid-portal experience.${valueEn} Tetamo is best considered for the additional property-specific channels and workflow it provides, without replacing what you already use.`
-        : `Paham Kak kenapa jadi lebih hati-hati setelah pengalaman portal berbayar sebelumnya.${valueId} Tetamo lebih tepat dilihat dari tambahan channel dan workflow khusus properti yang diberikan, tanpa harus menggantikan yang sudah Kakak gunakan.`;
+        : `Wajar Kak kalau jadi lebih hati-hati setelah sudah bayar tapi belum dapat calon pembeli.${valueId} Itu yang bisa Kakak pertimbangkan sebelum memutuskan pasang listing di Tetamo.`;
   } else if (
     /self_marketing|facebook|instagram|\bfb\b|\big\b|post.*sendiri|gratis|free/i.test(
       signal
