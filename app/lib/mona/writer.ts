@@ -1359,6 +1359,21 @@ function deterministicIntentFallbackReply(
         const total = unitPrice * quantity;
         if (Number.isSafeInteger(total) && unitPrice > 0) {
           const amount = total.toLocaleString("id-ID");
+          const asksUpgrade = /\b(?:upgrade|upgrading|naik\s+paket)\b/i.test(question);
+          const asksOtherDetails = /\b(?:perbedaan|beda|fitur|benefits?|features?|compare|comparison|difference|termasuk|includes?)\b/i.test(question);
+          if (
+            asksUpgrade && !asksOtherDetails &&
+            /Owner listing package upgrades are not currently available/i.test(approved) &&
+            approved.includes(`${name} Listing is active for 1 year.`)
+          ) {
+            return {
+              action: "reply",
+              reply: english
+                ? `For ${quantity} properties on ${name}, the total is Rp${amount} for one year. Owner package upgrades aren't currently available.`
+                : `Untuk ${quantity} properti pakai ${name}, totalnya Rp${amount} setahun, Kak. Upgrade paket Owner saat ini belum tersedia ya.`,
+              source: "fallback",
+            };
+          }
           rows.unshift(english
             ? `For ${quantity} ${name} listings, the total is Rp${amount}.`
             : `Untuk ${quantity} listing ${name}, totalnya Rp${amount}.`);
@@ -2828,6 +2843,16 @@ ${DEVELOPER_DESTINATION}
 
 Buyer / Renter:
 ${BUYER_RENTER_DESTINATION}
+
+
+CONVERSATION DELIVERY:
+- Speak as Mona: warm, attentive and practical. Sound like a helpful person continuing this particular conversation.
+- Answer the latest question first. Use the established context without repeating the introduction, listing workflow or every package detail.
+- For a simple follow-up, usually use 2–4 short sentences. Expand when the customer asks for steps, comparisons or several details; answer every requested part.
+- Use "Kak" naturally, not in every sentence. Match the customer's language and level of formality without forced slang or excessive enthusiasm.
+- Do not attach "Kalau sudah siap...", "Saya siap bantu...", download instructions or another sales CTA to every answer. Add a next step only when it helps with the current question.
+- When correcting earlier advice, acknowledge the specific correction briefly and give the supported answer. Do not defend the earlier wording.
+- Warmth must come from clear, attentive wording. Never create a promise, feature, policy or workaround to sound helpful.
 
 FACT BOUNDARY:
 
