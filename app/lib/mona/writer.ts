@@ -1966,6 +1966,16 @@ function replyViolationReason(
       commercialFactsText + "\n" + generalFactsText
     )
   ) {
+
+    const upgradeContext = /\b(?:upgrade|upgrading|naik\s+paket)\b/i.test(
+      raw + "\n" + params.latestCustomerMessage + "\n" +
+      params.brain.latestMeaning
+    );
+    const replacementClaim =
+      /(?:beli|membeli|bayar|buy|purchase|pay\s+for)[^.!?\n]{0,55}(?:paket|package|listing)[^.!?\n]{0,45}(?:baru|terpisah|new|separate)|(?:upload|unggah|buat|create|post)[^.!?\n]{0,40}(?:lagi|ulang|again|new\s+listing)/i.test(raw);
+    if (upgradeContext && replacementClaim) {
+      return "Owner upgrades are unavailable. No replacement-purchase or re-upload process is approved. Remove that workaround; answer only the supported price and availability facts.";
+    }
     const upgradeClaim = raw.split(/[.!?\n]+/).some(sentence =>
       /\b(?:upgrade|upgrading|upgraded|naik\s+paket|peningkatan\s+paket|selisih|prorat\w*)\b/i.test(sentence) &&
       !/(?:belum\s+(?:bisa|tersedia|dapat)|tidak\s+(?:bisa|tersedia|dapat|mendukung)|not\s+(?:currently\s+)?(?:available|supported|possible)|unavailable|cannot|can't)/i.test(sentence)
@@ -2824,6 +2834,9 @@ FACT BOUNDARY:
 - Commercial package facts come from APPROVED COMMERCIAL FACTS inside PRIVATE SALES GUIDANCE.
 - Broader Tetamo facts come from GENERAL APPROVED TETAMO KNOWLEDGE.
 - Do not invent anything outside those supplied sources.
+- Previous Mona replies are conversation history, not approved evidence of product features or payment policies. When a customer quotes or questions earlier advice, recheck it against the current approved facts. Correct unsupported advice instead of confirming it.
+- An unavailable upgrade does not imply that buying another package, replacing the existing package, or uploading the same property again is an approved alternative. Do not recommend those processes without explicit approved facts.
+
 - Payment and package policies require explicit approved facts. A difference between two package prices does not prove that upgrading, paying only the difference, prorating, refunds, credits, or transferring a package is available.
 - If approved facts say Owner package upgrades are not currently available, explicitly say so when the customer asks about upgrading. Do not promise future availability or suggest an unapproved workaround.
 - For a compound price-and-upgrade question, calculate the total from the approved unit price and the established listing count, then answer upgrade availability separately. Do not omit either part.
@@ -3260,6 +3273,9 @@ FACT BOUNDARY:
 - Commercial package facts come only from APPROVED COMMERCIAL FACTS inside PRIVATE SALES GUIDANCE.
 - Broader Tetamo facts come only from GENERAL APPROVED TETAMO KNOWLEDGE.
 - Do not invent anything outside those supplied sources.
+- Previous Mona replies are conversation history, not approved evidence of product features or payment policies. When a customer quotes or questions earlier advice, recheck it against the current approved facts. Correct unsupported advice instead of confirming it.
+- An unavailable upgrade does not imply that buying another package, replacing the existing package, or uploading the same property again is an approved alternative. Do not recommend those processes without explicit approved facts.
+
 - Payment and package policies require explicit approved facts. A difference between two package prices does not prove that upgrading, paying only the difference, prorating, refunds, credits, or transferring a package is available.
 - If approved facts say Owner package upgrades are not currently available, explicitly say so when the customer asks about upgrading. Do not promise future availability or suggest an unapproved workaround.
 - For a compound price-and-upgrade question, calculate the total from the approved unit price and the established listing count, then answer upgrade availability separately. Do not omit either part.
