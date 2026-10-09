@@ -1272,6 +1272,55 @@ function deterministicIntentFallbackReply(
   const subject = params.brain.intentSubject;
   const facts = params.knowledge.approvedFactsText || "";
 
+  // Preserve an approved Owner package answer when model drafting fails.
+  if (
+    params.brain.customerType === "owner" &&
+    ["package_price", "package_features", "package_recommendation"].includes(intent) &&
+    params.salesGuidance.strategist === "owner"
+  ) {
+    const approved = params.salesGuidance.guidance.commercialFacts.join("\n");
+    const english = language === "en";
+    const rows: string[] = [];
+
+    for (const name of ["Basic", "Priority", "Featured"]) {
+      const price = approved.match(
+        new RegExp(name + " Listing costs Rp([0-9.,]+)\\.")
+      );
+      if (!price) continue;
+
+      const details: string[] = [];
+      if (approved.includes(name + " Listing is active for 1 year.")) {
+        details.push(english ? "1 year" : "1 tahun");
+      }
+      if (approved.includes(name + " Listing supports 1 active property listing.")) {
+        details.push(english ? "1 active listing" : "1 listing aktif");
+      }
+      if (name === "Basic" && approved.includes("Basic receives standard/basic marketplace visibility.")) {
+        details.push(english ? "standard marketplace visibility" : "visibilitas standar di marketplace");
+      }
+      if (name === "Priority" && approved.includes("Priority provides higher marketplace visibility than Basic.")) {
+        details.push(english ? "higher marketplace visibility than Basic" : "visibilitas marketplace lebih tinggi daripada Basic");
+      }
+      if (name === "Featured" && approved.includes("Featured provides the highest Owner-package marketplace visibility.")) {
+        details.push(english ? "highest Owner-package marketplace visibility" : "visibilitas marketplace tertinggi di antara paket Owner");
+      }
+      if (name === "Featured" && approved.includes("Featured includes posting on Tetamo social media channels Facebook, Instagram and TikTok.")) {
+        details.push(english ? "posting on Tetamo Facebook, Instagram and TikTok" : "posting di Facebook, Instagram dan TikTok Tetamo");
+      }
+      rows.push(`${name}: Rp${price[1]}${details.length ? " — " + details.join("; ") : ""}.`);
+    }
+
+    if (rows.length) {
+      if (/Verification Badge after approval/i.test(approved)) {
+        rows.push(english
+          ? "A Verification Badge is available only after approval; purchasing a package does not automatically verify the listing."
+          : "Badge verifikasi bisa didapat setelah disetujui; membeli paket tidak otomatis membuat listing terverifikasi.");
+      }
+      return { action: "reply", reply: rows.join("\n\n"), source: "fallback" };
+    }
+  }
+
+
   /*
    * Feature status must come from the specifically matched Product Truth section,
    * never from every retrieved fact in the turn. Broad Knowledge may legitimately
