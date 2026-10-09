@@ -1575,7 +1575,15 @@ function deterministicIntentFallbackReply(
       }
     };
 
-    add(/tetamo partner/i, "Tetamo Partner untuk kelola listing dan workflow agent", "Tetamo Partner for listing and agent workflow management");
+    add(
+      /tetamo partner/i,
+      params.brain.customerType === "owner"
+        ? "Tetamo Partner untuk mengelola listing properti Kakak"
+        : "Tetamo Partner untuk kelola listing dan workflow agent",
+      params.brain.customerType === "owner"
+        ? "Tetamo Partner for managing your property listings"
+        : "Tetamo Partner for listing and agent workflow management"
+    );
     add(/direct whatsapp/i, "Direct WhatsApp enquiry", "Direct WhatsApp enquiries");
     add(/leads dashboard|manage property leads/i, "Leads Dashboard", "Leads Dashboard");
     add(/jadwal viewing|viewing schedule/i, "Jadwal Viewing", "Viewing Schedule");

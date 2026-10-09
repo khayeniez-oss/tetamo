@@ -2296,21 +2296,21 @@ function recoverEstablishedCustomerType(
     }
 
     if (
-      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:agen|agent|broker|property\s+agent|real\s*estate\s+agent|marketing\s+property)\b/i.test(text) ||
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+|tetap\s+|still\s+)?(?:agen|agent|broker|property\s+agent|real\s*estate\s+agent|marketing\s+property)\b/i.test(text) ||
       /\b(?:agen|agent)\s+(?:independent|freelance)\b/i.test(text)
     ) {
       return "agent";
     }
 
     if (
-      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:owner|pemilik)\b/i.test(text) ||
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+|tetap\s+|still\s+)?(?:owner|pemilik)\b/i.test(text) ||
       /\b(?:properti|property|rumah|villa|vila|apartemen|tanah)\s+(?:ini\s+)?(?:punya\s+saya|milik\s+saya)\b/i.test(text)
     ) {
       return "owner";
     }
 
     if (
-      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+)?(?:buyer|pembeli|renter|penyewa)\b/i.test(text) ||
+      /\b(?:saya|aku|sy|gue|gw)\s+(?:adalah\s+|sebagai\s+|tetap\s+|still\s+)?(?:buyer|pembeli|renter|penyewa)\b/i.test(text) ||
       /\b(?:saya|aku|sy|gue|gw)\s+(?:lagi\s+|sedang\s+|mau\s+|ingin\s+)?(?:cari|mencari)\s+(?:rumah|villa|vila|apartemen|property|properti|tanah)\b/i.test(text) ||
       /\b(?:saya|aku|sy|gue|gw)\s+mau\s+(?:beli|sewa)\s+(?:rumah|villa|vila|apartemen|property|properti|tanah)\b/i.test(text)
     ) {
@@ -2919,14 +2919,22 @@ function enforceBrainRouting(
   };
 
   const establishedCustomerType =
-    recoverEstablishedCustomerType(memory);
+    recoverEstablishedCustomerType({
+      ...memory,
+      messages: [
+        ...memory.messages,
+        {
+          speaker: "Customer",
+          message: latestMessage,
+        } as MonaConversationMemory["messages"][number],
+      ],
+    });
 
   /*
-   * Memory wins over an accidental model regression to UNKNOWN when the customer
+   * Explicit customer identity wins over an accidental model role regression when the customer
    * explicitly established their role earlier (for example: "saya agen").
    */
   if (
-    result.customerType === "unknown" &&
     establishedCustomerType
   ) {
     result = {
