@@ -1967,13 +1967,12 @@ function objectionResponseViolation(
   return null;
 }
 
-function replyViolationReason(
+function ownerUpgradeViolationReason(
   raw: string,
-  params: WriteMonaReplyParams,
+  params: Pick<WriteMonaReplyParams, "brain" | "latestCustomerMessage">,
   commercialFactsText: string,
   generalFactsText: string
 ): string | null {
-
   // Enforce the approved Owner upgrade policy sentence by sentence.
   if (
     params.brain.customerType === "owner" &&
@@ -1999,6 +1998,21 @@ function replyViolationReason(
       return "Owner package upgrades are not currently available. Remove upgrade, price-difference payment, proration or upgrade-credit promises and preserve the supported price answer.";
     }
   }
+  return null;
+}
+
+function replyViolationReason(
+  raw: string,
+  params: WriteMonaReplyParams,
+  commercialFactsText: string,
+  generalFactsText: string
+): string | null {
+
+  const upgradeViolation = ownerUpgradeViolationReason(
+    raw, params, commercialFactsText, generalFactsText
+  );
+  if (upgradeViolation) return upgradeViolation;
+
   if (requiresApprovedReplyFacts(params.brain) &&
       (commercialFactsText.trim() || generalFactsText.trim()) &&
       /^(?:boleh(?: kak)?|baik(?: kak)?|siap(?: kak)?|oke(?: kak)?|sure|okay|ok)[.!\s]*$/i.test(raw.trim())) {
@@ -3296,6 +3310,12 @@ ${BUYER_RENTER_DESTINATION}
 FACT BOUNDARY:
 
 - Commercial package facts come only from APPROVED COMMERCIAL FACTS inside PRIVATE SALES GUIDANCE.
+- Conversation history establishes what was discussed, not whether Mona's previous product or payment advice was correct. Recheck previous advice against current approved facts.
+- Discussing, comparing or quoting a package does not mean the customer selected it or is ready to pay. Only an explicit customer choice establishes selection.
+- If a customer objection remains unresolved, follow the applicable Agent or Owner Sales guidance for that concern. Do not replace objection handling with a generic signup, download or payment push.
+- Owner upgrades being unavailable does not establish a replacement-purchase or re-upload process. Do not repeat such advice without explicit approved facts.
+- Keep the follow-up warm and brief. Continue the actual unresolved point; do not repeat the full explanation or assume purchase readiness from customer silence.
+
 - Broader Tetamo facts come only from GENERAL APPROVED TETAMO KNOWLEDGE.
 - Do not invent anything outside those supplied sources.
 - Previous Mona replies are conversation history, not approved evidence of product features or payment policies. When a customer quotes or questions earlier advice, recheck it against the current approved facts. Correct unsupported advice instead of confirming it.
@@ -3370,6 +3390,20 @@ If no follow-up should be sent, output exactly:
         reply: "",
         source: "fallback",
       };
+    }
+
+    const upgradeViolation = ownerUpgradeViolationReason(
+      raw,
+      {
+        brain: params.brain,
+        latestCustomerMessage: params.brain.normalizedMessage || "",
+      },
+      commercialFactsText,
+      generalFactsText
+    );
+    if (upgradeViolation) {
+      console.error("Tetamo Mona follow-up draft blocked:", upgradeViolation);
+      return { action: "silent", reply: "", source: "fallback" };
     }
 
     const unsupportedPerformanceClaim =
