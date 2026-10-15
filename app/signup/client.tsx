@@ -548,26 +548,9 @@ export default function SignupPageClient() {
         return;
       }
 
-      if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").upsert(
-          {
-            id: data.user.id,
-            email: trimmedEmail,
-            full_name: trimmedFullName,
-            phone: normalizedPhone,
-            role: currentRole,
-          },
-          {
-            onConflict: "id",
-          }
-        );
-
-        if (profileError) {
-          setLoading(false);
-          alert(profileError.message);
-          return;
-        }
-      }
+      // Supabase automatically creates the profile through
+      // on_auth_user_created / handle_new_user.
+      // Do not upsert the profile or role from the browser.
 
       setLoading(false);
 
