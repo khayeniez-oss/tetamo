@@ -92,6 +92,14 @@ export function evaluateMonaJourney(
     };
   }
 
+  // Brain intentionally skips Sales on hard rejection. Persist STOP anyway
+  // so existing active journeys cannot continue to receive pursuit.
+  if (brain.conversationSituation === "rejection") {
+    return currentStatus === "active"
+      ? { action: "stop", reason: "Customer rejected further sales contact." }
+      : { action: "keep", reason: "No active sales journey to stop." };
+  }
+
   const guidance = salesGuidance.guidance;
 
   /*

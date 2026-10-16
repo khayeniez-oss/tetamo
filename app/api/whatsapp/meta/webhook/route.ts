@@ -1,3 +1,5 @@
+import { applyMonaOutboundFollowUpPolicy } from "@/app/lib/mona/outbound-followup-policy";
+import { shouldPauseMonaProactiveFollowUps } from "../../../../lib/mona/continuity";
 import { phase1Run, phase1RouteIds } from "../../../../lib/mona/phase1-trace.mjs";
 
 
@@ -10,6 +12,7 @@ import {
 } from "../../../../lib/mona/orchestrator";
 import { waitForMonaHumanDelay } from "../../../../lib/mona/timing";
 import { evaluateAndPersistMonaJourney } from "../../../../lib/mona/journey";
+import { isExplicitMonaContactOptOut } from "../../../../lib/mona/contact-optout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1185,11 +1188,66 @@ async function processMetaWebhook(request: Request) {
         continue;
       }
 
+      // Only a successfully stored new inbound cancels old follow-ups.
+      const { error: followUpResetError } = await supabaseAdmin
+        .from("whatsapp_conversations")
+        .update({
+          mona_followup_count: 0,
+          mona_followup_waiting_since: null,
+          mona_first_followup_sent_at: null,
+          mona_next_followup_due_at: null,
+          mona_followup_claimed_at: null,
+          mona_followup_claim_token: null,
+        })
+        .eq("id", conversation.id);
+
+      if (followUpResetError) {
+        console.error("Failed to cancel Mona follow-up after inbound:", {
+          conversationId: conversation.id,
+          error: followUpResetError,
+        });
+      }
+
       logMonaOutcome("inbound_stored", {
         conversationId: conversation.id,
         messageId: inboundSave.messageId,
         providerMessageId: metaMessageId,
       });
+
+      // Do-not-contact requests are durable transport decisions, not AI opinions.
+      // Persist opt-out before any generated reply or new follow-up is possible.
+      if (isExplicitMonaContactOptOut(readableText || messageText)) {
+        const { error: optOutError } = await supabaseAdmin
+          .from("whatsapp_conversations")
+          .update({
+            status: "opted_out",
+            opted_out_at: new Date().toISOString(),
+            ai_enabled: false,
+            mona_journey_status: "stopped",
+            mona_followup_count: 0,
+            mona_followup_waiting_since: null,
+            mona_first_followup_sent_at: null,
+            mona_next_followup_due_at: null,
+            mona_followup_claimed_at: null,
+            mona_followup_claim_token: null,
+            mona_dependency_controlled: false,
+            mona_dependency_reason: null,
+          })
+          .eq("id", conversation.id);
+
+        if (optOutError) {
+          console.error("Failed to persist explicit Mona opt-out:", optOutError);
+        } else {
+          logMonaOutcome("customer_opted_out", {
+            conversationId: conversation.id,
+            messageId: inboundSave.messageId,
+          });
+        }
+        // Stay silent even if the persistence write failed; no unwanted reply.
+        processedCount += 1;
+        ignoredCount += 1;
+        continue;
+      }
 
       /*
        * If Admin already owns this conversation, Safety will intentionally stop
@@ -1414,21 +1472,28 @@ async function processMetaWebhook(request: Request) {
           ? "tetamo_mona_v2_fallback_meta"
           : "tetamo_mona_v2_meta";
 
-      await saveOutboundMessage({
-        conversationId: conversation.id,
-        customerPhone,
-        businessPhoneNumberId: phoneNumberId,
-        profileName: item.profileName,
-        reply,
-        metaSendId: sendResult.id,
-        metaSendError: sendResult.success ? null : sendResult.error,
-        aiGenerated: true,
-        source: sendResult.success
-          ? sourcePrefix
-          : `${sourcePrefix}_send_failed`,
-        sendSucceeded:
-          sendResult.success,
-      });
+      let primaryOutboundStored = false;
+
+      try {
+        const savedOutbound = await saveOutboundMessage({
+          conversationId: conversation.id,
+          customerPhone,
+          businessPhoneNumberId: phoneNumberId,
+          profileName: item.profileName,
+          reply,
+          metaSendId: sendResult.id,
+          metaSendError: sendResult.success ? null : sendResult.error,
+          aiGenerated: true,
+          source: sendResult.success
+            ? sourcePrefix
+            : `${sourcePrefix}_send_failed`,
+          sendSucceeded: sendResult.success,
+        });
+
+        primaryOutboundStored = savedOutbound.stored;
+      } catch (error) {
+        console.error("Meta outbound persistence failed:", error);
+      }
 
       processedCount += 1;
 
@@ -1482,9 +1547,14 @@ async function processMetaWebhook(request: Request) {
           }
         }
 
+        // Customers who ask us to wait must not be pursued just because
+        // Brain used a generic "hesitation" classification on this turn.
+        const customerRequestedPause = shouldPauseMonaProactiveFollowUps(
+          readableText || messageText
+        );
         const dependencyControlled =
-          generation.brain.timingDependency.active ===
-          true;
+          generation.brain.timingDependency.active === true ||
+          customerRequestedPause;
 
         const dependencyReason =
           dependencyControlled
@@ -1495,24 +1565,36 @@ async function processMetaWebhook(request: Request) {
               )
             : null;
 
-        try {
-          await markMonaReplySuccessfullySent({
-            supabase: supabaseAdmin,
-            conversationId:
-              conversation.id,
-            dependencyControlled,
-            dependencyReason,
+        const followUpOutcome =
+          await applyMonaOutboundFollowUpPolicy({
+            metaSendSucceeded: sendResult.success,
+            outboundStored: primaryOutboundStored,
+            persist: () =>
+              markMonaReplySuccessfullySent({
+                supabase: supabaseAdmin,
+                conversationId: conversation.id,
+                dependencyControlled,
+                dependencyReason,
+                // Rejection and requests to wait must not start reminders.
+                suppressFollowUps:
+                  generation.brain.conversationSituation === "rejection" ||
+                  customerRequestedPause,
+              }),
+            onPersistenceError: (error) => {
+              console.error(
+                "Mona reply sent successfully but follow-up timing state could not be started:",
+                error
+              );
+            },
           });
-        } catch (error) {
-          /*
-           * Do not resend the WhatsApp message if Timing persistence fails.
-           * The customer already received the reply.
-           *
-           * Log the failure so we can repair follow-up state safely.
-           */
+
+        if (followUpOutcome === "outbound_not_stored") {
           console.error(
-            "Mona reply sent successfully but follow-up timing state could not be started:",
-            error
+            "Mona Meta send succeeded but outbound memory was not stored; follow-up scheduling suppressed.",
+            {
+              conversationId: conversation.id,
+              metaSendId: sendResult.id,
+            }
           );
         }
 

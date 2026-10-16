@@ -73,6 +73,23 @@ function hasExplicitPaymentSuccess(
   );
 }
 
+/*
+ * PAYMENT EVIDENCE BOUNDARY
+ * -------------------------
+ * A past purchase on ANOTHER advertising platform or a property booking/deposit
+ * is not payment to Tetamo. In particular, "saya sudah bayar portal lain tapi
+ * nggak dapat lead" must never mark this Tetamo lead as CLOSED_WON.
+ * Ambiguous mixed messages are kept out of the automatic transaction observer.
+ */
+function isUnrelatedPaymentContext(text: string) {
+  const mentionsOtherAdvertisingPayment =
+    /(?:pernah|dulu|sebelumnya|sudah|udah|telah|previously|already).{0,65}(?:bayar|paid|payment|transfer).{0,75}(?:portal\s+lain|platform\s+lain|iklan\s+(?:lain|di)|portal|rumah\s*123|propertyguru|99\.?co|lamudi|facebook\s+ads|google\s+ads)/i.test(text) ||
+    /(?:portal\s+lain|platform\s+lain|rumah\s*123|propertyguru|99\.?co|lamudi).{0,75}(?:bayar|paid|payment|transfer)/i.test(text);
+  const propertyPurchaseOrDeposit =
+    /(?:booking\s+fee|deposit|dp\s+(?:rumah|villa|properti)|uang\s+muka|bayar\s+ke\s+(?:owner|pemilik|penjual)|transfer\s+ke\s+(?:owner|pemilik|penjual))/i.test(text);
+  return mentionsOtherAdvertisingPayment || propertyPurchaseOrDeposit;
+}
+
 function hasExplicitPaymentIntent(
   text: string
 ) {
@@ -288,6 +305,10 @@ export function evaluateMonaSalesStage(
       params.brain.directQuestion || "",
     ].join(" ")
   );
+  // Only the real CURRENT customer text can establish a transaction.
+  // Brain summaries and earlier portal payments are not payment evidence.
+  const currentPaymentText = normalizeText(params.latestCustomerMessage);
+  const unrelatedPayment = isUnrelatedPaymentContext(currentPaymentText);
 
   /*
    * ==================================================
@@ -298,7 +319,7 @@ export function evaluateMonaSalesStage(
    */
 
   if (
-    hasExplicitPaymentFailure(text)
+    !unrelatedPayment && hasExplicitPaymentFailure(currentPaymentText)
   ) {
     return makeSuggestion(
       "payment_failed",
@@ -309,7 +330,7 @@ export function evaluateMonaSalesStage(
   }
 
   if (
-    hasExplicitPaymentSuccess(text)
+    !unrelatedPayment && hasExplicitPaymentSuccess(currentPaymentText)
   ) {
     return makeSuggestion(
       "closed_won",
@@ -370,9 +391,10 @@ export function evaluateMonaSalesStage(
    */
 
   if (
-    params.brain.conversationSituation ===
-      "payment" ||
-    hasExplicitPaymentIntent(text)
+    !unrelatedPayment && (
+      params.brain.conversationSituation === "payment" ||
+      hasExplicitPaymentIntent(currentPaymentText)
+    )
   ) {
     return makeSuggestion(
       "payment_started",
@@ -589,7 +611,7 @@ export function evaluateExplicitTransactionStage(
   );
 
   if (
-    hasExplicitPaymentFailure(text)
+    !isUnrelatedPaymentContext(text) && hasExplicitPaymentFailure(text)
   ) {
     return makeSuggestion(
       "payment_failed",
@@ -600,7 +622,7 @@ export function evaluateExplicitTransactionStage(
   }
 
   if (
-    hasExplicitPaymentSuccess(text)
+    !isUnrelatedPaymentContext(text) && hasExplicitPaymentSuccess(text)
   ) {
     return makeSuggestion(
       "closed_won",

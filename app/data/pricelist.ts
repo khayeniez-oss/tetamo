@@ -302,8 +302,8 @@ export type AgentPackage = {
 export const AGENT_PACKAGES: AgentPackage[] = [
   {
     id: "silver",
-    name: "Silver",
-    nameEn: "Silver",
+    name: "Basic",
+    nameEn: "Basic",
     audience: "agent",
     productType: "membership",
 
@@ -343,14 +343,14 @@ export const AGENT_PACKAGES: AgentPackage[] = [
     hasRentalAgreement: false,
     hasProfessionalLetters: false,
 
-    paymentTitle: "Silver Membership - Yearly",
-    paymentTitleEn: "Silver Membership - Yearly",
+    paymentTitle: "Basic Membership - Yearly",
+    paymentTitleEn: "Basic Membership - Yearly",
     paymentDescription:
       "Paket tahunan untuk agen properti yang ingin mulai tampil profesional, mengelola listing aktif, leads, viewing, billing, dan insight dalam satu dashboard TETAMO.",
     paymentDescriptionEn:
       "A yearly package for property agents who want to build a professional presence and manage active listings, leads, viewings, billing, and insights in one TETAMO dashboard.",
-    renewalLabel: "Perpanjang Silver Membership",
-    renewalLabelEn: "Renew Silver Membership",
+    renewalLabel: "Perpanjang Basic Membership",
+    renewalLabelEn: "Renew Basic Membership",
     billingNote:
       "Membership aktif selama 1 tahun dan diperpanjang otomatis secara tahunan kecuali Anda menonaktifkan auto renew dari dashboard. Jika auto renew dimatikan, membership tetap aktif hingga akhir masa aktif saat ini.",
     billingNoteEn:

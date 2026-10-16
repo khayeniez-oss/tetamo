@@ -229,7 +229,7 @@ function getPackageIntro(packageName: string, lang: string) {
       return "Untuk agen yang ingin mulai listing aktif dengan biaya bulanan yang ringan.";
     }
 
-    if (name.includes("silver")) {
+    if (name.includes("basic") || name.includes("silver")) {
       return "Untuk agen yang ingin tampil profesional dengan kapasitas listing lebih besar.";
     }
 
@@ -248,7 +248,7 @@ function getPackageIntro(packageName: string, lang: string) {
     return "For agents who want to start with active listings and a simple monthly plan.";
   }
 
-  if (name.includes("silver")) {
+  if (name.includes("basic") || name.includes("silver")) {
     return "For agents who want a professional start with a larger listing capacity.";
   }
 

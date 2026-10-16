@@ -1,3 +1,5 @@
+import { isStaleMonaFollowUpClaim } from "@/app/lib/mona/followup-freshness";
+import { isTerminalMonaJourney } from "../../../../lib/mona/continuity";
 import { createClient } from "@supabase/supabase-js";
 
 import {
@@ -60,8 +62,10 @@ type ConversationRecord = {
   mona_next_followup_due_at?: string | null;
   mona_dependency_controlled?: boolean | null;
   mona_dependency_reason?: string | null;
+  last_inbound_at?: string | null;
   mona_followup_claimed_at?: string | null;
   mona_followup_claim_token?: string | null;
+  mona_journey_status?: string | null;
 };
 
 function cleanEnv(value?: string | null) {
@@ -150,7 +154,8 @@ function isMonaUnavailable(
 ) {
   return (
     conversation.ai_enabled === false ||
-    conversation.handover_to_admin === true
+    conversation.handover_to_admin === true ||
+    isTerminalMonaJourney(conversation.mona_journey_status)
   );
 }
 
@@ -418,8 +423,10 @@ async function loadConversation(
         mona_next_followup_due_at,
         mona_dependency_controlled,
         mona_dependency_reason,
+        last_inbound_at,
         mona_followup_claimed_at,
-        mona_followup_claim_token
+        mona_followup_claim_token,
+        mona_journey_status
       `
     )
     .eq("id", conversationId)
@@ -1338,8 +1345,15 @@ async function handleMonaFollowUpSend(params: {
       conversationId
     );
 
+  // Cancel reminders invalidated by newer customer activity.
+  const staleClaim = isStaleMonaFollowUpClaim(
+    latestConversation?.mona_followup_claimed_at,
+    latestConversation?.last_inbound_at
+  );
+
   if (
     !latestConversation ||
+    staleClaim ||
     latestConversation.mona_followup_claim_token !==
       claimToken ||
     !isMetaConversation(

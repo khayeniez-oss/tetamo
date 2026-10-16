@@ -132,7 +132,7 @@ const OWNER_PACKAGES: Record<
 
 const BOOST_FACTS = [
   "Boost Listing is available to both owners and agents.",
-  "Boost Listing costs Rp300.000.",
+  "Boost Listing costs Rp299.000.",
   "Boost Listing is active for 14 days.",
   "Boost gives the listing higher display priority in the Tetamo marketplace.",
   "Boost auto renew is enabled by default unless disabled.",
@@ -166,7 +166,7 @@ const OWNER_REGISTRATION_STEPS = [
   "Create and complete the property listing, then choose the applicable Owner listing package at the end of the listing flow.",
   "Review the listing and continue to the payment flow in Tetamo Partner.",
   "Complete payment by following the payment flow shown inside Tetamo Partner.",
-  "After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.",
+  "After successful payment confirmation, the listing automatically appears on Tetamo Marketplace.",
 ];
 
 const OWNER_LISTING_STEPS = [
@@ -181,9 +181,7 @@ const OWNER_LISTING_STEPS = [
   "Choose the applicable Owner listing package at the end of the listing flow.",
   "Complete payment through the payment flow shown inside Tetamo Partner.",
   "After payment is successfully confirmed, the listing becomes active.",
-  "The listing automatically appears publicly with Pending Verification status while awaiting Tetamo verification.",
-  "Tetamo reviews and verifies the listing.",
-  "After successful verification, the listing becomes Verified.",
+  "After successful payment confirmation, the listing automatically appears on Tetamo Marketplace.",
   "The owner can continue managing or editing the listing and receive applicable leads, Direct WhatsApp enquiries and viewing requests.",
 ];
 
@@ -388,7 +386,7 @@ FEATURED LISTING
 BOOST LISTING
 
 - Available to owners and agents.
-- Rp300.000.
+- Rp299.000.
 - 14 days.
 - Higher marketplace display priority.
 - Auto renew enabled by default unless disabled.
@@ -508,9 +506,11 @@ OWNER REGISTRATION FLOW
 3. Create and complete the property listing, then choose the applicable Owner listing package at the end of the listing flow.
 4. Review the listing and proceed to the applicable Tetamo Owner checkout.
 5. Complete payment by following the payment flow shown in Tetamo Partner.
-6. After successful payment, the listing becomes active and can appear publicly as Pending Verification while Tetamo completes verification.
+6. After successful payment confirmation, the listing automatically appears on Tetamo Marketplace.
 
 OWNER LISTING FLOW
+
+For normal listing and payment explanations, say that the listing automatically appears on Tetamo Marketplace after successful payment confirmation. Do not mention Pending Verification unless the customer specifically asks about verification or listing status.
 
 If the owner asks:
 - cara pasang iklan;
@@ -523,7 +523,7 @@ recommend a clear numbered step-by-step answer.
 
 1. Download/open Tetamo Partner on iOS or Android.
 2. Register/login as Owner in Tetamo Partner.
-3. Choose the applicable Owner listing package and start listing.
+3. Create the property listing first and choose the Owner package at the end of the listing flow.
 4. Enter property details, location, price, transaction type, facilities and
    required information.
 5. Upload photos and supported videos.
@@ -532,7 +532,7 @@ recommend a clear numbered step-by-step answer.
 8. Review the listing.
 9. Complete payment through the payment flow shown in Tetamo Partner.
 10. After successful payment confirmation, listing becomes active.
-11. Listing automatically appears publicly as Pending Verification.
+11. Listing automatically appears on Tetamo Marketplace after successful payment confirmation.
 12. Tetamo reviews/verifies the listing.
 13. Successful verification changes status to Verified.
 14. Owner can manage/edit the listing and receive applicable leads,
@@ -541,7 +541,7 @@ recommend a clear numbered step-by-step answer.
 IMPORTANT:
 The Owner listing does NOT need to wait until final verification before it
 appears publicly after successful payment.
-It can appear publicly as Pending Verification.
+It automatically appears on Tetamo Marketplace after successful payment confirmation.
 
 ASSISTED LISTING REQUEST
 
@@ -639,8 +639,8 @@ APPROVED INDONESIA OWNER PAYMENT FLOW
 2. Proceed to Tetamo Owner checkout.
 3. Continue to payment through Tetamo Partner.
 4. Follow the payment options shown by the payment system and complete payment there.
-5. After successful payment, the listing becomes active and can appear publicly
-   as Pending Verification while Tetamo completes verification.
+5. After successful payment confirmation, the listing automatically appears on Tetamo Marketplace.
+   Explain verification status separately only when the customer asks.
 
 Never invent a direct bank-transfer flow.
 Never say Tetamo will send bank-account details.
@@ -2047,6 +2047,13 @@ function applyDeterministicOwnerSalesGuards(
   if (currentTurnObjectionLocked) {
     shouldAskQuestion = false;
     handoverRecommended = false;
+    // A customer objection is not a payment/closing signal, even if the
+    // customer mentioned an OLD payment to another portal. Remove any stale
+    // checkout facts or package pitch added before the objection priority lock.
+    buyingSignal = "low";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    commercialFacts.clear();
 
     /*
      * A deterministic current-turn objection is already semantically resolved.
@@ -2460,7 +2467,9 @@ function applyDeterministicOwnerSalesGuards(
     recommendedDirection =
       "Acknowledge the previous bad portal/advertising experience briefly, then explain the most relevant Tetamo value. Do not lead with a no-guarantee disclaimer and do not promise a better outcome.";
     reason = "Brain resolved a bad-past-experience objection.";
-    shouldAskQuestion = false;
+    shouldAskQuestion = true;
+    recommendedDirection +=
+      " First recognize exactly what went wrong. If the customer says they received ZERO leads, treat that as an established fact. Never ask what leads arrived, where those leads came from, or how they followed up nonexistent leads. Give only one or two relevant approved Tetamo advantages, then ask ONE specific unanswered diagnostic question, such as how long the listing was advertised. Use previous conversation answers. Do not assume another marketplace was overcrowded. Once the problem is sufficiently understood, connect Tetamo's capabilities to that problem and guide toward an appropriate buying decision.";
     commercialFacts.clear();
     needsTetamoFacts = true;
     factsNeeded.clear();
@@ -2484,7 +2493,9 @@ function applyDeterministicOwnerSalesGuards(
     recommendedDirection =
       "Address the price/value concern using relevant Owner value. Do not automatically discount, upsell, or make the answer mainly about guarantees.";
     reason = "Brain resolved a price/value objection.";
-    shouldAskQuestion = false;
+    shouldAskQuestion = true;
+    recommendedDirection +=
+      " Understand WHY the customer considers the price expensive before delivering a catalogue of features. Briefly acknowledge the concern, mention at most one relevant verified advantage, then ask ONE natural question about what price or result they are comparing it with, if unknown. If their previous answers already explain the objection, do not ask again. Explain the relevant value, recommend a suitable package when justified, and offer the next purchase step when the customer is ready. Respect hesitation or rejection without pressure.";
     needsTetamoFacts = true;
     factsNeeded.add("approved Tetamo Owner value facts relevant to a price/value objection");
   } else if (brainIntent === "buyer_quality") {
@@ -2511,11 +2522,22 @@ function applyDeterministicOwnerSalesGuards(
     factsNeeded.add("approved Tetamo guarantee/result boundaries plus the relevant value provided");
   } else if (brainIntent === "how_to_list") {
     objection = null;
-    recommendedPackage = null;
+
+    // Preserve a package explicitly selected in the current turn.
+    const selectedListingPackage = selectedPackageMatch
+      ? normalizePackageId(selectedPackageMatch[1])
+      : null;
+
+    recommendedPackage = selectedListingPackage;
     packageRecommendationReason = null;
-    recommendedObjective = "explain_listing_process";
-    recommendedDirection =
-      "Direct the Owner to download/open Tetamo Partner on iOS or Android and give the self-service listing steps. Tetamo Partner is the primary listing route. Do not add unrelated package details.";
+
+    recommendedObjective = selectedListingPackage
+      ? "move_to_listing"
+      : "explain_listing_process";
+
+    recommendedDirection = selectedListingPackage
+      ? `The Owner already selected ${OWNER_PACKAGES[selectedListingPackage].name}. Acknowledge that choice. Guide the Owner to open Tetamo Partner, create and review the property listing, select the same package at the END of the listing flow, and complete payment inside the app. Do not restart package discovery or request payment before listing creation.`
+      : "Direct the Owner to download/open Tetamo Partner on iOS or Android and give the self-service listing steps. Tetamo Partner is the primary listing route. Do not add unrelated package details.";
     reason = "Brain resolved a direct how-to-list question.";
     shouldAskQuestion = false;
     commercialFacts.clear();

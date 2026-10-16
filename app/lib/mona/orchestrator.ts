@@ -1,3 +1,4 @@
+import { isTerminalMonaJourney, shouldConsiderMonaSecondFollowUp } from "./continuity";
 import { phase1Stage, phase1Next, phase1Result, phase1Mark } from "./phase1-trace.mjs";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -133,6 +134,7 @@ type FollowUpConversationRow = {
   mona_next_followup_due_at?: string | null;
   mona_dependency_controlled?: boolean | null;
   mona_dependency_reason?: string | null;
+  mona_journey_status?: string | null;
 };
 
 function getLatestCustomerMessageFromMemory(
@@ -607,6 +609,9 @@ export async function resetMonaFollowUpCycleForCustomerReply(
         mona_followup_waiting_since: null,
         mona_first_followup_sent_at: null,
         mona_next_followup_due_at: null,
+        // Invalidate an in-flight follow-up prepared before this inbound.
+        mona_followup_claimed_at: null,
+        mona_followup_claim_token: null,
         mona_dependency_controlled: false,
         mona_dependency_reason: null,
       })
@@ -722,6 +727,7 @@ export async function markMonaReplySuccessfullySent(
     sentAt?: Date;
     dependencyControlled?: boolean;
     dependencyReason?: string | null;
+    suppressFollowUps?: boolean;
   }
 ) {
   const sentAt =
@@ -732,8 +738,9 @@ export async function markMonaReplySuccessfullySent(
     params.dependencyControlled ===
     true;
 
+  const suppressFollowUps = params.suppressFollowUps === true;
   const nextDueAt =
-    dependencyControlled
+    dependencyControlled || suppressFollowUps
       ? null
       : addFollowUpHoursIso(
           sentAt,
@@ -746,7 +753,7 @@ export async function markMonaReplySuccessfullySent(
       .update({
         mona_followup_count: 0,
         mona_followup_waiting_since:
-          sentAt.toISOString(),
+          suppressFollowUps ? null : sentAt.toISOString(),
         mona_first_followup_sent_at:
           null,
         mona_next_followup_due_at:
@@ -912,6 +919,7 @@ export async function loadMonaFollowUpPersistenceState(
           "mona_next_followup_due_at",
           "mona_dependency_controlled",
           "mona_dependency_reason",
+          "mona_journey_status",
         ].join(", ")
       )
       .eq(
@@ -1043,6 +1051,7 @@ export async function evaluateMonaConversationFollowUp(
           .opted_out_at
       ) ||
       status === "opted_out",
+    journeyStopped: isTerminalMonaJourney(persisted.conversation.mona_journey_status),
   });
 }
 
@@ -1242,6 +1251,23 @@ export async function runMonaScheduledFollowUp(
       action: "silent",
       reason:
         "Sales detected a semantic conflict during scheduled follow-up reconstruction; Mona will not send a follow-up from disputed meaning.",
+      followUpNumber,
+    };
+  }
+
+  // A second reminder requires a real unfinished commercial action;
+  // the AI cannot manufacture a reason to chase a vague enquiry.
+  if (
+    followUpNumber === 2 &&
+    !shouldConsiderMonaSecondFollowUp({
+      brain,
+      salesGuidance,
+      salesStage: persisted.conversation.sales_stage,
+    })
+  ) {
+    return {
+      action: "silent",
+      reason: "No concrete unresolved sales action justifies a second follow-up.",
       followUpNumber,
     };
   }

@@ -80,6 +80,7 @@ export type EvaluateMonaSilenceFollowUpParams = {
   aiPaused?: boolean;
   blocked?: boolean;
   optedOut?: boolean;
+  journeyStopped?: boolean;
 };
 
 const FIRST_SILENCE_FOLLOW_UP_MS =
@@ -447,6 +448,14 @@ export function evaluateMonaSilenceFollowUp(
       action: "stop",
       reason:
         "Customer opted out or requested no further contact.",
+      nextDueAt: null,
+    };
+  }
+
+  if (params.journeyStopped) {
+    return {
+      action: "stop",
+      reason: "Mona's sales journey is stopped or resolved.",
       nextDueAt: null,
     };
   }

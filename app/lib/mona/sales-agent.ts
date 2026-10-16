@@ -68,26 +68,26 @@ type AgentCommercialPackage = {
 const AGENT_PACKAGES: Record<AgentPackageId, AgentCommercialPackage> = {
   silver: {
     id: "silver",
-    name: "Silver",
+    name: "Basic",
     yearlyPrice: 499000,
     maxListings: 30,
     facts: [
-      "Silver costs Rp499.000 per year.",
-      "Silver supports up to 30 active listings.",
-      "Silver membership is active for 1 year.",
-      "Silver includes an Agent Profile Website.",
-      "Silver includes Social Media Integration.",
-      "Silver includes Leads Dashboard.",
-      "Silver includes Viewing Schedule.",
-      "Silver includes Packages & Billing access.",
-      "Silver includes Payments / Receipts.",
-      "Silver includes Analytics / Insights.",
-      "Silver includes Commission Tracking.",
-      "Silver provides access to purchase Boost and Homepage Spotlight.",
-      "Silver does not include free Featured Listings.",
-      "Silver does not include an AI Avatar introduction video.",
-      "Silver is not eligible for Featured Agent placement.",
-      "Silver auto renew is enabled by default and may be disabled for future renewal.",
+      "Basic costs Rp499.000 per year.",
+      "Basic supports up to 30 active listings.",
+      "Basic membership is active for 1 year.",
+      "Basic includes an Agent Profile Website.",
+      "Basic includes Social Media Integration.",
+      "Basic includes Leads Dashboard.",
+      "Basic includes Viewing Schedule.",
+      "Basic includes Packages & Billing access.",
+      "Basic includes Payments / Receipts.",
+      "Basic includes Analytics / Insights.",
+      "Basic includes Commission Tracking.",
+      "Basic provides access to purchase Boost and Homepage Spotlight.",
+      "Basic does not include free Featured Listings.",
+      "Basic does not include an AI Avatar introduction video.",
+      "Basic is not eligible for Featured Agent placement.",
+      "Basic auto renew is enabled by default and may be disabled for future renewal.",
     ],
   },
 
@@ -150,7 +150,7 @@ const AGENT_PACKAGES: Record<AgentPackageId, AgentCommercialPackage> = {
 
 const BOOST_FACTS = [
   "Boost Listing is available to both agents and owners.",
-  "Boost Listing costs Rp300.000.",
+  "Boost Listing costs Rp299.000.",
   "Boost Listing is active for 14 days.",
   "Boost gives the listing higher display priority in the Tetamo marketplace.",
   "Boost auto renew is enabled by default unless disabled.",
@@ -334,7 +334,7 @@ Agent package information below is BUILT INTO Agent Sales AI.
 
 Do NOT request these package facts from general Tetamo Knowledge.
 
-SILVER
+BASIC
 - Rp499.000 per year.
 - Yearly billing.
 - Up to 30 active listings.
@@ -396,7 +396,7 @@ AGENT PRO
 
 BOOST LISTING
 - Available to agents and owners.
-- Rp300.000.
+- Rp299.000.
 - 14 days.
 - Higher display priority in the Tetamo marketplace.
 - Auto renew enabled by default unless disabled.
@@ -440,7 +440,7 @@ PACKAGE RECOMMENDATION
 Use the agent's actual needs.
 
 Listing capacity is an important recommendation factor:
-- 0 to 30 active listings: Silver can accommodate the volume.
+- 0 to 30 active listings: Basic can accommodate the volume.
 - 31 to 100 active listings: Gold can accommodate the volume.
 - 101 to 500 active listings: Agent Pro can accommodate the volume.
 
@@ -470,7 +470,7 @@ unless the answer materially changes the recommendation or objection strategy.
 DIRECT PACKAGE QUESTIONS
 If customer asks:
 - package price;
-- Silver vs Gold;
+- Basic vs Gold;
 - Gold vs Agent Pro;
 - cheapest package;
 - listing capacity;
@@ -1012,7 +1012,7 @@ function normalizePackageId(value: unknown): AgentPackageId | null {
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
 
-  if (text === "silver") return "silver";
+  if (text === "silver" || text === "basic" || text === "agent_basic") return "silver";
   if (text === "gold") return "gold";
   if (
     text === "agent_pro" ||
@@ -1227,7 +1227,7 @@ function relevantCommercialFacts(
   const message = customerMessage.toLowerCase();
   const facts = new Set<string>();
 
-  const mentionsSilver = /\bsilver\b/i.test(message);
+  const mentionsSilver = /\b(?:silver|basic)\b/i.test(message);
   const mentionsGold = /\bgold\b/i.test(message);
   const mentionsPro =
     /\bagent\s*pro\b|\bagent-pro\b|\bpro\b/i.test(message);
@@ -1571,7 +1571,7 @@ function applyDeterministicAgentSalesGuards(
 
   const selectedPackageMatch =
     latestMessage.match(
-      /\b(?:pilih|ambil|mau|choose|take)\s+(silver|gold|agent\s*pro|pro)\b/i
+      /\b(?:pilih|ambil|mau|choose|take)\s+(silver|basic|gold|agent\s*pro|pro)\b/i
     );
 
   if (selectedPackageMatch) {
@@ -1657,7 +1657,9 @@ function applyDeterministicAgentSalesGuards(
     }
 
     recommendedDirection =
-      "Answer the Agent payment question directly and simply: direct the customer to download or open Tetamo Partner -> choose the membership or product -> follow the payment flow shown in the app -> complete payment there. If they ask about transfer, rekening, or payment method, do not explain banking infrastructure and do not offer manual transfer; redirect them to the Tetamo Partner payment flow.";
+      known.packageSelected
+        ? `The Agent has already selected ${known.packageSelected}. Acknowledge the chosen package by name. Direct the customer to open or download Tetamo Partner, select that same membership inside the app, and complete payment through the in-app flow. Do not restart discovery, ask them to choose another package, or suggest unrelated packages. Never offer manual bank transfers or bank-account details.`
+        : "Answer the Agent payment question directly and simply: direct the customer to download or open Tetamo Partner -> choose the membership or product -> follow the payment flow shown in the app -> complete payment there. If they ask about transfer, rekening, or payment method, do not explain banking infrastructure and do not offer manual transfer; redirect them to the Tetamo Partner payment flow.";
 
     reason =
       "The customer is asking how to pay or is ready to proceed with Agent membership payment.";
@@ -1883,6 +1885,13 @@ function applyDeterministicAgentSalesGuards(
   if (currentTurnObjectionLocked) {
     shouldAskQuestion = false;
     handoverRecommended = false;
+    // A customer objection is not a payment/closing signal, even if the
+    // customer mentioned an OLD payment to another portal. Remove any stale
+    // checkout facts or package pitch added before the objection priority lock.
+    buyingSignal = "low";
+    recommendedPackage = null;
+    packageRecommendationReason = null;
+    commercialFacts.clear();
 
     /*
      * A deterministic current-turn objection is already semantically resolved.
@@ -1905,7 +1914,7 @@ function applyDeterministicAgentSalesGuards(
   }
 
   const namesSpecificPackage =
-    /\b(?:silver|gold|agent\s*pro|agent-pro|pro)\b/i.test(
+    /\b(?:silver|basic|gold|agent\s*pro|agent-pro|pro)\b/i.test(
       semanticSignal
     );
 
@@ -1941,7 +1950,7 @@ function applyDeterministicAgentSalesGuards(
     packageRecommendationReason = null;
     recommendedObjective = "answer_current_question";
     recommendedDirection =
-      "Show the Agent the available Silver, Gold and Agent Pro package choices using only the canonical commercial facts. Answer the request directly and do not ask listing count unless the customer later asks for a recommendation.";
+      "Show the Agent the available Basic, Gold and Agent Pro package choices using only the canonical commercial facts. Answer the request directly and do not ask listing count unless the customer later asks for a recommendation.";
     reason =
       "The Agent asked to see the available package choices, not for a personalized package recommendation.";
     shouldAskQuestion = false;
@@ -1980,7 +1989,7 @@ function applyDeterministicAgentSalesGuards(
     packageRecommendationReason = null;
     recommendedObjective = "answer_current_question";
     recommendedDirection =
-      "Answer the Agent's generic price question directly with the canonical Silver, Gold and Agent Pro prices. Do not ask listing count just to answer price.";
+      "Answer the Agent's generic price question directly with the canonical Basic, Gold and Agent Pro prices. Do not ask listing count just to answer price.";
     reason =
       "The Agent asked for Agent membership pricing, not for a personalized recommendation.";
     shouldAskQuestion = false;
@@ -2002,7 +2011,7 @@ function applyDeterministicAgentSalesGuards(
       [
         /paket.{0,20}(?:cocok|sesuai|recommend|rekomendasi)/i,
         /(?:cocok|sesuai).{0,20}paket/i,
-        /ambil.{0,15}(?:silver|gold|agent\s*pro|pro).{0,20}(?:atau|or)/i,
+        /ambil.{0,15}(?:silver|basic|gold|agent\s*pro|pro).{0,20}(?:atau|or)/i,
         /which.{0,15}package/i,
         /paket.{0,15}mana/i,
       ]
@@ -2066,7 +2075,7 @@ function applyDeterministicAgentSalesGuards(
         "First explain the practical Tetamo Agent value using the approved live features. Then ask one natural question about approximately how many active listings the Agent manages, because listing capacity materially affects the membership recommendation. Never lead with the listing-count question before explaining value.";
 
       reason =
-        "Listing volume is not yet known and is useful for choosing between Silver, Gold and Agent Pro.";
+        "Listing volume is not yet known and is useful for choosing between Basic, Gold and Agent Pro.";
 
       shouldAskQuestion = true;
     }
@@ -2150,7 +2159,7 @@ function applyDeterministicAgentSalesGuards(
     packageRecommendationReason = null;
     recommendedObjective = "explain_comparison";
     recommendedDirection =
-      "Answer the comparison directly. Explain Tetamo's own current value and Agent tools without attacking the other platform. Do not turn a neutral comparison into a guarantee disclaimer or package pitch.";
+      "Answer the comparison directly and consultatively. First use the customer's actual conversation history: if they previously said they paid another portal, advertised for months, or received zero leads, acknowledge that specific experience without repeating a question they already answered. Explain only the one or two verified Tetamo differences most relevant to their concern, such as property-to-buyer matching and direct WhatsApp enquiries, rather than listing every feature. Make clear these capabilities create additional ways to reach or hear from potential customers, not guaranteed leads or sales. Never claim to know why the other portal produced no results. Keep the reply natural, focused, and concise. Do not attack competitors, force an unrelated package pitch, or restart discovery. If the customer is ready to proceed, follow their buying decision.";
     reason = "Brain resolved a neutral platform comparison rather than a resistance objection.";
     shouldAskQuestion = false;
     commercialFacts.clear();
@@ -2221,7 +2230,9 @@ function applyDeterministicAgentSalesGuards(
     recommendedDirection =
       "Acknowledge the bad past portal/advertising experience briefly, then explain the most relevant Tetamo value and current differentiators. Do not lead with a no-guarantee disclaimer and do not promise a better result.";
     reason = "Brain resolved a bad-past-experience objection.";
-    shouldAskQuestion = false;
+    shouldAskQuestion = true;
+    recommendedDirection +=
+      " First recognize exactly what went wrong. If the customer says they received ZERO leads, treat that as an established fact. Never ask what leads arrived, where those leads came from, or how they followed up nonexistent leads. Give only one or two relevant approved Tetamo advantages, then ask ONE specific unanswered diagnostic question, such as how long the listing was advertised. Use previous conversation answers. Do not assume another marketplace was overcrowded. Once the problem is sufficiently understood, connect Tetamo's capabilities to that problem and guide toward an appropriate buying decision.";
     commercialFacts.clear();
     needsTetamoFacts = true;
     factsNeeded.clear();
@@ -2245,7 +2256,9 @@ function applyDeterministicAgentSalesGuards(
     recommendedDirection =
       "Address the price/value concern with the most relevant Tetamo value for this agent. Do not automatically discount, upsell, or turn the answer into a no-guarantee disclaimer.";
     reason = "Brain resolved a price/value objection.";
-    shouldAskQuestion = false;
+    shouldAskQuestion = true;
+    recommendedDirection +=
+      " Understand WHY the customer considers the price expensive before delivering a catalogue of features. Briefly acknowledge the concern, mention at most one relevant verified advantage, then ask ONE natural question about what price or result they are comparing it with, if unknown. If their previous answers already explain the objection, do not ask again. Explain the relevant value, recommend a suitable package when justified, and offer the next purchase step when the customer is ready. Respect hesitation or rejection without pressure.";
     needsTetamoFacts = true;
     factsNeeded.add("approved Tetamo Agent value facts relevant to a price/value objection");
   } else if (brainIntent === "buyer_quality") {
@@ -2312,7 +2325,7 @@ function applyDeterministicAgentSalesGuards(
       ["package_price", "package_features", "package_recommendation"].includes(brainIntent)) {
     const subject = (params.brain.intentSubject || "").toLowerCase();
     const named = (Object.keys(AGENT_PACKAGES) as AgentPackageId[]).find(
-      id => subject.includes(AGENT_PACKAGES[id].name.toLowerCase())
+      id => subject.includes(AGENT_PACKAGES[id].name.toLowerCase()) || (id === "silver" && subject.includes("silver"))
     );
     const applicable = named ? [named] : recommendedPackage ? [recommendedPackage] :
       ["silver", "gold", "agent_pro"] as AgentPackageId[];

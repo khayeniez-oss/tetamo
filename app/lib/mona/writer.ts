@@ -1,3 +1,4 @@
+import { isReturningGenericMonaEnquiry, isRepetitiveMonaFollowUp } from "./continuity";
 import { requiresApprovedReplyFacts } from "./reply-contract";
 import { phase1Stage, phase1Result, phase1OpenAIOptions, phase1Request, phase1Response } from "./phase1-trace.mjs";
 import OpenAI from "openai";
@@ -45,7 +46,10 @@ type WriteMonaFollowUpParams = {
 const DEVELOPER_DESTINATION =
   "https://www.tetamo.com/developer-license";
 
-const BUYER_RENTER_DESTINATION =
+const BUYER_RENTER_MARKETPLACE_DESTINATION =
+  "https://www.tetamo.com/properti";
+
+const BUYER_RENTER_REQUIREMENTS_DESTINATION =
   "https://www.tetamo.com/pembeli";
 
 const MONA_WRITER_PROMPT = `
@@ -357,7 +361,7 @@ feature_details / feature_example / feature_availability / how_to_use:
 - if approved capability says Mona cannot send screenshots/demo, say that directly and then give a concise text example or walkthrough using only the approved facts for that feature.
 
 how_to_list / registration:
-- for an Owner listing, preserve the approved verification sequence: after successful payment is confirmed, the listing becomes active and can appear publicly on the marketplace as Pending Verification while Tetamo completes verification; final verification later changes the status to Verified;
+- for an Owner listing, explain the customer-facing sequence: create listing, choose the Owner package at the end, pay in Tetamo Partner, and after successful payment confirmation the listing automatically appears on Tetamo Marketplace; mention Pending Verification or Verified only if the customer specifically asks about verification or listing status;
 - never say an Owner listing must wait until final Tetamo verification before it can appear publicly if approved facts say Pending Verification can be public;
 - when approved facts say Tetamo Partner is the primary Agent/Owner route, direct them to download/open Tetamo Partner on iOS or Android.
 - when approved Product Truth says an Agent or Owner asking what they need or the minimum/basic requirement to start listing should download/open Tetamo Partner and start creating/managing listings there, answer from that approved fact directly.
@@ -386,7 +390,7 @@ CAPABILITY BOUNDARY:
 VALUE-FIRST / LIMITATION RULE:
 - For normal feature questions, comparisons, proof questions, existing-solution objections, self-marketing objections, price/value objections, bad past experience, and growth questions, lead with the relevant Tetamo value.
 - Do NOT volunteer "Tetamo does not guarantee leads/closing" as a generic disclaimer.
-- A no-guarantee boundary should be prominent when Brain.intent="guarantee_question".
+- When the customer explicitly asks about guaranteed leads, briefly connect ONE approved Tetamo benefit to their concern. Then answer clearly in ONE short statement that a fixed lead count is not guaranteed. Do not repeat the limitation, blame the customer, or promise outcomes. Build confidence through concrete value.
 - For Brain.intent="buyer_quality", explain matching/available lead information and then state the buyer-quality boundary.
 - Never guarantee results under any intent.
 
@@ -402,7 +406,7 @@ RESPONSE FOCUS:
 6. DIRECT QUESTIONS
 ==================================================
 
-Answer the customer's direct question FIRST.
+Answer direct questions clearly, without evasion. For explicit lead-guarantee questions, a brief relevant value explanation may precede ONE concise guarantee clarification. Never bury or repeat the answer. Other direct questions should be answered first.
 
 Then continue the current journey only if useful.
 
@@ -497,6 +501,15 @@ For objections:
 - do not guarantee leads, views, enquiries, buyers, sales, rentals, conversions, or closing;
 - if approved factual support is available, use enough of it to explain WHY Tetamo may still be relevant to the customer's concern;
 - never ignore the objection and never leave the customer without a substantive answer.
+
+For competitor comparisons:
+- Read the customer's latest question together with the actual conversation history and remembered facts.
+- If the customer already explained a concrete disappointing outcome, such as advertising for 10 months with zero leads, explicitly connect your answer to that experience in one short, natural sentence.
+- Do not give another generic sympathy statement or repeat questions already answered.
+- Explain the ONE or TWO approved Tetamo capabilities most relevant to the customer's particular concern. Avoid a long catalogue of unrelated features.
+- Never claim to know why the other platform failed or promise that Tetamo will deliver leads or sales.
+- Answer the direct comparison question before considering another sales step.
+- Do not force a package pitch. When the customer later asks for a suitable package or decides to buy, follow that buying decision.
 
 For hesitation:
 - respect timing;
@@ -860,6 +873,28 @@ function cleanReply(
   reply =
     stripMarkdownLinks(reply);
 
+  // Repair clear sentence-boundary and Indonesian word-number spacing.
+  reply = reply
+    .replace(/([.!?])(?=[A-Z][a-z]{2,}(?:\s|$))/g,
+      (match, punctuation, offset, text) => {
+        const left = text.slice(0, offset).split(/\s/).pop() || "";
+        const right = text.slice(offset + 1).match(/^[A-Za-z]+/)?.[0] || "";
+
+        // Preserve URLs, email addresses and common domain endings.
+        if (
+          /https?:\/\/|@/i.test(left) ||
+          /^www$/i.test(left) ||
+          /^(com|org|net|io|id|co|app|dev|edu|gov|info)$/i.test(right)
+        ) {
+          return match;
+        }
+
+        return punctuation + " ";
+      })
+    .replace(/\btermasuk(?=\d)/gi, "termasuk ")
+    .replace(/\bsertaintegrasi\b/gi, "serta integrasi")
+    .replace(/\b(Gold|Kakak)(?=(?:memberikan|bisa)\b)/gi, "$1 ");
+
   return reply.trim();
 }
 
@@ -1132,15 +1167,72 @@ function deterministicObjectionFallbackReply(
     );
   }
 
+  // MONA_OBJECTION_FALLBACK_CONTINUITY
+  // Do not recycle previously explained benefits when generating
+  // a fallback for an ongoing sales objection.
+  const previousMonaReply =
+    [...params.memory.messages]
+      .reverse()
+      .find((message) => message.speaker === "Mona")
+      ?.message || "";
+
+  const customerRequestsRecap =
+    /jelaskan lagi|ulangi|ulang lagi|lebih detail|explain again|repeat that|tell me more/i.test(
+      params.latestCustomerMessage
+    );
+
+  const previouslyExplained = (benefit: string): boolean => {
+    if (!previousMonaReply || customerRequestsRecap) {
+      return false;
+    }
+
+    const topics: Array<[RegExp, RegExp]> = [
+      [
+        /marketplace/i,
+        /marketplace|portal properti|portal iklan|tempat pasang iklan/i,
+      ],
+      [
+        /matching/i,
+        /matching|pencocokan|mencocokkan/i,
+      ],
+      [
+        /whatsapp/i,
+        /whatsapp/i,
+      ],
+      [
+        /leads dashboard/i,
+        /leads? dashboard|dashboard leads?|kelola.{0,25}leads?|pengelolaan leads?/i,
+      ],
+      [
+        /viewing schedule/i,
+        /viewing|jadwal kunjungan/i,
+      ],
+      [
+        /proposal.*portfolio/i,
+        /proposal|portfolio|portofolio/i,
+      ],
+      [
+        /exposure|marketing|promosi|visibility/i,
+        /exposure|google|media sosial|social media|promosi|iklan digital|berbagai kanal/i,
+      ],
+    ];
+
+    return topics.some(
+      ([benefitPattern, historyPattern]) =>
+        benefitPattern.test(benefit) &&
+        historyPattern.test(previousMonaReply)
+    );
+  };
+
   const uniqueId =
-    Array.from(
-      new Set(approvedValuePartsId)
-    ).slice(0, 4);
+    Array.from(new Set(approvedValuePartsId))
+      .filter((benefit) => !previouslyExplained(benefit))
+      .slice(0, 4);
 
   const uniqueEn =
-    Array.from(
-      new Set(approvedValuePartsEn)
-    ).slice(0, 4);
+    Array.from(new Set(approvedValuePartsEn))
+      .filter((benefit) => !previouslyExplained(benefit))
+      .slice(0, 4);
 
   const valueId =
     uniqueId.length
@@ -1153,10 +1245,10 @@ function deterministicObjectionFallbackReply(
       : "";
 
   const noGuaranteeId =
-    "Tetamo juga tidak menjamin lead atau closing, jadi saya tidak mau menjanjikan hasil yang belum pasti.";
+    "Soal hasil, Tetamo tidak menjamin lead dalam jumlah tertentu karena respons pasar setiap properti berbeda. Kakak bisa menilai manfaat sistemnya tanpa bergantung pada janji angka lead.";
 
   const noGuaranteeEn =
-    "Tetamo also does not guarantee leads or closing, so I do not want to promise an outcome that cannot be guaranteed.";
+    "Regarding results, Tetamo does not guarantee leads in any specific quantity because market response varies by property. You can evaluate the platform's benefits without relying on promised lead numbers.";
 
   let reply: string;
 
@@ -1167,8 +1259,8 @@ function deterministicObjectionFallbackReply(
   ) {
     reply =
       language === "en"
-        ? `${noGuaranteeEn}${valueEn}`
-        : `${noGuaranteeId}${valueId}`;
+        ? `${valueEn.trim() || "Tetamo offers a property-focused marketing channel."} ${noGuaranteeEn}`
+        : `${valueId.trim() || "Tetamo menyediakan channel pemasaran khusus properti."} ${noGuaranteeId}`;
   } else if (
     /buyer_quality|lead quality|serius|qualified|kepo/i.test(
       signal
@@ -1250,16 +1342,33 @@ function deterministicPaymentFlowReply(
   const isOwner =
     params.brain.customerType === "owner";
 
+  const agentPackageNames: Record<string, string> = {
+    silver: "Basic",
+    gold: "Gold",
+    pro: "Agent Pro",
+    agent_pro: "Agent Pro",
+  };
+
+  const agentPaymentPackage =
+    params.brain.customerType === "agent" &&
+    guidance.recommendedPackage
+      ? agentPackageNames[String(guidance.recommendedPackage)] || null
+      : null;
+
   return {
     action: "reply",
     reply:
       language === "en"
         ? isOwner
           ? "For payment, download or open Tetamo Partner, create and review your property listing, choose the Owner package at the end of the listing flow, then follow the payment flow shown in the app and pay directly there."
-          : "For payment, download or open Tetamo Partner, choose the membership or product you want, then follow the payment flow shown in the app and pay directly there."
+          : agentPaymentPackage
+            ? `For the ${agentPaymentPackage} membership, open or download Tetamo Partner, select ${agentPaymentPackage} in the app, and complete payment through the in-app payment flow.`
+            : "For payment, download or open Tetamo Partner, choose the membership or product you want, then follow the payment flow shown in the app and pay directly there."
         : isOwner
           ? "Untuk pembayaran, Kakak bisa download atau buka Tetamo Partner, buat dan review listing properti, pilih paket Owner di akhir alur listing, lalu ikuti proses pembayaran langsung di aplikasi ya."
-          : "Untuk pembayaran, Kakak bisa download atau buka Tetamo Partner, pilih membership atau produk yang diinginkan, lalu ikuti proses pembayaran langsung di aplikasi ya.",
+          : agentPaymentPackage
+            ? `Siap Kak, untuk paket ${agentPaymentPackage}, silakan buka atau download Tetamo Partner, pilih paket ${agentPaymentPackage} di aplikasi, lalu selesaikan pembayaran melalui proses yang tersedia di aplikasi ya.`
+            : "Untuk pembayaran, Kakak bisa download atau buka Tetamo Partner, pilih membership atau produk yang diinginkan, lalu ikuti proses pembayaran langsung di aplikasi ya.",
     source: "fallback",
   };
 }
@@ -1595,6 +1704,31 @@ function deterministicIntentFallbackReply(
         ? "its property marketplace and partner workflow tools"
         : "marketplace properti dan tools kerja untuk partner";
 
+    // MONA_COMPARISON_ZERO_LEAD_CONTINUITY
+    // Do not restart the feature pitch when the customer has
+    // already heard it and is concerned about receiving no leads.
+    const hasPriorMonaReply =
+      params.memory.messages.some(
+        (message) =>
+          message.speaker === "Mona" &&
+          Boolean(message.message?.trim())
+      );
+
+    const zeroLeadConcern =
+      /\b(?:nol|zero|0|tanpa|no)\s+(?:leads?|enquir(?:y|ies))\b/i.test(
+        params.latestCustomerMessage
+      );
+
+    if (hasPriorMonaReply && zeroLeadConcern) {
+      return {
+        action: "reply",
+        reply: language === "en"
+          ? "I understand why you are concerned after so long without leads. Tetamo offers additional ways for properties to gain exposure and for prospects to contact agents, as I explained earlier, but that does not guarantee enquiries. Which area are most of your properties in?"
+          : "Saya paham kenapa Kakak ragu setelah lama tanpa lead. Bedanya, Tetamo menyediakan jalur tambahan agar properti mendapat exposure dan calon pembeli bisa menghubungi agen, seperti yang tadi saya jelaskan. Tapi itu bukan jaminan lead. Boleh tahu listing Kakak paling banyak di area mana?",
+        source: "fallback",
+      };
+    }
+
     return {
       action: "reply",
       reply: language === "en"
@@ -1745,7 +1879,7 @@ function deterministicIntentFallbackReply(
   return null;
 }
 
-function fallbackReply(
+export function fallbackReply(
   params: WriteMonaReplyParams
 ): MonaWriterResult {
   /*
@@ -1887,6 +2021,57 @@ function paymentFactBoundaryViolation(
   return null;
 }
 
+function repeatedSalesPitchViolation(
+  raw: string,
+  params: WriteMonaReplyParams
+): string | null {
+  // Check continuity across sales objectives, not only objections.
+  const previousReply =
+    [...params.memory.messages]
+      .reverse()
+      .find((message) => message.speaker === "Mona")
+      ?.message || "";
+
+  if (!previousReply) return null;
+
+  const latest = params.latestCustomerMessage;
+
+  // Allow the customer to request clarification or deeper details
+  // about a specific previously discussed capability.
+  if (
+    /jelaskan lagi|ulangi|lebih detail|lebih lanjut|explain again|tell me more/i.test(latest) ||
+    /matching|pencocokan|whatsapp|marketplace|dashboard/i.test(latest)
+  ) {
+    return null;
+  }
+
+  const topics = [
+    ["property marketplace", /marketplace|portal\s+properti/i],
+    ["buyer matching", /matching|pencocokan|mencocokkan|cocokkan|database\s+(?:calon\s+)?(?:pembeli|penyewa)/i],
+    ["marketing channels", /google|media sosial|social media|berbagai kanal|banyak kanal/i],
+    ["direct enquiries", /enquir(?:y|ies)|inquir(?:y|ies)|direct\s+whatsapp|langsung\s+(?:chat|menghubungi)|hubungi.{0,30}whatsapp|tanya\s+langsung/i],
+  ] as const;
+
+  const repeated = topics
+    .filter(([, pattern]) =>
+      pattern.test(previousReply) && pattern.test(raw)
+    )
+    .map(([name]) => name);
+
+  if (repeated.length < 2 && !repeated.includes("buyer matching")) return null;
+
+  return (
+    "This sales reply repeats previously explained benefits: " +
+    repeated.join(", ") +
+    ". The customer has continued the conversation. " +
+    "Rewrite the answer using their latest information and " +
+    "one genuinely new, relevant approved fact or practical " +
+    "distinction. Do not repeat the prior sales presentation. " +
+    "If no new fact is available, respond directly and concisely " +
+    "without inventing a benefit or restarting discovery."
+  );
+}
+
 function objectionResponseViolation(
   raw: string,
   params: WriteMonaReplyParams,
@@ -1921,6 +2106,91 @@ function objectionResponseViolation(
 
   if (acknowledgementOnly) {
     return "Sales required objection handling, but Writer only acknowledged the customer without answering the objection.";
+  }
+
+  // Relevance gate: checkout instructions must not substitute for answering
+  // a customer's concern about past advertising failures or platform value.
+  const customerAskedToPay =
+    /(?:cara|gimana|bagaimana|how).{0,22}(?:bayar|payment)|(?:saya|aku)\s+(?:mau|ingin)\s+bayar|(?:kirim|send).{0,15}(?:link\s+bayar|payment\s+link)/i.test(params.latestCustomerMessage);
+  const isCheckoutInstructions =
+    /(?:untuk\s+pembayaran|for\s+payment|proses\s+pembayaran|cara\s+bayar|choose\s+(?:your\s+)?membership|pilih\s+membership|ikuti\s+alur\s+pembayaran|follow\s+the\s+payment\s+flow)/i.test(draft);
+  if (isCheckoutInstructions && !customerAskedToPay) {
+    return "Writer substituted checkout instructions for a substantive answer to the customer's current sales objection.";
+  }
+  if (/bad[_\s-]*past|past[_\s-]*advertis/i.test(String(guidance.objection || ""))) {
+    const hasRelevantValue =
+      /(?:marketplace|buyer|pembeli|penyewa|matching|pencocokan|lead|direct\s+whatsapp|enquiry|inquiry|visibilitas|exposure|promosi|promotional|iklan|advertising|pemasaran|alat\s+agen|agent\s+tools|discovery)/i.test(draft);
+    if (!hasRelevantValue) {
+      return "A past advertising failure requires actual Tetamo discovery/lead/marketing value, not only empathy, pricing, or payment instructions.";
+    }
+  }
+
+
+  // MONA_ZERO_LEADS_GUARD
+  // Respect an explicit report of receiving zero leads.
+  const zeroLeadsReported =
+    /(?:tidak|nggak|enggak|ngga|gak|ga|belum|tanpa)\s+(?:(?:pernah|ada|dapat|mendapat|menerima|masuk)\s+){0,3}(?:leads?|enquir(?:y|ies)|inquir(?:y|ies))\b|\b(?:no|zero)\s+(?:leads?|enquir(?:y|ies)|inquir(?:y|ies))\b/i.test(
+      params.latestCustomerMessage
+    );
+
+  if (zeroLeadsReported) {
+    const questions = draft.match(/[^.!?\n]*\?/g) || [];
+
+    const repeatsZeroLeadQuestion = questions.some((question) => {
+      const mentionsLeads =
+        /\b(?:leads?|enquir(?:y|ies)|inquir(?:y|ies))\b/i.test(question);
+
+      const refersToPreviousExperience =
+        /\b(?:biasanya|selama|sebelumnya|dulu|pernah|waktu itu|portal lain)\b/i.test(question);
+
+      const asksAboutReceivedLeads =
+        /\b(?:dapat|didapat|mendapat|menerima|diterima|masuk|ada|berapa|darimana)\b|dari\s+mana|follow[\s-]?up|menindaklanjuti/i.test(question);
+
+      return mentionsLeads &&
+        refersToPreviousExperience &&
+        asksAboutReceivedLeads;
+    });
+
+    // MONA_ZERO_LEADS_FOLLOWUP_GUARD
+    if (questions.some((question) =>
+      /(?:follow[\s-]?up|menindaklanjuti)/i.test(question) &&
+      /(?:calon\s+(?:pembeli|penyewa)|leads?|prospek)/i.test(question)
+    )) {
+      return "Customer reported zero leads from the previous portal. Do not ask about following up buyers who never enquired. Answer the trust concern directly.";
+    }
+
+    if (repeatsZeroLeadQuestion) {
+      return "Customer explicitly reported zero leads. Do not ask where previous leads came from, how many were received, or how they were followed up. Before asking anything, check the customer's actual statements and conversation history. Do not ask about listing count, advertising duration, or lead results already provided. Answer the customer's concern directly using known facts and one or two relevant approved Tetamo benefits. A follow-up question is optional, never mandatory, and must concern genuinely missing information.";
+    }
+  }
+
+  // MONA_ALREADY_ANSWERED_AD_DURATION_GUARD
+  // Never ask for advertising duration already supplied by the customer.
+  const customerStatements = [
+    params.latestCustomerMessage,
+    ...params.memory.messages
+      .filter((message) => message.speaker === "Customer")
+      .map((message) => message.message),
+  ];
+
+  const advertisingDurationKnown = customerStatements.some(
+    (message) =>
+      /(?:\b\d{1,3}\s*|\b(?:satu|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)\s+)(?:bulan|minggu|tahun|hari|months?|weeks?|years?|days?)\b/i.test(message) &&
+      /(?:listing|iklan|portal|tayang|pasang|beriklan|advertis|bayar|paid)/i.test(message)
+  );
+
+  const asksForKnownAdvertisingDuration =
+    (draft.match(/[^.!?\n]*\?/g) || []).some(
+      (question) =>
+        /(?:berapa\s+lama|how\s+long|berapa\s+(?:bulan|minggu|tahun)|how\s+many\s+(?:months|weeks|years))/i.test(question) &&
+        /(?:listing|iklan|portal|tayang|pasang|advertis|sebelumnya)/i.test(question)
+    );
+
+  if (
+    advertisingDurationKnown &&
+    asksForKnownAdvertisingDuration
+  ) {
+    return "Customer already provided the previous advertising duration. Do not ask for it again. Use the known duration to answer the objection, and only ask about a genuinely unknown issue if necessary.";
   }
 
   const asksQuestion =
@@ -2055,9 +2325,39 @@ function replyViolationReason(
     }
   }
 
+
+  // MONA_DATABASE_ACCESS_GUARD
+  // Tetamo manages its buyer database; partners access matched leads only.
+  const databaseAccessViolation = raw
+    .split(/[.!?\n;]+/)
+    .some((sentence) => {
+      const claimsAccess =
+        /\b(?:akses|mengakses|access)\b.{0,100}\b(?:database\s+pembeli|buyer\s+database)\b/i.test(sentence);
+
+      const explicitlyDeniesAccess =
+        /\b(?:tidak|nggak|gak|bukan|tanpa|not|no)\b.{0,50}\b(?:akses|mengakses|access)\b/i.test(sentence);
+
+      return claimsAccess && !explicitlyDeniesAccess;
+    });
+
+  if (databaseAccessViolation) {
+    return "Do not imply that agents or owners can access Tetamo's buyer database. Tetamo manages that database and shares relevant matched leads through the partner's Leads Dashboard.";
+  }
+
+  // A truthful denial is not a performance promise.
+  const performanceClaimCandidate = raw
+    .replace(
+      /\b(?:tidak|nggak|gak|ga|tak|belum)\s+(?:(?:bisa|dapat|akan)\s+)?(?:menjamin|jamin)\s+(?:jumlah\s+)?(?:leads?|closing|sales|penjualan|rentals?|penyewaan|viewings?|buyers?|pembeli)\b/gi,
+      ""
+    )
+    .replace(
+      /\b(?:does\s+not|doesn't|do\s+not|don't|cannot|can't|will\s+not|won't|never)\s+(?:guarantee|promise)\s+(?:leads?|closing|sales|rentals?|viewings?|buyers?)\b/gi,
+      ""
+    );
+
   const unsupportedPerformanceClaim =
     /(?:jamin|menjamin|guarantee|guaranteed)\s+(?:lead|leads|closing|sales|penjualan|rentals?|penyewaan|viewing|buyer|buyers|pembeli)|(?:serious|serius|qualified|terkualifikasi)\s+(?:buyer|buyers|pembeli|lead|leads)\s+(?:pasti|guaranteed|terjamin)|(?:pasti|dijamin)\s+(?:closing|laku|terjual|tersewa|dapat\s+lead)/i.test(
-      raw
+      performanceClaimCandidate
     );
 
   if (unsupportedPerformanceClaim) {
@@ -2155,7 +2455,7 @@ function replyViolationReason(
     approvedPendingPublicFlow &&
     draftMakesVisibilityWaitForVerification
   ) {
-    return "The draft reversed the approved Owner listing sequence. After successful payment, the listing can be active/public as Pending Verification while Tetamo completes verification; it does not need to wait for final verification before appearing publicly.";
+    return "The draft incorrectly makes Owner listing publication wait for final verification. After successful payment confirmation, the listing automatically appears on Tetamo Marketplace. Only explain verification status when the customer asks about it.";
   }
 
   /*
@@ -2245,6 +2545,45 @@ function replyViolationReason(
   if (objectionViolation) {
     return objectionViolation;
   }
+  const buyerDatabaseClaim =
+    /\bdatabase\s+(?:calon\s+)?(?:pembeli|penyewa)\b/i;
+
+  if (
+    buyerDatabaseClaim.test(raw) &&
+    !buyerDatabaseClaim.test(
+      commercialFactsText + "\n" + generalFactsText
+    )
+  ) {
+    return "Buyer or tenant database claim is not supported by approved facts. Describe only approved matching capabilities without inventing database details.";
+  }
+
+  const continuityViolation =
+    repeatedSalesPitchViolation(raw, params);
+
+  if (continuityViolation) {
+    return continuityViolation;
+  }
+
+  // MONA_OWNER_UNPROMPTED_VERIFICATION_GUARD
+  const ownerPaymentOrPublication =
+    params.brain.customerType === "owner" &&
+    /bayar|pembayaran|payment|tayang|tampil|muncul|publish|published|go live/i.test(
+      params.latestCustomerMessage
+    );
+
+  const customerAskedVerification =
+    /verifik|verification|verified|pending|badge|approval/i.test(
+      params.latestCustomerMessage
+    );
+
+  if (
+    ownerPaymentOrPublication &&
+    !customerAskedVerification &&
+    /pending verification|pending verifikasi|status verifikasi|menunggu verifikasi|verified listing/i.test(raw)
+  ) {
+    return "Owner asked about payment or publication, not verification status. Answer when the listing becomes public after confirmed payment without introducing Pending Verification.";
+  }
+
 
   const unknownRoleCommercialLeak =
     params.brain.customerType ===
@@ -2462,6 +2801,42 @@ function replyViolationReason(
     }
   }
 
+  // MONA_EXPLICIT_LEAD_GUARANTEE_GUARD
+  // Explicit customer questions override broad Brain intent labels.
+  const customerAskedLeadGuarantee =
+    /(?:jaminan|garansi|dijamin|menjamin|guarantee|guaranteed)/i.test(
+      params.latestCustomerMessage
+    ) &&
+    /\b(?:leads?|enquir(?:y|ies)|inquir(?:y|ies))\b/i.test(
+      params.latestCustomerMessage
+    );
+
+  const clearlyDeniedLeadGuarantee =
+    /(?:tidak|nggak|gak|ga|tak)\s+(?:(?:bisa|dapat|akan)\s+)?(?:menjamin|menjanjikan)\s+(?:jumlah\s+)?leads?\b|(?:tidak|nggak|gak|ga|tak)\s+ada\s+(?:jaminan|garansi)\s+(?:jumlah\s+)?leads?\b|(?:does\s+not|doesn't|do\s+not|don't|cannot|can't|never)\s+(?:guarantee|promise)\s+leads?\b|(?:no|not)\s+guarantee\s+(?:of\s+)?leads?\b/i.test(raw);
+
+  // MONA_NATURAL_GUARANTEE_LANGUAGE
+  // Accept clear, natural denials without accepting positive promises.
+  const naturalDenial =
+    /(?:jumlah\s+)?leads?\s+(?:memang\s+)?(?:tidak|tak|nggak|gak|ga)\s+(?:bisa\s+)?dijamin\b|(?:leads?|lead\s+count)\s+(?:cannot|can't|are\s+not|aren't)\s+be\s+guaranteed\b/i.test(raw);
+
+  if (customerAskedLeadGuarantee && !clearlyDeniedLeadGuarantee && !naturalDenial) {
+    return "Customer explicitly asked about guaranteed leads. State clearly that Tetamo does not guarantee leads, then explain relevant approved benefits. Do not avoid the direct question.";
+  }
+
+  // MONA_SINGLE_GUARANTEE_STATEMENT_GUARD
+  // Answer explicit guarantee questions once, without repeated disclaimers.
+  if (customerAskedLeadGuarantee) {
+    const denialCount = raw.split(/[.!?\n;]+/).filter((sentence) =>
+      /(?:\b(?:tidak|nggak|gak|ga|tak|bukan|no|not|cannot)\b|can.t)/i.test(sentence) &&
+      /(?:jamin|garansi|dijamin|guarantee|promis)/i.test(sentence) &&
+      /(?:lead|hasil|result|closing)/i.test(sentence)
+    ).length;
+
+    if (denialCount > 1) {
+      return "The guarantee limitation was repeated. Explain relevant Tetamo value, answer the guarantee question clearly ONCE, and avoid repeating negative disclaimers.";
+    }
+  }
+
   const limitationShouldNotLead = [
     "platform_features",
     "feature_details",
@@ -2479,6 +2854,7 @@ function replyViolationReason(
 
   if (
     limitationShouldNotLead &&
+    !customerAskedLeadGuarantee &&
     /(?:tetamo\s+)?(?:tidak|nggak|gak)\s+(?:bisa\s+)?menjamin|does\s+not\s+guarantee|cannot\s+guarantee|can't\s+guarantee/i.test(raw)
   ) {
     return "This intent requires a value-first answer, but the draft volunteered a no-guarantee disclaimer that the customer did not ask for.";
@@ -2600,6 +2976,25 @@ export async function writeMonaReply(
     }, 3);
   }
 
+  // When a previous role question went unanswered for days, continue the
+  // conversation instead of re-sending the same first-time greeting.
+  if (
+    params.brain.customerType === "unknown" &&
+    params.brain.clarification.needed &&
+    params.brain.clarification.kind === "role"
+  ) {
+    const previousRoleQuestion = [...params.memory.messages]
+      .reverse()
+      .find((item) => item.speaker === "Mona")?.message || null;
+    if (isReturningGenericMonaEnquiry(params.memory, params.latestCustomerMessage, previousRoleQuestion)) {
+      const reply = params.brain.languageStyle.primaryLanguage === "en" ||
+        /\b(?:may i|can i|details|information|hello|hi)\b/i.test(params.latestCustomerMessage)
+        ? "Welcome back, Kak! Happy to help with the details. To continue from our last chat, are you a property agent or property owner? I'll tailor the information to you."
+        : "Halo lagi, Kak! Saya bantu lanjut dari chat sebelumnya ya. Boleh konfirmasi Kakak sebagai agen properti atau pemilik properti? Biar informasinya sesuai kebutuhan Kakak.";
+      return phase1Result(__phase1Span, {action: "reply", reply, source: "fallback"}, 16);
+    }
+  }
+
   const identityReply =
     deterministicIdentityReply(params);
 
@@ -2614,8 +3009,16 @@ export async function writeMonaReply(
     ) &&
     params.brain.intent === "unknown" &&
     !params.brain.directQuestion &&
-    /\b(?:saya|aku|kami|i\s*am|i'm|im)\s+(?:agent|agen|agency)\b/i.test(
+    // The canned introduction is for a simple role introduction only.
+    // Messages containing listing counts, concerns or questions must
+    // proceed through the contextual Writer instead.
+    /^\s*(?:(?:halo|hai|hello|hi)[,!.\s]*)?(?:saya|aku|kami|i\s*am|i'm|im)\s+(?:agent|agen|agency)(?:\s+(?:property|properti|real\s+estate))?[!.\s]*$/i.test(
       params.latestCustomerMessage
+    ) &&
+    !params.memory.messages.some(
+      (item) =>
+        item.speaker === "Customer" &&
+        /\b\d{1,4}\s*(?:listing|properti|properties)\b/i.test(item.message)
     );
 
   if (isNewAgentIntroduction) {
@@ -2752,6 +3155,11 @@ export async function writeMonaReply(
   const memoryText =
     buildMemoryText(params.memory);
 
+  const previousMonaReply =
+    params.memory.messages
+      .filter((message) => message.speaker === "Mona")
+      .slice(-1)[0]?.message || "none";
+
   const salesText =
     formatSalesGuidance(
       params.salesGuidance
@@ -2863,8 +3271,14 @@ ROLE DESTINATIONS:
 Developer:
 ${DEVELOPER_DESTINATION}
 
-Buyer / Renter:
-${BUYER_RENTER_DESTINATION}
+Buyer / Renter destinations — choose based on customer intent:
+- Browse or view available property listings: ${BUYER_RENTER_MARKETPLACE_DESTINATION}
+- Submit property requirements for Tetamo assistance: ${BUYER_RENTER_REQUIREMENTS_DESTINATION}
+- When the customer wants to browse properties, use the marketplace destination.
+- When the customer wants to submit their requirements for assistance, use the requirements destination.
+- Do not describe the requirements page as a property-listing catalogue.
+- Do not claim the requirements page provides browsing, saving, sharing, or direct listing-contact features.
+- Do not confuse the two destinations.
 
 
 CONVERSATION DELIVERY:
@@ -2899,6 +3313,26 @@ FACT BOUNDARY:
 
 FULL AVAILABLE CONVERSATION FROM THE BEGINNING:
 ${memoryText}
+
+MOST RECENT MONA REPLY:
+${previousMonaReply}
+
+CONVERSATION PROGRESSION RULE:
+- Treat the latest customer message as a continuation, even when Sales changes objectives, such as handle_objection to explain_comparison.
+- Compare your planned reply with MOST RECENT MONA REPLY before writing.
+- Do not repeat or paraphrase the same already-explained benefits as a fresh sales pitch.
+- If the customer provides a new concrete detail, such as months of advertising without leads, address that detail specifically and advance the answer.
+- If the customer reports zero leads, do not present Leads Dashboard as the solution to generating leads; it helps manage enquiries only after they exist. Explain a relevant approved discovery or matching capability not already covered, or ask one useful question about the property's location or type. Never promise leads or invent benefits.
+- When approved facts support it, introduce one new relevant capability, practical distinction, or useful next step rather than recycling the previous explanation.
+- Do not repeat generic sympathy statements or questions that were already answered.
+- If the customer explicitly asks to clarify or revisit an earlier benefit, answer that question directly; necessary clarification is not prohibited repetition.
+- Never invent an additional benefit just to avoid repetition.
+- Do not force package recommendations, payment instructions, or guarantees when the customer is still evaluating value.
+
+OWNER PAYMENT AND PUBLICATION ACCURACY:
+- When an Owner asks about payment or listing publication, answer the requested steps and timing directly.
+- Do not introduce Pending Verification unless the customer asks about verification.
+- Never assume a property is in Canggu, Ubud, or another location unless the customer or approved context establishes that location.
 
 LATEST CUSTOMER MESSAGE:
 ${params.latestCustomerMessage}
@@ -3025,7 +3459,7 @@ Requirements:
 - if Sales Guidance says recommendedObjective="handle_objection", answer the objection substantively now; do not ignore, defer, hand it off, or replace it with generic discovery;
 - for an objection, follow Sales Guidance recommendedDirection and use relevant approved facts;
 - if Sales Guidance says shouldAskQuestion=false, do not add a question to the objection response;
-- for Owner how_to_list, preserve the approved sequence: successful payment -> listing active/public as Pending Verification while Tetamo verifies -> later Verified; never say marketplace visibility must wait for final verification;
+- for Owner how_to_list, preserve the sequence: create listing -> choose the Owner package at the end -> pay in Tetamo Partner -> listing becomes active and publicly visible after payment confirmation, initially as Pending Verification until verified; never imply publication must wait for final verification, and only discuss verification status when the customer asks;
 - if Brain.customerNeeds says the customer asks what they need or the minimum/basic requirement to start listing, answer that need explicitly from the approved Product Truth: direct the Agent/Owner to download/open Tetamo Partner, where they can start creating and managing listings;
 - if the same customer also asks how to post, you may explain the approved listing workflow separately, but do not relabel workflow steps such as property details, photos, documents, payment, verification, or package selection as the minimum/basic requirement;
 - if approved package facts say a Verification Badge is available after approval, explicitly preserve "after approval / setelah disetujui"; never present the verification badge as automatically included merely because the package was purchased;
@@ -3312,8 +3746,14 @@ ROLE DESTINATIONS:
 Developer:
 ${DEVELOPER_DESTINATION}
 
-Buyer / Renter:
-${BUYER_RENTER_DESTINATION}
+Buyer / Renter destinations — choose based on customer intent:
+- Browse or view available property listings: ${BUYER_RENTER_MARKETPLACE_DESTINATION}
+- Submit property requirements for Tetamo assistance: ${BUYER_RENTER_REQUIREMENTS_DESTINATION}
+- When the customer wants to browse properties, use the marketplace destination.
+- When the customer wants to submit their requirements for assistance, use the requirements destination.
+- Do not describe the requirements page as a property-listing catalogue.
+- Do not claim the requirements page provides browsing, saving, sharing, or direct listing-contact features.
+- Do not confuse the two destinations.
 
 FACT BOUNDARY:
 
@@ -3454,6 +3894,16 @@ If no follow-up should be sent, output exactly:
     if (
       assistedListingPromise
     ) {
+      return {
+        action: "silent",
+        reply: "",
+        source: "fallback",
+      };
+    }
+
+    // The AI can see Memory and still inadvertently repeat an old message.
+    // Do not send a near-duplicate, especially as Follow-up #2.
+    if (isRepetitiveMonaFollowUp(params.memory, raw, params.followUpNumber)) {
       return {
         action: "silent",
         reply: "",

@@ -1,3 +1,4 @@
+import { isReturningGenericMonaEnquiry } from "./continuity";
 import { preserveReplyFactRequest } from "./reply-contract";
 import { phase1Stage, phase1Result, phase1OpenAIOptions, phase1Request, phase1Response } from "./phase1-trace.mjs";
 
@@ -2168,23 +2169,30 @@ function buildConversationForBrain(
 function isHardRejection(
   message: string
 ) {
-  return (
-    /\b(?:tidak|nggak|gak|ga)\s+(?:tertarik|minat|mau)\b/i.test(
-      message
-    ) ||
-    /\bjangan\s+(?:hubungi|chat|wa|contact)\b/i.test(
-      message
-    ) ||
-    /\bstop\b/i.test(message) ||
-    /\bunsubscribe\b/i.test(message) ||
-    /\bhapus\s+nomor\b/i.test(message) ||
-    /\bdon'?t\s+contact\s+me\b/i.test(
-      message
-    ) ||
-    /\bnot\s+interested\b/i.test(
-      message
-    )
-  );
+  const text = String(message || "").trim().toLowerCase();
+
+  // Respect unambiguous no-contact instructions, regardless of other content.
+  if (
+    /\bjangan\s+(?:hubungi|chat|wa|contact)\b/i.test(text) ||
+    /\b(?:stop|unsubscribe|hapus\s+nomor)\b/i.test(text) ||
+    /\bdon'?t\s+contact\s+me\b/i.test(text) ||
+    /(?:tidak|nggak|gak|ga)\s+mau\s+(?:di)?hubungi\b/i.test(text)
+  ) return true;
+
+  const explicitNoInterest =
+    /\b(?:tidak|nggak|gak|ga|ngga)\s+(?:tertarik|minat|mau)\b/i.test(text) ||
+    /\bnot\s+interested\b/i.test(text);
+  if (!explicitNoInterest) return false;
+
+  // Refusing to PAY now, declining one package, or asking for alternatives
+  // is hesitation/objection, not consent to permanently end all contact.
+  if (
+    /(?:belum|nanti|bulan\s+depan|sekarang|saat\s+ini|dulu|sementara)/i.test(text) ||
+    /(?:mau|tertarik|minat).{0,28}(?:bayar|harga|paket|membership|silver|gold|agent\s+pro|basic|priority|featured|yang\s+ini|segitu)/i.test(text) ||
+    /(?:ada|punya|bagaimana|gimana).{0,28}(?:paket|opsi|alternatif|pilihan|yang\s+lain|lebih\s+murah)/i.test(text)
+  ) return false;
+
+  return true;
 }
 
 function isFeeQuestion(
@@ -2202,6 +2210,8 @@ function isTimingHesitation(
     /(?:nggak|gak|ga|ngga|enggak|tidak)\s+dulu/i.test(
       message
     ) ||
+    /belum\s+(?:mau|bisa|siap)\s+(?:bayar|langganan|membership|paket)/i.test(message) ||
+    /(?:nggak|gak|ga|tidak)\s+mau\s+bayar\s+(?:sekarang|dulu)/i.test(message) ||
     /belum\s+(?:mau|bisa|siap)\s+(?:daftar|join|gabung|ambil)/i.test(
       message
     ) ||
@@ -2565,10 +2575,21 @@ function repairPreciseBrainIntent(
       lower
     );
 
+  /*
+   * A historical mention of paying for another portal is NOT a request to
+   * pay Tetamo. The old single-keyword rule ("bayar") rewrote genuine sales
+   * objections into payment instructions and erased Brain's resolved meaning.
+   * Only explicit CURRENT payment instructions/questions qualify here.
+   */
   const asksPaymentMethod =
     !discussesPropertyTransactionPayment &&
-    /\b(?:bayar(?:nya)?|pembayaran(?:nya)?|payment|cara\s+bayar|cara\s+pembayaran(?:nya)?|metode\s+pembayaran(?:nya)?|qris|transfer|rekening(?:nya)?)\b/i.test(
-      lower
+    (
+      /(?:cara|gimana|gmana|gmn|bagaimana|how|where|where\s+to|metode|method|via|lewat).{0,28}(?:bayar|byr|payment|pembayaran|transfer)/i.test(lower) ||
+      /(?:bayar|byr|payment|pembayaran|transfer).{0,28}(?:gimana|gmana|gmn|bagaimana|caranya|lewat\s+mana|via\s+apa|pakai\s+apa|di\s+mana|dimana|how)/i.test(lower) ||
+      /\b(?:saya|aku|kami)\s+(?:mau|ingin|pengen|akan)\s+(?:bayar|byr|transfer)\b/i.test(lower) ||
+      /(?:kirim|send|minta|boleh).{0,22}(?:link\s+bayar|payment\s+link)/i.test(lower) ||
+      /(?:qris|rekening|payment\s+link|link\s+bayar).{0,18}(?:mana|bisa|boleh|apa|\?)/i.test(lower) ||
+      /(?:bisa|boleh|pakai|pake|via).{0,18}(?:qris|transfer|rekening)/i.test(lower)
     );
 
   if (asksTetamoOfficeOrCompanyFact) {
@@ -2765,6 +2786,70 @@ function repairPreciseBrainIntent(
       "Customer says they already have or use a similar solution and wants to understand whether Tetamo adds distinct value.",
       "What additional value would Tetamo provide if the customer already uses a similar solution?"
     );
+  }
+
+  /*
+   * CURRENT-TURN COMMERCIAL CONCERNS OVERRIDE INCIDENTAL KEYWORDS.
+   * Use the customer's CURRENT statement, never a prior sales objective.
+   * This applies to more than one canned example: bad prior advertising,
+   * self-marketing, duplicate-channel resistance, and price/value concerns.
+   * Explicit requests to pay, account support, and hard opt-outs remain separate.
+   */
+  const historicalPaidPortalFailure =
+    /(?:pernah|dulu|sebelumnya|last\s+time|previously).{0,90}(?:bayar|iklan|portal|advertis|paid).{0,100}(?:nggak|gak|ga|tidak|ngga|belum|tanpa|no|zero|none|without).{0,32}(?:lead|hasil|closing|buyer|pembeli|penyewa|inquiry|enquiry|result)/i.test(lower) ||
+    /(?:bayar|paid).{0,50}(?:portal|iklan|advertis|platform).{0,80}(?:nggak|gak|ga|tidak|ngga|belum|no|without).{0,32}(?:lead|hasil|closing|buyer|result)/i.test(lower) ||
+    /(?<!\w)(?:kapok|trauma|zonk)(?!\w)/i.test(lower) &&
+      !/(?:tidak|nggak|ga|gak)\s+(?:kapok|trauma)/i.test(lower) &&
+      /(?:portal|iklan|advertis|lead|bayar|paid|platform)/i.test(lower);
+  const selfMarketingResistance =
+    /(?:facebook|instagram|fb|ig|sosmed|social\s+media|marketplace).{0,65}(?:gratis|free|sendiri|ngapain|buat\s+apa|tidak\s+perlu|nggak\s+perlu)/i.test(lower) ||
+    /(?:gratis|free|sendiri).{0,65}(?:facebook|instagram|fb|ig|sosmed|social\s+media|marketplace)/i.test(lower);
+  const priceResistance =
+    /(?:mahal|kemahalan|terlalu\s+mahal|pricey|too\s+expensive|keberatan\s+harga)/i.test(lower) &&
+    !/\b(?:mahal\s+(?:nggak|ga|gak|tidak)|is\s+it\s+expensive)\b/i.test(lower);
+  const existingSolutionResistance =
+    /(?:sudah|udah|telah|already).{0,40}(?:pakai|punya|menggunakan|use|have).{0,45}(?:rumah\s*123|99\.?co|propertyguru|lamudi|portal|platform|crm|yang\s+sama|seperti\s+itu)/i.test(lower) &&
+    /(?:ngapain|buat\s+apa|tidak\s+perlu|nggak\s+perlu|gak\s+perlu|untuk\s+apa|why|but|tapi|sudah|udah)/i.test(lower);
+
+  if (!isHardRejection(latest) && !asksPaymentMethod &&
+      !looksLikeHumanActionRequired(latest)) {
+    // MONA_EXPLICIT_GUARANTEE_INTENT_PRIORITY
+    if (
+      /(?:jaminan|garansi|dijamin|menjamin|guarantee|guaranteed)/i.test(lower) &&
+      /(?:lead|closing|hasil|result|terjual|tersewa)/i.test(lower) &&
+      /(?:\?|apakah|adakah|apa\s+ada|bisa|can|does|will)/i.test(lower)
+    ) {
+      applyPreciseMeaning(
+        "guarantee_question", null,
+        "Customer explicitly asks about guaranteed leads or results.",
+        "Does Tetamo guarantee leads or results?"
+      );
+    } else if (historicalPaidPortalFailure) {
+      applyPreciseMeaning(
+        "bad_past_experience", null,
+        "Customer is reluctant after paying another advertising portal without getting leads or results.",
+        null
+      );
+    } else if (selfMarketingResistance) {
+      applyPreciseMeaning(
+        "self_marketing_objection", null,
+        "Customer questions Tetamo's added value compared with their own free social-media advertising.",
+        null
+      );
+    } else if (priceResistance) {
+      applyPreciseMeaning(
+        "price_objection", null,
+        "Customer expresses a concern about the price or value of Tetamo.",
+        null
+      );
+    } else if (existingSolutionResistance &&
+        /(?:ngapain|buat\s+apa|tidak\s+perlu|nggak\s+perlu|gak\s+perlu|untuk\s+apa|why|tapi|but)/i.test(lower)) {
+      applyPreciseMeaning(
+        "existing_solution_objection", null,
+        "Customer questions the additional value of Tetamo while already using another solution.",
+        null
+      );
+    }
   }
 
   if (
@@ -3036,6 +3121,51 @@ function enforceBrainRouting(
   );
 
   /*
+   * MONA_OWNER_PHOTO_READINESS_RESOURCE_GUARD
+   * Waiting for property photos is a listing-readiness delay,
+   * not a request to postpone delivery of a customer resource.
+   * Preserve real resource postponements and timing decisions.
+   */
+  const ownerWaitingForListingPhotos =
+    result.customerType === "owner" &&
+    /\b(?:foto|fotografer|photos?|photographer|pictures?)\b/i.test(latestMessage) &&
+    /\b(?:tunggu|nunggu|menunggu|belum|nanti|wait|waiting|later)\b/i.test(latestMessage) &&
+    !/\b(?:tutorial|panduan|guide|link|tautan|dokumen|file|kirim|send|bagikan|share)\b/i.test(latestMessage);
+
+  if (
+    ownerWaitingForListingPhotos &&
+    result.resourceAction.action === "postpone"
+  ) {
+    result = {
+      ...result,
+      resourceAction: {
+        requested: false,
+        action: "none",
+        resourceId: null,
+      },
+    };
+  }
+
+  // Keep situation and required knowledge aligned with repaired objection intent.
+  if ([
+    "bad_past_experience", "self_marketing_objection", "price_objection",
+    "existing_solution_objection",
+  ].includes(result.intent) &&
+      !isHardRejection(latestMessage)) {
+    result = {
+      ...result,
+      conversationSituation: "objection",
+      understood: true,
+      replyNeeded: true,
+      factualKnowledgeNeeded: true,
+      knowledgeRequest: [
+        `Approved Tetamo facts for the customer's current ${result.intent} concern.`,
+      ],
+      directQuestion: result.directQuestion,
+    };
+  }
+
+  /*
    * ROLE RECOVERY FROM THE CURRENT MESSAGE.
    *
    * A customer does not need to literally say "saya agent" when the current
@@ -3099,6 +3229,7 @@ function enforceBrainRouting(
    */
   if (
     result.customerType === "unknown" &&
+    !isReturningGenericMonaEnquiry(memory, latestMessage, priorClarification.question) &&
     (
       Boolean(result.directQuestion) ||
       result.intent === "payment"
@@ -3300,6 +3431,12 @@ function enforceBrainRouting(
       understood: true,
       conversationSituation:
         "rejection",
+      // A stop-selling / do-not-contact message is not a resource refusal.
+      resourceAction: {
+        requested: false,
+        action: "none",
+        resourceId: null,
+      },
       clarification: {
         needed: false,
         kind: "none",
@@ -3575,6 +3712,36 @@ function enforceBrainRouting(
       };
     }
 
+    // A returning customer with the same generic enquiry days later is
+    // restarting the conversation, not failing a role-clarification test.
+    // Continue from the unanswered question once, without restarting sales.
+    if (
+      sameClarificationAlreadyAsked &&
+      clarificationKind === "role" &&
+      isReturningGenericMonaEnquiry(memory, latestMessage, priorClarification.question)
+    ) {
+      return {
+        ...result,
+        understood: true,
+        replyNeeded: true,
+        clarification: {
+          needed: true,
+          kind: "role",
+          alreadyAttempted: false,
+          attemptCount: 0,
+          goal: "Continue the previously unanswered role question, acknowledging the returning customer.",
+        },
+        handoverRecommended: false,
+        handoverReason: null,
+        salesStrategyNeeded: false,
+        salesStrategist: "none",
+        factualKnowledgeNeeded: false,
+        knowledgeRequest: [],
+        recommendedNextStep:
+          "Welcome the customer back briefly. Continue the previously unanswered Agent/Owner role question without repeating the original welcome or sending a package pitch.",
+      };
+    }
+
     if (sameClarificationAlreadyAsked) {
       return {
         ...result,
@@ -3664,6 +3831,33 @@ function enforceBrainRouting(
   };
 
   result = applyKnownRoleIntentRouting(result);
+
+  // MONA_RETURNING_PACKAGE_RECALL
+  // A question about what was previously discussed is not a feature request.
+  const asksPriorPackageRecall =
+    /(?:masih\s+ingat|ingat\s+(?:nggak|gak|tidak)|do\s+you\s+remember|remember)/i.test(latestMessage) &&
+    /\b(?:paket|package|membership)\b/i.test(latestMessage) &&
+    !/\b(?:fitur(?:nya)?|features?|harga|price|bayar|payment|checkout)\b/i.test(latestMessage) &&
+    memory.messages.some((item) => item.speaker === "Customer" || item.speaker === "Mona");
+
+  if (asksPriorPackageRecall) {
+    result = {
+      ...result,
+      intent: "general_information",
+      intentSubject: null,
+      latestMeaning: "Customer asks Mona to recall the previously discussed package, not to explain its features.",
+      directQuestion: "Which membership package did we previously discuss?",
+      conversationSituation: "information",
+      understood: true,
+      replyNeeded: true,
+      salesStrategyNeeded: false,
+      salesStrategist: "none",
+      factualKnowledgeNeeded: false,
+      knowledgeRequest: [],
+      recommendedNextStep: "Answer briefly using the actual conversation memory. Recall the package and relevant customer context. Do not repeat package features, restart discovery, or assume payment readiness. If the package cannot be established, say so rather than guessing.",
+    };
+  }
+
 
   /*
    * STRATEGIST CONSISTENCY.
