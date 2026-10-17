@@ -1576,8 +1576,8 @@ function FeaturedPropertiesCard({
   function getVerifiedBadgeText() {
     if (property.postedByType === "owner") {
       return lang === "id"
-        ? "Pemilik Terverifikasi"
-        : "Verified Owner";
+        ? "Terverifikasi"
+        : "Verified";
     }
 
     if (property.postedByType === "developer") {
@@ -1841,8 +1841,8 @@ function FeaturedOwnerPropertyCard({
           <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
             ✓{" "}
             {lang === "id"
-              ? "Pemilik Terverifikasi"
-              : "Verified Owner"}
+              ? "Terverifikasi"
+              : "Verified"}
           </div>
         </div>
 

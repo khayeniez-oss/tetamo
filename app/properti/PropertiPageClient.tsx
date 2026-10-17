@@ -859,8 +859,8 @@ function PropertyCard({
           />
 
           {lang === "id"
-            ? "Pemilik Terverifikasi"
-            : "Verified Owner"}
+            ? "Terverifikasi"
+            : "Verified"}
         </span>
       );
     }
