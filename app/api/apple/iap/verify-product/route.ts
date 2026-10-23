@@ -72,11 +72,11 @@ function json(
 
 function asObject(
   value: unknown
-): Record<string, any> {
+): Record<string, unknown> {
   return value &&
     typeof value === "object" &&
     !Array.isArray(value)
-    ? (value as Record<string, any>)
+    ? (value as Record<string, unknown>)
     : {};
 }
 
@@ -192,33 +192,6 @@ function positiveNumber(
     : null;
 }
 
-function extendExpiryIso(
-  currentValue: unknown,
-  durationDays: number
-) {
-  const now =
-    Date.now();
-
-  const currentMs =
-    currentValue
-      ? new Date(
-          String(currentValue)
-        ).getTime()
-      : NaN;
-
-  const base =
-    Number.isFinite(currentMs) &&
-    currentMs > now
-      ? currentMs
-      : now;
-
-  return new Date(
-    base +
-      durationDays *
-        86_400_000
-  ).toISOString();
-}
-
 async function loadVerifiedAppleTransaction(
   transactionId: string
 ) {
@@ -319,7 +292,7 @@ export async function POST(
   }
 
   let body:
-    Record<string, any>;
+    Record<string, unknown>;
 
   try {
     body =
@@ -379,7 +352,7 @@ export async function POST(
       );
 
     const tx =
-      transaction as any;
+      transaction;
 
     const verifiedTransactionId =
       String(
@@ -731,7 +704,7 @@ export async function POST(
           "payment_transactions"
         )
         .select(
-          "id, user_id, metadata"
+          "id, user_id, status, metadata"
         )
         .eq(
           "id",
@@ -758,6 +731,10 @@ export async function POST(
         },
         409
       );
+    }
+
+    if (existingPayment && existingPayment.status !== "paid") {
+      return json({ success: false, message: "Apple payment is no longer paid." }, 409);
     }
 
     const existingMetadata =
@@ -905,8 +882,9 @@ export async function POST(
       new Date()
         .toISOString();
 
-    let productConfig:
-      any = null;
+    let productConfig: {
+      durationDays?: number; priceIdr?: number; name?: string; featuredDurationDays?: number;
+    } | null = null;
 
     let paymentType:
       string;
@@ -1206,6 +1184,7 @@ export async function POST(
           {
             onConflict:
               "id",
+            ignoreDuplicates: true,
           }
         );
 
@@ -1215,185 +1194,26 @@ export async function POST(
       throw paymentUpsertError;
     }
 
-    let updatePayload:
-      Record<string, any> = {
-        updated_at:
-          nowIso,
-    };
-
-    let activationType:
-      string;
-
-    let expiresAt:
-      string | null =
-      null;
-
-    if (
-      mapping.kind ===
-      "owner-package"
-    ) {
-      const featuredDurationDays =
-        positiveNumber(
-          productConfig
-            .featuredDurationDays
-        ) || 0;
-
-      const listingExpiresAt =
-        extendExpiryIso(
-          property
-            .listing_expires_at,
-          durationDays
-        );
-
-      updatePayload = {
-        ...updatePayload,
-        status: "active",
-        verification_status:
-          "pending_verification",
-        verified_ok: false,
-        is_paused: false,
-        posted_date:
-          new Date()
-            .toISOString()
-            .slice(0, 10),
-        plan_id:
-          mapping.productId,
-        listing_expires_at:
-          listingExpiresAt,
-      };
-
-      if (
-        featuredDurationDays >
-        0
-      ) {
-        updatePayload
-          .featured_expires_at =
-          extendExpiryIso(
-            property
-              .featured_expires_at,
-            featuredDurationDays
-          );
-      }
-
-      activationType =
-        "owner-listing";
-
-      expiresAt =
-        listingExpiresAt;
-    } else if (
-      mapping.productId ===
-      "homepage-spotlight"
-    ) {
-      const spotlightExpiresAt =
-        extendExpiryIso(
-          property
-            .spotlight_expires_at,
-          durationDays
-        );
-
-      updatePayload
-        .spotlight_active =
-        true;
-
-      updatePayload
-        .spotlight_expires_at =
-        spotlightExpiresAt;
-
-      activationType =
-        "homepage-spotlight";
-
-      expiresAt =
-        spotlightExpiresAt;
-    } else {
-      const boostExpiresAt =
-        extendExpiryIso(
-          property
-            .boost_expires_at,
-          durationDays
-        );
-
-      updatePayload
-        .boost_active =
-        true;
-
-      updatePayload
-        .boost_expires_at =
-        boostExpiresAt;
-
-      activationType =
-        "boost-listing";
-
-      expiresAt =
-        boostExpiresAt;
-    }
-
-    const {
-      error:
-        propertyUpdateError,
-    } =
-      await admin
-        .from("properties")
-        .update(
-          updatePayload
-        )
-        .eq(
-          "id",
-          property.id
-        )
-        .eq(
-          "user_id",
-          user.id
-        );
-
-    if (
-      propertyUpdateError
-    ) {
-      throw propertyUpdateError;
-    }
-
-    const activation = {
-      done: true,
-      processedAt:
-        new Date()
-          .toISOString(),
-      processedBy:
-        "apple_iap_verify_product",
-      activationType,
-      propertyId:
-        property.id,
-      propertyCode:
-        property.kode ||
-        null,
-      expiresAt,
-    };
-
-    const {
-      error:
-        finalUpdateError,
-    } =
-      await admin
-        .from(
-          "payment_transactions"
-        )
-        .update({
-          metadata: {
-            ...metadata,
-            activation,
-          },
-          updated_at:
-            new Date()
-              .toISOString(),
-        })
-        .eq(
-          "id",
-          paymentId
-        );
-
-    if (
-      finalUpdateError
-    ) {
-      throw finalUpdateError;
-    }
+    // Property activation and receipt completion commit together. A lost
+    // response or concurrent callback cannot grant this purchase twice.
+    const { data: activation, error: activationError } = await admin.rpc(
+      "finalize_apple_product_purchase",
+      {
+        p_payment_id: paymentId,
+        p_user_id: user.id,
+        p_property_id: property.id,
+        p_duration_days: durationDays,
+        p_featured_days: mapping.kind === "owner-package"
+          ? positiveNumber(productConfig.featuredDurationDays) || 0 : 0,
+        p_activation_type: mapping.kind === "owner-package"
+          ? "owner-listing" : mapping.productId === "homepage-spotlight"
+            ? "homepage-spotlight" : "boost-listing",
+      },
+    );
+    if (activationError) throw activationError;
+    if (!activation?.done) throw new Error("Apple purchase activation is incomplete.");
+    const activationType = activation.activationType;
+    const expiresAt = activation.expiresAt;
 
     await markServerIntentConsumed();
 

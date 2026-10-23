@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:billing": "node --test tests/google-play*.test.cjs"
+    "test:billing": "node --test tests/google-play*.test.cjs tests/apple-*.test.cjs"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",
