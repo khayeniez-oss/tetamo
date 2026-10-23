@@ -89,6 +89,7 @@ async function googlePlayGet<T>(
 
   const response = await fetch(url, {
     method: "GET",
+    signal: AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
@@ -97,14 +98,8 @@ async function googlePlayGet<T>(
   });
 
   if (!response.ok) {
-    const responseText =
-      await response.text();
-
     throw new Error(
-      `Google Play API request failed with status ${response.status}: ${responseText.slice(
-        0,
-        500
-      )}`
+      `Google Play API request failed with status ${response.status}`
     );
   }
 
@@ -120,6 +115,7 @@ async function googlePlayPost(
 
   const response = await fetch(url, {
     method: "POST",
+    signal: AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
@@ -133,14 +129,8 @@ async function googlePlayPost(
   });
 
   if (!response.ok) {
-    const responseText =
-      await response.text();
-
     throw new Error(
-      `Google Play API request failed with status ${response.status}: ${responseText.slice(
-        0,
-        500
-      )}`
+      `Google Play API request failed with status ${response.status}`
     );
   }
 }
@@ -228,4 +218,20 @@ export async function consumeGooglePlayOneTimePurchase(
     `${encodeURIComponent(product)}/tokens/${encodeURIComponent(token)}:consume`;
 
   await googlePlayPost(url);
+}
+
+export async function getGooglePlayVoidedPurchases(pageToken?: string) {
+  const url = new URL(
+    `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${TETAMO_PARTNER_ANDROID_PACKAGE}/purchases/voidedpurchases`
+  );
+  // Google limits the API to 30 days. Replay the whole window idempotently so
+  // delayed notifications and missed scheduler runs cannot leave stale payments.
+  url.searchParams.set("startTime", String(Date.now() - 29 * 86_400_000));
+  url.searchParams.set("type", "0");
+  url.searchParams.set("maxResults", "1000");
+  if (pageToken) url.searchParams.set("token", pageToken);
+  return googlePlayGet<{
+    voidedPurchases?: Array<{ purchaseToken?: string; orderId?: string; voidedTimeMillis?: string; voidedReason?: number }>;
+    tokenPagination?: { nextPageToken?: string };
+  }>(url.toString());
 }

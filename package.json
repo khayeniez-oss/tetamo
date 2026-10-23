@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:billing": "node --test tests/google-play*.test.cjs"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",
@@ -35,6 +36,7 @@
     "stripe": "^20.4.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

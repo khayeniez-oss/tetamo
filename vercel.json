@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/google-play",
+      "schedule": "15 1 * * *"
+    },
+    {
       "path": "/api/cron/rupert",
       "schedule": "0 0 * * *"
     },
