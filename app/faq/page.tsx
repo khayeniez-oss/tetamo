@@ -1,4 +1,5 @@
 "use client";
+import Pagination from "@/components/Pagination";
 
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/app/context/LanguageContext";
@@ -565,6 +566,32 @@ export default function FAQPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [saveState, setSaveState] = useState("");
+  const [faqVersion, setFaqVersion] = useState("");
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/thara/faq", { cache: "no-store" }).then(r => {
+      if (!r.ok) throw new Error("FAQ source unavailable");
+      return r.json();
+    }).then(payload => { if (active && Array.isArray(payload.faqs)) { setFaqs(payload.faqs); setFaqVersion(payload.version); } }).catch(() => {
+      if (active) setSaveState("Published FAQ service unavailable; showing website reference content.");
+    });
+    return () => { active = false; };
+  }, []);
+
+  async function publishFaqs() {
+    setSaveState("Saving...");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!faqVersion) throw new Error("Reload the published FAQ source before saving.");
+      if (!session) throw new Error("Please sign in again.");
+      const response = await fetch("/api/thara/faq", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ faqs, version: faqVersion }) });
+      if (!response.ok) throw new Error("Unable to publish. Check administrator access and database setup.");
+      const latest = await fetch("/api/thara/faq", { cache: "no-store" }).then(r => r.json());
+      setFaqVersion(latest.version);
+      setSaveState("Published. Thara will use the updated FAQs on the next request.");
+    } catch (error) { setSaveState(error instanceof Error ? error.message : "Unable to publish."); }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -764,6 +791,10 @@ export default function FAQPage() {
                 {t.heroSubtitle}
               </p>
 
+              {saveState && <p role="status" className="mt-3 text-sm">{saveState}</p>}
+              {isAdmin && (
+                <button type="button" onClick={() => void publishFaqs()} className="mt-3 rounded-full border border-white/30 px-4 py-2 text-sm">Publish FAQ changes</button>
+              )}
               {isAdmin && (
                 <div className="mt-4 flex flex-wrap items-center gap-2.5 sm:mt-5 sm:gap-3">
                   <label className="inline-flex cursor-pointer items-center rounded-full border border-white/25 bg-white/10 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur transition hover:bg-white/15 sm:px-5 sm:py-2.5 sm:text-sm">
@@ -972,44 +1003,7 @@ export default function FAQPage() {
               {filtered.length}
             </p>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-[12px] font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
-              >
-                {t.previous}
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (pageNumber) => (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNumber)}
-                    className={`min-w-[38px] rounded-xl border px-3 py-2 text-[12px] font-semibold transition sm:min-w-[42px] sm:px-4 sm:text-sm ${
-                      currentPage === pageNumber
-                        ? "border-[#1C1C1E] bg-[#1C1C1E] text-white"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    {pageNumber}
-                  </button>
-                )
-              )}
-
-              <button
-                type="button"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-[12px] font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-sm"
-              >
-                {t.next}
-              </button>
-            </div>
+            <Pagination page={currentPage} totalPages={totalPages} onChange={setCurrentPage} lang={lang} />
           </div>
         )}
       </div>

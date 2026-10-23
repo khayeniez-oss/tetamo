@@ -1,4 +1,8 @@
 "use client";
+import Pagination from "@/components/Pagination";
+import { PostedTimestamp } from "@/components/listing/PostedTimestamp";
+
+import { TETAMO_PARTNER_LINKS } from "@/app/data/tetamo-app-links";
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -22,12 +26,15 @@ import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/trackEvent";
+import { PropertyCardFacts, toPropertyCardFacts, type PropertyCardFactsData } from "@/components/listing/PropertyCardFacts";
+import { ListingAvatar } from "@/components/listing/ListingAvatar";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
 
 type RentalType = "daily" | "monthly" | "yearly" | "";
 type SupportedCurrency = "IDR" | "USD" | "AUD";
 
 type Property = {
+  facts: PropertyCardFactsData;
   verifiedListing: boolean;
 
   ownerVerified: boolean;
@@ -54,6 +61,7 @@ type Property = {
 
   kode?: string;
   postedDate?: string;
+  createdAt?: string | null;
   sortDateRaw?: string | null;
 
   title: string;
@@ -118,6 +126,10 @@ type PropertyRow = {
   province: string | null;
   city: string | null;
   area: string | null;
+  bathrooms: number | null;
+  certificate: string | null;
+  land_unit: string | null;
+  ownership_type: string | null;
   building_size: number | null;
   land_size: number | null;
   bedrooms: number | null;
@@ -1442,11 +1454,11 @@ Is this property still available?`;
     <article
   ref={cardRef}
   className={[
-    "group relative overflow-hidden rounded-[28px] border bg-white transition-all duration-500",
+    "group relative overflow-hidden rounded-[20px] border bg-white transition-all duration-500",
     promoTheme.border,
     promoTheme.hoverBorder,
     "shadow-[0_12px_32px_rgba(0,0,0,0.06)]",
-    "hover:-translate-y-2 hover:scale-[1.01] hover:shadow-[0_30px_80px_rgba(0,0,0,0.14)]",
+    "hover:shadow-[0_30px_80px_rgba(0,0,0,0.14)]",
   ].join(" ")}
 >
 
@@ -1497,7 +1509,7 @@ Is this property still available?`;
       {/* =================================
           PROPERTY IMAGE
       ================================= */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-[#F2F0EB]">
+      <div className="relative aspect-[16/10] overflow-hidden bg-[#F2F0EB]">
 
         <Link
           href={getPropertyHref(p)}
@@ -1613,12 +1625,12 @@ Is this property still available?`;
       {/* =================================
     CONTENT
 ================================= */}
-<div className="p-5">
+<div className="p-4">
 
   {/* =================================
       PRICE + QUICK ACTIONS
   ================================= */}
-  <div className="flex items-start justify-between gap-5">
+  <div className="flex items-start justify-between gap-3">
 
     {/* PRICE */}
     <div className="min-w-0">
@@ -1647,11 +1659,11 @@ Is this property still available?`;
         </div>
       ) : (
         <>
-          <p className="text-[22px] font-extrabold leading-none tracking-[-0.035em] text-[#1C1C1E] sm:text-[24px]">
+          <p className="text-[20px] font-bold leading-tight tracking-[-0.035em] text-[#1C1C1E] sm:text-[21px]">
             {displayPrice}
           </p>
 
-          <p className="mt-2 text-xs font-semibold text-gray-400">
+          <p className="mt-1 text-[10px] font-medium text-gray-400">
             ≈ {secondaryPrice}
           </p>
         </>
@@ -1676,7 +1688,7 @@ Is this property still available?`;
             ? "Simpan"
             : "Save"
         }
-        className={`flex h-10 w-10 items-center justify-center rounded-full border transition ${
+        className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${
           saved
             ? "border-[#D8B46A] bg-[#F8F2E5] text-[#B8860B]"
             : "border-gray-200 bg-white text-gray-500 hover:border-[#D8B46A] hover:text-[#B8860B]"
@@ -1707,7 +1719,7 @@ Is this property still available?`;
             ? "Bagikan"
             : "Share"
         }
-        className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:border-[#D8B46A] hover:text-[#B8860B]"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:border-[#D8B46A] hover:text-[#B8860B]"
       >
         <Share2 className="h-4 w-4" />
       </button>
@@ -1718,7 +1730,7 @@ Is this property still available?`;
   {/* =================================
       LOCATION
   ================================= */}
-  <p className="mt-5 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#B8860B]">
+  <p className="mt-3 text-[10px] font-extrabold uppercase tracking-[0.13em] text-[#B8860B]">
     {p.area},{" "}
     {p.province}
   </p>
@@ -1740,7 +1752,7 @@ Is this property still available?`;
     }
     className="mt-2 block"
   >
-    <h3 className="line-clamp-2 min-h-[48px] text-[16px] font-extrabold leading-6 text-[#1C1C1E] transition group-hover:text-[#8D680C]">
+    <h3 className="line-clamp-2 min-h-10 text-[14px] font-semibold leading-5 text-[#1C1C1E] transition group-hover:text-[#8D680C]">
       {displayTitle}
     </h3>
   </Link>
@@ -1748,46 +1760,15 @@ Is this property still available?`;
   {/* =================================
       PROPERTY SPECS
   ================================= */}
-  <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-gray-600">
-
-    <span>
-      {p.size}
-    </span>
-
-    <span className="text-[#D8B46A]">
-      •
-    </span>
-
-    <span>
-      {p.bed.replace(
-        "Kamar",
-        lang === "id"
-          ? "Kamar"
-          : "Bed"
-      )}
-    </span>
-
-    <span className="text-[#D8B46A]">
-      •
-    </span>
-
-    <span>
-      {p.furnished}
-    </span>
-
-  </div>
+  <PropertyCardFacts data={p.facts} lang={lang} />
 
   {/* =================================
       AGENT / OWNER / DEVELOPER PROFILE
   ================================= */}
-  <div className="mt-5 flex items-center gap-3 rounded-[20px] border border-[#EEE9DF] bg-[#F8F6F1] p-3">
+  <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-[#EEE9DF] bg-[#F8F6F1] p-2.5">
 
     {/* PROFILE PHOTO */}
-    <img
-      src={p.agentPhoto}
-      alt={p.agentName}
-      className="h-12 w-12 shrink-0 rounded-full border-2 border-white bg-white object-cover shadow-sm"
-    />
+    <ListingAvatar src={p.agentPhoto} name={p.agentName} />
 
     {/* PROFILE INFO */}
     <div className="min-w-0 flex-1">
@@ -1806,7 +1787,7 @@ Is this property still available?`;
 
       </div>
 
-      <p className="mt-1 truncate text-sm font-extrabold text-[#1C1C1E]">
+      <p className="mt-0.5 truncate text-[12px] font-semibold text-[#1C1C1E]">
         {p.agentName}
       </p>
 
@@ -1837,7 +1818,7 @@ Is this property still available?`;
   {/* =================================
       PROPERTY METADATA
   ================================= */}
-  <div className="mt-5 grid grid-cols-2 gap-3 border-b border-gray-100 pb-5">
+  <div className="mt-3 grid grid-cols-2 gap-2 border-b border-gray-100 pb-3">
 
     {/* PROPERTY CODE */}
     <div>
@@ -1847,7 +1828,7 @@ Is this property still available?`;
           : "Property Code"}
       </p>
 
-      <p className="mt-1.5 text-xs font-extrabold text-[#1C1C1E]">
+      <p className="mt-1 text-[11px] font-semibold text-[#1C1C1E]">
         {p.kode || "-"}
       </p>
     </div>
@@ -1860,8 +1841,8 @@ Is this property still available?`;
           : "Posted Date"}
       </p>
 
-      <p className="mt-1.5 text-xs font-extrabold text-[#1C1C1E]">
-        {p.postedDate || "-"}
+      <p className="mt-1 text-[11px] font-semibold text-[#1C1C1E]">
+        <PostedTimestamp value={p.createdAt} lang={lang} fallback={p.postedDate} />
       </p>
     </div>
 
@@ -1882,7 +1863,7 @@ Is this property still available?`;
         }
       )
     }
-    className="group/button mt-5 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[16px] bg-[#D8B46A] px-5 text-sm font-extrabold text-[#111111] transition hover:bg-[#C59F4F]"
+    className="group/button mt-3 flex min-h-9 w-full items-center justify-center gap-2 rounded-lg bg-[#D8B46A] px-3 text-[12px] font-semibold text-[#111111] transition hover:bg-[#C59F4F]"
   >
     {lang === "id"
       ? "Lihat Properti"
@@ -1896,14 +1877,14 @@ Is this property still available?`;
   {/* =================================
       CONTACT ACTIONS
   ================================= */}
-  <div className="mt-3 grid grid-cols-2 gap-3">
+  <div className="mt-2 grid grid-cols-2 gap-2">
 
     <button
       type="button"
       onClick={() =>
         handleWhatsAppInquiry(p)
       }
-      className="min-h-[45px] rounded-[15px] bg-[#1C1C1E] px-3 text-xs font-extrabold text-white transition hover:bg-black sm:text-[13px]"
+      className="min-h-9 rounded-lg bg-[#1C1C1E] px-3 text-[11px] font-semibold text-white transition hover:bg-black sm:text-[11px]"
     >
       WhatsApp
     </button>
@@ -1913,7 +1894,7 @@ Is this property still available?`;
       onClick={() =>
         handleScheduleViewing(p)
       }
-      className="min-h-[45px] rounded-[15px] border border-gray-200 bg-white px-3 text-xs font-extrabold text-[#1C1C1E] transition hover:border-[#D8B46A] hover:bg-[#F8F6F1] sm:text-[13px]"
+      className="min-h-9 rounded-lg border border-gray-200 bg-white px-3 text-[11px] font-semibold text-[#1C1C1E] transition hover:border-[#D8B46A] hover:bg-[#F8F6F1] sm:text-[11px]"
     >
       {lang === "id"
         ? "Jadwal Viewing"
@@ -1938,10 +1919,10 @@ function MarketplacePromoSidebar() {
     "https://play.google.com/store/apps/details?id=com.tetamo.mobile";
 
   const partnerAppStoreUrl =
-    "https://apps.apple.com/us/app/tetamo-partner/id6804323379";
+    TETAMO_PARTNER_LINKS.ios;
 
   const partnerPlayStoreUrl =
-    "https://play.google.com/store/apps/details?id=com.tetamo.partner";
+    TETAMO_PARTNER_LINKS.android;
 
   const affiliateMessage =
     lang === "id"
@@ -2480,6 +2461,10 @@ export default function PropertiPageClient({
         province,
         city,
         area,
+        bathrooms,
+        certificate,
+        land_unit,
+        ownership_type,
         building_size,
         land_size,
         bedrooms,
@@ -2776,6 +2761,7 @@ export default function PropertiPageClient({
           null;
 
         return {
+          facts: toPropertyCardFacts(row),
           verifiedListing:
             isVerified,
 
@@ -2836,6 +2822,7 @@ export default function PropertiPageClient({
             row.kode ??
             undefined,
 
+          createdAt: row.created_at,
           postedDate:
             formatPostedDate(
               liveDate
@@ -3828,11 +3815,7 @@ export default function PropertiPageClient({
     ===================================== */}
     <div className="mt-7 flex flex-col gap-3 border-t border-[#DED8CC] pt-5 sm:flex-row sm:items-center sm:justify-between">
 
-      <p className="text-xs font-medium text-gray-500 sm:text-sm">
-        {lang === "id"
-          ? `${filtered.length} properti tersedia`
-          : `${filtered.length} properties available`}
-      </p>
+
 
       <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-500 sm:text-xs">
 
@@ -3879,11 +3862,7 @@ export default function PropertiPageClient({
             : "Available Properties"}
         </p>
 
-        <p className="mt-1 text-sm font-semibold text-gray-600">
-          {lang === "id"
-            ? `${filtered.length} properti ditemukan`
-            : `${filtered.length} properties found`}
-        </p>
+
       </div>
 
     </div>
@@ -4021,72 +4000,7 @@ export default function PropertiPageClient({
     {!loading &&
       paged.length > 0 &&
       totalPages > 1 && (
-        <div className="mt-10 flex items-center justify-center gap-3">
-
-          {/* PREVIOUS */}
-          <button
-            type="button"
-            onClick={() =>
-              setPage((current) =>
-                Math.max(
-                  1,
-                  current - 1
-                )
-              )
-            }
-            disabled={page === 1}
-            className="inline-flex min-h-[44px] min-w-[105px] items-center justify-center rounded-full border border-[#DED8CC] bg-white px-4 text-sm font-bold text-[#1C1C1E] transition hover:border-[#B8860B] hover:text-[#B8860B] disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            ←{" "}
-            {lang === "id"
-              ? "Sebelumnya"
-              : "Previous"}
-          </button>
-
-          {/* PAGE NUMBER */}
-          <div className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#F6F3EC] px-5 text-xs font-semibold text-gray-500">
-
-            <span>
-              {lang === "id"
-                ? "Halaman"
-                : "Page"}
-            </span>
-
-            <span className="mx-1.5 font-extrabold text-[#1C1C1E]">
-              {page}
-            </span>
-
-            <span>/</span>
-
-            <span className="ml-1.5 font-extrabold text-[#1C1C1E]">
-              {totalPages}
-            </span>
-
-          </div>
-
-          {/* NEXT */}
-          <button
-            type="button"
-            onClick={() =>
-              setPage((current) =>
-                Math.min(
-                  totalPages,
-                  current + 1
-                )
-              )
-            }
-            disabled={
-              page === totalPages
-            }
-            className="inline-flex min-h-[44px] min-w-[105px] items-center justify-center rounded-full border border-[#DED8CC] bg-white px-4 text-sm font-bold text-[#1C1C1E] transition hover:border-[#B8860B] hover:text-[#B8860B] disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            {lang === "id"
-              ? "Berikutnya"
-              : "Next"}{" "}
-            →
-          </button>
-
-        </div>
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} lang={lang} />
       )}
 
   </section>

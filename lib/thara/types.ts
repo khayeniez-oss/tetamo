@@ -1,0 +1,12 @@
+export type Language = "en" | "id";
+export type Audience = "owner" | "agent" | "agency" | "buyer" | "renter" | "developer" | "unknown";
+export const INTENTS = ["start", "listing", "packages", "payment", "manage", "search", "enquiry", "viewing", "tools", "developer", "support", "faq", "articles", "apps", "commission", "promotion", "unknown"] as const;
+export type Intent = typeof INTENTS[number];
+export type Message = { id: string; sender_type: "user" | "ai" | "admin"; message_text: string; created_at: string; suggested_action?: string | null; conversation_id?: string };
+export type Plan = { audience: Audience; listingCount: number | null; intents: Intent[]; factIds: string[]; packageIds: string[]; details: boolean; clarify: boolean; repeat: boolean; naturalReply?: string };
+export type Fact = { id: string; kind: "faq" | "article" | "product"; title: string; aliases?: string[]; en: string; idText: string; url: string };
+export type Package = { id: string; audience: "owner" | "agent"; name: string; nameEn: string; priceIdr: number; durationDays: number; maxListings: number; features: string[]; featuresEn: string[]; monthlyPriceIdr?: number; monthlyCommitmentMonths?: number };
+export type Knowledge = { version: string; packages: Package[]; facts: Fact[]; partner: { ios: string; android: string }; unavailable: string[] };
+export type Memory = { topicPackageIds?: string[]; confirmedAudience?: Audience; audience: Audience; listingCount: number | null };
+export type Reply = { memory: Memory; text: string; factIds: string[]; knowledgeVersion: string; suggestedAction: "handoff_to_human" | null };
+export type Planner = (question: string, history: Message[], knowledge: Knowledge, language: Language, memory?: Memory) => Promise<Plan>;

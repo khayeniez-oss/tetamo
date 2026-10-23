@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reconcileAppleProductRefund } from "../../../../../lib/apple-product-refunds";
 
 import {
   reconcileAppleAgentSubscriptionNotification,
@@ -139,6 +140,7 @@ export async function POST(
 
   try {
     const result =
+      await reconcileAppleProductRefund({ environment, notification }) ??
       await reconcileAppleAgentSubscriptionNotification(
         {
           environment,

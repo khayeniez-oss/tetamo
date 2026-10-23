@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { createClient } from "@supabase/supabase-js";
 import PropertiPageClient from "./PropertiPageClient";
+import { toPropertyCardFacts, type PropertyCardFactsData } from "@/components/listing/PropertyCardFacts";
 import { getSEOBySlug, getSiteUrl } from "@/lib/seo-server";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 type RentalType = "daily" | "monthly" | "yearly" | "";
 
 type Property = {
+  facts: PropertyCardFactsData;
   verifiedListing: boolean;
 
   ownerVerified: boolean;
@@ -31,6 +33,7 @@ type Property = {
   propertyType: string;
   kode?: string;
   postedDate?: string;
+  createdAt?: string | null;
   sortDateRaw?: string | null;
 
   title: string;
@@ -86,6 +89,10 @@ type PropertyRow = {
   province: string | null;
   city: string | null;
   area: string | null;
+  bathrooms: number | null;
+  certificate: string | null;
+  land_unit: string | null;
+  ownership_type: string | null;
   building_size: number | null;
   land_size: number | null;
   bedrooms: number | null;
@@ -236,6 +243,10 @@ async function getInitialProperties(): Promise<Property[]> {
       province,
       city,
       area,
+      bathrooms,
+      certificate,
+      land_unit,
+      ownership_type,
       building_size,
       land_size,
       bedrooms,
@@ -357,6 +368,7 @@ async function getInitialProperties(): Promise<Property[]> {
     const liveDate = row.posted_date || row.created_at || null;
 
     return {
+      facts: toPropertyCardFacts(row),
       verifiedListing: isVerified,
 
       ownerVerified: postedByType === "owner" && isVerified,
@@ -383,6 +395,7 @@ async function getInitialProperties(): Promise<Property[]> {
       rentalType: normalizeRentalType(row.rental_type),
       propertyType: row.property_type || "",
       kode: row.kode ?? undefined,
+      createdAt: row.created_at,
       postedDate: formatPostedDate(liveDate),
       sortDateRaw: liveDate,
 
