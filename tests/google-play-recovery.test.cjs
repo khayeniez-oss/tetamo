@@ -59,7 +59,7 @@ async function fixture() {
       customer_name text,customer_email text,customer_phone text,checkout_url text,paid_at timestamptz,metadata jsonb,
       created_at timestamptz,updated_at timestamptz);
   `);
-  await db.exec(fs.readFileSync('supabase/migrations/20261023012543_google_play_product_recovery.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/20261023015804_google_play_product_recovery.sql','utf8'));
   await db.query(`insert into public.google_play_purchase_intents(id,user_id,property_id,product_id,google_product_id,obfuscated_account_id) values ($1,$2,$3,'basic','tetamo_owner_basic',$4)`,[INTENT,USER,PROPERTY,ACCOUNT]);
   await db.query(`insert into public.properties(id,user_id,kode,status) values ($1,$2,'TEST','draft')`,[PROPERTY,USER]);
   const admin={ from: table=>new Query(db,table), rpc: async(name,args)=> {

@@ -5,7 +5,7 @@ already issued by Google. Existing subscription billing remains unchanged.
 
 ## Release order
 
-1. Apply `supabase/migrations/20261023012543_google_play_product_recovery.sql` to
+1. Apply `supabase/migrations/20261023015804_google_play_product_recovery.sql` to
    the Tetamo project. The new queue and both functions are service-role only.
 2. Deploy the backend, preserving any production-only changes outside GitHub.
    Keep the existing `CRON_SECRET` configured. The new daily cron is compatible
