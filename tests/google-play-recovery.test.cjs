@@ -20,6 +20,13 @@ class Query {
   single() { this.one=true; return this; }
   async then(resolve,reject) {
     try {
+      if (this.op==='update' && this.table==='payment_transactions') {
+        const metadata=this.value?.metadata;
+        if ((metadata?.activation?.done && !metadata?.google_finalized_at && this.db.failActivationOnce) || (metadata?.google_finalized_at && this.db.failFinalizationOnce)) {
+          this.db.failActivationOnce=false; this.db.failFinalizationOnce=false;
+          throw Error('simulated database interruption');
+        }
+      }
       const params=[...this.params];
       const bind=(v)=> { params.push(v && typeof v==='object' ? JSON.stringify(v) : v); return `$${params.length}`; };
       const where=this.filters.length ? ` where ${this.filters.join(' and ')}` : '';
@@ -69,23 +76,23 @@ async function fixture() {
       return {data: rows,error:null};
     } catch(error) { return {data:null,error}; }
   }};
-  let consumed=false,failConsume=false,consumeCalls=0;
+  let consumed=false,failConsume=false,failVerify=false,consumeCalls=0;
   let purchaseState='PURCHASED';
   const load=makeLoader({
     'server-only':{},
     './google-play-server': {
       getGooglePlayObfuscatedAccountId:()=>ACCOUNT,
-      getGooglePlayOneTimePurchase:async()=>({
+      getGooglePlayOneTimePurchase:async()=>{ if(failVerify)throw Error('simulated verification outage'); return ({
         purchaseStateContext:{purchaseState},
         productLineItem:[{productId:'tetamo_owner_basic',productOfferDetails:{consumptionState:consumed?'CONSUMPTION_STATE_CONSUMED':'CONSUMPTION_STATE_YET_TO_BE_CONSUMED'}}],
         obfuscatedExternalAccountId:ACCOUNT,obfuscatedExternalProfileId:INTENT,
         orderId:'GPA.TEST',purchaseCompletionTime:'2026-10-23T01:00:00Z',
-      }),
+      }); },
       consumeGooglePlayOneTimePurchase:async()=> { consumeCalls++; if(failConsume) throw Error('simulated Google outage'); consumed=true; },
     },
     '../app/data/pricelist': {getOwnerPackageById:()=>({durationDays:365,priceIdr:49000,name:'Basic'}),getAddOnProductById:()=>null},
   });
-  return {db,admin,jobs:load('lib/google-play-jobs.ts'),setFail:v=>{failConsume=v;},setState:v=>{purchaseState=v;},calls:()=>consumeCalls};
+  return {db,admin,jobs:load('lib/google-play-jobs.ts'),setFail:v=>{failConsume=v;},setVerifyFail:v=>{failVerify=v;},setState:v=>{purchaseState=v;},calls:()=>consumeCalls};
 }
 async function enqueue(f, input={}) {
   return f.jobs.enqueueGoogleProduct(f.admin,USER,{purchaseToken:TOKEN,intentId:INTENT,productId:'basic',googleProductId:'tetamo_owner_basic',...input});
@@ -188,5 +195,41 @@ test('raw tokens and lease/refund functions are inaccessible to client roles',as
     await assert.rejects(()=>f.db.query('select * from google_play_product_jobs'));
     await assert.rejects(()=>f.db.query('select * from claim_google_play_product_job($1,$2)',['a'.repeat(64),crypto.randomUUID()]));
     await assert.rejects(()=>f.db.query('select reconcile_google_play_product_refund($1,$2)',[PROPERTY,{}]));
+  } finally {await f.db.close();}
+});
+
+
+test('verification outage before payment recording is durably retried',async()=>{
+  const f=await fixture();
+  try {
+    f.setVerifyFail(true); const job=await enqueue(f);
+    assert.equal((await f.jobs.runGoogleProductJob(f.admin,job.token_hash)).status,500);
+    assert.equal((await f.db.query('select count(*)::int as count from payment_transactions')).rows[0].count,0);
+    assert.equal((await f.db.query('select state from google_play_product_jobs')).rows[0].state,'pending');
+    f.setVerifyFail(false); await makeDue(f);
+    assert.equal((await f.jobs.runGoogleProductJob(f.admin,job.token_hash)).status,200);
+  } finally {await f.db.close();}
+});
+
+test('interruption between listing activation and its receipt does not extend twice',async()=>{
+  const f=await fixture();
+  try {
+    const job=await enqueue(f); f.db.failActivationOnce=true;
+    assert.equal((await f.jobs.runGoogleProductJob(f.admin,job.token_hash)).status,500);
+    const expiry=(await f.db.query('select listing_expires_at from properties')).rows[0].listing_expires_at;
+    await makeDue(f);
+    assert.equal((await f.jobs.runGoogleProductJob(f.admin,job.token_hash)).status,200);
+    assert.equal(+new Date((await f.db.query('select listing_expires_at from properties')).rows[0].listing_expires_at),+new Date(expiry));
+  } finally {await f.db.close();}
+});
+
+test('Google consumption succeeds but lost database confirmation is recovered without consuming again',async()=>{
+  const f=await fixture();
+  try {
+    const job=await enqueue(f); f.db.failFinalizationOnce=true;
+    assert.equal((await f.jobs.runGoogleProductJob(f.admin,job.token_hash)).status,500);
+    assert.equal(f.calls(),1); await makeDue(f);
+    assert.equal((await f.jobs.runGoogleProductJob(f.admin,job.token_hash)).status,200);
+    assert.equal(f.calls(),1);
   } finally {await f.db.close();}
 });
