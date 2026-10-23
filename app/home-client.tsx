@@ -1,4 +1,7 @@
 "use client";
+import { PostedTimestamp } from "@/components/listing/PostedTimestamp";
+
+import { TETAMO_PARTNER_LINKS } from "@/app/data/tetamo-app-links";
 
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
@@ -18,12 +21,17 @@ import { useLanguage } from "@/app/context/LanguageContext";
 import { useCurrency } from "@/app/context/CurrencyContext";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/lib/trackEvent";
+import { PropertyCardFacts, toPropertyCardFacts, type PropertyCardFactsData } from "@/components/listing/PropertyCardFacts";
+import { ListingAvatar } from "@/components/listing/ListingAvatar";
+import { fetchListingPhotos } from "@/lib/listing-photos";
 
 /* =========================
    MANUAL HOMEPAGE PICKS
 ========================= */
 
 const FEATURED_PROPERTY_CODES = ["TTM0-E2", "TTM0 -RTLO", "TTM013"];
+
+const FEATURED_OWNER_CODES = ["TTMO-HVBU", "TTMO-8GHT", "TTM03"];
 
 const FEATURED_AGENT_NAMES = [
   "Aprianadh",
@@ -38,10 +46,10 @@ const TETAMO_PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.tetamo.mobile";
 
 const TETAMO_PARTNER_APP_STORE_URL =
-  "https://apps.apple.com/us/app/tetamo-partner/id6804323379";
+  TETAMO_PARTNER_LINKS.ios;
 
 const TETAMO_PARTNER_PLAY_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.tetamo.partner";
+  TETAMO_PARTNER_LINKS.android;
 
 /* =========================
    TYPES
@@ -59,11 +67,16 @@ type HomepagePropertyRow = {
   posted_date: string | null;
   created_at: string | null;
   title: string | null;
+  title_id: string | null;
   view_count: number | null;
   price: number | null;
   province: string | null;
   city: string | null;
   area: string | null;
+  bathrooms: number | null;
+  certificate: string | null;
+  land_unit: string | null;
+  ownership_type: string | null;
   building_size: number | null;
   land_size: number | null;
   bedrooms: number | null;
@@ -108,6 +121,8 @@ type HomepageProfileRow = {
 };
 
 type FeaturedProperty = {
+  facts: PropertyCardFactsData;
+  posterPhoto?: string;
   id: string;
   title: string;
   viewCount: number;
@@ -127,10 +142,13 @@ agency: string;
   receiverRole: string;
   kode?: string;
   postedDate?: string;
+  postedRaw?: string | null;
   verifiedListing: boolean;
 };
 
 type FeaturedOwnerProperty = {
+  facts: PropertyCardFactsData;
+  posterPhoto?: string;
   id: string;
   title: string;
   viewCount: number;
@@ -148,6 +166,7 @@ type FeaturedOwnerProperty = {
   garage: string;
   kode?: string;
   postedDate?: string;
+  postedRaw?: string | null;
   ownerApproved: boolean;
 };
 
@@ -328,7 +347,7 @@ function isListingPublic(
     "status" | "is_paused" | "listing_expires_at" | "transaction_status"
   >
 ) {
-  if (row.status === "rejected") return false;
+  if (row.status !== "active") return false;
   if (row.is_paused) return false;
 
   if (normalizeTransactionStatus(row.transaction_status) !== "available") {
@@ -619,7 +638,24 @@ Is this property still available?`;
    DATA
 ========================= */
 
-async function fetchHomepageProperties() {
+let homepagePropertiesInFlight:
+  Promise<HomepagePropertyRow[]> | null = null;
+
+function fetchHomepageProperties():
+  Promise<HomepagePropertyRow[]> {
+  if (!homepagePropertiesInFlight) {
+    homepagePropertiesInFlight =
+      loadHomepagePropertiesFromSupabase()
+        .finally(() => {
+          homepagePropertiesInFlight = null;
+        });
+  }
+
+  return homepagePropertiesInFlight;
+}
+
+async function loadHomepagePropertiesFromSupabase() {
+
   const { data, error } = await supabase
     .from("properties")
     .select(`
@@ -628,11 +664,16 @@ async function fetchHomepageProperties() {
       posted_date,
       created_at,
       title,
+      title_id,
       view_count,
       price,
       province,
       city,
       area,
+      bathrooms,
+      certificate,
+      land_unit,
+      ownership_type,
       building_size,
       land_size,
       bedrooms,
@@ -672,49 +713,6 @@ async function fetchHomepageProperties() {
   return (data ?? []) as HomepagePropertyRow[];
 }
 
-async function fetchHomepageProfilesByIds(ids: string[]) {
-  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
-
-  if (uniqueIds.length === 0) {
-    return new Map<string, HomepageProfileRow>();
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(`
-        id,
-        full_name,
-        photo_url,
-        address,
-        agency,
-        phone,
-        role,
-        instagram_url,
-        facebook_url,
-        tiktok_url,
-        linkedin_url
-      `)
-      .in("id", uniqueIds);
-
-    if (error) {
-      console.error("Failed to load homepage profile fallback:", error);
-      return new Map<string, HomepageProfileRow>();
-    }
-
-    return new Map(
-      ((data ?? []) as HomepageProfileRow[]).map((profile) => [
-        profile.id,
-        profile,
-      ])
-    );
-  } catch (error) {
-    console.error("Failed to load homepage profile fallback:", error);
-    return new Map<string, HomepageProfileRow>();
-  }
-}
-
-
 function normalizeProfileName(value?: string | null) {
   return String(value || "")
     .replace(/\s+/g, " ")
@@ -723,37 +721,27 @@ function normalizeProfileName(value?: string | null) {
 }
 
 async function fetchHomepageProfilesByFeaturedNames(names: string[]) {
-  const requestedNames = names.filter(Boolean);
-
-  if (requestedNames.length === 0) {
-    return [];
-  }
+  if (names.length === 0) return [];
 
   try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(`
-        id,
-        full_name,
-        photo_url,
-        address,
-        agency,
-        phone,
-        role,
-        instagram_url,
-        facebook_url,
-        tiktok_url,
-        linkedin_url
-      `);
+    const response = await fetch("/api/public/featured-agents", {
+      cache: "no-store",
+    });
 
-    if (error) {
-      console.error("Failed to load manual featured agents:", error);
-      return [];
+    if (!response.ok) {
+      throw new Error(
+        `Featured agent endpoint returned HTTP ${response.status}`
+      );
     }
 
-    const rows = (data ?? []) as HomepageProfileRow[];
+    const payload: { agents?: HomepageProfileRow[] } =
+      await response.json();
 
-    return requestedNames
+    const rows = Array.isArray(payload.agents)
+      ? payload.agents
+      : [];
+
+    return names
       .map((name) =>
         rows.find(
           (profile) =>
@@ -761,7 +749,10 @@ async function fetchHomepageProfilesByFeaturedNames(names: string[]) {
             normalizeProfileName(name)
         )
       )
-      .filter((profile): profile is HomepageProfileRow => Boolean(profile));
+      .filter(
+        (profile): profile is HomepageProfileRow =>
+          Boolean(profile)
+      );
   } catch (error) {
     console.error("Failed to load manual featured agents:", error);
     return [];
@@ -901,10 +892,12 @@ function PropertyEngagementBar({
   propertyId,
   propertyTitle,
   propertyProvince,
+  compact = false,
 }: {
   propertyId: string;
   propertyTitle: string;
   propertyProvince: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const { lang } = useLanguage();
@@ -1247,6 +1240,11 @@ function PropertyEngagementBar({
     }
   }
 
+  if (compact) return <div className="flex shrink-0 items-center gap-1.5">
+    <button type="button" onClick={toggleSave} aria-label={lang === "id" ? "Simpan properti" : "Save property"} aria-pressed={saved} title={lang === "id" ? "Simpan properti" : "Save property"} className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${saved ? "border-[#CCAD65] bg-[#F7F0DF] text-[#99701E]" : "border-[#E8E4DA] text-[#827C70] hover:border-[#C5A567]"}`}><Bookmark className="h-3.5 w-3.5" fill={saved ? "currentColor" : "none"} /></button>
+    <button type="button" onClick={handleShare} aria-label={lang === "id" ? "Bagikan properti" : "Share property"} title={lang === "id" ? "Bagikan properti" : "Share property"} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E8E4DA] text-[#827C70] transition hover:border-[#C5A567]"><Share2 className="h-3.5 w-3.5" /></button>
+  </div>;
+
   return (
     <>
       <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
@@ -1329,6 +1327,7 @@ function ScheduleViewingButton({
   receiverId,
   receiverName,
   receiverRole,
+  compact = false,
 }: {
   propertyId: string;
   propertyTitle: string;
@@ -1336,6 +1335,7 @@ function ScheduleViewingButton({
   receiverId: string;
   receiverName: string;
   receiverRole: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const { lang } = useLanguage();
@@ -1426,9 +1426,9 @@ function ScheduleViewingButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-3 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"
+        className={compact ? "min-h-9 w-full rounded-lg bg-[#D8B46A] px-2 text-[11px] font-semibold text-[#292319] transition hover:bg-[#C7A04E]" : "mt-3 w-full rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90"}
       >
-        {lang === "id" ? "Schedule Viewing" : "Schedule Viewing"}
+        {lang === "id" ? "Jadwal Viewing" : "Schedule Viewing"}
       </button>
 
       {open && (
@@ -1528,479 +1528,57 @@ function ScheduleViewingButton({
    CARDS
 ========================= */
 
-function FeaturedPropertiesCard({
-  property,
-}: {
-  property: FeaturedProperty;
-}) {
+function FeaturedPropertiesCard({ property }: { property: FeaturedProperty }) {
   const [imgIndex, setImgIndex] = useState(0);
   const { lang } = useLanguage();
-
-  const next = () =>
-    setImgIndex((prev) =>
-      prev === property.images.length - 1 ? 0 : prev + 1
-    );
-
-  const prev = () =>
-    setImgIndex((prev) =>
-      prev === 0 ? property.images.length - 1 : prev - 1
-    );
-
-  const whatsappHref = property.whatsapp
-    ? `https://wa.me/${property.whatsapp}`
-    : "#";
-
-  async function handleHomepageWhatsappClick(
-    event: MouseEvent<HTMLAnchorElement>
-  ) {
+  const posterLabel = property.postedByType === "owner" ? (lang === "id" ? "Pemilik" : "Owner") : property.postedByType === "developer" ? "Developer" : (lang === "id" ? "Agen" : "Agent");
+  async function handleWhatsapp(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
-
     if (!property.whatsapp) return;
-
-    await createHomepageWhatsappLeadAndOpen({
-      propertyId: property.id,
-      propertyTitle: property.title,
-      propertyCode: property.kode || null,
-      receiverWhatsapp: property.whatsapp,
-      receiverId: property.receiverId,
-      receiverName: property.receiverName,
-      receiverRole:
-        property.receiverRole || property.postedByType || "owner",
-      price: property.price,
-      location: property.province,
-      lang,
-      source: "homepage_featured_property_whatsapp",
-    });
+    await createHomepageWhatsappLeadAndOpen({ propertyId: property.id, propertyTitle: property.title, propertyCode: property.kode || null, receiverWhatsapp: property.whatsapp, receiverId: property.receiverId, receiverName: property.receiverName, receiverRole: property.receiverRole || property.postedByType, price: property.price, location: property.province, lang, source: property.postedByType === "owner" ? "homepage_featured_owner_whatsapp" : "homepage_featured_property_whatsapp" });
   }
-
-  function getVerifiedBadgeText() {
-    if (property.postedByType === "owner") {
-      return lang === "id"
-        ? "Terverifikasi"
-        : "Verified";
-    }
-
-    if (property.postedByType === "developer") {
-      return lang === "id"
-        ? "Developer Terverifikasi"
-        : "Verified Developer";
-    }
-
-    return lang === "id"
-      ? "Agen Terverifikasi"
-      : "Verified Agent";
-  }
-
-  function getPosterLabel() {
-    if (property.postedByType === "owner") {
-      return lang === "id" ? "PEMILIK" : "OWNER";
-    }
-
-    if (property.postedByType === "developer") {
-      return "DEVELOPER";
-    }
-
-    return lang === "id" ? "AGEN" : "AGENT";
-  }
-
-  return (
-    <article className="group overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white shadow-[0_16px_45px_rgba(0,0,0,0.07)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.14)]">
-
-      {/* PROPERTY IMAGE */}
-      <div className="relative overflow-hidden">
-        <Link href={`/properti/${property.id}`} className="block">
-          <img
-            src={property.images[imgIndex]}
-            alt={property.title}
-            className="h-[315px] w-full object-cover transition duration-700 group-hover:scale-[1.035] sm:h-[330px]"
-          />
-        </Link>
-
-        {/* Stronger premium gradient */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/10" />
-
-        {/* Verified badge */}
-        <div className="absolute left-4 top-4">
-          <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] font-bold text-white shadow-lg backdrop-blur-md">
-            ✓ {getVerifiedBadgeText()}
-          </div>
-        </div>
-
-        {/* Tetamo */}
-        <div className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#1C1C1E] shadow-sm backdrop-blur">
-          TETAMO
-        </div>
-
-        {/* Navigation */}
-        {property.images.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={prev}
-              aria-label="Previous image"
-              className="absolute left-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
-            >
-              ‹
-            </button>
-
-            <button
-              type="button"
-              onClick={next}
-              aria-label="Next image"
-              className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
-            >
-              ›
-            </button>
-          </>
-        )}
-
-        {/* PRICE ON IMAGE */}
-        <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 sm:px-6">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/65">
-                {lang === "id" ? "Harga Properti" : "Property Price"}
-              </p>
-
-              <p className="mt-1 text-[24px] font-extrabold tracking-[-0.035em] text-white drop-shadow sm:text-[27px]">
-                {property.price}
-              </p>
-            </div>
-
-            {property.images.length > 1 && (
-              <div className="shrink-0 rounded-full border border-white/20 bg-black/40 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
-                {imgIndex + 1} / {property.images.length}
-              </div>
-            )}
-          </div>
+  return <article data-property-card={property.postedByType} className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] border border-[#E7E2D8] bg-white shadow-[0_4px_18px_rgba(0,0,0,0.04)] transition duration-200 hover:shadow-[0_10px_28px_rgba(0,0,0,0.08)]">
+    <div className="relative aspect-[16/10] overflow-hidden bg-[#EDEAE3]">
+      <Link href={`/properti/${property.id}`} className="block h-full"><img src={property.images[imgIndex]} alt={property.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]" /></Link>
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/10" />
+      {property.verifiedListing && <span className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">✓ {lang === "id" ? "Listing Terverifikasi" : "Verified Listing"}</span>}
+      <span className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[9px] font-bold tracking-[0.12em] text-[#292723]">TETAMO</span>
+      {property.images.length > 1 && <>
+        <button type="button" onClick={() => setImgIndex(i => (i - 1 + property.images.length) % property.images.length)} aria-label={lang === "id" ? "Foto sebelumnya" : "Previous image"} className="absolute left-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/35 text-xl text-white hover:bg-black/60">‹</button>
+        <button type="button" onClick={() => setImgIndex(i => (i + 1) % property.images.length)} aria-label={lang === "id" ? "Foto berikutnya" : "Next image"} className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/35 text-xl text-white hover:bg-black/60">›</button>
+      </>}
+      <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2 text-white">
+        <p className="text-[22px] font-bold leading-tight tracking-tight">{property.price}</p>
+        {property.images.length > 1 && <span className="shrink-0 rounded-full bg-black/45 px-2 py-1 text-[10px]">{imgIndex + 1}/{property.images.length}</span>}
+      </div>
+    </div>
+    <div className="flex flex-1 flex-col p-4">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-[#807B71]">
+        <span className="truncate font-medium tracking-wide">{property.kode}</span><span className="shrink-0 text-right"><PostedTimestamp value={property.postedRaw} lang={lang} fallback={property.postedDate} /></span>
+      </div>
+      <Link href={`/properti/${property.id}`} className="mt-2 block"><h3 title={property.title} className="line-clamp-2 min-h-10 text-[14px] font-semibold leading-5 tracking-[-0.01em] text-[#24231F] hover:text-[#9B761F]">{property.title}</h3></Link>
+      <p className="mt-1.5 flex items-center gap-1.5 truncate text-[12px] text-[#817D74]"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#B18B3F]" />{property.province}</p>
+      <PropertyCardFacts data={property.facts} lang={lang} />
+      <div className="mt-3 flex items-center gap-2.5 border-t border-[#F0EDE6] pt-3">
+        <ListingAvatar src={property.posterPhoto} name={property.posterName} />
+        <div className="min-w-0 flex-1"><p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#A3813A]">{posterLabel}</p><p className="truncate text-[12px] font-semibold leading-5 text-[#302E29]">{property.posterName}</p>{property.agency && <p className="truncate text-[10px] text-[#8B867D]">{property.agency}</p>}</div>
+        <PropertyEngagementBar compact propertyId={property.id} propertyTitle={property.title} propertyProvince={property.province} />
+      </div>
+      <div className="mt-auto pt-3">
+        <Link href={`/properti/${property.id}`} className="mb-2 flex items-center justify-between text-[11px] font-semibold text-[#987222]">{lang === "id" ? "Lihat properti" : "View property"}<span aria-hidden="true">↗</span></Link>
+        <div className="grid grid-cols-2 gap-2">
+          <a href={property.whatsapp ? `https://wa.me/${property.whatsapp}` : "#"} onClick={handleWhatsapp} target="_blank" rel="noreferrer" aria-disabled={!property.whatsapp} className={`flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D8E7DD] bg-[#F2F8F4] text-[11px] font-semibold text-[#285C3B] transition hover:bg-[#E6F2E9] ${!property.whatsapp ? "pointer-events-none opacity-40" : ""}`}><MessageCircle className="h-3.5 w-3.5" />WhatsApp</a>
+          <ScheduleViewingButton compact propertyId={property.id} propertyTitle={property.title} propertyCode={property.kode} receiverId={property.receiverId} receiverName={property.receiverName} receiverRole={property.receiverRole} />
         </div>
       </div>
-
-      {/* COMPACT CONTENT */}
-      <div className="p-5 sm:p-6">
-
-        {/* Title */}
-        <Link href={`/properti/${property.id}`}>
-          <h3 className="line-clamp-2 text-[16px] font-extrabold leading-[1.45] tracking-[-0.015em] text-[#1C1C1E] transition hover:text-[#B8860B] sm:text-[17px]">
-            {property.title}
-          </h3>
-        </Link>
-
-        {/* Location */}
-        <p className="mt-2 text-sm font-medium text-gray-500">
-          📍 {property.province}
-        </p>
-
-        {/* SPECS - NO PILLS */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-gray-600">
-          <span>{property.size}</span>
-
-          <span className="text-[#C8A44D]">•</span>
-
-          <span>{translateBed(property.bed, lang)}</span>
-
-          <span className="text-[#C8A44D]">•</span>
-
-          <span>
-            {translateFurnishing(property.furnishing, lang)}
-          </span>
-        </div>
-
-        {/* AGENT / AGENCY PANEL */}
-        <div className="mt-5 rounded-[18px] border border-[#EDE6D8] bg-[#FAF8F3] px-4 py-3.5">
-          <div className="flex items-center justify-between gap-4">
-
-            <div className="min-w-0">
-              <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
-                {getPosterLabel()}
-              </p>
-
-              <p className="mt-1 truncate text-sm font-extrabold text-[#1C1C1E]">
-                {property.posterName}
-              </p>
-
-              {property.agency && (
-                <p className="mt-0.5 truncate text-[12px] font-medium text-gray-500">
-                  {property.agency}
-                </p>
-              )}
-            </div>
-
-            {property.kode && (
-              <div className="shrink-0 rounded-full border border-[#DDD5C8] bg-white px-3 py-1.5 text-[9px] font-bold tracking-wide text-gray-500">
-                {property.kode}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* CTA HIERARCHY */}
-        <div className="mt-5 grid grid-cols-[1.35fr_0.85fr] gap-3">
-
-          {/* MAIN CTA */}
-          <Link
-            href={`/properti/${property.id}`}
-            className="flex min-h-[50px] items-center justify-center rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(184,134,11,0.20)] transition hover:bg-[#9C7208]"
-          >
-            {lang === "id"
-              ? "Lihat Properti →"
-              : "View Property →"}
-          </Link>
-
-          {/* SECONDARY CTA */}
-          <a
-            href={whatsappHref}
-            onClick={handleHomepageWhatsappClick}
-            target="_blank"
-            rel="noreferrer"
-            className={`flex min-h-[50px] items-center justify-center rounded-2xl px-3 py-3 text-center text-sm font-bold transition ${
-              property.whatsapp
-                ? "bg-[#1C1C1E] text-white hover:bg-black"
-                : "pointer-events-none bg-gray-200 text-gray-400"
-            }`}
-          >
-            WhatsApp
-          </a>
-        </div>
-
-        {/* Viewing */}
-        <ScheduleViewingButton
-          propertyId={property.id}
-          propertyTitle={property.title}
-          propertyCode={property.kode}
-          receiverId={property.receiverId}
-          receiverName={property.receiverName}
-          receiverRole={property.receiverRole}
-        />
-      </div>
-    </article>
-  );
+    </div>
+  </article>;
 }
 
-function FeaturedOwnerPropertyCard({
-  property,
-}: {
-  property: FeaturedOwnerProperty;
-}) {
-  const [imgIndex, setImgIndex] = useState(0);
-  const { lang } = useLanguage();
-
-  const next = () =>
-    setImgIndex((prev) =>
-      prev === property.images.length - 1 ? 0 : prev + 1
-    );
-
-  const prev = () =>
-    setImgIndex((prev) =>
-      prev === 0 ? property.images.length - 1 : prev - 1
-    );
-
-  const whatsappHref = property.ownerWhatsapp
-    ? `https://wa.me/${property.ownerWhatsapp}`
-    : "#";
-
-  async function handleHomepageOwnerWhatsappClick(
-    event: MouseEvent<HTMLAnchorElement>
-  ) {
-    event.preventDefault();
-
-    if (!property.ownerWhatsapp) return;
-
-    await createHomepageWhatsappLeadAndOpen({
-      propertyId: property.id,
-      propertyTitle: property.title,
-      propertyCode: property.kode || null,
-      receiverWhatsapp: property.ownerWhatsapp,
-      receiverId: property.receiverId,
-      receiverName: property.receiverName,
-      receiverRole: property.receiverRole || "owner",
-      price: property.price,
-      location: property.province,
-      lang,
-      source: "homepage_featured_owner_whatsapp",
-    });
-  }
-
-  return (
-    <article className="group overflow-hidden rounded-[30px] border border-[#E8E2D7] bg-white shadow-[0_14px_45px_rgba(0,0,0,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.13)]">
-
-      {/* PROPERTY IMAGE */}
-      <div className="relative overflow-hidden">
-        <Link href={`/properti/${property.id}`} className="block">
-          <img
-            src={property.images[imgIndex]}
-            alt={property.title}
-            className="h-[315px] w-full object-cover transition duration-700 group-hover:scale-[1.035] sm:h-[330px]"
-          />
-        </Link>
-
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/10" />
-
-        {/* OWNER VERIFIED */}
-        <div className="absolute left-4 top-4">
-          <div className="rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur-md">
-            ✓{" "}
-            {lang === "id"
-              ? "Terverifikasi"
-              : "Verified"}
-          </div>
-        </div>
-
-        {/* DIRECT OWNER BADGE */}
-        <div className="absolute right-4 top-4 rounded-full bg-[#D8B46A] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#111111]">
-          {lang === "id"
-            ? "Langsung Pemilik"
-            : "Direct Owner"}
-        </div>
-
-        {/* IMAGE CONTROLS */}
-        {property.images.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={prev}
-              aria-label="Previous image"
-              className="absolute left-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
-            >
-              ‹
-            </button>
-
-            <button
-              type="button"
-              onClick={next}
-              aria-label="Next image"
-              className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-xl text-white backdrop-blur-md transition hover:bg-black/70"
-            >
-              ›
-            </button>
-          </>
-        )}
-
-        {/* PRICE */}
-        <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 sm:px-6">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/60">
-                {lang === "id"
-                  ? "Harga Properti"
-                  : "Property Price"}
-              </p>
-
-              <p className="mt-1 text-[24px] font-extrabold tracking-[-0.035em] text-white sm:text-[27px]">
-                {property.price}
-              </p>
-            </div>
-
-            {property.images.length > 1 && (
-              <span className="rounded-full border border-white/20 bg-black/40 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur">
-                {imgIndex + 1} / {property.images.length}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* DETAILS */}
-      <div className="p-5 sm:p-6">
-
-        <Link href={`/properti/${property.id}`}>
-          <h3 className="line-clamp-2 text-[16px] font-extrabold leading-[1.45] tracking-[-0.015em] text-[#1C1C1E] transition hover:text-[#B8860B] sm:text-[17px]">
-            {property.title}
-          </h3>
-        </Link>
-
-        <p className="mt-2 text-sm font-medium text-gray-500">
-          📍 {property.province}
-        </p>
-
-        {/* SPECS */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-gray-600">
-          <span>{property.size}</span>
-
-          <span className="text-[#C8A44D]">•</span>
-
-          <span>
-            {translateBed(property.bed, lang)}
-          </span>
-
-          <span className="text-[#C8A44D]">•</span>
-
-          <span>
-            {translateFurnishing(
-              property.furnishing,
-              lang
-            )}
-          </span>
-        </div>
-
-        {/* OWNER */}
-        <div className="mt-5 rounded-[18px] border border-[#EDE6D8] bg-[#FAF8F3] px-4 py-3.5">
-          <div className="flex items-center justify-between gap-4">
-
-            <div className="min-w-0">
-              <p className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-[#B8860B]">
-                {lang === "id"
-                  ? "PEMILIK"
-                  : "OWNER"}
-              </p>
-
-              <p className="mt-1 truncate text-sm font-extrabold text-[#1C1C1E]">
-                {property.ownerName}
-              </p>
-
-              <p className="mt-0.5 text-[11px] font-medium text-gray-500">
-                {lang === "id"
-                  ? "Hubungi pemilik secara langsung"
-                  : "Contact the owner directly"}
-              </p>
-            </div>
-
-            {property.kode && (
-              <div className="shrink-0 rounded-full border border-[#DDD5C8] bg-white px-3 py-1.5 text-[9px] font-bold tracking-wide text-gray-500">
-                {property.kode}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* CTA */}
-        <div className="mt-5 grid grid-cols-[1.35fr_0.85fr] gap-3">
-          <Link
-            href={`/properti/${property.id}`}
-            className="flex min-h-[50px] items-center justify-center rounded-2xl bg-[#B8860B] px-4 py-3 text-center text-sm font-extrabold text-white transition hover:bg-[#9C7208]"
-          >
-            {lang === "id"
-              ? "Lihat Properti →"
-              : "View Property →"}
-          </Link>
-
-          <a
-            href={whatsappHref}
-            onClick={handleHomepageOwnerWhatsappClick}
-            target="_blank"
-            rel="noreferrer"
-            className={`flex min-h-[50px] items-center justify-center rounded-2xl px-3 py-3 text-center text-sm font-bold transition ${
-              property.ownerWhatsapp
-                ? "bg-[#1C1C1E] text-white hover:bg-black"
-                : "pointer-events-none bg-gray-200 text-gray-400"
-            }`}
-          >
-            WhatsApp
-          </a>
-        </div>
-
-        <ScheduleViewingButton
-          propertyId={property.id}
-          propertyTitle={property.title}
-          propertyCode={property.kode}
-          receiverId={property.receiverId}
-          receiverName={property.receiverName}
-          receiverRole={property.receiverRole}
-        />
-      </div>
-    </article>
-  );
+function FeaturedOwnerPropertyCard({ property }: { property: FeaturedOwnerProperty }) {
+  return <FeaturedPropertiesCard property={{ ...property, posterName: property.ownerName, agency: "", postedByType: "owner", whatsapp: property.ownerWhatsapp, verifiedListing: property.ownerApproved }} />;
 }
+
 
 /* =========================
    SECTIONS
@@ -2057,30 +1635,18 @@ function FeaturedPropertiesSection() {
           ...fallbackRows,
         ].slice(0, 3);
 
-        const profileIds = Array.from(
-          new Set(
-            featuredRows
-              .map((row) => row.contact_user_id)
-              .filter(
-                (value): value is string => Boolean(value)
-              )
-          )
-        );
-
-        const profilesMap =
-          await fetchHomepageProfilesByIds(profileIds);
+        const photos = await fetchListingPhotos(featuredRows.map(row => row.id));
 
         const mapped: FeaturedProperty[] =
           featuredRows.map((row) => {
-            const profile = row.contact_user_id
-              ? profilesMap.get(row.contact_user_id)
-              : null;
 
             return {
               id: row.id,
+              facts: toPropertyCardFacts(row),
+              posterPhoto: photos[row.id],
 
               title:
-                row.title ||
+                (lang === "id" ? row.title_id || row.title : row.title) ||
                 (lang === "id"
                   ? "Properti di Tetamo"
                   : "Property on Tetamo"),
@@ -2118,12 +1684,12 @@ function FeaturedPropertiesSection() {
 
               posterName:
                 row.contact_name ||
-                profile?.full_name ||
+
                 "Tetamo User",
 
               agency:
                 row.contact_agency ||
-                profile?.agency ||
+
                 "",
 
               postedByType: normalizePostedByType(
@@ -2133,7 +1699,7 @@ function FeaturedPropertiesSection() {
 
               whatsapp: normalizeWhatsapp(
                 row.contact_phone ||
-                  profile?.phone ||
+
                   ""
               ),
 
@@ -2142,7 +1708,7 @@ function FeaturedPropertiesSection() {
 
               receiverName:
                 row.contact_name ||
-                profile?.full_name ||
+
                 "Tetamo User",
 
               receiverRole: normalizePostedByType(
@@ -2152,6 +1718,7 @@ function FeaturedPropertiesSection() {
 
               kode: row.kode ?? undefined,
 
+              postedRaw: row.created_at,
               postedDate: formatPostedDate(
                 row.posted_date || row.created_at
               ),
@@ -2187,7 +1754,7 @@ function FeaturedPropertiesSection() {
   }, [currency, lang]);
 
   return (
-    <section className="relative overflow-hidden bg-[#F6F3EC] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+    <section id="featured-properties" className="relative overflow-hidden bg-[#F6F3EC] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
 
       {/* subtle premium background */}
       <div className="pointer-events-none absolute -right-40 top-0 h-[420px] w-[420px] rounded-full bg-[#D8B46A]/10 blur-[120px]" />
@@ -2618,11 +2185,11 @@ function FeaturedAgentsSection() {
 
         {/* AGENTS */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((item) => (
               <div
                 key={item}
-                className="overflow-hidden rounded-[30px] border border-gray-200 bg-white"
+                className="overflow-hidden rounded-[20px] border border-gray-200 bg-white"
               >
                 <div className="h-[320px] animate-pulse bg-gray-200" />
 
@@ -2635,7 +2202,7 @@ function FeaturedAgentsSection() {
             ))}
           </div>
         ) : agents.length === 0 ? (
-          <div className="rounded-[30px] border border-gray-200 bg-[#F8F7F4] px-6 py-14 text-center">
+          <div className="rounded-[20px] border border-gray-200 bg-[#F8F7F4] px-6 py-14 text-center">
             <p className="text-lg font-extrabold text-[#1C1C1E]">
               {lang === "id"
                 ? "Agen pilihan sedang diperbarui."
@@ -2643,7 +2210,7 @@ function FeaturedAgentsSection() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
 
             {agents.map((agent) => {
               const inquiryMessage =
@@ -2675,16 +2242,16 @@ function FeaturedAgentsSection() {
               return (
                 <article
                   key={agent.id}
-                  className="group flex h-full flex-col overflow-hidden rounded-[30px] border border-[#E7DFD2] bg-white shadow-[0_16px_46px_rgba(28,28,30,0.08)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_70px_rgba(0,0,0,0.13)]"
+                  className="group flex h-full flex-col overflow-hidden rounded-[20px] border border-[#E7DFD2] bg-white shadow-[0_4px_18px_rgba(0,0,0,0.04)] transition duration-200 hover:shadow-lg"
                 >
 
                   {/* PHOTO */}
-                  <div className="relative h-[260px] overflow-hidden bg-[#1C1C1E] sm:h-[290px]">
+                  <div className="relative aspect-[4/3] overflow-hidden bg-[#F4F1EB]">
 
                     <img
                       src={agent.photo}
                       alt={agent.name}
-                      className="h-full w-full object-cover object-center transition duration-700 group-hover:scale-[1.035]"
+                      className="h-full w-full object-cover object-top transition duration-700 group-hover:scale-[1.035]"
                     />
 
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
@@ -2709,7 +2276,7 @@ function FeaturedAgentsSection() {
                   </div>
 
                   {/* DETAILS */}
-                  <div className="flex flex-1 flex-col p-5 sm:p-6">
+                  <div className="flex flex-1 flex-col p-4">
 
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#B8860B]">
                       {lang === "id"
@@ -2717,12 +2284,12 @@ function FeaturedAgentsSection() {
                         : "Property Agent"}
                     </p>
 
-                    <h3 className="mt-1.5 text-[24px] font-extrabold leading-tight tracking-[-0.035em] text-[#1C1C1E]">
+                    <h3 className="mt-1 text-[18px] font-semibold leading-6 tracking-[-0.02em] text-[#1C1C1E]">
                       {agent.name}
                     </h3>
 
                     {/* AGENCY AND LOCATION */}
-                    <div className="mt-5 space-y-3 rounded-[18px] bg-[#F8F6F1] p-4">
+                    <div className="mt-3 space-y-2 rounded-xl bg-[#F8F6F1] p-3">
 
                       <div className="grid grid-cols-[30px_minmax(0,1fr)] items-start gap-2.5">
 
@@ -2769,7 +2336,7 @@ function FeaturedAgentsSection() {
                     </div>
 
                     {/* SOCIAL LINKS */}
-                    <div className="mt-5 flex min-h-[54px] items-center justify-between gap-4 border-t border-gray-100 pt-4">
+                    <div className="mt-3 mb-3 flex min-h-9 items-center justify-between gap-3 border-t border-gray-100 pt-2">
 
                       <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-gray-400">
                         {lang === "id"
@@ -2830,7 +2397,7 @@ function FeaturedAgentsSection() {
                       target="_blank"
                       rel="noreferrer"
                       className={[
-                        "mt-auto flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[15px] px-4 py-3 text-center text-sm font-extrabold transition",
+                        "mt-auto flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-center text-xs font-semibold transition",
                         agent.whatsapp
                           ? "bg-[#1C1C1E] text-white hover:bg-black"
                           : "pointer-events-none bg-gray-200 text-gray-400",
@@ -2911,59 +2478,23 @@ function FeaturedOwnersSection() {
         const rows =
           await fetchHomepageProperties();
 
-        const ownerRows = rows
-          .filter((row) =>
-            isListingPublic(row)
-          )
-          .filter((row) =>
-            isVerifiedListing(row)
-          )
-          .filter((row) =>
-            hasFeaturedPlacement(row)
-          )
-          .filter(
-            (row) =>
-              normalizePostedByType(
-                row.contact_role,
-                row.source
-              ) === "owner"
-          )
-          .sort(sortRowsByFeaturedNewest)
-          .slice(0, 3);
+        const eligibleOwners = rows.filter(row => isListingPublic(row) && isVerifiedListing(row) && normalizePostedByType(row.contact_role, row.source) === "owner" && Boolean(row.property_images?.length));
+        const manualOwners = FEATURED_OWNER_CODES.map(code => eligibleOwners.find(row => normalizePropertyCode(row.kode) === normalizePropertyCode(code))).filter((row): row is HomepagePropertyRow => Boolean(row));
+        const selectedOwners = new Set(manualOwners.map(row => row.id));
+        const ownerRows = [...manualOwners, ...eligibleOwners.filter(row => !selectedOwners.has(row.id)).sort(sortRowsByFeaturedNewest)].slice(0, 3);
 
-        const profileIds = Array.from(
-          new Set(
-            ownerRows
-              .map(
-                (row) =>
-                  row.contact_user_id
-              )
-              .filter(
-                (value): value is string =>
-                  Boolean(value)
-              )
-          )
-        );
-
-        const profilesMap =
-          await fetchHomepageProfilesByIds(
-            profileIds
-          );
+        const photos = await fetchListingPhotos(ownerRows.map(row => row.id));
 
         const mapped: FeaturedOwnerProperty[] =
           ownerRows.map((row) => {
-            const profile =
-              row.contact_user_id
-                ? profilesMap.get(
-                    row.contact_user_id
-                  )
-                : null;
 
             return {
               id: row.id,
+              facts: toPropertyCardFacts(row),
+              posterPhoto: photos[row.id],
 
               title:
-                row.title ||
+                (lang === "id" ? row.title_id || row.title : row.title) ||
                 (lang === "id"
                   ? "Properti di Tetamo"
                   : "Property on Tetamo"),
@@ -2974,13 +2505,13 @@ function FeaturedOwnersSection() {
 
               ownerName:
                 row.contact_name ||
-                profile?.full_name ||
+
                 "Tetamo Owner",
 
               ownerWhatsapp:
                 normalizeWhatsapp(
                   row.contact_phone ||
-                    profile?.phone ||
+
                     ""
                 ),
 
@@ -2989,7 +2520,7 @@ function FeaturedOwnersSection() {
 
               receiverName:
                 row.contact_name ||
-                profile?.full_name ||
+
                 "Tetamo Owner",
 
               receiverRole: "owner",
@@ -3025,6 +2556,7 @@ function FeaturedOwnersSection() {
               kode:
                 row.kode ?? undefined,
 
+              postedRaw: row.created_at,
               postedDate:
                 formatPostedDate(
                   row.posted_date ||
@@ -3062,7 +2594,7 @@ function FeaturedOwnersSection() {
   }, [currency, lang]);
 
   return (
-    <section className="relative overflow-hidden bg-[#F6F3EC] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+    <section id="owner-properties" className="relative overflow-hidden bg-[#F6F3EC] px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
 
       <div className="pointer-events-none absolute -right-32 top-0 h-[380px] w-[380px] rounded-full bg-[#D8B46A]/10 blur-[120px]" />
 

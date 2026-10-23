@@ -1,4 +1,5 @@
 "use client";
+import Pagination from "@/components/Pagination";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -2013,53 +2014,7 @@ export default function SearchPageContent() {
               })}
             </div>
 
-            <div className="mt-8 flex flex-col gap-4 sm:mt-10">
-              <p className="text-sm text-gray-900">
-                {t.page} {safeCurrentPage} / {totalPages}
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() =>
-                    pushSearchUrl(
-                      { page: Math.max(1, safeCurrentPage - 1) },
-                      { resetPage: false }
-                    )
-                  }
-                  disabled={safeCurrentPage === 1}
-                  className="rounded-xl border bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {t.previous}
-                </button>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {visiblePages.map((p) => (
-                    <PaginationButton
-                      key={p}
-                      active={safeCurrentPage === p}
-                      onClick={() =>
-                        pushSearchUrl({ page: p }, { resetPage: false })
-                      }
-                    >
-                      {p}
-                    </PaginationButton>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() =>
-                    pushSearchUrl(
-                      { page: Math.min(totalPages, safeCurrentPage + 1) },
-                      { resetPage: false }
-                    )
-                  }
-                  disabled={safeCurrentPage === totalPages}
-                  className="rounded-xl border bg-[#1C1C1E] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {t.next}
-                </button>
-              </div>
-            </div>
+            <Pagination page={safeCurrentPage} totalPages={totalPages} lang={lang} onChange={page => pushSearchUrl({ page }, { resetPage: false })} />
           </>
         ) : (
           <div className="mt-12 rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 sm:mt-16 sm:text-base">

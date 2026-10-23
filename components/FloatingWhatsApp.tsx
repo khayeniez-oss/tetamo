@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { supabase } from "@/lib/supabase";
+import { websiteThara, TharaClientError, type BrowserSnapshot } from "@/lib/thara/browser-client";
 
 type SupportConversation = {
   id: string;
@@ -41,8 +42,7 @@ type SupportMessage = {
 type AuthPromptMode = "handoff" | null;
 type AiFeedbackChoice = "yes" | "no";
 
-const GUEST_SESSION_KEY = "scorpio_assist_guest_session_id";
-const GUEST_MESSAGES_KEY = "scorpio_assist_guest_messages";
+// Legacy Scorpio storage is retained untouched; it is never treated as a secure Thara session.
 
 function cleanDisplayText(value: unknown) {
   return String(value || "")
@@ -136,10 +136,14 @@ export default function FloatingWhatsApp() {
   );
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [input, setInput] = useState("");
-  const [guestSessionId, setGuestSessionId] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  const [humanActive, setHumanActive] = useState(false);
+  const busyRef = useRef(false);
+  const retryRef = useRef<{ text: string; id: string } | null>(null);
+  const generationRef = useRef(0);
 
-  const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
+  const loadingMessages = loadingConversation;
   const [sending, setSending] = useState(false);
   const [handoffLoading, setHandoffLoading] = useState(false);
   const [error, setError] = useState("");
@@ -149,6 +153,11 @@ export default function FloatingWhatsApp() {
   >({});
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+  const olderLoadedRef = useRef(false);
+  const authIdentityRef = useRef<string | null | undefined>(undefined);
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
 
   const waitingForAgent = conversation?.handoff_status === "waiting_agent";
 
@@ -182,369 +191,104 @@ export default function FloatingWhatsApp() {
     return "";
   }, [messages]);
 
-  useEffect(() => {
-    let ignore = false;
+  function applySnapshot(snapshot: BrowserSnapshot) {
+    const sameConversation = conversationIdRef.current === (snapshot.conversation?.id || null);
+    if (!sameConversation) olderLoadedRef.current = false;
+    conversationIdRef.current = snapshot.conversation?.id || null;
+    setConversation(snapshot.conversation);
+    setMessages(current => sameConversation ? [...current.filter(item => !snapshot.messages.some(next => next.id === item.id)), ...snapshot.messages] : snapshot.messages);
+    if (!olderLoadedRef.current) setOlderCursor(snapshot.hasOlder ? snapshot.cursor || null : null);
+    setHumanActive(Boolean(snapshot.conversation && !["ai_active", "waiting_agent"].includes(snapshot.conversation.handoff_status)));
+    setUnavailable(false);
+  }
 
-    async function loadAuth() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!ignore) {
-        setUserId(user?.id ?? null);
-      }
-    }
-
-    if (open) {
-      void loadAuth();
-    }
-
-    return () => {
-      ignore = true;
-    };
-  }, [open]);
+  function displayFailure(error: unknown) {
+    const pending = error instanceof TharaClientError && error.status === 503 && /activation is pending|not available yet/i.test(error.message);
+    setUnavailable(pending);
+    setError(pending
+      ? (isID ? "Thara belum tersedia untuk publik. Silakan hubungi Tetamo untuk bantuan." : "Thara is not available publicly yet. Please contact Tetamo for help.")
+      : (isID ? "Chat belum dapat terhubung. Silakan coba lagi." : "Chat could not connect. Please try again."));
+  }
 
   useEffect(() => {
     if (!open) return;
-
-    if (typeof window !== "undefined") {
-      const savedGuestSessionId =
-        window.localStorage.getItem(GUEST_SESSION_KEY);
-      const savedGuestMessages =
-        window.localStorage.getItem(GUEST_MESSAGES_KEY);
-
-      if (savedGuestSessionId) {
-        setGuestSessionId(savedGuestSessionId);
-      }
-
-      if (!userId && savedGuestMessages) {
-        try {
-          const parsed = JSON.parse(savedGuestMessages) as SupportMessage[];
-          setMessages(Array.isArray(parsed) ? parsed : []);
-        } catch {
-          setMessages([]);
-        }
-      }
+    let cancelled = false;
+    generationRef.current++;
+    setLoadingConversation(true);
+    async function refresh() {
+      if (busyRef.current) return;
+      const generation = ++generationRef.current;
+      try {
+        const snapshot = await websiteThara("history");
+        if (!cancelled && generation === generationRef.current && !busyRef.current) applySnapshot(snapshot);
+      } catch (error) {
+        if (!cancelled && generation === generationRef.current && !busyRef.current) displayFailure(error);
+      } finally { if (!cancelled) setLoadingConversation(false); }
     }
-  }, [open, userId]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadExistingConversation() {
-      if (!open || !userId) return;
-
-      const { data, error } = await supabase
-        .from("support_conversations")
-        .select(
-          "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
-        )
-        .eq("user_id", userId)
-        .eq("status", "open")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Failed to load existing conversation:", error);
-        return;
-      }
-
-      if (!ignore && data) {
-        const existing = data as SupportConversation;
-        setConversation(existing);
-        await refreshMessages(existing.id);
-      }
-    }
-
-    void loadExistingConversation();
-
-    return () => {
-      ignore = true;
-    };
-  }, [open, userId]);
-
-  useEffect(() => {
-    if (!open || !userId || !conversation?.id) return;
-
-    const timer = window.setInterval(() => {
-      void refreshConversation(conversation.id);
-      void refreshMessages(conversation.id);
-    }, 3000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [open, userId, conversation?.id]);
+    void supabase.auth.getSession().then(({ data }) => { if (!cancelled) setUserId(data.session?.user.id ?? null); });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      const identity = session?.user.id ?? null;
+      if (authIdentityRef.current === identity) return;
+      authIdentityRef.current = identity;
+      setUserId(identity);
+      setConversation(null); setMessages([]); setOlderCursor(null); retryRef.current = null; conversationIdRef.current = null; olderLoadedRef.current = false;
+      // Discard any in-flight response from the previous identity.
+      generationRef.current++;
+    });
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 5000);
+    return () => { cancelled = true; subscription.unsubscribe(); window.clearInterval(timer); generationRef.current++; };
+  // Reinitialize secure history when authentication or display language changes.
+  }, [open, userId, lang]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, waitingForAgent, authPrompt, aiFeedbackMap]);
 
-  function persistGuestState(
-    nextGuestSessionId: string,
-    nextMessages: SupportMessage[],
-  ) {
-    if (typeof window === "undefined") return;
-
-    window.localStorage.setItem(GUEST_SESSION_KEY, nextGuestSessionId);
-    window.localStorage.setItem(
-      GUEST_MESSAGES_KEY,
-      JSON.stringify(nextMessages),
-    );
-  }
-
-  async function refreshConversation(conversationId: string) {
-    const { data, error } = await supabase
-      .from("support_conversations")
-      .select(
-        "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
-      )
-      .eq("id", conversationId)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Failed to refresh conversation:", error);
-      return;
-    }
-
-    if (data) {
-      setConversation(data as SupportConversation);
-    }
-  }
-
-  async function refreshMessages(conversationId: string) {
-    setLoadingMessages(true);
-
-    const { data, error } = await supabase
-      .from("support_messages")
-      .select(
-        "id, conversation_id, sender_type, message_text, ai_status, suggested_action, suggested_action_label, created_at",
-      )
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Failed to refresh messages:", error);
-      setLoadingMessages(false);
-      return;
-    }
-
-    setMessages((data ?? []) as SupportMessage[]);
-    setLoadingMessages(false);
-  }
-
-  async function initConversation() {
-    if (!userId) return null;
-
-    setLoadingConversation(true);
-    setError("");
-
-    try {
-      const { data: existing, error: existingError } = await supabase
-        .from("support_conversations")
-        .select(
-          "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
-        )
-        .eq("user_id", userId)
-        .eq("status", "open")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existingError) throw existingError;
-
-      let activeConversation = existing as SupportConversation | null;
-
-      if (!activeConversation) {
-        const { data: created, error: createError } = await supabase
-          .from("support_conversations")
-          .insert({
-            user_id: userId,
-            source: `website_chat_${lang}`,
-            status: "open",
-            handoff_requested: false,
-            handoff_status: "ai_active",
-          })
-          .select(
-            "id, user_id, guest_session_id, source, status, handoff_requested, handoff_status, created_at, updated_at, last_message_at",
-          )
-          .maybeSingle();
-
-        if (createError) throw createError;
-
-        activeConversation = created as SupportConversation | null;
-      }
-
-      if (!activeConversation) {
-        throw new Error("Failed to create or load support conversation.");
-      }
-
-      setConversation(activeConversation);
-      await refreshMessages(activeConversation.id);
-
-      return activeConversation;
-    } catch (err: any) {
-      console.error("Failed to initialize conversation:", err);
-      setError(
-        err?.message ||
-          (isID
-            ? "Tidak dapat memulai chat saat ini."
-            : "Unable to start chat right now."),
-      );
-      return null;
-    } finally {
-      setLoadingConversation(false);
-    }
-  }
-
-  async function sendGuestMessage(messageText: string) {
-    setSending(true);
-    setError("");
-    setAuthPrompt(null);
-
-    try {
-      const body: Record<string, string> = {
-        message_text: messageText,
-        language: lang,
-        source: `website_chat_guest_${lang}`,
-      };
-
-      if (guestSessionId) {
-        body.guest_session_id = guestSessionId;
-      }
-
-      const { data, error } = await supabase.functions.invoke(
-        "scorpio-assist-guest",
-        {
-          body,
-        },
-      );
-
-      if (error) throw error;
-      if (!data?.ok) {
-        throw new Error(data?.error || "Guest chat failed.");
-      }
-
-      const nextGuestSessionId = String(data.guest_session_id || "");
-      const nextMessages = (data.messages ?? []) as SupportMessage[];
-      const nextConversation = (data.conversation ??
-        null) as SupportConversation | null;
-
-      if (nextGuestSessionId) {
-        setGuestSessionId(nextGuestSessionId);
-        persistGuestState(nextGuestSessionId, nextMessages);
-      }
-
-      setConversation(nextConversation);
-      setMessages(nextMessages);
-      setInput("");
-    } catch (err: any) {
-      console.error("Failed to send guest message:", err);
-      setError(
-        err?.message ||
-          (isID
-            ? "Pesan guest gagal dikirim."
-            : "Guest message failed to send."),
-      );
-    } finally {
-      setSending(false);
-    }
-  }
-
   async function handleSendMessage() {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-
-    setError("");
-
-    if (!userId) {
-      await sendGuestMessage(trimmed);
-      return;
-    }
-
-    let activeConversation = conversation;
-
-    if (!activeConversation) {
-      activeConversation = await initConversation();
-    }
-
-    if (!activeConversation) return;
-
-    setSending(true);
-
+    const text = input.trim();
+    if (!text || busyRef.current || unavailable) return;
+    busyRef.current = true;
+    const generation = ++generationRef.current;
+    setSending(true); setError(""); setAuthPrompt(null);
+    if (retryRef.current?.text !== text) retryRef.current = { text, id: crypto.randomUUID() };
     try {
-      const { error: insertError } = await supabase
-        .from("support_messages")
-        .insert({
-          conversation_id: activeConversation.id,
-          sender_type: "user",
-          message_text: trimmed,
-          ai_status: "pending",
-        });
+      const snapshot = await websiteThara("send", { request_id: retryRef.current.id, message_text: text, language: lang });
+      if (generation === generationRef.current) {
+        applySnapshot(snapshot); setInput(current => current.trim() === text ? "" : current); retryRef.current = null;
+      }
+    } catch (error) { if (generation === generationRef.current) displayFailure(error); }
+    finally { busyRef.current = false; setSending(false); }
+  }
 
-      if (insertError) throw insertError;
-
-      setInput("");
-      await refreshConversation(activeConversation.id);
-      await refreshMessages(activeConversation.id);
-    } catch (err: any) {
-      console.error("Failed to send message:", err);
-      setError(
-        err?.message ||
-          (isID ? "Pesan gagal dikirim." : "Message failed to send."),
-      );
-    } finally {
-      setSending(false);
-    }
+  async function loadEarlier() {
+    if (!olderCursor || busyRef.current) return;
+    busyRef.current = true;
+    const generation = ++generationRef.current;
+    setLoadingEarlier(true);
+    try {
+      const snapshot = await websiteThara("history", { before: olderCursor });
+      if (generation === generationRef.current) {
+        olderLoadedRef.current = true;
+        setMessages(current => [...snapshot.messages, ...current.filter(item => !snapshot.messages.some(old => old.id === item.id))]);
+        setOlderCursor(snapshot.hasOlder ? snapshot.cursor || null : null);
+      }
+    } catch (error) { if (generation === generationRef.current) displayFailure(error); }
+    finally { busyRef.current = false; setLoadingEarlier(false); }
   }
 
   async function handleHandoff() {
-    setError("");
-
-    if (!userId) {
-      setAuthPrompt("handoff");
-      return;
-    }
-
-    setAuthPrompt(null);
-
-    let activeConversation = conversation;
-
-    if (!activeConversation) {
-      activeConversation = await initConversation();
-    }
-
-    if (!activeConversation) return;
-
-    setHandoffLoading(true);
-
+    if (!userId) { setAuthPrompt("handoff"); return; }
+    if (busyRef.current || unavailable) return;
+    busyRef.current = true;
+    const generation = ++generationRef.current;
+    setHandoffLoading(true); setError(""); setAuthPrompt(null);
     try {
-      const { error: updateError } = await supabase
-        .from("support_conversations")
-        .update({
-          handoff_requested: true,
-          handoff_status: "waiting_agent",
-          handoff_requested_at: new Date().toISOString(),
-          handoff_requested_by: "user",
-        })
-        .eq("id", activeConversation.id);
-
-      if (updateError) throw updateError;
-
-      await refreshConversation(activeConversation.id);
-      await refreshMessages(activeConversation.id);
-    } catch (err: any) {
-      console.error("Failed to request agent handoff:", err);
-      setError(
-        err?.message ||
-          (isID
-            ? "Gagal meminta bantuan Tetamo Agent."
-            : "Failed to request a Tetamo Agent."),
-      );
-    } finally {
-      setHandoffLoading(false);
-    }
+      const snapshot = await websiteThara("handoff");
+      if (generation === generationRef.current) applySnapshot(snapshot);
+    } catch (error) { if (generation === generationRef.current) displayFailure(error); }
+    finally { busyRef.current = false; setHandoffLoading(false); }
   }
 
   function handleAiFeedback(messageId: string, choice: AiFeedbackChoice) {
@@ -589,7 +333,7 @@ export default function FloatingWhatsApp() {
 
                   <div className="min-w-0">
                     <p className="text-sm font-semibold tracking-[0.01em]">
-                      Scorpio Assist
+                      Thara
                     </p>
                     <p className="mt-0.5 text-xs text-white/70">
                       {isID
@@ -628,15 +372,16 @@ export default function FloatingWhatsApp() {
             </div>
           </div>
 
-          {waitingForAgent ? (
+          {waitingForAgent || humanActive ? (
             <div className="relative border-b border-amber-200 bg-[linear-gradient(90deg,#FFF7E0_0%,#FFFBEF_100%)] px-4 py-3 text-sm font-medium text-amber-800">
               {isID
-                ? "Menunggu Tetamo Agent bergabung..."
-                : "Waiting for Tetamo Agent to join..."}
+                ? (humanActive ? "Percakapan ditangani Tetamo Agent." : "Permintaan bantuan telah diterima Tetamo Agent.")
+                : (humanActive ? "A Tetamo Agent is handling this conversation." : "Your request has been sent to Tetamo Agent.")}
             </div>
           ) : null}
 
           <div className="relative max-h-[380px] min-h-[320px] space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(255,255,255,0.76)_0%,rgba(250,250,250,0.92)_100%)] px-4 py-4">
+            {olderCursor && <button type="button" disabled={loadingEarlier || sending || handoffLoading} onClick={() => void loadEarlier()} className="text-xs font-medium text-amber-700 disabled:opacity-50">{loadingEarlier ? (isID ? "Memuat..." : "Loading...") : (isID ? "Muat pesan sebelumnya" : "Load earlier messages")}</button>}
             {loadingMessages && messages.length === 0 ? (
               <div className="flex h-[220px] items-center justify-center text-sm text-[#6E6E73]">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -670,7 +415,7 @@ export default function FloatingWhatsApp() {
                               <Sparkles className="h-3.5 w-3.5 text-amber-600" />
                             </div>
                             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8E8E93]">
-                              Scorpio Assist
+                              Thara
                             </span>
                           </div>
                         ) : null}
@@ -693,7 +438,7 @@ export default function FloatingWhatsApp() {
 
                       {isAi &&
                       message.suggested_action === "handoff_to_human" &&
-                      !waitingForAgent ? (
+                      !waitingForAgent && !humanActive ? (
                         <button
                           type="button"
                           onClick={() => void handleHandoff()}
@@ -712,7 +457,7 @@ export default function FloatingWhatsApp() {
                         </button>
                       ) : null}
 
-                      {isLatestAiMessage && !waitingForAgent ? (
+                      {isLatestAiMessage && !waitingForAgent && !humanActive ? (
                         <div className="mt-2 rounded-[20px] border border-[#ECECEF] bg-white/95 px-3 py-3 shadow-sm">
                           <p className="text-xs font-semibold text-[#1C1C1E]">
                             {isID
@@ -800,14 +545,14 @@ export default function FloatingWhatsApp() {
                         <Sparkles className="h-3.5 w-3.5 text-amber-600" />
                       </div>
                       <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8E8E93]">
-                        Scorpio Assist
+                        Thara
                       </span>
                     </div>
 
                     <p>
                       {isID
-                        ? "Halo, saya Scorpio Assist. Anda bisa tanya tentang cara pasang properti, paket, proses signup, atau cara kerja Tetamo."
-                        : "Hi, I’m Scorpio Assist. You can ask me about listing property, packages, signup flow, or how Tetamo works."}
+                        ? "Halo, saya Thara. Anda bisa tanya tentang cara pasang properti, paket, proses signup, atau cara kerja Tetamo."
+                        : "Hi, I’m Thara. You can ask me about listing property, packages, signup flow, or how Tetamo works."}
                     </p>
                   </div>
                 </div>
@@ -891,7 +636,7 @@ export default function FloatingWhatsApp() {
               <button
                 type="button"
                 onClick={() => void handleSendMessage()}
-                disabled={sending || !input.trim()}
+                disabled={sending || handoffLoading || loadingConversation || unavailable || !input.trim()}
                 className="inline-flex h-[50px] w-[50px] items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] text-white shadow-[0_12px_28px_rgba(17,24,39,0.25)] transition hover:scale-[1.02] hover:opacity-95 disabled:opacity-60"
                 aria-label={isID ? "Kirim pesan" : "Send message"}
               >
@@ -908,7 +653,7 @@ export default function FloatingWhatsApp() {
                 type="button"
                 onClick={() => void handleHandoff()}
                 disabled={
-                  handoffLoading || waitingForAgent || loadingConversation
+                  handoffLoading || sending || waitingForAgent || humanActive || unavailable || loadingConversation
                 }
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[20px] border border-amber-200 bg-[linear-gradient(180deg,#FFF8E8_0%,#FFFFFF_100%)] px-4 py-3 text-sm font-semibold text-[#1C1C1E] shadow-sm transition hover:opacity-95 disabled:opacity-60"
               >
@@ -922,8 +667,8 @@ export default function FloatingWhatsApp() {
 
               <p className="text-[11px] leading-5 text-[#8E8E93]">
                 {isID
-                  ? "Scorpio Assist terbuka untuk semua pengguna. Login hanya diperlukan untuk bantuan Tetamo Agent, riwayat chat tersimpan, dan bantuan khusus akun."
-                  : "Scorpio Assist is open to all users. Login is only required for Tetamo Agent support, saved chat history, and account-specific help."}
+                  ? "Login diperlukan untuk bantuan Tetamo Agent dan bantuan khusus akun."
+                  : "Log in for Tetamo Agent support and account-specific help."}
               </p>
             </div>
           </div>
@@ -933,8 +678,8 @@ export default function FloatingWhatsApp() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label={isID ? "Buka Scorpio Assist" : "Open Scorpio Assist"}
-        title={isID ? "Buka Scorpio Assist" : "Open Scorpio Assist"}
+        aria-label={isID ? "Buka Thara" : "Open Thara"}
+        title={isID ? "Buka Thara" : "Open Thara"}
         className="fixed bottom-5 right-4 z-[60] inline-flex h-14 items-center gap-2.5 rounded-full border border-white/20 bg-[linear-gradient(135deg,#111827_0%,#1F2937_100%)] px-4 pr-5 text-white shadow-[0_16px_40px_rgba(0,0,0,0.28)] transition hover:scale-[1.02] hover:opacity-95 sm:right-5"
       >
         <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
@@ -943,7 +688,7 @@ export default function FloatingWhatsApp() {
         </span>
 
         <span className="whitespace-nowrap text-sm font-semibold tracking-[0.01em]">
-          Scorpio Assist
+          Thara
         </span>
       </button>
     </>
