@@ -4012,7 +4012,6 @@ export default function PropertiPageClient({
       totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} onChange={setPage} lang={lang} />
       )}
-      <PropertyVideoFeed lang={lang} slider />
 
   </section>
 
@@ -4031,6 +4030,8 @@ export default function PropertiPageClient({
   </aside>
 
 </div>
+
+        <PropertyVideoFeed lang={lang} slider fullWidth />
 
         <div className="mt-10 rounded-[32px] border border-gray-200 bg-[#1C1C1E] p-5 text-white shadow-[0_18px_60px_rgba(0,0,0,0.18)] sm:p-6 lg:p-8">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">

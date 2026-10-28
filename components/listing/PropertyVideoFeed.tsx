@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { PropertyCardFacts } from "./PropertyCardFacts";
 import OpeningFrameVideo from "./OpeningFrameVideo";
 import ShareListingButton from "./ShareListingButton";
@@ -14,7 +14,7 @@ type VideoProperty = {
   land_size: number | null; land_unit: string | null; building_size: number | null;
 };
 
-export default function PropertyVideoFeed({ lang = "id", slider = false }: { lang?: string; slider?: boolean }) {
+export default function PropertyVideoFeed({ lang = "id", slider = false, fullWidth = false }: { lang?: string; slider?: boolean; fullWidth?: boolean }) {
   const [videos, setVideos] = useState<VideoProperty[]>([]);
   const [loaded, setLoaded] = useState(false);
   const rail = useRef<HTMLDivElement>(null);
@@ -35,7 +35,7 @@ export default function PropertyVideoFeed({ lang = "id", slider = false }: { lan
     return () => { controller.abort(); clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
   }, []);
   const money = (value: number | null) => new Intl.NumberFormat(id ? "id-ID" : "en-US", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value || 0);
-  return <section className="mx-auto my-12 w-full max-w-7xl px-4 sm:px-6" aria-label={id ? "Video properti terbaru" : "Latest property videos"}>
+  return <section className={fullWidth ? "my-12 w-full min-w-0" : "mx-auto my-12 w-full max-w-7xl px-4 sm:px-6"} aria-label={id ? "Video properti terbaru" : "Latest property videos"}>
     <div className="mb-5 flex items-center justify-between gap-4">
       <div><p className="text-xs font-bold uppercase tracking-widest text-[#B8860B]">Tetamo Video</p><h2 className="mt-2 text-2xl font-bold">{id ? "Jelajahi properti lewat video" : "Explore properties through video"}</h2><p className="mt-1 text-sm text-gray-500">{id ? "Video terbaru dari properti yang tersedia." : "The latest videos from available properties."}</p></div>
       {slider && <div className="flex gap-2"><button type="button" aria-label={id ? "Video sebelumnya" : "Previous videos"} onClick={() => rail.current?.scrollBy({ left: -rail.current.clientWidth, behavior: "smooth" })} className="rounded-full border p-2"><ChevronLeft size={20} /></button><button type="button" aria-label={id ? "Video berikutnya" : "Next videos"} onClick={() => rail.current?.scrollBy({ left: rail.current.clientWidth, behavior: "smooth" })} className="rounded-full border p-2"><ChevronRight size={20} /></button></div>}
@@ -53,7 +53,7 @@ export default function PropertyVideoFeed({ lang = "id", slider = false }: { lan
             {property.listing_type === "dijual_disewa" && <p className="text-sm">{money(property.rent_price)}{period ? ` / ${period}` : ""}</p>}
             <PropertyCardFacts data={property} lang={lang} />
             <div className="flex flex-wrap items-center gap-2">
-              <a href={`/properti/${property.slug || property.id}`} aria-label={`${id ? "Lihat properti" : "View property"}: ${title}`} className="rounded-full border border-[#E8E2D8] px-3 py-2 text-sm font-medium hover:bg-[#F8F6F1]">{id ? "Lihat properti" : "View property"}</a>
+              <a href={`/properti/${property.slug || property.id}`} aria-label={`${id ? "Lihat properti" : "View property"}: ${title}`} className="inline-flex min-h-9 items-center gap-1 py-1 text-xs font-semibold text-[#9A7119] underline-offset-4 hover:text-[#6F5010] hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B8860B]">{id ? "Lihat properti" : "View property"}<ArrowUpRight size={13} aria-hidden="true" /></a>
               <ShareListingButton id={property.id} title={title} lang={lang} />
             </div>
           </div>
