@@ -1,4 +1,5 @@
 "use client";
+import PropertyVideoFeed from "@/components/listing/PropertyVideoFeed";
 import { PostedTimestamp } from "@/components/listing/PostedTimestamp";
 
 import { TETAMO_PARTNER_LINKS } from "@/app/data/tetamo-app-links";
@@ -3649,9 +3650,10 @@ return (
 
  <FeaturedPropertiesSection />
 <TetamoTrustSection />
-<FeaturedAgentsSection />
 <FeaturedOwnersSection />
+<PropertyVideoFeed lang={lang} slider />
 <LocationDiscoverySection />
+<FeaturedAgentsSection />
 <DownloadTetamoAppSection />
 
       <section className="mt-12 px-4 pb-16 sm:px-6 lg:mt-16 lg:px-8 lg:pb-20">

@@ -464,7 +464,7 @@ export default function ListingIklan({
   const mode = draft?.mode === "edit" ? "edit" : "create";
 
   const [listingType, setListingType] = useState(
-    () => draft?.listingType ?? ""
+    () => draft?.listingType === "dijual" && draft?.saleType === "leasehold" ? "leasehold" : draft?.listingType ?? ""
   );
   const [address, setAddress] = useState(() => draft?.address ?? "");
   const [province, setProvince] = useState(() => draft?.province ?? "");
@@ -476,6 +476,14 @@ export default function ListingIklan({
     () => draft?.customHousing ?? ""
   );
   const [note, setNote] = useState(() => draft?.note ?? "");
+
+  useEffect(() => {
+    setDraft(previous => {
+      const fields = { listingType: listingType === "leasehold" ? "dijual" : listingType, saleType: listingType === "leasehold" ? "leasehold" : previous?.saleType === "leasehold" ? "" : previous?.saleType, address, province, city, housingName, customHousing, note };
+      if (Object.entries(fields).every(([key, value]) => previous?.[key] === value)) return previous ?? fields;
+      return { ...previous, ...fields };
+    });
+  }, [listingType, address, province, city, housingName, customHousing, note, setDraft]);
 
   const [googleAddressSuggestions, setGoogleAddressSuggestions] = useState<
     string[]
@@ -684,7 +692,8 @@ export default function ListingIklan({
     setDraft((prev) => ({
       ...(prev || {}),
       mode,
-      listingType,
+      listingType: listingType === "leasehold" ? "dijual" : listingType,
+      saleType: listingType === "leasehold" ? "leasehold" : prev?.saleType === "leasehold" ? "" : prev?.saleType,
       address,
       province,
       city,
@@ -747,6 +756,7 @@ export default function ListingIklan({
           <div className="mt-3 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-1 sm:inline-flex sm:gap-0">
             {[
               { key: "dijual", label: lang === "id" ? "Dijual" : "For Sale" },
+              { key: "leasehold", label: "Leasehold" },
               { key: "disewa", label: lang === "id" ? "Disewa" : "For Rent" },
               {
                 key: "dijual_disewa",

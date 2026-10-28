@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, PackageCheck } from "lucide-react";
@@ -53,15 +55,7 @@ function cleanNumber(value: any) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-function cleanDecimal(value: any) {
-  if (value === null || value === undefined) return null;
-
-  const raw = String(value).replace(/[^\d.]/g, "");
-  if (!raw) return null;
-
-  const parsed = Number(raw);
-  return Number.isNaN(parsed) ? null : parsed;
-}
+function cleanDecimal(value: unknown) { return parseListingDecimal(value); }
 
 function generateListingKode() {
   const year = new Date().getFullYear();

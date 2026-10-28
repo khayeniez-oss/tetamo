@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ComponentProps } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   usePemilikDraftListing,
@@ -34,8 +34,19 @@ export default function PemilikIklanPageClient() {
     if (planFromUrl === "priority") return "priority";
     if (planFromUrl === "featured") return "featured";
 
-    return "basic";
-  }, [searchParams]);
+    if (planFromUrl === "basic") return "basic";
+    return draft?.plan || "basic";
+  }, [searchParams, draft?.plan]);
+
+  const freshStart = searchParams.get("new") === "1";
+  const resetStarted = useRef(false);
+  useEffect(() => {
+    if (!freshStart || resetStarted.current) return;
+    resetStarted.current = true;
+    clearDraft();
+    setDraft(previous => ({ ...previous, plan: currentPlan, mediaFolder: crypto.randomUUID() }));
+    router.replace(`/pemilik/iklan?plan=${currentPlan}`);
+  }, [freshStart, clearDraft, setDraft, currentPlan, router]);
 
   const listingDraft = useMemo<ListingIklanDraft>(() => {
     const draftRecord = toRecord(draft);
@@ -90,6 +101,8 @@ export default function PemilikIklanPageClient() {
     clearDraft();
     router.push("/pemilik");
   }
+
+  if (freshStart) return <main className="p-8 text-sm text-gray-500">Menyiapkan listing baru…</main>;
 
   return (
     <main className="min-h-screen bg-white">

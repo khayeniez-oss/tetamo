@@ -1,4 +1,6 @@
 "use client";
+import OpeningFrameVideo from "@/components/listing/OpeningFrameVideo";
+import ShareListingButton from "@/components/listing/ShareListingButton";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -2480,6 +2482,37 @@ Is this property still available?`;
   ].filter((item): item is DetailChip => Boolean(item && item.value && item.value !== "-"));
 
   const facilityLabels: Record<string, string> = {
+    fac_tennis: lang === "id" ? "Lapangan Tenis" : "Tennis Court",
+    fac_basketball: lang === "id" ? "Lapangan Basket" : "Basketball Court",
+    fac_squash: lang === "id" ? "Lapangan Squash" : "Squash Court",
+    fac_padel: lang === "id" ? "Lapangan Padel" : "Padel Court",
+    fac_badminton: lang === "id" ? "Lapangan Bulu Tangkis" : "Badminton Court",
+    fac_jogging_track: lang === "id" ? "Jalur Joging" : "Jogging Track",
+    fac_sauna: lang === "id" ? "Sauna" : "Sauna",
+
+    fac_fridge: lang === "id" ? "Kulkas" : "Refrigerator",
+    fac_stove: lang === "id" ? "Kompor" : "Stove",
+    fac_oven: lang === "id" ? "Oven" : "Oven",
+    fac_microwave: lang === "id" ? "Microwave" : "Microwave",
+    fac_washing_machine: lang === "id" ? "Mesin Cuci" : "Washing Machine",
+    fac_dryer: lang === "id" ? "Pengering Pakaian" : "Clothes Dryer",
+    fac_tv: lang === "id" ? "Televisi" : "Television",
+    fac_dishwasher: lang === "id" ? "Mesin Pencuci Piring" : "Dishwasher",
+    fac_kettle: lang === "id" ? "Ketel Listrik" : "Electric Kettle",
+    fac_cookware: lang === "id" ? "Peralatan Masak" : "Cookware",
+    fac_bed_linen: lang === "id" ? "Seprai & Selimut" : "Bed Linen",
+    fac_towels: lang === "id" ? "Handuk" : "Towels",
+    fac_wardrobe: lang === "id" ? "Lemari Pakaian" : "Wardrobe",
+    fac_desk: lang === "id" ? "Meja Kerja" : "Work Desk",
+    fac_private_bathroom: lang === "id" ? "Kamar Mandi Pribadi" : "Private Bathroom",
+    fac_shared_bathroom: lang === "id" ? "Kamar Mandi Bersama" : "Shared Bathroom",
+    fac_private_kitchen: lang === "id" ? "Dapur Pribadi" : "Private Kitchen",
+    fac_shared_kitchen: lang === "id" ? "Dapur Bersama" : "Shared Kitchen",
+    fac_electricity_connection: lang === "id" ? "Sambungan Listrik" : "Electricity Connection",
+    fac_water_connection: lang === "id" ? "Sambungan Air" : "Water Connection",
+    fac_drainage: lang === "id" ? "Drainase" : "Drainage",
+    fac_fenced: lang === "id" ? "Pagar Keliling" : "Fenced",
+    fac_paved_access: lang === "id" ? "Akses Jalan Beraspal" : "Paved Road Access",
     fac_ac: "AC",
     fac_pool: lang === "id" ? "Kolam Renang" : "Swimming Pool",
     fac_private_pool:
@@ -2532,6 +2565,11 @@ Is this property still available?`;
   };
 
   const nearbyLabels: Record<string, string> = {
+    near_bus_stop: lang === "id" ? "Halte Bus" : "Bus Stop",
+    near_worship: lang === "id" ? "Tempat Ibadah" : "Place of Worship",
+    near_bank: lang === "id" ? "Bank / ATM" : "Bank / ATM",
+    near_park: lang === "id" ? "Taman Umum" : "Public Park",
+
     near_toll: lang === "id" ? "Akses Tol" : "Toll Access",
     near_mall: "Mall",
     near_school: lang === "id" ? "Sekolah" : "School",
@@ -3410,11 +3448,7 @@ const detailPromoTheme = property.spotlight
         </h2>
       </div>
 
-      {property.videoUrl ? (
-        <span className="rounded-full bg-[#F8F2E5] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#8A650B]">
-          Property Video
-        </span>
-      ) : null}
+      <ShareListingButton id={property.id} title={property.title} lang={lang} />
 
     </div>
 
@@ -3428,11 +3462,10 @@ const detailPromoTheme = property.spotlight
 
       <div className="relative aspect-[9/16] overflow-hidden rounded-[20px] bg-black">
 
-        <video
+        <OpeningFrameVideo
           src={property.videoUrl}
-          controls
-          playsInline
-          className="h-full w-full object-cover"
+          label={property.title}
+          className="h-full w-full object-contain"
         />
 
       </div>

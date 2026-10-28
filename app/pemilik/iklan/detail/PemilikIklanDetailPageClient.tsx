@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePemilikDraftListing } from "../layout";
@@ -21,8 +23,9 @@ export default function PemilikIklanDetailPageClient() {
     if (planFromUrl === "priority") return "priority";
     if (planFromUrl === "featured") return "featured";
 
-    return "basic";
-  }, [searchParams]);
+    if (planFromUrl === "basic") return "basic";
+    return draft?.plan || "basic";
+  }, [searchParams, draft?.plan]);
 
   useEffect(() => {
     setDraft((prev: any) => ({
@@ -68,14 +71,14 @@ export default function PemilikIklanDetailPageClient() {
     const jenisZoning = String(draft?.jenisZoning || "").trim();
 
     const isApartment = ["apartemen", "studio"].includes(propertyType);
-    const usesLandSize = !isApartment;
+    const usesLandSize = !isApartment && propertyType !== "room";
     const requiresRentalType = hasRent;
     const requiresLandLegal = propertyType === "tanah" && (hasSale || isAuction);
 
     const baseValid =
       propertyType.length > 0 &&
       hasRequiredPrice &&
-      (!usesLandSize || lt.length > 0);
+      (!usesLandSize || (parseListingDecimal(lt) ?? 0) > 0);
 
     if (!baseValid) return false;
 

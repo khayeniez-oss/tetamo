@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import BackgroundMusic, { EMPTY_MUSIC, type BackgroundMusicChoice } from "./BackgroundMusic";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { renderDurable, hasPendingRender } from "@/lib/ai-video-durable/client.mjs";
 import { useLanguage } from "@/app/context/LanguageContext";
+import { propertyVideoContext } from "@/lib/property-video-context";
 
 type Props = {
   draft: any;
@@ -14,7 +17,18 @@ type Props = {
 
 type SourceType = "owner" | "agent" | "admin";
 
+type AiVideoMediaItem = {
+  id: string;
+  file: File;
+  url: string;
+  kind: "image" | "video";
+  durationSeconds: number;
+  width: number;
+  height: number;
+};
+
 type DraftMedia = {
+  propertyId?: string;
   photos?: string[];
   coverIndex?: number;
   video?: string;
@@ -370,6 +384,19 @@ function getDraftLocation(draft: any) {
   return joinUniqueText([address, housingName, area, city, province]);
 }
 
+function getAiVideoLocation(draft: any) {
+  const city = getDraftText(draft, [
+    "city",
+    "kota",
+    "regency",
+    "kabupaten",
+  ]);
+
+  const province = getDraftText(draft, ["province", "provinsi"]);
+
+  return joinUniqueText([city, province]);
+}
+
 function getDraftLocationNotes(draft: any) {
   return joinUniqueText([
     getDraftText(draft, ["note", "locationNote", "location_note"]),
@@ -464,7 +491,24 @@ export default function ListingFoto({
   }, [draft, pathname]);
 
   const isEdit = mode === "edit";
+  const isDemo = process.env.NODE_ENV === "development" && Boolean(draft?.demo);
+  const videoLocked = isEdit && (source === "agent" || source === "owner");
   const isAgent = source === "agent";
+  const [agentVideoEligible, setAgentVideoEligible] = useState(false);
+  useEffect(() => {
+    if (!isAgent || videoLocked) return;
+    let cancelled = false;
+    async function checkVideoMembership() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase.from("agent_memberships")
+        .select("package_id,status,expires_at").eq("user_id", user.id).eq("status", "active");
+      const eligible = !error && (data || []).some(row => ["gold", "agent-pro"].includes(row.package_id) && (!row.expires_at || new Date(row.expires_at).getTime() >= Date.now()));
+      if (!cancelled) setAgentVideoEligible(eligible);
+    }
+    void checkVideoMembership().catch(() => { if (!cancelled) setAgentVideoEligible(false); });
+    return () => { cancelled = true; };
+  }, [isAgent, videoLocked]);
   const isAdmin = source === "admin";
   const canUseSocialCaption = isAgent || isAdmin;
   const shouldSubmitForApproval = isEdit || isAgent;
@@ -660,6 +704,21 @@ export default function ListingFoto({
   const hydratedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Tetamo AI Video raw media is intentionally isolated from listing media.
+  const [backgroundMusic, setBackgroundMusic] = useState<BackgroundMusicChoice>(EMPTY_MUSIC);
+  const aiVideoInputRef = useRef<HTMLInputElement | null>(null);
+  const [aiVideoMedia, setAiVideoMedia] = useState<AiVideoMediaItem[]>([]);
+  const [draggedAiMediaId, setDraggedAiMediaId] = useState<string | null>(null);
+  const [aiVideoPreparing, setAiVideoPreparing] = useState(false);
+  const [aiVideoStage, setAiVideoStage] = useState<'preparing' | 'uploading' | 'rendering'>('preparing');
+  const [aiVideoSuccessfulCount, setAiVideoSuccessfulCount] = useState<number | null>(null);
+  const [aiVideoLimit, setAiVideoLimit] = useState<number | null>(null);
+  const [aiVideoCanResume, setAiVideoCanResume] = useState(false);
+  const aiStudioRef = useRef<HTMLDivElement | null>(null);
+  const aiPreviewRef = useRef<HTMLDivElement | null>(null);
+  const aiVideoRequestRef = useRef(false);
+  const aiVideoApprovalRef = useRef(false);
 
   const photoInputId = "listing-photo-input";
   const videoInputId = "listing-video-input";
@@ -1101,7 +1160,7 @@ export default function ListingFoto({
       throw new Error(t.loginFirst);
     }
 
-    const folder = draft?.mediaFolder || draft?.kode || crypto.randomUUID();
+    const folder = draft?.mediaFolder || crypto.randomUUID();
 
     if (!draft?.mediaFolder) {
       setDraft((p: any) => ({
@@ -1188,7 +1247,7 @@ export default function ListingFoto({
   }
 
   async function onAddVideo(files: FileList | null) {
-    if (!files) return;
+    if (videoLocked || !files) return;
 
     const file = files[0];
     if (!file) return;
@@ -1208,12 +1267,9 @@ export default function ListingFoto({
 
       const { user, folder } = await ensureUserAndFolder();
 
-      if (video) {
-        const oldPath = getPublicFilePathFromUrl(video, "property-videos");
-        if (oldPath) {
-          await supabase.storage.from("property-videos").remove([oldPath]);
-        }
-      }
+      // Retain the previous video until the replacement has uploaded successfully.
+      // Saved listing videos remain untouched by this Create upload path.
+      const previousVideo = video;
 
       const extension = getSafeVideoExtension(file);
       const baseName = file.name.includes(".")
@@ -1239,6 +1295,15 @@ export default function ListingFoto({
         .getPublicUrl(path);
 
       setVideo(publicData.publicUrl);
+      setAiGeneratedVideoBlob(null);
+      setAiGeneratedVideoPreview("");
+      if (mode !== "edit" && previousVideo) {
+        const oldPath = getPublicFilePathFromUrl(previousVideo, "property-videos");
+        if (oldPath) {
+          const { error: cleanupError } = await supabase.storage.from("property-videos").remove([oldPath]);
+          if (cleanupError) console.warn("Previous draft video cleanup deferred:", cleanupError.message);
+        }
+      }
     } catch (error: any) {
       console.error("Video upload error:", error);
       alert(error?.message || t.videoUploadFailed);
@@ -1281,10 +1346,13 @@ export default function ListingFoto({
   }
 
   async function clearVideo() {
+    if (videoLocked) return;
     const path = getPublicFilePathFromUrl(video, "property-videos");
     setVideo("");
 
-    if (!path) return;
+    // In Edit mode this is only a draft removal.
+    // The old live storage object is cleaned up after successful Edit submit.
+    if (mode === "edit" || !path) return;
 
     try {
       await supabase.storage.from("property-videos").remove([path]);
@@ -1293,16 +1361,758 @@ export default function ListingFoto({
     }
   }
 
+  async function onAddAiVideoMedia(files: FileList | null) {
+    if (!files) return;
+
+    const MAX_AI_IMAGE_SIZE = 10 * 1024 * 1024;
+    const MAX_AI_VIDEO_SIZE = 100 * 1024 * 1024;
+    const MAX_AI_VIDEO_DURATION_SECONDS = 90;
+
+    const acceptedImageTypes = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ]);
+
+    const acceptedVideoTypes = new Set([
+      "video/mp4",
+      "video/quicktime",
+      "video/webm",
+    ]);
+
+    function getVideoDuration(file: File): Promise<{ duration: number; width: number; height: number }> {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const element = document.createElement("video");
+
+        const cleanup = () => {
+          URL.revokeObjectURL(url);
+          element.removeAttribute("src");
+          element.load();
+        };
+
+        element.preload = "metadata";
+
+        element.onloadedmetadata = () => {
+          const duration = element.duration;
+          const width = element.videoWidth;
+          const height = element.videoHeight;
+          cleanup();
+
+          if (!Number.isFinite(duration)) {
+            reject(new Error("Could not read video duration."));
+            return;
+          }
+
+          resolve({ duration, width, height });
+        };
+
+        element.onerror = () => {
+          cleanup();
+          reject(new Error("Could not read video metadata."));
+        };
+
+        element.src = url;
+      });
+    }
+
+    function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => { URL.revokeObjectURL(url); resolve({ width: image.naturalWidth, height: image.naturalHeight }); };
+        image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Unable to read image dimensions.")); };
+        image.src = url;
+      });
+    }
+
+    const accepted: Array<{
+      file: File;
+      durationSeconds: number;
+      width: number;
+      height: number;
+    }> = [];
+    const rejected: string[] = [];
+
+    let acceptedVideoDuration = aiVideoMedia.reduce(
+      (total, item) =>
+        total + (item.kind === "video" ? item.durationSeconds : 0),
+      0
+    );
+
+    for (const file of Array.from(files)) {
+      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+      const isImage =
+        acceptedImageTypes.has(file.type) ||
+        ["jpg", "jpeg", "png", "webp", "heic", "heif"].includes(extension);
+
+      const isVideo =
+        acceptedVideoTypes.has(file.type) ||
+        ["mp4", "mov", "webm"].includes(extension);
+
+      if (!isImage && !isVideo) {
+        rejected.push(
+          `${file.name}: ${
+            lang === "id"
+              ? "format file tidak didukung"
+              : "unsupported file format"
+          }`
+        );
+        continue;
+      }
+
+      if (isImage) {
+        if (file.size > MAX_AI_IMAGE_SIZE) {
+          rejected.push(
+            `${file.name}: ${
+              lang === "id"
+                ? "foto melebihi batas 10 MB"
+                : "photo exceeds the 10 MB limit"
+            }`
+          );
+          continue;
+        }
+
+        try {
+          const dimensions = await getImageDimensions(file);
+          accepted.push({ file, durationSeconds: 0, ...dimensions });
+        } catch {
+          rejected.push(`${file.name}: ${lang === "id" ? "foto tidak dapat dibaca; gunakan JPG, PNG, atau WEBP" : "photo could not be read; use JPG, PNG or WEBP"}`);
+        }
+        continue;
+      }
+
+      if (file.size > MAX_AI_VIDEO_SIZE) {
+        rejected.push(
+          `${file.name}: ${
+            lang === "id"
+              ? "video melebihi batas 100 MB"
+              : "video exceeds the 100 MB limit"
+          }`
+        );
+        continue;
+      }
+
+      let duration: number;
+      let width = 0;
+      let height = 0;
+
+      try {
+        const metadata = await getVideoDuration(file);
+        duration = metadata.duration;
+        width = metadata.width;
+        height = metadata.height;
+
+        if (duration > MAX_AI_VIDEO_DURATION_SECONDS) {
+          rejected.push(
+            `${file.name}: ${
+              lang === "id"
+                ? "video harus maksimal 1:30"
+                : "video must be 1:30 or shorter"
+            }`
+          );
+          continue;
+        }
+      } catch {
+        rejected.push(
+          `${file.name}: ${
+            lang === "id"
+              ? "durasi video tidak dapat dibaca"
+              : "video duration could not be read"
+          }`
+        );
+        continue;
+      }
+
+      if (
+        acceptedVideoDuration + duration >
+        MAX_AI_VIDEO_DURATION_SECONDS
+      ) {
+        rejected.push(
+          `${file.name}: ${
+            lang === "id"
+              ? "total durasi semua video tidak boleh melebihi 1:30"
+              : "total duration of all video clips cannot exceed 1:30"
+          }`
+        );
+        continue;
+      }
+
+      acceptedVideoDuration += duration;
+
+      accepted.push({
+        file,
+        durationSeconds: duration,
+        width,
+        height,
+      });
+    }
+
+    if (accepted.length > 0) {
+      const stamp = Date.now();
+
+      const items: AiVideoMediaItem[] = accepted.map(
+        ({ file, durationSeconds, width, height }, index) => ({
+          id: `${stamp}-${index}-${file.name}`,
+          file,
+          url: URL.createObjectURL(file),
+          kind: file.type.startsWith("video/")
+            ? "video"
+            : ["mp4", "mov", "webm"].includes(
+                  file.name.split(".").pop()?.toLowerCase() ?? ""
+                )
+              ? "video"
+              : "image",
+          durationSeconds,
+          width,
+          height,
+        })
+      );
+
+      updateAiVideoMedia((current) => [...current, ...items]);
+    }
+
+    if (aiVideoInputRef.current) {
+      aiVideoInputRef.current.value = "";
+    }
+
+    if (rejected.length > 0) {
+      alert(
+        `${
+          lang === "id"
+            ? "Beberapa media tidak dapat ditambahkan:"
+            : "Some media could not be added:"
+        }\n\n${rejected.join("\n")}`
+      );
+    }
+  }
+
+  function removeAiVideoMedia(id: string) {
+    updateAiVideoMedia((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target) URL.revokeObjectURL(target.url);
+      return current.filter((item) => item.id !== id);
+    });
+  }
+
+  function moveAiVideoMedia(fromIndex: number, toIndex: number) {
+    updateAiVideoMedia((current) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= current.length ||
+        toIndex >= current.length ||
+        fromIndex === toIndex
+      ) {
+        return current;
+      }
+
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }
+
+  function dropAiVideoMedia(targetId: string) {
+    if (!draggedAiMediaId || draggedAiMediaId === targetId) {
+      setDraggedAiMediaId(null);
+      return;
+    }
+
+    updateAiVideoMedia((current) => {
+      const fromIndex = current.findIndex(
+        (item) => item.id === draggedAiMediaId
+      );
+      const toIndex = current.findIndex((item) => item.id === targetId);
+
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+        return current;
+      }
+
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+
+    setDraggedAiMediaId(null);
+  }
+
+  const [aiGeneratedVideoPreview, setAiGeneratedVideoPreview] =
+    useState<string>("");
+  const [aiGeneratedVideoBlob, setAiGeneratedVideoBlob] =
+    useState<Blob | null>(null);
+  const [aiVideoApproving, setAiVideoApproving] = useState(false);
+  const [aiPreviewSettingsChanged, setAiPreviewSettingsChanged] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (aiGeneratedVideoPreview) {
+        URL.revokeObjectURL(aiGeneratedVideoPreview);
+      }
+    };
+  }, [aiGeneratedVideoPreview]);
+
+  useEffect(() => {
+    if (aiGeneratedVideoPreview && (isAgent || source === "owner")) aiPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [aiGeneratedVideoPreview, isAgent, source]);
+
+  function updateAiVideoMedia(update: (current: AiVideoMediaItem[]) => AiVideoMediaItem[]) {
+    if (aiVideoRequestRef.current || aiVideoApproving) return;
+    setAiVideoMedia(update);
+    if (aiGeneratedVideoPreview) setAiPreviewSettingsChanged(true);
+  }
+
+  function changeBackgroundMusic(next: BackgroundMusicChoice) {
+    if (aiVideoRequestRef.current || aiVideoApproving) return;
+    if (next.track === backgroundMusic.track && next.volume === backgroundMusic.volume && next.file === backgroundMusic.file && next.rightsConfirmed === backgroundMusic.rightsConfirmed) return;
+    setBackgroundMusic(next);
+    if (aiGeneratedVideoPreview) setAiPreviewSettingsChanged(true);
+  }
+
+  async function handleAiVideoGenerate() {
+    if (videoLocked || aiVideoRequestRef.current || aiVideoPreparing || aiVideoApproving) return;
+
+    if (aiVideoMedia.length === 0) {
+      alert(
+        lang === "id"
+          ? "Tambahkan foto atau video properti terlebih dahulu."
+          : "Add property photos or videos first."
+      );
+      return;
+    }
+
+    if (backgroundMusic.track === "upload" && (!backgroundMusic.file || !backgroundMusic.rightsConfirmed)) {
+      alert(lang === "id" ? "Pilih file musik dan konfirmasikan izin penggunaannya." : "Choose a music file and confirm permission to use it.");
+      return;
+    }
+
+    if (aiVideoMedia.some(item => item.width > 0 && item.height > 0 && Math.abs(item.width / item.height - 9 / 16) > 0.025)) {
+      const proceed = window.confirm(lang === "id"
+        ? "Sebagian foto atau klip Anda bukan format vertikal 9:16. Video hanya dibuat dalam format 9:16, maksimal 1:30. Media akan disesuaikan ke bingkai vertikal dan bagian tepi dapat terpotong. Lanjutkan?"
+        : "Some photos or clips are not 9:16 portrait, including any landscape media. Videos are generated only in 9:16, up to 1:30. Your media will be fitted to the portrait frame and edges may be cropped. Continue?");
+      if (!proceed) return;
+    }
+
+    const durableVideo = process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_AI_VIDEO_DURABLE_ENABLED === "true";
+    let projectId = "";
+    const uploadedMediaIds: string[] = [];
+
+    aiVideoRequestRef.current = true;
+    setAiVideoStage("preparing");
+    setAiVideoPreparing(true);
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        alert(
+          lang === "id"
+            ? "Silakan login kembali untuk menggunakan Tetamo AI Video."
+            : "Please log in again to use Tetamo AI Video."
+        );
+        return;
+      }
+
+      const token = session.access_token;
+      const { folder } = await ensureUserAndFolder();
+
+      const projectResponse = await fetch(
+        "/api/agent/ai-property-video/project",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mediaFolder: folder,
+            propertyId: draft?.propertyId || null,
+            language: lang === "en" ? "en" : "id",
+            audioMode: "none",
+            ownerPlan: source === "owner" ? draft?.plan : undefined,
+          }),
+        }
+      );
+
+      const projectResult = await projectResponse
+        .json()
+        .catch(() => ({}));
+
+      if (projectResult?.code === "AI_VIDEO_SCHEMA_REQUIRED") throw new Error(lang === "id" ? "Pembuatan video belum siap: pembaruan database video diperlukan. Foto dan musik pilihan Anda tetap tersimpan di halaman ini." : "Video generation needs the database video upgrade. Your selected photos and music remain on this page.");
+
+      if (projectResponse.status === 403 && projectResult?.code === "AI_VIDEO_PACKAGE_REQUIRED") throw new Error(lang === "id" ? "Fitur ini tersedia untuk paket Pemilik Priority / Featured, Agen Gold, dan Agent Pro." : "Video generation is available with Owner Priority / Featured, Agent Gold and Agent Pro.");
+
+      if (!projectResponse.ok || !projectResult?.project?.id) {
+        throw new Error(
+          projectResult?.error ||
+            (lang === "id"
+              ? "Tidak dapat menyiapkan Tetamo AI Video."
+              : "Unable to prepare Tetamo AI Video.")
+        );
+      }
+
+      projectId = String(projectResult.project.id);
+      setAiVideoCanResume(durableVideo && hasPendingRender(projectId));
+      const used = Number(projectResult.project.successful_generation_count);
+      if (Number.isInteger(used) && used >= 0) setAiVideoSuccessfulCount(used);
+      const limit = Number(projectResult.generationLimit ?? projectResult.project.generation_limit);
+      if (![1, 2, 3].includes(limit)) throw new Error("Unable to verify video generation allowance.");
+      setAiVideoLimit(limit);
+      if (used >= limit && !(durableVideo && hasPendingRender(projectId))) throw new Error(lang === "id" ? `Kuota ${limit} pembuatan video untuk listing ini telah digunakan.` : `All ${limit} video generations for this listing have been used.`);
+      setAiVideoStage("uploading");
+
+      if (!durableVideo) {
+      const clearResponse = await fetch(
+        "/api/agent/ai-property-video/source-media",
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            projectId,
+          }),
+        }
+      );
+
+      const clearResult = await clearResponse
+        .json()
+        .catch(() => ({}));
+
+      if (!clearResponse.ok) {
+        throw new Error(
+          clearResult?.error ||
+            (lang === "id"
+              ? "Tidak dapat menyiapkan ulang media properti."
+              : "Unable to reset property media.")
+        );
+      }
+
+      for (let index = 0; index < aiVideoMedia.length; index += 1) {
+        const item = aiVideoMedia[index];
+
+        const formData = new FormData();
+        formData.append("projectId", projectId);
+        formData.append("file", item.file);
+        formData.append("sortOrder", String(index));
+        formData.append(
+          "durationSeconds",
+          String(item.kind === "video" ? item.durationSeconds : 0)
+        );
+
+        const uploadResponse = await fetch(
+          "/api/agent/ai-property-video/source-media",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
+
+        const uploadResult = await uploadResponse
+          .json()
+          .catch(() => ({}));
+
+        if (!uploadResponse.ok || !uploadResult?.media?.id) {
+          throw new Error(
+            uploadResult?.error ||
+              (lang === "id"
+                ? `Gagal mengunggah media ${index + 1}.`
+                : `Failed to upload media ${index + 1}.`)
+          );
+        }
+
+        uploadedMediaIds.push(String(uploadResult.media.id));
+      }
+
+      }
+      const aiPayload = propertyVideoContext(draft || {}, buildAiPayload(), lang);
+
+      const renderForm = new FormData();
+      renderForm.append("payload", JSON.stringify({
+            projectId,
+            music: { track: backgroundMusic.track, volume: backgroundMusic.volume, rightsConfirmed: backgroundMusic.rightsConfirmed },
+            language: lang === "en" ? "en" : "id",
+            propertyContext: {
+              propertyType: aiPayload.propertyType,
+              location: `${isDemo ? "DEMO · " : ""}${getAiVideoLocation(draft)}`,
+              price: aiPayload.price,
+              rentPrice: aiPayload.rentPrice,
+              bedrooms: aiPayload.bedrooms,
+              bathrooms: aiPayload.bathrooms,
+              landSize: aiPayload.landSize,
+              buildingSize: aiPayload.buildingSize,
+              furnishing: aiPayload.furnishing,
+              purpose: aiPayload.purpose,
+              rentalType: aiPayload.rentalType,
+              ownershipTitle: aiPayload.ownershipTitle,
+            },
+          }));
+      if (backgroundMusic.track === "upload" && backgroundMusic.file) {
+        renderForm.append("musicFile", backgroundMusic.file);
+      }
+      setAiVideoStage("rendering");
+      const renderResponse = durableVideo ? await renderDurable({
+        token, projectId, media: aiVideoMedia, music: backgroundMusic,
+        language: lang === "en" ? "en" : "id",
+        propertyContext: JSON.parse(String(renderForm.get("payload"))).propertyContext,
+      }) : await fetch("/api/agent/ai-property-video/generate-local", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: renderForm,
+      });
+
+      if (!renderResponse.ok) {
+        const renderError = await renderResponse
+          .json()
+          .catch(() => ({}));
+
+        throw new Error(
+          renderError?.error ||
+            (lang === "id"
+              ? "Tetamo AI tidak dapat membuat video."
+              : "Tetamo AI could not generate the video.")
+        );
+      }
+
+      const completedCount = Number(renderResponse.headers.get("X-Tetamo-AI-Successful-Generation"));
+      if (completedCount > 0 && Number.isInteger(completedCount)) setAiVideoSuccessfulCount(completedCount);
+      const renderedBlob = await renderResponse.blob();
+
+      if (!renderedBlob.size) {
+        throw new Error(
+          lang === "id"
+            ? "Video berhasil diproses tetapi hasilnya kosong."
+            : "The video was processed but the result was empty."
+        );
+      }
+
+      setAiVideoCanResume(false);
+      const previewUrl = URL.createObjectURL(renderedBlob);
+
+      setAiGeneratedVideoBlob(renderedBlob);
+      setAiPreviewSettingsChanged(false);
+      setAiGeneratedVideoPreview((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return previewUrl;
+      });
+
+
+    } catch (error) {
+      if (projectId) setAiVideoCanResume(durableVideo && hasPendingRender(projectId));
+      console.warn("Tetamo AI Video preparation failed:", error);
+
+      if (!durableVideo && projectId && uploadedMediaIds.length > 0) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          if (session?.access_token) {
+            const cleanupResponse = await fetch(
+              "/api/agent/ai-property-video/source-media",
+              {
+                method: "DELETE",
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  projectId,
+                  mediaIds: uploadedMediaIds,
+                }),
+              }
+            );
+
+            if (!cleanupResponse.ok) {
+              console.error(
+                "Tetamo AI Video batch cleanup failed:",
+                await cleanupResponse.text()
+              );
+            }
+          }
+        } catch (cleanupError) {
+          console.error(
+            "Tetamo AI Video batch cleanup failed:",
+            cleanupError
+          );
+        }
+      }
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : lang === "id"
+            ? "Terjadi kesalahan saat menyiapkan Tetamo AI Video."
+            : "Something went wrong while preparing Tetamo AI Video."
+      );
+    } finally {
+      aiVideoRequestRef.current = false;
+      setAiVideoPreparing(false);
+    }
+  }
+
   function handleNext() {
-    if (!canContinue || uploadingPhotos || uploadingVideo || generatingAi) return;
+    if (isDemo) return;
+    if (!canContinue || uploadingPhotos || uploadingVideo || generatingAi || aiVideoPreparing || aiVideoApproving) return;
+    if (aiGeneratedVideoBlob && aiGeneratedVideoPreview) {
+      alert(lang === "id" ? "Video masih berupa pratinjau. Klik Gunakan video ini sebelum melanjutkan, atau hapus pratinjau jika tidak ingin menggunakannya." : "Your generated video is still a preview. Click Use this video before continuing, or discard the preview if you do not want to use it.");
+      aiPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     onNext();
   }
+
+  async function approveAiGeneratedVideo() {
+    if (videoLocked || !aiGeneratedVideoBlob || aiVideoApprovalRef.current || aiVideoApproving || aiVideoRequestRef.current) return;
+    aiVideoApprovalRef.current = true;
+
+    try {
+      setAiVideoApproving(true);
+
+      const { user, folder } = await ensureUserAndFolder();
+
+      const path =
+        `public/${user.id}/${folder}/video/` +
+        `${Date.now()}-tetamo-ai-video.mp4`;
+
+      const generatedFile = new File(
+        [aiGeneratedVideoBlob],
+        "tetamo-ai-video.mp4",
+        { type: "video/mp4" }
+      );
+
+      const { error: uploadError } = await supabase.storage
+        .from("property-videos")
+        .upload(path, generatedFile, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData } = supabase.storage
+        .from("property-videos")
+        .getPublicUrl(path);
+
+      if (!publicData?.publicUrl) {
+        throw new Error("Unable to create the approved video URL.");
+      }
+
+      const previousVideo = video;
+
+      // This is the approval boundary:
+      // only now does the AI draft become the listing video.
+      setVideo(publicData.publicUrl);
+      setDraft((previous: any) => ({ ...(previous || {}), video: publicData.publicUrl }));
+
+      setAiGeneratedVideoBlob(null);
+      setAiGeneratedVideoPreview((current) => {
+        if (current) {
+          URL.revokeObjectURL(current);
+        }
+        return "";
+      });
+
+      // In Edit mode the previous video is still the live DB-backed video.
+      // Keep it until the parent Edit submit succeeds.
+      if (mode !== "edit" && previousVideo) {
+        const previousPath = getPublicFilePathFromUrl(
+          previousVideo,
+          "property-videos"
+        );
+
+        if (previousPath && previousPath !== path) {
+          try {
+            await supabase.storage
+              .from("property-videos")
+              .remove([previousPath]);
+          } catch (cleanupError) {
+            console.error(
+              "Previous listing video cleanup failed:",
+              cleanupError
+            );
+          }
+        }
+      }
+
+      alert(
+        lang === "id"
+          ? "Video ditambahkan ke draft listing. Simpan atau kirim listing untuk menyelesaikan."
+          : "Video added to your listing draft. Save or submit the listing to finish."
+      );
+    } catch (error) {
+      console.error("Tetamo AI Video approval failed:", error);
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : lang === "id"
+            ? "Video tidak dapat disetujui."
+            : "Unable to approve the video."
+      );
+    } finally {
+      aiVideoApprovalRef.current = false;
+      setAiVideoApproving(false);
+    }
+  }
+
+  const aiVideoTotalDurationSeconds = aiVideoMedia.reduce(
+    (total, item) =>
+      total + (item.kind === "video" ? item.durationSeconds : 0),
+    0
+  );
+
+  async function loadNo4DemoMedia() {
+    if (!isDemo || uploadingPhotos || aiVideoPreparing) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Silakan masuk kembali.");
+      const headers = { Authorization: `Bearer ${session.access_token}` };
+      const read = async (url: string) => { const response = await fetch(url, { headers }); if (!response.ok) { const result = await response.json().catch(() => ({})); throw new Error(`Media demo tidak dapat dibaca (${response.status}): ${result.error || url}`); } return response; };
+      const info = await (await read("/api/dev/listing-demo")).json();
+      const files = await Promise.all((info.photos as string[]).map(async (name, index) => new File([await (await read(`/api/dev/listing-demo?asset=photo&index=${index}`)).blob()], name, { type: "image/jpeg" })));
+      const selected = new DataTransfer(); files.forEach(file => selected.items.add(file));
+      await onAddPhotos(selected.files);
+      await onAddAiVideoMedia(selected.files);
+      const music = new File([await (await read("/api/dev/listing-demo?asset=music")).blob()], info.music, { type: "audio/mp4" });
+      changeBackgroundMusic({ track: "upload", volume: 25, file: music, rightsConfirmed: false });
+    } catch (error) { alert(error instanceof Error ? error.message : "Demo gagal dimuat."); }
+  }
+
+  const aiVideoDurationMinutes = Math.floor(
+    aiVideoTotalDurationSeconds / 60
+  );
+
+  const aiVideoDurationRemainingSeconds = Math.floor(
+    aiVideoTotalDurationSeconds % 60
+  );
+
+  const aiVideoDurationLabel = `${aiVideoDurationMinutes}:${String(
+    aiVideoDurationRemainingSeconds
+  ).padStart(2, "0")}`;
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <button
           onClick={onBack}
+          disabled={aiVideoPreparing || aiVideoApproving}
           className="text-sm text-gray-700 hover:text-[#1C1C1E]"
           type="button"
         >
@@ -1315,6 +2125,7 @@ export default function ListingFoto({
         <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 sm:text-base">
           {t.pageSubtitle}
         </p>
+        {isDemo ? <button type="button" onClick={loadNo4DemoMedia} disabled={uploadingPhotos || aiVideoPreparing || aiVideoMedia.length > 0} className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold disabled:opacity-50">Gunakan media properti No. 4 & musik pilihan Anda</button> : null}
 
         <div className="mt-6 rounded-3xl border border-gray-200 bg-white shadow-sm sm:mt-8">
           <div className="p-4 sm:p-5 md:p-6 lg:p-7">
@@ -1428,17 +2239,41 @@ export default function ListingFoto({
                 </div>
               </section>
 
-              <section className="min-w-0">
+              <section id="listing-video-panel" ref={aiPreviewRef} className="min-w-0 scroll-mt-32">
                 <div className="mb-3 text-sm font-semibold sm:text-base">
                   {t.videoOptional}
                 </div>
 
                 <div className="mx-auto w-full max-w-[320px] lg:max-w-[340px] xl:max-w-[380px]">
                   <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
-                    {video ? (
+                    {aiVideoPreparing ? (
+                      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-[#1C1C1E]" />
+                        <p className="mt-4 text-sm font-semibold text-[#1C1C1E]">
+                          {lang === "id"
+                            ? "Tetamo AI sedang membuat video..."
+                            : "Tetamo AI is creating your video..."}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-gray-500">
+                          {lang === "id"
+                            ? "Tetap di halaman ini sampai proses selesai."
+                            : "Keep this page open until rendering is complete."}
+                        </p>
+                      </div>
+                    ) : aiGeneratedVideoPreview ? (
+                      <>
+                        <video
+                          src={aiGeneratedVideoPreview}
+                          controls
+                          playsInline
+                          className="h-full w-full object-contain"
+                        />
+                      </>
+                    ) : video ? (
                       <video
                         src={video}
                         controls
+                        playsInline
                         className="h-full w-full object-cover"
                       />
                     ) : (
@@ -1448,7 +2283,49 @@ export default function ListingFoto({
                     )}
                   </div>
 
-                  <div className="mt-4 flex items-center gap-2">
+                  {aiGeneratedVideoPreview ? (
+                    <div className="mt-3">
+                      {aiPreviewSettingsChanged ? <p role="status" className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{lang === "id" ? "Foto atau musik telah diubah. Pratinjau ini tetap menampilkan hasil terakhir. Buat ulang untuk menerapkan perubahan, atau gunakan video terakhir ini." : "Photos or music have changed. This preview still shows your last rendered video. Generate again to apply changes, or use this last video."}</p> : null}
+                      <p className="text-center text-xs leading-5 text-gray-500">
+                        {lang === "id"
+                          ? "Ini masih draft. Video listing Anda belum diganti sampai Anda menyetujuinya."
+                          : "This is still a draft. Your listing video will not change until you approve it."}
+                      </p>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setAiGeneratedVideoBlob(null); setAiGeneratedVideoPreview(""); aiStudioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                          disabled={aiVideoPreparing || aiVideoApproving}
+                          className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-[#1C1C1E] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {lang === "id" ? "Ubah & buat lagi" : "Change and generate again"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={approveAiGeneratedVideo}
+                          disabled={
+                            !aiGeneratedVideoBlob ||
+                            aiVideoPreparing ||
+                            aiVideoApproving
+                          }
+                          className="inline-flex items-center justify-center rounded-2xl bg-[#D8B46A] px-4 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {aiVideoApproving
+                            ? lang === "id"
+                              ? "Mengunggah..."
+                              : "Uploading..."
+                            : lang === "id"
+                              ? "✓ Gunakan video ini"
+                              : "✓ Use this video"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <p className="mt-2 text-center text-xs font-medium text-gray-500">{lang === "id" ? "9:16 vertikal · Maksimal 1:30" : "9:16 portrait · Maximum 1:30"}</p>
+                  {videoLocked ? <p className="mt-3 rounded-xl bg-gray-50 p-3 text-xs leading-5 text-gray-600">{lang === "id" ? "Video dibuat saat membuat listing dan tidak dapat diubah setelah diposting. Anda tetap dapat mengedit detail listing lainnya." : "Videos are added when creating a listing and cannot be changed after posting. You can still edit the other listing details."}</p> : <div className="mt-4 flex items-center gap-2">
                     <label
                       htmlFor={videoInputId}
                       className={[
@@ -1458,7 +2335,7 @@ export default function ListingFoto({
                           : "cursor-pointer",
                       ].join(" ")}
                       onClick={(e) => {
-                        if (uploadingVideo) {
+                        if (uploadingVideo || aiVideoPreparing || aiVideoApproving) {
                           e.preventDefault();
                           return;
                         }
@@ -1474,23 +2351,25 @@ export default function ListingFoto({
                     {video ? (
                       <button
                         onClick={clearVideo}
+                        disabled={aiVideoPreparing || aiVideoApproving}
                         className="inline-flex flex-1 items-center justify-center rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold"
                         type="button"
                       >
                         {t.removeVideo}
                       </button>
                     ) : null}
-                  </div>
+                  </div>}
 
-                  <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <p className="font-semibold">{t.videoGuideTitle}</p>
+                  <details className="mt-3 rounded-2xl border border-gray-200 px-3 py-2 text-xs text-gray-600"><summary className="cursor-pointer font-semibold">ⓘ {lang === "id" ? "Sudah punya video?" : "Already have a finished video?"}</summary><p className="mt-2 leading-5">{lang === "id" ? "Upload video siap pakai melalui tombol Upload Video. Video otomatis tampil di pratinjau setelah unggahan selesai. Tersedia untuk semua paket. Pembuatan video dari foto atau klip di bawah adalah fitur terpisah untuk Pemilik Priority / Featured, Agen Gold, dan Agent Pro." : "Upload your finished video with Upload Video. It appears in the preview once uploading completes. Available with every package. Generating a video from photos or clips below is a separate feature for Owner Priority / Featured, Agent Gold and Agent Pro."}</p></details>
+                  <details className="mt-3 rounded-2xl border border-gray-200 px-3 py-2 text-xs text-gray-600">
+                    <summary className="cursor-pointer font-semibold">{t.videoGuideTitle}</summary>
                     <ul className="mt-2 list-disc space-y-1 pl-5">
                       <li>{t.videoGuideMp4}</li>
                       <li>{t.videoGuideResolution}</li>
                       <li>{t.videoGuideCompressed}</li>
                       <li>{t.videoGuideRawPhone}</li>
                     </ul>
-                  </div>
+                  </details>
                 </div>
 
                 <input
@@ -1499,10 +2378,223 @@ export default function ListingFoto({
                   type="file"
                   accept="video/*,.mp4,.mov,.webm"
                   className="absolute left-[-9999px] top-auto h-px w-px opacity-0"
+                  disabled={videoLocked}
                   onChange={(e) => onAddVideo(e.target.files)}
                 />
               </section>
             </div>
+
+
+            {((isAgent && agentVideoEligible) || (source === "owner" && ["priority", "featured"].includes(String(draft?.plan)))) && !videoLocked ? (
+              <div id="ai-video-steps" ref={aiStudioRef} className="mt-8 scroll-mt-32 overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm">
+                <div className="bg-[#17191D] px-5 py-5 text-white sm:px-7">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#D8B46A]">TETAMO AI VIDEO</p>
+                  <h3 className="mt-2 text-xl font-bold sm:text-2xl">{lang === "id" ? "Buat video properti Anda" : "Generate your property video"}</h3>
+                  <p className="mt-2 text-sm text-gray-300">{lang === "id" ? "Tambah foto atau klip → pilih musik → buat video." : "Add photos or clips → choose music → generate video."}</p>
+                  <p className="mt-3 text-xs font-semibold text-[#E8CB8B]">{lang === "id" ? "9:16 vertikal saja · Maksimal 1:30" : "9:16 portrait only · Maximum 1:30"}</p>
+                </div>
+                  <div className="space-y-5 p-5 sm:p-7">
+                    <fieldset disabled={aiVideoPreparing || aiVideoApproving} className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-3 disabled:opacity-60">
+                      <legend className="px-2 text-sm font-bold">{lang === "id" ? "1. Tambah foto atau klip" : "1. Add photos or clips"}</legend>
+                      {aiVideoMedia.length === 0 ? (
+                        <div className="py-3 text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                            +
+                          </div>
+
+                          <p className="mt-4 text-sm font-bold text-[#1C1C1E]">
+                            {lang === "id"
+                              ? "Foto dan klip properti Anda"
+                              : "Your property photos and clips"}
+                          </p>
+
+                          <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-gray-500 sm:text-sm">
+                            {lang === "id"
+                              ? "Video vertikal 9:16 saja · maksimal 1:30. Tambahkan foto atau klip properti Anda."
+                              : "9:16 portrait only · maximum 1:30. Add your property photos or clips."}
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() => aiVideoInputRef.current?.click()}
+                            className="mt-5 inline-flex items-center justify-center rounded-2xl bg-[#1C1C1E] px-6 py-3 text-sm font-semibold text-white hover:bg-black"
+                          >
+                            + {lang === "id" ? "Tambah foto atau video" : "Add photos or videos"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-bold text-[#1C1C1E]">
+                                {lang === "id"
+                                  ? "Media Properti"
+                                  : "Property Media"}
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500">
+                                {aiVideoMedia.length}{" "}
+                                {lang === "id" ? "media dipilih" : "media selected"}
+                                {" · "}
+                                {lang === "id" ? "Durasi video" : "Video footage"}:{" "}
+                                {aiVideoDurationLabel} / 1:30
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => aiVideoInputRef.current?.click()}
+                              className="inline-flex w-fit items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-[#1C1C1E] hover:bg-gray-50"
+                            >
+                              + {lang === "id" ? "Tambah Media" : "Add More"}
+                            </button>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                            {aiVideoMedia.map((item, index) => (
+                              <div
+                                key={item.id}
+                                draggable={!aiVideoPreparing && !aiVideoApproving}
+                                onDragStart={() => setDraggedAiMediaId(item.id)}
+                                onDragEnd={() => setDraggedAiMediaId(null)}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  dropAiVideoMedia(item.id);
+                                }}
+                                className={[
+                                  "group relative aspect-square overflow-hidden rounded-2xl border bg-black transition",
+                                  draggedAiMediaId === item.id
+                                    ? "border-[#1C1C1E] opacity-50"
+                                    : "border-gray-200",
+                                ].join(" ")}
+                              >
+                                {item.kind === "video" ? (
+                                  <video
+                                    src={item.url}
+                                    className="h-full w-full object-cover"
+                                    controls
+                                    playsInline
+                                  />
+                                ) : (
+                                  <img
+                                    src={item.url}
+                                    alt={item.file.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                )}
+
+                                <div className="absolute left-2 top-2 z-10 flex items-center gap-1">
+                                  <span className="flex h-8 min-w-8 items-center justify-center rounded-full bg-black/70 px-2 text-[11px] font-bold text-white shadow-sm">
+                                    {index + 1}
+                                  </span>
+
+                                  <span
+                                    title={
+                                      lang === "id"
+                                        ? "Tarik untuk mengatur urutan"
+                                        : "Drag to reorder"
+                                    }
+                                    className="hidden h-8 cursor-grab items-center justify-center rounded-full bg-black/70 px-2 text-sm font-bold text-white shadow-sm active:cursor-grabbing sm:flex"
+                                  >
+                                    ⋮⋮
+                                  </span>
+                                </div>
+
+                                <div className="absolute bottom-8 left-2 z-20 flex gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() =>
+                                      moveAiVideoMedia(index, index - 1)
+                                    }
+                                    aria-label={
+                                      lang === "id"
+                                        ? "Pindah ke kiri"
+                                        : "Move left"
+                                    }
+                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white shadow-sm disabled:opacity-30"
+                                  >
+                                    ←
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={index === aiVideoMedia.length - 1}
+                                    onClick={() =>
+                                      moveAiVideoMedia(index, index + 1)
+                                    }
+                                    aria-label={
+                                      lang === "id"
+                                        ? "Pindah ke kanan"
+                                        : "Move right"
+                                    }
+                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white shadow-sm disabled:opacity-30"
+                                  >
+                                    →
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeAiVideoMedia(item.id)}
+                                  aria-label={
+                                    lang === "id" ? "Hapus media" : "Remove media"
+                                  }
+                                  className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-sm font-bold text-white shadow-sm hover:bg-black"
+                                >
+                                  ×
+                                </button>
+
+                                <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/75 to-transparent px-2 pb-2 pt-8">
+                                  <p className="truncate text-[10px] font-medium text-white">
+                                    {item.file.name}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <input
+                        ref={aiVideoInputRef}
+                        type="file"
+                        accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm"
+                        multiple
+                        className="absolute left-[-9999px] top-auto h-px w-px opacity-0"
+                        onChange={(e) => onAddAiVideoMedia(e.target.files)}
+                      />
+                    </fieldset>
+
+                    {aiVideoMedia.some(item => item.width > 0 && item.height > 0 && Math.abs(item.width / item.height - 9 / 16) > 0.025) && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">{lang === "id" ? "⚠ Ada foto atau klip yang bukan 9:16 vertikal. Hasil video tetap 9:16; bagian tepi dapat terpotong. Periksa preview sebelum menggunakan video." : "⚠ Some photos or clips are not 9:16 portrait. Your finished video will be 9:16; edges may be cropped. Check the preview before using it."}</p>}
+
+                    <BackgroundMusic lang={lang} value={backgroundMusic} onChange={changeBackgroundMusic} disabled={aiVideoPreparing || aiVideoApproving} />
+
+                    <div className="space-y-3 border-t border-gray-100 pt-5">
+                      <h4 className="text-sm font-bold">{lang === "id" ? "3. Buat video Anda" : "3. Generate your video"}</h4>
+                      <p className="text-xs text-gray-500">{aiVideoLimit === null || aiVideoSuccessfulCount === null ? (lang === "id" ? "Kuota per listing: Priority / Featured 1 · Gold 2 · Agent Pro 3. Diperiksa sebelum pembuatan video." : "Per listing: Priority / Featured 1 · Gold 2 · Agent Pro 3. Allowance is verified before generation.") : (lang === "id" ? `${Math.max(0, aiVideoLimit - aiVideoSuccessfulCount)} dari ${aiVideoLimit} pembuatan tersisa` : `${Math.max(0, aiVideoLimit - aiVideoSuccessfulCount)} of ${aiVideoLimit} generations remaining`)}</p>
+                      {aiVideoPreparing && <p role="status" aria-live="polite" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{lang === "id" ? (aiVideoStage === 'preparing' ? 'Menyiapkan video…' : aiVideoStage === 'uploading' ? 'Mengunggah foto dan klip…' : 'Membuat video dan menambahkan musik… Tetap buka halaman ini.') : (aiVideoStage === 'preparing' ? 'Preparing your video…' : aiVideoStage === 'uploading' ? 'Uploading photos and clips…' : 'Creating your video and adding music… Keep this page open.')}</p>}
+                      <button
+                        type="button"
+                        onClick={handleAiVideoGenerate}
+                        disabled={aiVideoMedia.length === 0 || aiVideoPreparing || aiVideoApproving || (aiVideoLimit !== null && aiVideoSuccessfulCount !== null && aiVideoSuccessfulCount >= aiVideoLimit && !aiVideoCanResume)}
+                        className={[
+                          "inline-flex w-full items-center justify-center rounded-2xl bg-[#D8B46A] px-6 py-3.5 text-sm font-bold text-black transition sm:w-auto",
+                          aiVideoMedia.length === 0 || aiVideoPreparing
+                            ? "cursor-not-allowed opacity-40"
+                            : "hover:brightness-95",
+                        ].join(" ")}
+                      >
+                        {aiVideoPreparing
+                          ? lang === "id"
+                            ? "Membuat video…"
+                            : "Creating your video…"
+                          : `✨ ${lang === "id" ? "Buat video" : "Generate Video"}`}
+                      </button>
+                    </div>
+                  </div>
+              </div>
+            ) : null}
 
             <div className="mt-8 border-t border-gray-100 pt-8 sm:mt-10 sm:pt-10">
               <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
@@ -1684,7 +2776,7 @@ export default function ListingFoto({
               <button
                 onClick={handleNext}
                 disabled={
-                  !canContinue ||
+                  isDemo || !canContinue || aiVideoPreparing || aiVideoApproving ||
                   uploadingPhotos ||
                   uploadingVideo ||
                   generatingAi
@@ -1700,7 +2792,7 @@ export default function ListingFoto({
                 ].join(" ")}
                 type="button"
               >
-                {primaryButtonLabel}
+                {isDemo ? "Demo berhenti di pratinjau—tidak dipublikasikan" : primaryButtonLabel}
               </button>
             </div>
           </div>

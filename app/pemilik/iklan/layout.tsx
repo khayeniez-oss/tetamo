@@ -1,13 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from "react";
+import { useListingDraft } from "@/lib/use-listing-draft";
+import React, { createContext, useContext, useMemo } from "react";
 
 export type PemilikPlanType = "basic" | "priority" | "featured";
 export type PemilikPaymentGateway = "stripe" | "xendit" | "hitpay";
 
 export type PemilikListingDraft = {
   listingType?: "dijual" | "disewa" | "dijual_disewa" | "lelang" | "";
-  rentalType?: "bulanan" | "tahunan" | "";
+  rentalType?: "harian" | "bulanan" | "tahunan" | "";
   plan?: PemilikPlanType;
   mode?: "create" | "edit";
   source?: "owner";
@@ -154,12 +155,8 @@ export default function PemilikIklanLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [mounted] = useState(true);
-  const [draft, setDraft] = useState<PemilikListingDraft>(getEmptyDraft());
-
-  const clearDraft = () => {
-    setDraft(getEmptyDraft());
-  };
+  const { draft, setDraft, clearDraft, ready, storageError } = useListingDraft("owner", getEmptyDraft);
+  const mounted = ready;
 
   const value = useMemo<PemilikDraftCtx>(
     () => ({
@@ -173,7 +170,8 @@ export default function PemilikIklanLayout({
 
   return (
     <PemilikDraftContext.Provider value={value}>
-      {children}
+      {storageError ? <p role="alert" className="p-3 text-sm text-amber-800">Draft storage is unavailable. Keep this tab open until you save your listing.</p> : null}
+      {ready ? children : <p role="status" className="p-4">Memuat draft…</p>}
     </PemilikDraftContext.Provider>
   );
 }

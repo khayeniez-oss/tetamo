@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
+import { listingDetailIssue } from "@/lib/listing-detail-validation";
+import { decimalInput, parseListingDecimal, landAreaInSqm } from "@/lib/listing-numbers";
 import { TetamoSelect } from "@/components/ui/TetamoSelect";
 import { useLanguage } from "@/app/context/LanguageContext";
 
@@ -72,19 +74,9 @@ function cleanNumber(value: string) {
   return value.replace(/[^\d]/g, "");
 }
 
-function cleanDecimal(value: string) {
-  return value.replace(/[^\d.]/g, "");
-}
+function cleanDecimal(value: string) { return decimalInput(value); }
 
-function parseNumber(value: unknown) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-
-  if (typeof value !== "string") return 0;
-
-  const parsed = Number(value.replace(/[^\d.]/g, ""));
-
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+function parseNumber(value: unknown) { return parseListingDecimal(value) ?? 0; }
 
 function formatRupiah(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "-";
@@ -102,15 +94,7 @@ function getOwnerPackageLabel(plan?: string) {
   return "Basic";
 }
 
-function convertLandToSqm(size: number, unit: string) {
-  if (!size || size <= 0) return 0;
-
-  if (unit === "are") return size * 100;
-  if (unit === "hectare") return size * 10000;
-  if (unit === "acre") return size * 4046.8564224;
-
-  return size;
-}
+function convertLandToSqm(size: number, unit: string) { return landAreaInSqm(size, unit) ?? 0; }
 
 export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   props: Props<TDraft>
@@ -132,6 +116,15 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   const propertyType = getString(draftRecord, "propertyType");
   const ownershipType = getString(draftRecord, "jenisKepemilikan");
   const savedSaleType = getString(draftRecord, "saleType");
+  const detailIssue = propertyType ? listingDetailIssue(draftRecord) : null;
+  const canContinue = isValid && !detailIssue;
+  const detailIssueText = detailIssue ? ({
+    measurement: lang === "id" ? "Isi luas yang wajib dan ukuran dengan angka lebih dari 0. Gunakan koma atau titik untuk desimal, misalnya 1,2." : "Enter required areas and valid measurements greater than 0. Decimal commas or dots are accepted, for example 1.2.",
+    lease: lang === "id" ? "Lengkapi durasi leasehold, tahun berakhir yang berlaku, dan opsi perpanjangan." : "Complete the lease duration, valid expiry year and extension option.",
+    rent: lang === "id" ? "Pilih periode sewa: harian, bulanan, atau tahunan." : "Select a daily, monthly or yearly rental period.",
+    price: lang === "id" ? "Masukkan harga lebih dari 0 untuk setiap jenis penawaran." : "Enter a price greater than 0 for each offer type.",
+  })[detailIssue] : "";
+
 
   const hasSale =
     listingType === "dijual" || listingType === "dijual_disewa";
@@ -151,6 +144,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   const saleType = inferredSaleType;
   const isLeaseholdSale = isSaleLike && saleType === "leasehold";
 
+  const isRoom = propertyType === "room";
   const isStudio = propertyType === "studio";
   const isApartment = ["apartemen", "studio"].includes(propertyType);
   const isTanah = propertyType === "tanah";
@@ -165,7 +159,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   );
   const isHouseLike = ["rumah", "vila"].includes(propertyType);
 
-  const usesLandSize = !isApartment;
+  const usesLandSize = !isApartment && !isRoom;
   const usesBuildingSize = !isTanah;
 
   const showBedroomField =
@@ -187,14 +181,14 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   const showCeilingHeight = isIndustrial || isCommercial;
   const showRoadAccess = isTanah || isIndustrial;
   const showDimensionFields = isTanah || isIndustrial;
-  const showFacilities = !isTanah;
+  const showFacilities = Boolean(propertyType);
   const showNearby = true;
 
   const showLegalFields = isSaleLike;
   const showMarketType = isSaleLike;
   const showSaleType = isSaleLike;
-  const showLandTypeField = showLegalFields && !isApartment;
-  const showZoningField = showLegalFields && !isApartment;
+  const showLandTypeField = showLegalFields && !isApartment && !isRoom;
+  const showZoningField = showLegalFields && !isApartment && !isRoom;
 
   const legacyPrice = getString(draftRecord, "price");
   const storedSalePrice = getString(draftRecord, "salePrice");
@@ -343,6 +337,14 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
     ];
 
     const apartmentFacilities: ChecklistItem[] = [
+      { key: "fac_tennis", label: lang === "id" ? "Lapangan Tenis" : "Tennis Court" },
+      { key: "fac_basketball", label: lang === "id" ? "Lapangan Basket" : "Basketball Court" },
+      { key: "fac_squash", label: lang === "id" ? "Lapangan Squash" : "Squash Court" },
+      { key: "fac_padel", label: lang === "id" ? "Lapangan Padel" : "Padel Court" },
+      { key: "fac_badminton", label: lang === "id" ? "Lapangan Bulu Tangkis" : "Badminton Court" },
+      { key: "fac_jogging_track", label: lang === "id" ? "Jalur Joging" : "Jogging Track" },
+      { key: "fac_sauna", label: lang === "id" ? "Sauna" : "Sauna" },
+
       { key: "fac_lift", label: "Lift" },
       { key: "fac_gym", label: "Gym" },
       {
@@ -432,33 +434,76 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
       { key: "fac_lift", label: "Lift" },
     ];
 
-    if (isApartment) return mergeChecklist(commonFacilities, apartmentFacilities);
-    if (isIndustrial) return mergeChecklist(commonFacilities, industrialFacilities);
+    const appliances: ChecklistItem[] = [
+      { key: "fac_fridge", label: lang === "id" ? "Kulkas" : "Refrigerator" },
+      { key: "fac_stove", label: lang === "id" ? "Kompor" : "Stove" },
+      { key: "fac_oven", label: lang === "id" ? "Oven" : "Oven" },
+      { key: "fac_microwave", label: lang === "id" ? "Microwave" : "Microwave" },
+      { key: "fac_washing_machine", label: lang === "id" ? "Mesin Cuci" : "Washing Machine" },
+      { key: "fac_dryer", label: lang === "id" ? "Pengering Pakaian" : "Clothes Dryer" },
+      { key: "fac_tv", label: lang === "id" ? "Televisi" : "Television" },
+      { key: "fac_dishwasher", label: lang === "id" ? "Mesin Pencuci Piring" : "Dishwasher" },
+      { key: "fac_kettle", label: lang === "id" ? "Ketel Listrik" : "Electric Kettle" },
+      { key: "fac_cookware", label: lang === "id" ? "Peralatan Masak" : "Cookware" },
+      { key: "fac_bed_linen", label: lang === "id" ? "Seprai & Selimut" : "Bed Linen" },
+      { key: "fac_towels", label: lang === "id" ? "Handuk" : "Towels" },
+      { key: "fac_wardrobe", label: lang === "id" ? "Lemari Pakaian" : "Wardrobe" },
+      { key: "fac_desk", label: lang === "id" ? "Meja Kerja" : "Work Desk" },
+    ];
+    const roomFacilities: ChecklistItem[] = [
+      { key: "fac_private_bathroom", label: lang === "id" ? "Kamar Mandi Pribadi" : "Private Bathroom" },
+      { key: "fac_shared_bathroom", label: lang === "id" ? "Kamar Mandi Bersama" : "Shared Bathroom" },
+      { key: "fac_private_kitchen", label: lang === "id" ? "Dapur Pribadi" : "Private Kitchen" },
+      { key: "fac_shared_kitchen", label: lang === "id" ? "Dapur Bersama" : "Shared Kitchen" },
+    ];
+    const landFacilities: ChecklistItem[] = [
+      { key: "fac_electricity_connection", label: lang === "id" ? "Sambungan Listrik" : "Electricity Connection" },
+      { key: "fac_water_connection", label: lang === "id" ? "Sambungan Air" : "Water Connection" },
+      { key: "fac_drainage", label: lang === "id" ? "Drainase" : "Drainage" },
+      { key: "fac_fenced", label: lang === "id" ? "Pagar Keliling" : "Fenced" },
+      { key: "fac_paved_access", label: lang === "id" ? "Akses Jalan Beraspal" : "Paved Road Access" },
+    ];
+    const businessCommon = commonFacilities.filter(item => ["fac_ac", "fac_wifi", "fac_cctv", "fac_security", "fac_parking", "fac_storage"].includes(item.key));
+    if (isTanah) return landFacilities;
+    if (isRoom) return mergeChecklist(commonFacilities.filter(item => !["fac_garden", "fac_living_room", "fac_kitchen_set"].includes(item.key)), roomFacilities, appliances);
+    if (isApartment) return mergeChecklist(commonFacilities, apartmentFacilities, appliances);
+    if (isIndustrial) return mergeChecklist(businessCommon, industrialFacilities);
 
     if (isHospitality) {
       return mergeChecklist(
         commonFacilities,
         houseFacilities,
-        hospitalityFacilities
+        hospitalityFacilities,
+        appliances
       );
     }
 
     if (isCommercial || isRuko) {
-      return mergeChecklist(commonFacilities, commercialFacilities);
+      return mergeChecklist(businessCommon, commercialFacilities);
     }
 
-    return mergeChecklist(commonFacilities, houseFacilities);
+    return mergeChecklist(commonFacilities, houseFacilities, appliances);
   }, [
     lang,
     isApartment,
+    isRoom,
+    isTanah,
     isIndustrial,
     isHospitality,
     isCommercial,
     isRuko,
   ]);
 
+  const applianceKeys = new Set(["fac_fridge", "fac_stove", "fac_oven", "fac_microwave", "fac_washing_machine", "fac_dryer", "fac_tv", "fac_dishwasher", "fac_kettle", "fac_cookware", "fac_bed_linen", "fac_towels", "fac_wardrobe", "fac_desk"]);
+  const applianceItems = facilityItems.filter(item => applianceKeys.has(item.key));
+
   const nearbyItems = useMemo<ChecklistItem[]>(
     () => [
+      { key: "near_station", label: lang === "id" ? "Stasiun Kereta / MRT / LRT" : "Train / MRT / LRT Station" },
+      { key: "near_bus_stop", label: lang === "id" ? "Halte Bus" : "Bus Stop" },
+      { key: "near_worship", label: lang === "id" ? "Tempat Ibadah" : "Place of Worship" },
+      { key: "near_bank", label: lang === "id" ? "Bank / ATM" : "Bank / ATM" },
+      { key: "near_park", label: lang === "id" ? "Taman Umum" : "Public Park" },
       { key: "near_cafe", label: "Cafe" },
       {
         key: "near_restaurant",
@@ -588,6 +633,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   function handlePropertyTypeChange(value: string) {
     const nextPatch: DraftRecord = {
       propertyType: value,
+      fasilitas: {},
     };
 
     const nextIsStudio = value === "studio";
@@ -596,7 +642,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
     const nextIsIndustrial = ["gudang", "pabrik"].includes(value);
     const nextShowFacilities = !nextIsTanah;
     const nextUsesBuildingSize = !nextIsTanah;
-    const nextShowLandDetails = !nextIsApartment;
+    const nextShowLandDetails = !nextIsApartment && value !== "room";
     const nextShowRoadAndDimension = nextIsTanah || nextIsIndustrial;
 
     if (nextIsStudio) {
@@ -696,7 +742,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
       patch.leaseExtendable = "";
     }
 
-    if (isApartment) {
+    if (isApartment || isRoom) {
       patch.lt = "";
       patch.landUnit = "";
       patch.frontage = "";
@@ -724,7 +770,6 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
       patch.ceilingHeight = "";
       patch.listrik = "";
       patch.jenisAir = "";
-      patch.fasilitas = {};
     }
 
     if (!showFacilities) {
@@ -735,6 +780,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
   }
 
   function handleNext() {
+    if (!canContinue) return;
     sanitizeHiddenFieldsBeforeNext();
     onNext();
   }
@@ -753,10 +799,11 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
     { value: "gudang", label: lang === "id" ? "Gudang" : "Warehouse" },
     { value: "pabrik", label: lang === "id" ? "Pabrik" : "Factory" },
     { value: "kos", label: lang === "id" ? "Kos" : "Boarding House" },
+    { value: "room", label: lang === "id" ? "Kamar / Room" : "Room" },
     { value: "guesthouse", label: "Guesthouse" },
     { value: "hotel", label: "Hotel" },
     { value: "resort", label: "Resort" },
-  ];
+  ].sort((a, b) => a.label.localeCompare(b.label, lang === "id" ? "id" : "en"));
 
   const zoningOptions: OptionItem[] = [
     {
@@ -896,6 +943,7 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
                           value={getString(draftRecord, "rentalType")}
                           placeholder={lang === "id" ? "Pilih" : "Select"}
                           options={[
+                            { value: "harian", label: lang === "id" ? "Harian" : "Daily" },
                             {
                               value: "bulanan",
                               label: lang === "id" ? "Bulanan" : "Monthly",
@@ -1883,31 +1931,14 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
               </div>
             )}
 
-            {propertyType && (showFacilities || showNearby) && (
-              <div className="md:col-span-2">
-                <div
-                  className={`grid grid-cols-1 items-start gap-6 ${
-                    showFacilities ? "md:grid-cols-2" : "md:grid-cols-1"
-                  }`}
-                >
-                  {showFacilities && (
-                    <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
-                      <h2 className="text-sm font-bold text-[#1C1C1E] sm:text-base">
-                        {lang === "id" ? "Fasilitas" : "Facilities"}
-                      </h2>
-                      <p className="mt-1 text-sm leading-6 text-gray-600">
-                        {lang === "id"
-                          ? "Pilih fasilitas yang tersedia."
-                          : "Select the available facilities."}
-                      </p>
-
-                      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-                        {facilityItems.map((item) => {
+            {propertyType && applianceItems.length > 0 ? <section className="md:col-span-2 mt-6 border-t border-gray-100 pt-6"><h2 className="text-sm font-bold sm:text-base">{lang === "id" ? "Peralatan & Perlengkapan Hunian" : "Appliances & Rental Essentials"}</h2><div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {applianceItems.map((item) => {
                           const checked = Boolean(
                             getNestedRecord(draftRecord, "fasilitas")[item.key]
                           );
 
                           return (
+                            <Fragment key={item.key}>
                             <label
                               key={item.key}
                               className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 transition sm:px-4 ${
@@ -1930,6 +1961,60 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
                                 {item.label}
                               </span>
                             </label>
+                            </Fragment>
+                          );
+                        })}
+</div></section> : null}
+
+            {propertyType && (showFacilities || showNearby) && (
+              <div className="md:col-span-2">
+                <div
+                  className={`grid grid-cols-1 items-start gap-6 ${
+                    showFacilities ? "md:grid-cols-2" : "md:grid-cols-1"
+                  }`}
+                >
+                  {showFacilities && (
+                    <div className="mt-6 border-t border-gray-100 pt-6 sm:pt-8">
+                      <h2 className="text-sm font-bold text-[#1C1C1E] sm:text-base">
+                        {lang === "id" ? "Fasilitas" : "Facilities"}
+                      </h2>
+                      <p className="mt-1 text-sm leading-6 text-gray-600">
+                        {lang === "id"
+                          ? "Pilih fasilitas yang tersedia."
+                          : "Select the available facilities."}
+                      </p>
+
+                      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                        {facilityItems.filter(item => !applianceKeys.has(item.key)).map((item) => {
+                          const checked = Boolean(
+                            getNestedRecord(draftRecord, "fasilitas")[item.key]
+                          );
+
+                          return (
+                            <Fragment key={item.key}>
+                            <label
+                              key={item.key}
+                              className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 transition sm:px-4 ${
+                                checked ? "border-[#1C1C1E]" : "border-gray-200"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) =>
+                                  updateNestedBoolean(
+                                    "fasilitas",
+                                    item.key,
+                                    e.target.checked
+                                  )
+                                }
+                                className="mt-0.5 h-4 w-4"
+                              />
+                              <span className="text-sm font-semibold leading-5 text-[#1C1C1E]">
+                                {item.label}
+                              </span>
+                            </label>
+                            </Fragment>
                           );
                         })}
                       </div>
@@ -1987,13 +2072,14 @@ export default function ListingForm<TDraft extends DraftRecord = DraftRecord>(
 
             {propertyType ? (
               <div className="mt-8">
+                {detailIssueText ? <p className="mb-3 text-sm text-amber-800" role="status">{detailIssueText}</p> : null}
                 <button
                   type="button"
                   onClick={handleNext}
-                  disabled={!isValid}
+                  disabled={!canContinue}
                   className={[
                     "w-full rounded-2xl px-6 py-3.5 text-center text-sm font-semibold transition",
-                    isValid
+                    canContinue
                       ? "bg-[#1C1C1E] text-white hover:opacity-90"
                       : "cursor-not-allowed bg-gray-200 text-gray-500",
                   ].join(" ")}

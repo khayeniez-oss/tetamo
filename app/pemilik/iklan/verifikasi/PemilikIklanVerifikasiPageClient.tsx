@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -23,15 +25,7 @@ function cleanNumber(value: unknown) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-function cleanDecimal(value: unknown) {
-  if (value === null || value === undefined) return null;
-
-  const raw = String(value).trim().replace(",", ".");
-  if (!raw) return null;
-
-  const parsed = Number(raw);
-  return Number.isNaN(parsed) ? null : parsed;
-}
+function cleanDecimal(value: unknown) { return parseListingDecimal(value); }
 
 
 function buildListingCode(existingKode?: string | null) {
@@ -324,6 +318,7 @@ export default function PemilikIklanVerifikasiPageClient() {
         floor: cleanDecimal(draft?.floor),
         building_size: cleanDecimal(draft?.lb),
         land_size: cleanDecimal(draft?.lt),
+        land_unit: cleanText((draft as Record<string, unknown>)?.landUnit) || "m2",
 
         furnishing: cleanText(draft?.furnishing),
         electricity: cleanNumber(draft?.listrik),

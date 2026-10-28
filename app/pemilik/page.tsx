@@ -291,7 +291,7 @@ export default function PemilikPage() {
 
                   <div className="relative z-10 mt-5">
                     <Link
-                      href={`/pemilik/iklan?plan=${pkg.id}`}
+                      href={`/pemilik/iklan?plan=${pkg.id}&new=1`}
                       onClick={(e) => e.stopPropagation()}
                       className={[
                         "inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition sm:w-auto",
@@ -387,7 +387,7 @@ export default function PemilikPage() {
 
                 <div className="mt-4">
                   <Link
-                    href={`/pemilik/iklan?plan=${selectedPlan}`}
+                    href={`/pemilik/iklan?plan=${selectedPlan}&new=1`}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
                   >
                     {lang === "id" ? "Pilih Paket Ini" : "Choose This Package"}
@@ -416,7 +416,7 @@ export default function PemilikPage() {
 
               <div className="mt-5 flex flex-col justify-center gap-3 sm:mt-6 sm:flex-row">
                 <Link
-                  href={`/pemilik/iklan?plan=${selectedPlan}`}
+                  href={`/pemilik/iklan?plan=${selectedPlan}&new=1`}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#111827] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95"
                 >
                   {lang === "id" ? "Mulai Listing" : "Start Listing"}

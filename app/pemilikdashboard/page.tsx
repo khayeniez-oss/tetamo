@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ElementType } from "react";
+import ShareListingButton from "@/components/listing/ShareListingButton";
+import ListingVideo from "@/components/listing/ListingVideo";
 import { supabase } from "@/lib/supabase";
 import { notifyAdmins } from "@/lib/notifications";
 import { useOwnerProfile } from "./layout";
@@ -44,6 +46,7 @@ type EffectiveStatus =
   | "PENDING_APPROVAL";
 
 type PropertyRow = {
+  video_url: string | null;
   id: string;
   user_id: string | null;
   status: string | null;
@@ -92,6 +95,7 @@ type PropertyImageRow = {
 };
 
 type Listing = {
+  video: string | null;
   id: string;
   kode: string;
   title: string;
@@ -373,6 +377,7 @@ function mapPropertiesWithImages(
 
     return {
       id: property.id,
+      video: property.video_url || null,
       kode: property.kode || "-",
       title: property.title || "-",
       price: Number(property.price || 0),
@@ -786,7 +791,7 @@ export default function OwnerDashboardPage() {
       const { data: propertiesData, error: propertiesError } = await supabase
         .from("properties")
         .select(
-          "id, user_id, status, verified_ok, verification_status, kode, posted_date, title, price, sale_price, rent_price, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type, listing_expires_at, featured_expires_at, is_paused, created_at, plan_id, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, transaction_closed_at, transaction_closed_by"
+          "id, video_url, user_id, status, verified_ok, verification_status, kode, posted_date, title, price, sale_price, rent_price, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type, listing_expires_at, featured_expires_at, is_paused, created_at, plan_id, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, transaction_closed_at, transaction_closed_by"
         )
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
@@ -1289,6 +1294,8 @@ export default function OwnerDashboardPage() {
                           </p>
                         )}
 
+                        <ListingVideo url={item.video} title={item.title} code={item.kode} poster={item.photo} lang={lang} />
+
                         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <DetailPill
                             icon={Building2}
@@ -1389,6 +1396,7 @@ export default function OwnerDashboardPage() {
                       </div>
 
                       <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+                        <ShareListingButton id={item.id} title={item.title} lang={lang} />
                         <button
                           onClick={() => {
                             if (!canEdit) return;

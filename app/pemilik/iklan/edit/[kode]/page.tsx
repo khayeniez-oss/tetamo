@@ -231,6 +231,7 @@ export default function PemilikIklanEditPage() {
         leaseExtendable: stringFrom(propertyRecord.lease_extendable),
 
         lt: stringFrom(propertyRecord.lt, propertyRecord.land_size),
+        landUnit: stringFrom(propertyRecord.land_unit) || "m2",
         lb: stringFrom(propertyRecord.lb, propertyRecord.building_size),
 
         bed: stringFrom(propertyRecord.bed, propertyRecord.bedrooms),

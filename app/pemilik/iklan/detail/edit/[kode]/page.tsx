@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { usePemilikDraftListing } from "../../../layout";
@@ -65,7 +67,7 @@ export default function Page() {
     const baseValid =
       propertyType.length > 0 &&
       hasRequiredPrice &&
-      lt.length > 0;
+      (["apartemen", "studio", "room"].includes(propertyType) || (parseListingDecimal(lt) ?? 0) > 0);
 
     if (!baseValid) return false;
 

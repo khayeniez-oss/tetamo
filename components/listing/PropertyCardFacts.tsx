@@ -19,7 +19,7 @@ export function toPropertyCardFacts(row: PropertyCardFactsData): PropertyCardFac
 
 export function PropertyCardFacts({ data, lang }: { data: PropertyCardFactsData; lang: string }) {
   const type = String(data.property_type || "").toLowerCase();
-  const unit = /apart|studio|flat|kondo/.test(type);
+  const unit = /apart|studio|flat|kondo|room/.test(type);
   const landOnly = /^(tanah|land|kavling)$/.test(type);
   const positive = (n?: number | null): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
   const number = (n: number) => new Intl.NumberFormat(lang === "id" ? "id-ID" : "en-GB", { maximumFractionDigits: 2 }).format(n);

@@ -24,6 +24,8 @@ import {
   FileText,
   Building2,
 } from "lucide-react";
+import ShareListingButton from "@/components/listing/ShareListingButton";
+import ListingVideo from "@/components/listing/ListingVideo";
 import { supabase } from "@/lib/supabase";
 import { notifyAdmins } from "@/lib/notifications";
 import { useAgentProfile } from "../layout";
@@ -45,6 +47,7 @@ type EffectiveStatus =
   | "TERSEWA";
 
 type Listing = {
+  video: string | null;
   id: string;
   kode: string;
   ownerId: string;
@@ -76,6 +79,7 @@ type Listing = {
 };
 
 type PropertyRow = {
+  video_url: string | null;
   id: string;
   user_id: string | null;
   kode: string | null;
@@ -456,6 +460,7 @@ function mapPropertiesWithImages(
 
     return {
       id: property.id,
+      video: property.video_url || null,
       kode: property.kode || "-",
       ownerId: property.user_id || "",
       title: property.title || "Tanpa Judul",
@@ -637,7 +642,7 @@ export default function AgentListingSayaPage() {
         supabase
           .from("properties")
           .select(
-            "id, user_id, kode, title, price, sale_price, rent_price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type"
+            "id, video_url, user_id, kode, title, price, sale_price, rent_price, city, area, province, posted_date, created_at, source, status, verification_status, verified_ok, is_paused, listing_expires_at, boost_active, boost_expires_at, spotlight_active, spotlight_expires_at, transaction_status, listing_type, rental_type, sale_type, property_type, land_size, building_size, land_unit, road_access, ownership_type, land_type, zoning_type"
           )
           .eq("user_id", userId)
           .eq("source", "agent")
@@ -1329,6 +1334,8 @@ export default function AgentListingSayaPage() {
                             </p>
                           )}
 
+                          <ListingVideo url={item.video} title={item.title} code={item.kode} poster={cover} />
+
                           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                             <DetailPill
                               icon={Building2}
@@ -1378,6 +1385,7 @@ export default function AgentListingSayaPage() {
 
                     <div className="w-full xl:w-auto xl:max-w-[540px]">
                       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end">
+                        <ShareListingButton id={item.id} title={item.title} />
                         <button
                           onClick={() =>
                             router.push(

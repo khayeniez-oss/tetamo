@@ -1,10 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from "react";
+import { useListingDraft } from "@/lib/use-listing-draft";
+import React, { createContext, useContext, useMemo } from "react";
 
 export type AgentListingDraft = {
   listingType?: "dijual" | "disewa" | "dijual_disewa" | "lelang" | "";
-  rentalType?: "bulanan" | "tahunan" | "";
+  rentalType?: "harian" | "bulanan" | "tahunan" | "";
   mode?: "create" | "edit";
   source?: "agent";
   kode?: string;
@@ -115,11 +116,7 @@ export function AgentListingDraftProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [draft, setDraft] = useState<AgentListingDraft>(getEmptyDraft());
-
-  const clearDraft = () => {
-    setDraft(getEmptyDraft());
-  };
+  const { draft, setDraft, clearDraft, ready, storageError, demoScope } = useListingDraft("agent", getEmptyDraft);
 
   const value = useMemo(
     () => ({
@@ -132,7 +129,9 @@ export function AgentListingDraftProvider({
 
   return (
     <AgentDraftContext.Provider value={value}>
-      {children}
+      {demoScope ? <p role="status" className="m-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">DEMO • Draft terpisah dari draft asli Anda. Nilai contoh, tidak dipublikasikan dan tanpa pembayaran.</p> : null}
+      {storageError ? <p role="alert" className="p-3 text-sm text-amber-800">Draft storage is unavailable. Keep this tab open until you save your listing.</p> : null}
+      {ready ? children : <p role="status" className="p-4">Memuat draft…</p>}
     </AgentDraftContext.Provider>
   );
 }

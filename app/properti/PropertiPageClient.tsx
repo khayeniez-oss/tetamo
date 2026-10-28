@@ -1,4 +1,5 @@
 "use client";
+import PropertyVideoFeed from "@/components/listing/PropertyVideoFeed";
 import Pagination from "@/components/Pagination";
 import { PostedTimestamp } from "@/components/listing/PostedTimestamp";
 
@@ -444,6 +445,7 @@ function formatPropertyType(value?: string | null, lang?: string) {
   if (raw === "tanah") return lang === "id" ? "Tanah" : "Land";
   if (raw === "rumah") return lang === "id" ? "Rumah" : "House";
   if (raw === "villa" || raw === "vila") return "Villa";
+  if (raw === "room") return lang === "id" ? "Kamar" : "Room";
   if (raw === "studio") return "Studio";
   if (raw === "apartemen") return lang === "id" ? "Apartemen" : "Apartment";
   if (raw === "apartment") return lang === "id" ? "Apartemen" : "Apartment";
@@ -3723,6 +3725,14 @@ export default function PropertiPageClient({
       ) : null}
     </button>
 
+    <button type="button" onClick={(event) => {
+      router.push("/properti?jenisListing=disewa&rentalType=daily");
+      event.currentTarget.closest("details")?.removeAttribute("open");
+    }} className={`mt-1 flex w-full items-center justify-between rounded-[15px] px-4 py-3 text-left transition ${selectedRentalType === "daily" ? "bg-[#F6F3EC]" : "hover:bg-[#F8F6F1]"}`}>
+      <div><p className="text-sm font-extrabold text-[#1C1C1E]">{lang === "id" ? "Harian" : "Daily"}</p><p className="mt-0.5 text-[10px] font-medium text-gray-400">{lang === "id" ? "Sewa per hari" : "Rent per day"}</p></div>
+      {selectedRentalType === "daily" ? <span className="text-[#B8860B]">✓</span> : null}
+    </button>
+
     {/* BULANAN */}
     <button
       type="button"
@@ -4002,6 +4012,7 @@ export default function PropertiPageClient({
       totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} onChange={setPage} lang={lang} />
       )}
+      <PropertyVideoFeed lang={lang} slider />
 
   </section>
 

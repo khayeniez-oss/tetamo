@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -46,15 +48,7 @@ export default function Page() {
     return Number.isNaN(parsed) ? null : parsed;
   }
 
-function cleanDecimal(value: unknown) {
-  if (value === null || value === undefined) return null;
-
-  const raw = String(value).trim().replace(",", ".");
-  if (!raw) return null;
-
-  const parsed = Number(raw);
-  return Number.isNaN(parsed) ? null : parsed;
-}
+function cleanDecimal(value: unknown) { return parseListingDecimal(value); }
 
 
   async function onNext() {
@@ -164,8 +158,9 @@ function cleanDecimal(value: unknown) {
         custom_housing: cleanText(draft?.customHousing),
         location_note: cleanText(draft?.note),
 
-        land_size: cleanNumber(draft?.lt),
-        building_size: cleanNumber(draft?.lb),
+        land_size: cleanDecimal(draft?.lt),
+        land_unit: cleanText((draft as Record<string, unknown>)?.landUnit) || "m2",
+        building_size: cleanDecimal(draft?.lb),
         bedrooms: cleanNumber(draft?.bed),
         bathrooms: cleanNumber(draft?.bath),
         maid_room: cleanNumber(draft?.maid),

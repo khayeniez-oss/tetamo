@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, PackageCheck } from "lucide-react";
@@ -297,7 +299,7 @@ export default function AgentPropertiDetailPage() {
     const jenisZoning = getString(draftRecord, "jenisZoning").trim();
 
     const isApartment = ["apartemen", "studio"].includes(propertyType);
-    const usesLandSize = !isApartment;
+    const usesLandSize = !isApartment && propertyType !== "room";
     const requiresRentalType = hasRent;
     const requiresSaleLegal = hasSale || isAuction;
     const requiresLandLegal = propertyType === "tanah" && requiresSaleLegal;
@@ -305,7 +307,7 @@ export default function AgentPropertiDetailPage() {
     const baseValid =
       propertyType.length > 0 &&
       hasRequiredPrice &&
-      (!usesLandSize || lt.length > 0);
+      (!usesLandSize || (parseListingDecimal(lt) ?? 0) > 0);
 
     if (!baseValid) return false;
 

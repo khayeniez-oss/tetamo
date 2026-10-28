@@ -1,5 +1,7 @@
 "use client";
 
+import { parseListingDecimal } from "@/lib/listing-numbers";
+
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -21,15 +23,7 @@ function cleanNumber(value: any) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-function cleanDecimal(value: any) {
-  if (value === null || value === undefined) return null;
-
-  const raw = String(value).replace(/[^\d.]/g, "");
-  if (!raw) return null;
-
-  const parsed = Number(raw);
-  return Number.isNaN(parsed) ? null : parsed;
-}
+function cleanDecimal(value: unknown) { return parseListingDecimal(value); }
 
 function toInputValue(value: any) {
   if (value === null || value === undefined) return "";
@@ -206,6 +200,7 @@ export default function AgentEditDeskripsiFotoPage() {
           nearby: property.nearby ?? {},
 
           video: property.video_url ?? "",
+          originalVideoUrl: property.video_url ?? "",
           photos,
           coverIndex,
         }));
@@ -390,40 +385,60 @@ export default function AgentEditDeskripsiFotoPage() {
         contact_agency: cleanText(profile?.agency),
       };
 
-      const { error: updateError } = await supabase
-        .from("properties")
-        .update(updatePayload as any)
-        .eq("id", property.id)
-        .eq("user_id", user.id)
-        .eq("source", "agent");
+      const imageRows = photos.map((url: string, index: number) => ({
+        image_url: url,
+        sort_order: index,
+        is_cover: index === coverIndex,
+      }));
 
-      if (updateError) {
-        throw updateError;
+      const { error: saveError } = await supabase.rpc(
+        "save_agent_listing_edit",
+        {
+          p_property_id: property.id,
+          p_property_updates: updatePayload,
+          p_images: imageRows,
+        }
+      );
+
+      if (saveError) {
+        throw saveError;
       }
 
-      const { error: deleteImagesError } = await supabase
-        .from("property_images")
-        .delete()
-        .eq("property_id", property.id);
+      // The database is now safely committed. Only after that boundary may
+      // we remove the old DB-backed listing video from Storage.
+      const originalVideoUrl = cleanText(draftAny?.originalVideoUrl);
+      const savedVideoUrl = cleanText(draft?.video);
 
-      if (deleteImagesError) {
-        throw deleteImagesError;
-      }
+      if (originalVideoUrl && originalVideoUrl !== savedVideoUrl) {
+        try {
+          const marker = "/storage/v1/object/public/property-videos/";
+          const markerIndex = originalVideoUrl.indexOf(marker);
 
-      if (photos.length > 0) {
-        const imageRows = photos.map((url: string, index: number) => ({
-          property_id: property.id,
-          image_url: url,
-          sort_order: index,
-          is_cover: index === coverIndex,
-        }));
+          if (markerIndex >= 0) {
+            const encodedPath = originalVideoUrl.slice(
+              markerIndex + marker.length
+            );
+            const originalVideoPath = decodeURIComponent(encodedPath);
 
-        const { error: imageInsertError } = await supabase
-          .from("property_images")
-          .insert(imageRows);
+            if (originalVideoPath) {
+              const { error: cleanupError } = await supabase.storage
+                .from("property-videos")
+                .remove([originalVideoPath]);
 
-        if (imageInsertError) {
-          throw imageInsertError;
+              if (cleanupError) {
+                console.error(
+                  "Old listing video cleanup failed after successful save:",
+                  cleanupError
+                );
+              }
+            }
+          }
+        } catch (cleanupError) {
+          // Storage cleanup must never undo or misreport a successful DB save.
+          console.error(
+            "Old listing video cleanup failed after successful save:",
+            cleanupError
+          );
         }
       }
 
